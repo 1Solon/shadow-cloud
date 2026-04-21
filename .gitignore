@@ -10,3 +10,4 @@ packages/database/prisma/dev.db
 packages/database/prisma/dev.db-journal
 storage
 saves
+dev.db
