@@ -1,0 +1,11 @@
+node_modules
+.turbo
+.next
+dist
+coverage
+.env
+.env.*
+!.env.example
+packages/database/prisma/dev.db
+packages/database/prisma/dev.db-journal
+storage

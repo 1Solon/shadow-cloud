@@ -1,0 +1,178 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum GameRole {
+  ORGANIZER
+  PLAYER
+}
+
+enum AuditEventType {
+  GAME_CREATED
+  ROSTER_UPDATED
+  REGISTRATION_REQUESTED
+  REGISTRATION_APPROVED
+  REGISTRATION_REJECTED
+  METADATA_UPDATED
+  PLAYER_RESIGNED
+  PLAYER_REPLACED
+  TURN_SKIPPED
+  TURN_ADVANCED
+  TURN_REASSIGNED
+  FILE_UPLOADED
+  FILE_DOWNLOADED
+}
+
+enum RegistrationRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum GameDlcMode {
+  NONE
+  OCEANIA
+  REPUBLICA
+  BOTH
+}
+
+enum GameMode {
+  TEAMS
+  TEAMS_AI
+  FFA
+  FFA_AI
+}
+
+enum ZoneCountPreset {
+  CITY_STATE
+  TWO_ZONE_START
+  THREE_ZONE_START
+}
+
+enum ArmyCountPreset {
+  MILITIA_ONLY
+  ONE_PER_ZONE
+  TWO_PER_ZONE
+}
+
+model User {
+  id              String         @id @default(cuid())
+  email           String         @unique
+  displayName     String
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  identities      AuthIdentity[]
+  organizedGames  Game[]
+  memberships     GamePlayer[]
+  activeTurns     TurnState[]
+  uploads         FileVersion[]  @relation("UploadedBy")
+  auditEvents     AuditEvent[]   @relation("ActorEvents")
+}
+
+model AuthIdentity {
+  id         String   @id @default(cuid())
+  provider   String
+  providerId String
+  userId     String
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerId])
+}
+
+model Game {
+  id                    String                @id @default(cuid())
+  gameNumber            Int                   @unique
+  name                  String
+  slug                  String                @unique
+  playerCount           Int?
+  hasAiPlayers          Boolean?
+  dlcMode               GameDlcMode?
+  gameMode              GameMode?
+  techLevel             Int?
+  zoneCount             ZoneCountPreset?
+  armyCount             ArmyCountPreset?
+  notes                 String?
+  discordGuildId        String?
+  discordChannelId      String?
+  discordThreadId       String?               @unique
+  retentionLimit        Int                   @default(5)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  organizerId           String
+  organizer             User                  @relation(fields: [organizerId], references: [id])
+  players               GamePlayer[]
+  turnState             TurnState?
+  fileVersions          FileVersion[]
+  auditEvents           AuditEvent[]
+  registrationRequests  RegistrationRequest[]
+}
+
+model GamePlayer {
+  id          String      @id @default(cuid())
+  gameId      String
+  userId      String?
+  turnOrder   Int
+  role        GameRole    @default(PLAYER)
+  createdAt   DateTime    @default(now())
+  game        Game        @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  user        User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  activeTurns TurnState[] @relation("ActivePlayerEntry")
+
+  @@unique([gameId, turnOrder])
+}
+
+model TurnState {
+  id                  String      @id @default(cuid())
+  gameId              String      @unique
+  activePlayerId      String
+  activePlayerEntryId String?
+  roundNumber         Int         @default(1)
+  updatedAt           DateTime    @updatedAt
+  game                Game        @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  activePlayer        User        @relation(fields: [activePlayerId], references: [id])
+  activePlayerEntry   GamePlayer? @relation("ActivePlayerEntry", fields: [activePlayerEntryId], references: [id])
+}
+
+model FileVersion {
+  id            String   @id @default(cuid())
+  gameId        String
+  uploadedById  String
+  storagePath   String
+  originalName  String
+  versionNumber Int
+  uploadedAt    DateTime @default(now())
+  game          Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  uploadedBy    User     @relation("UploadedBy", fields: [uploadedById], references: [id])
+
+  @@unique([gameId, versionNumber])
+}
+
+model RegistrationRequest {
+  id                String                    @id @default(cuid())
+  gameId            String
+  playerDiscordId   String
+  playerDisplayName String
+  playerUsername    String?
+  status            RegistrationRequestStatus @default(PENDING)
+  discordMessageId  String?
+  requestedAt       DateTime                  @default(now())
+  respondedAt       DateTime?
+  game              Game                      @relation(fields: [gameId], references: [id], onDelete: Cascade)
+}
+
+model AuditEvent {
+  id        String         @id @default(cuid())
+  gameId    String
+  actorId   String?
+  eventType AuditEventType
+  payload   String
+  createdAt DateTime       @default(now())
+  game      Game           @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  actor     User?          @relation("ActorEvents", fields: [actorId], references: [id])
+}

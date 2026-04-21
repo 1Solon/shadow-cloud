@@ -1,0 +1,8 @@
+1. Split up the bot files
+2. Split up main react
+3. Updated all packages and deps
+4. Write dockerfiles and compose(s)
+5. Write documentation and readme
+6. Add a license
+7. Upload to GitHub
+8. Deploy to home server

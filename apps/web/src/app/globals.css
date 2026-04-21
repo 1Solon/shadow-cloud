@@ -1,0 +1,170 @@
+@import "tailwindcss";
+
+:root {
+  --background: #000000;
+  --foreground: #fb923c;
+  --card: rgba(0, 0, 0, 0.9);
+  --card-foreground: #fb923c;
+  --ring: #fb923c;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-ring: var(--ring);
+}
+
+body {
+  min-height: 100vh;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-mono), monospace;
+}
+
+@keyframes terminal-powerup {
+  0% {
+    opacity: 0;
+    transform: translate3d(14px, 18px, 0) scale(0.2, 0.02);
+    filter: brightness(0.55);
+  }
+
+  28% {
+    opacity: 0.95;
+    transform: translate3d(8px, 10px, 0) scale(1.03, 0.12);
+    filter: brightness(0.82);
+  }
+
+  64% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1, 0.94);
+    filter: brightness(1.08);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1, 1);
+    filter: brightness(1);
+  }
+}
+
+@keyframes terminal-powerup-text {
+  0% {
+    opacity: 0;
+    filter: brightness(0.45);
+  }
+
+  52% {
+    opacity: 0.88;
+    filter: brightness(1.08);
+  }
+
+  100% {
+    opacity: 1;
+    filter: brightness(1);
+  }
+}
+
+@keyframes terminal-powerdown {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1, 1);
+    filter: brightness(1);
+  }
+
+  35% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1, 0.94);
+    filter: brightness(1.08);
+  }
+
+  72% {
+    opacity: 0.9;
+    transform: translate3d(8px, 10px, 0) scale(1.03, 0.12);
+    filter: brightness(0.82);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate3d(14px, 18px, 0) scale(0.2, 0.02);
+    filter: brightness(0.55);
+  }
+}
+
+@keyframes terminal-powerdown-text {
+  0% {
+    opacity: 1;
+    filter: brightness(1);
+  }
+
+  55% {
+    opacity: 0.92;
+    filter: brightness(0.9);
+  }
+
+  100% {
+    opacity: 0;
+    filter: brightness(0.5);
+  }
+}
+
+@keyframes terminal-scanout {
+  0% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+
+  20% {
+    opacity: 0.28;
+    transform: translateY(0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@keyframes terminal-scanin {
+  0% {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+
+  30% {
+    opacity: 0.32;
+    transform: translateY(-4px);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+}
+
+.animate-terminal-powerup {
+  animation: terminal-powerup 260ms cubic-bezier(0.2, 0.8, 0.22, 1) forwards;
+}
+
+.animate-terminal-powerup-text {
+  animation: terminal-powerup-text 220ms ease-out forwards;
+}
+
+.animate-terminal-powerdown {
+  animation: terminal-powerdown 260ms cubic-bezier(0.42, 0, 0.7, 0.2) forwards;
+}
+
+.animate-terminal-powerdown-text {
+  animation: terminal-powerdown-text 220ms ease-out forwards;
+}
+
+.animate-terminal-scanout {
+  animation: terminal-scanout 260ms ease-out forwards;
+}
+
+.animate-terminal-scanin {
+  animation: terminal-scanin 260ms ease-out forwards;
+}
