@@ -35,6 +35,13 @@ Shadow Cloud is a PBEM coordination service for Shadow Empire. This repository c
 - `pnpm format` to run Prettier formatting across the app workspaces
 - `pnpm typecheck` to run TypeScript validation across the workspace
 
+## Docker
+
+- `docker compose up --build` builds and starts the web app on `http://localhost:3000` and the API on `http://localhost:3001`.
+- The compose stack expects a populated root `.env` file for Discord OAuth, bot credentials, and NextAuth secrets.
+- The API container runs Prisma migrations on startup, stores the SQLite database at `/data/shadow-cloud.db`, and keeps uploaded saves under `/data/saves` via the named `shadow-cloud-data` volume.
+- Compose overrides internal service URLs so the web and bot call the API at `http://api:3001`, and the API delivers bot notifications to `http://bot:3011`.
+
 ## Tooling Notes
 
 - `apps/api/prisma.config.mjs` owns the Prisma CLI datasource and migration configuration required by Prisma 7.
@@ -60,6 +67,11 @@ Copy values from `.env.example` into a local `.env` file and fill in real creden
 - `DISCORD_BOT_TOKEN`
 - `SHADOW_CLOUD_API_URL`
 - `BOT_API_TOKEN`
+
+Optional for containerized deployments:
+
+- `SHADOW_CLOUD_BOT_NOTIFY_BASE_URL`
+- `SHADOW_CLOUD_SAVE_DIR`
 
 Legacy aliases are still accepted by the current implementation:
 

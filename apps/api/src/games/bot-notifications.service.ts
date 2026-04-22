@@ -61,10 +61,11 @@ export type GameInitializedNotificationPayload = {
 @Injectable()
 export class BotNotificationsService {
   private readonly logger = new Logger(BotNotificationsService.name);
-  private readonly saveUploadedEndpoint =
-    'http://127.0.0.1:3011/notify/save-uploaded';
-  private readonly gameInitializedEndpoint =
-    'http://127.0.0.1:3011/notify/game-initialized';
+  private readonly notificationBaseUrl =
+    process.env.SHADOW_CLOUD_BOT_NOTIFY_BASE_URL?.replace(/\/$/, '') ??
+    'http://127.0.0.1:3011';
+  private readonly saveUploadedEndpoint = `${this.notificationBaseUrl}/notify/save-uploaded`;
+  private readonly gameInitializedEndpoint = `${this.notificationBaseUrl}/notify/game-initialized`;
   private readonly secret = process.env.SHADOW_CLOUD_BOT_NOTIFY_SECRET;
 
   async notifySaveUploaded(payload: UploadNotificationPayload) {

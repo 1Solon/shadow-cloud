@@ -1,0 +1,11 @@
+.env
+.git
+.turbo
+node_modules
+apps/*/node_modules
+apps/api/dist
+apps/bot/dist
+apps/web/.next
+apps/saves
+.shadow-cloud
+*.db

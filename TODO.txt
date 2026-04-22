@@ -1,4 +1,3 @@
-3. Lift the web ESLint 9 pin once eslint-config-next supports ESLint 10
 4. Write dockerfiles and compose(s)
 5. Write documentation and readme
 6. Add a license

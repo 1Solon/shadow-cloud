@@ -1,0 +1,49 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: file:/data/shadow-cloud.db
+      SHADOW_CLOUD_SAVE_DIR: /data
+      SHADOW_CLOUD_BOT_NOTIFY_BASE_URL: http://bot:3011
+    ports:
+      - "3001:3001"
+    volumes:
+      - shadow-cloud-data:/data
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      SHADOW_CLOUD_API_URL: http://api:3001
+      NEXTAUTH_URL: http://localhost:3000
+      AUTH_URL: http://localhost:3000
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+
+  bot:
+    build:
+      context: .
+      dockerfile: apps/bot/Dockerfile
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      SHADOW_CLOUD_API_URL: http://api:3001
+      AUTH_URL: http://localhost:3000
+    depends_on:
+      - api
+
+volumes:
+  shadow-cloud-data:
