@@ -29,7 +29,11 @@ async function resolveNotificationThread(client: Client, threadId: string) {
 
 export function startNotificationServer(
   client: Client,
-  { notificationPort, notificationSecret, webBaseUrl }: NotificationServerConfig,
+  {
+    notificationPort,
+    notificationSecret,
+    webBaseUrl,
+  }: NotificationServerConfig,
 ) {
   if (!notificationSecret) {
     console.warn(
@@ -50,7 +54,9 @@ export function startNotificationServer(
       return;
     }
 
-    if (request.headers["x-shadow-cloud-notify-secret"] !== notificationSecret) {
+    if (
+      request.headers["x-shadow-cloud-notify-secret"] !== notificationSecret
+    ) {
       response.writeHead(401).end("Unauthorized");
       return;
     }

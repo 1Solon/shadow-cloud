@@ -127,8 +127,10 @@ export async function sendCommandRequest(
       const gameMode = interaction.options.getString("gamemode") ?? undefined;
       const techLevel =
         interaction.options.getInteger("tech_level") ?? undefined;
-      const zoneCount = interaction.options.getString("zone_count") ?? undefined;
-      const armyCount = interaction.options.getString("army_count") ?? undefined;
+      const zoneCount =
+        interaction.options.getString("zone_count") ?? undefined;
+      const armyCount =
+        interaction.options.getString("army_count") ?? undefined;
       const response = await postJson(
         `${config.apiBaseUrl}/v1/games/init`,
         config.botApiToken,

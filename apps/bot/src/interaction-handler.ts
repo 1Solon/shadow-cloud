@@ -41,11 +41,14 @@ async function resolveThreadChannel(
         interaction.channelId,
       );
     } catch (error) {
-      console.warn(`Guild channel fetch failed for /${commandName} interaction.`, {
-        channelId: interaction.channelId,
-        guildId: interaction.guildId,
-        error,
-      });
+      console.warn(
+        `Guild channel fetch failed for /${commandName} interaction.`,
+        {
+          channelId: interaction.channelId,
+          guildId: interaction.guildId,
+          error,
+        },
+      );
     }
   }
 
@@ -53,11 +56,14 @@ async function resolveThreadChannel(
     try {
       resolvedChannel = await client.channels.fetch(interaction.channelId);
     } catch (error) {
-      console.warn(`Client channel fetch failed for /${commandName} interaction.`, {
-        channelId: interaction.channelId,
-        guildId: interaction.guildId,
-        error,
-      });
+      console.warn(
+        `Client channel fetch failed for /${commandName} interaction.`,
+        {
+          channelId: interaction.channelId,
+          guildId: interaction.guildId,
+          error,
+        },
+      );
     }
   }
 
@@ -236,7 +242,8 @@ async function handleSuccessfulCommand(
     const gameName = payload?.name ?? fallbackName;
     const playerDisplayName = payload?.player?.displayName ?? "Unknown";
     const seatNumber =
-      payload?.player?.turnOrder ?? interaction.options.getInteger("seat", true);
+      payload?.player?.turnOrder ??
+      interaction.options.getInteger("seat", true);
     const newPlayerUser = interaction.options.getUser("player", true);
     const tookActiveTurn = payload?.player?.tookActiveTurn ?? false;
 
@@ -267,7 +274,9 @@ async function handleSuccessfulCommand(
       `**${skippedName}**'s turn (seat ${skippedSeat}) has been skipped in **${gameName}**.`,
     );
 
-    const nextMention = nextDiscordId ? `<@${nextDiscordId}>` : `**${nextName}**`;
+    const nextMention = nextDiscordId
+      ? `<@${nextDiscordId}>`
+      : `**${nextName}**`;
     const allowedMentions = nextDiscordId ? { users: [nextDiscordId] } : {};
     await channel.send({
       content: `**${skippedName}** (seat ${skippedSeat}) has been skipped in **${gameName}**. It is now ${nextMention}'s turn (seat ${nextSeat}).`,
@@ -341,11 +350,14 @@ export function createInteractionHandler(client: Client, config: BotApiConfig) {
     );
 
     if (!channel) {
-      console.warn(`${commandName} command was invoked outside a thread context.`, {
-        channelId: interaction.channelId,
-        observedType,
-        guildId: interaction.guildId,
-      });
+      console.warn(
+        `${commandName} command was invoked outside a thread context.`,
+        {
+          channelId: interaction.channelId,
+          observedType,
+          guildId: interaction.guildId,
+        },
+      );
 
       await interaction.reply({
         content: `Run /${commandName} inside the forum thread that should own the game. Observed channel type: ${observedType}, channel id: ${interaction.channelId}.`,
@@ -392,7 +404,9 @@ export function createInteractionHandler(client: Client, config: BotApiConfig) {
       );
 
       if (!response.ok) {
-        await interaction.editReply(buildCommandErrorReply(commandName, payload));
+        await interaction.editReply(
+          buildCommandErrorReply(commandName, payload),
+        );
         return;
       }
 

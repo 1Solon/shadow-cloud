@@ -35,6 +35,12 @@ Shadow Cloud is a PBEM coordination service for Shadow Empire. This repository c
 - `pnpm format` to run Prettier formatting across the app workspaces
 - `pnpm typecheck` to run TypeScript validation across the workspace
 
+## Tooling Notes
+
+- `apps/api/prisma.config.mjs` owns the Prisma CLI datasource and migration configuration required by Prisma 7.
+- Prisma editor diagnostics are disabled in workspace settings because the current Prisma VS Code extension still reports a false `url`-missing error for Prisma 7 schemas that move datasource URLs into `prisma.config.*`.
+- `apps/web` stays on `eslint@9` for now because the current `eslint-config-next` plugin stack is not yet compatible with ESLint 10.
+
 ## Discord Notification Standard
 
 - Persistent Discord thread notifications now use Discord containers with one shared structure: action-first title, compact fact block, separator, then one action block.
@@ -77,5 +83,6 @@ For local Discord OAuth testing, set the callback URL in your Discord applicatio
 
 - `apps/web` - Next.js frontend
 - `apps/api` - NestJS backend
+- `apps/api/prisma.config.mjs` - Prisma CLI configuration for datasource and migrations
 - `apps/bot` - Discord bot
 - `apps/api/prisma` - Prisma schema, migrations, and seed data
