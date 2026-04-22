@@ -1,0 +1,15 @@
+services:
+  api:
+    ports:
+      - "3001:3001"
+
+  web:
+    environment:
+      NEXTAUTH_URL: http://localhost:3000
+      AUTH_URL: http://localhost:3000
+    ports:
+      - "3000:3000"
+
+  bot:
+    environment:
+      AUTH_URL: http://localhost:3000

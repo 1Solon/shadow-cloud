@@ -46,6 +46,11 @@ export function startNotificationServer(
     const isSaveUploadedRequest = request.url === "/notify/save-uploaded";
     const isGameInitializedRequest = request.url === "/notify/game-initialized";
 
+    if (request.method === "GET" && request.url === "/health") {
+      response.writeHead(200).end("ok");
+      return;
+    }
+
     if (
       request.method !== "POST" ||
       (!isSaveUploadedRequest && !isGameInitializedRequest)

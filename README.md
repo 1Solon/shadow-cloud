@@ -37,8 +37,10 @@ Shadow Cloud is a PBEM coordination service for Shadow Empire. This repository c
 
 ## Docker
 
-- `docker compose up --build` builds and starts the web app on `http://localhost:3000` and the API on `http://localhost:3001`.
-- The compose stack expects a populated root `.env` file for Discord OAuth, bot credentials, and NextAuth secrets.
+- `docker compose -f docker-compose.base.yml -f docker-compose.local.yml up --build` starts the local stack with the web app on `http://localhost:3000` and the API on `http://localhost:3001`.
+- `docker compose -f docker-compose.base.yml -f docker-compose.prod.yml up -d --build` starts the production-oriented stack with restart policies and externally configurable published ports.
+- `docker-compose.base.yml` now holds the shared service definitions, internal service wiring, persistent volume, and container healthchecks. The `docker-compose.local.yml` and `docker-compose.prod.yml` overlays only hold environment- and deployment-specific settings.
+- The web image now uses Next.js standalone output, so the runner only copies the traced server bundle, static assets, and public files instead of the full workspace install.
 - The API container runs Prisma migrations on startup, stores the SQLite database at `/data/shadow-cloud.db`, and keeps uploaded saves under `/data/saves` via the named `shadow-cloud-data` volume.
 - Compose overrides internal service URLs so the web and bot call the API at `http://api:3001`, and the API delivers bot notifications to `http://bot:3011`.
 

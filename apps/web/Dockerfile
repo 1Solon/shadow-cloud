@@ -31,21 +31,18 @@ RUN pnpm --dir apps/web exec next build
 
 FROM node:22-bookworm-slim AS runner
 
-ENV PNPM_HOME=/pnpm
-ENV PATH=$PNPM_HOME:$PATH
 ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
 
-RUN corepack enable
+WORKDIR /app
 
-WORKDIR /workspace
+COPY --from=build /workspace/apps/web/.next/standalone ./
+COPY --from=build /workspace/apps/web/.next/static ./apps/web/.next/static
+COPY --from=build /workspace/apps/web/public ./apps/web/public
 
-COPY --from=build /workspace/package.json ./package.json
-COPY --from=build /workspace/pnpm-workspace.yaml ./pnpm-workspace.yaml
-COPY --from=build /workspace/node_modules ./node_modules
-COPY --from=build /workspace/apps/web ./apps/web
-
-WORKDIR /workspace/apps/web
+WORKDIR /app/apps/web
 
 EXPOSE 3000
 
-CMD ["pnpm", "exec", "next", "start", "-H", "0.0.0.0", "-p", "3000"]
+CMD ["node", "server.js"]
