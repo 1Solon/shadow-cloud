@@ -72,15 +72,15 @@ export default async function GameDetailPage({
                 ],
               }
             : query.upload === "success"
-            ? {
-                command: "save-upload --dispatch",
-                lines: [
-                  "[ok] save file accepted into the active campaign archive",
-                  "[ok] next lord notification dispatched to the Discord thread",
-                  "<SAVE FILE UPLOADED>",
-                ],
-              }
-            : null
+              ? {
+                  command: "save-upload --dispatch",
+                  lines: [
+                    "[ok] save file accepted into the active campaign archive",
+                    "[ok] next lord notification dispatched to the Discord thread",
+                    "<SAVE FILE UPLOADED>",
+                  ],
+                }
+              : null
         }
       />
       <section>

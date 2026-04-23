@@ -85,7 +85,7 @@ function createDraft({
   armyCount,
 }: Omit<
   GameMetadataCardProps,
-  "gameNumber" | "canEdit" | "organizerDisplayName" | "activePlayerDisplayName"
+  "canEdit" | "organizerDisplayName" | "activePlayerDisplayName"
 >) {
   return {
     gameNumber: String(gameNumber),
@@ -133,10 +133,7 @@ function buildMetadataPayload(
     armyCount?: string;
   } = {};
 
-  if (
-    draft.gameNumber !== initialDraft.gameNumber &&
-    draft.gameNumber !== ""
-  ) {
+  if (draft.gameNumber !== initialDraft.gameNumber && draft.gameNumber !== "") {
     payload.gameNumber = Number(draft.gameNumber);
   }
 

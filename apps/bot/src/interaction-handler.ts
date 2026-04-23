@@ -221,8 +221,8 @@ function buildCommandErrorReply(
           : commandName === "replace"
             ? "Replacement failed"
             : commandName === "skip"
-                  ? "Skip failed"
-                  : "Registration failed",
+              ? "Skip failed"
+              : "Registration failed",
     facts: [errorMessage],
   });
 }

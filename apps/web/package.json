@@ -8,7 +8,7 @@
     "start": "dotenv -e ../../.env -- next start",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"scripts/**/*.mjs\" \"*.{ts,mjs}\"",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "node ./scripts/typecheck.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
