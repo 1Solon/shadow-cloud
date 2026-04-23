@@ -78,11 +78,15 @@ export class GamesQueryService {
         organizerDisplayName: game.organizer.displayName,
         updatedAt: game.updatedAt.toISOString(),
         roundNumber: game.turnState?.roundNumber ?? 1,
+        activePlayerUserId: activePlayerEntry?.userId ?? null,
         activePlayerDisplayName:
           activePlayerEntry?.user?.displayName ?? 'Unassigned',
         playerCount: game.playerCount ?? game.players.length,
         filledSeatCount: game.players.filter((player) => player.userId != null)
           .length,
+        participantUserIds: game.players
+          .map((player) => player.userId)
+          .filter((userId): userId is string => userId != null),
       };
     });
   }

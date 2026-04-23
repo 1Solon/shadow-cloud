@@ -29,8 +29,8 @@ export default async function GameLayout({
   }
 
   return (
-    <main className="min-h-screen bg-black text-orange-400 font-mono p-4">
-      <div className="min-h-[calc(100vh-2rem)] flex flex-col border border-orange-400 rounded-lg p-6 bg-black/90 shadow-2xl shadow-orange-400/20">
+    <main className="h-screen overflow-hidden bg-black text-orange-400 font-mono p-4 flex flex-col">
+      <div className="flex-1 min-h-0 flex flex-col border border-orange-400 rounded-lg p-6 bg-black/90 shadow-2xl shadow-orange-400/20 overflow-hidden">
         {/* Terminal header bar */}
         <div className="flex items-center justify-between border-b border-orange-400 pb-4 mb-6 shrink-0">
           <div className="flex items-center gap-4">
@@ -58,7 +58,7 @@ export default async function GameLayout({
         </div>
 
         {/* Page content */}
-        <div className="flex-1">{children}</div>
+        <div className="flex-1 min-h-0 overflow-y-auto pr-2">{children}</div>
 
         {/* Status bar */}
         <div className="mt-auto pt-4 border-t border-orange-400 flex justify-between text-xs text-orange-300/70 shrink-0">

@@ -17,9 +17,11 @@ export type GameListItem = {
   organizerDisplayName: string;
   updatedAt: string;
   roundNumber: number;
+  activePlayerUserId: string | null;
   activePlayerDisplayName: string;
   playerCount: number;
   filledSeatCount: number;
+  participantUserIds: string[];
 };
 
 export type GameDetail = {
