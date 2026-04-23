@@ -143,7 +143,9 @@ async function handleRegistrationButton(
     if (!response.ok) {
       const errorMessage = Array.isArray(payload?.message)
         ? payload.message.join(", ")
-        : (payload?.message ?? payload?.error ?? `Failed to ${action} registration.`);
+        : (payload?.message ??
+          payload?.error ??
+          `Failed to ${action} registration.`);
 
       await interaction.followUp(
         buildStandardReply({
