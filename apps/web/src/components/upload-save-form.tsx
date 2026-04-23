@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
 type UploadSaveFormProps = {
-  gameSlug: string;
+  gameNumber: number;
 };
 
-export function UploadSaveForm({ gameSlug }: UploadSaveFormProps) {
+export function UploadSaveForm({ gameNumber }: UploadSaveFormProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -45,7 +45,7 @@ export function UploadSaveForm({ gameSlug }: UploadSaveFormProps) {
 
         startTransition(async () => {
           const response = await fetch(
-            `/api/games/${encodeURIComponent(gameSlug)}/files`,
+            `/api/games/${encodeURIComponent(String(gameNumber))}/files`,
             {
               method: "POST",
               body: formData,

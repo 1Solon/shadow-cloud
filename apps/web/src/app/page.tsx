@@ -127,7 +127,7 @@ export default async function Home() {
                         <div className="pl-6 h-full">
                           <Link
                             className="flex h-full w-full items-center justify-center rounded-md border border-orange-400 px-4 text-sm font-mono font-medium uppercase tracking-[0.18em] text-orange-400 transition-colors hover:bg-orange-400 hover:text-black"
-                            href={`/games/${game.slug}`}
+                            href={`/games/${game.gameNumber}`}
                           >
                             Open
                           </Link>

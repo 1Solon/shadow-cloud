@@ -15,7 +15,7 @@ import { getGameDetail } from "@/lib/shadow-cloud-api";
 
 type UploadPageProps = {
   params: Promise<{
-    slug: string;
+    gameNumber: string;
   }>;
   searchParams: Promise<{
     upload?: string;
@@ -27,11 +27,11 @@ export default async function UploadPage({
   params,
   searchParams,
 }: UploadPageProps) {
-  const { slug } = await params;
+  const { gameNumber } = await params;
   const query = await searchParams;
   const [session, game] = await Promise.all([
     getServerAuthSession(),
-    getGameDetail(slug),
+    getGameDetail(gameNumber),
   ]);
 
   if (!game) {
@@ -65,7 +65,7 @@ export default async function UploadPage({
       <div>
         <Link
           className="inline-flex items-center text-sm font-mono text-orange-400/70 hover:text-orange-400 transition-colors"
-          href={`/games/${slug}`}
+          href={`/games/${game.gameNumber}`}
         >
           &lt; GAME OVERVIEW
         </Link>
@@ -91,7 +91,7 @@ export default async function UploadPage({
             </CardContent>
           </Card>
         ) : isActivePlayer ? (
-          <UploadSaveForm gameSlug={game.slug} />
+          <UploadSaveForm gameNumber={game.gameNumber} />
         ) : (
           <Card>
             <CardHeader>

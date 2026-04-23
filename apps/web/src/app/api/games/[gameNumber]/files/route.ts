@@ -6,11 +6,11 @@ const postRedirectStatus = 303;
 
 function buildGameRedirect(
   request: Request,
-  slug: string,
+  gameNumber: string,
   status: string,
   message?: string,
 ) {
-  const redirectUrl = new URL(`/games/${slug}`, request.url);
+  const redirectUrl = new URL(`/games/${gameNumber}`, request.url);
   redirectUrl.searchParams.set("upload", status);
 
   if (message) {
@@ -22,14 +22,19 @@ function buildGameRedirect(
 
 export async function POST(
   request: Request,
-  context: { params: Promise<{ slug: string }> },
+  context: { params: Promise<{ gameNumber: string }> },
 ) {
-  const { slug } = await context.params;
+  const { gameNumber } = await context.params;
   const session = await getServerAuthSession();
 
   if (!session?.user?.id) {
     return NextResponse.redirect(
-      buildGameRedirect(request, slug, "error", "Sign in to upload saves."),
+      buildGameRedirect(
+        request,
+        gameNumber,
+        "error",
+        "Sign in to upload saves.",
+      ),
       postRedirectStatus,
     );
   }
@@ -40,7 +45,7 @@ export async function POST(
     return NextResponse.redirect(
       buildGameRedirect(
         request,
-        slug,
+        gameNumber,
         "error",
         "API authentication is unavailable.",
       ),
@@ -55,7 +60,7 @@ export async function POST(
     return NextResponse.redirect(
       buildGameRedirect(
         request,
-        slug,
+        gameNumber,
         "error",
         "Choose a save file to upload.",
       ),
@@ -67,7 +72,7 @@ export async function POST(
   apiFormData.set("file", file, file.name);
 
   const response = await fetch(
-    `${apiBaseUrl}/v1/games/${encodeURIComponent(slug)}/files`,
+    `${apiBaseUrl}/v1/games/${encodeURIComponent(gameNumber)}/files`,
     {
       method: "POST",
       headers: {
@@ -87,13 +92,13 @@ export async function POST(
       : (payload?.message ?? "The save upload failed.");
 
     return NextResponse.redirect(
-      buildGameRedirect(request, slug, "error", message),
+      buildGameRedirect(request, gameNumber, "error", message),
       postRedirectStatus,
     );
   }
 
   return NextResponse.redirect(
-    buildGameRedirect(request, slug, "success"),
+    buildGameRedirect(request, gameNumber, "success"),
     postRedirectStatus,
   );
 }

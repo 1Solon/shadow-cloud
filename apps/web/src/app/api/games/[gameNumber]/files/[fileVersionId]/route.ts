@@ -4,9 +4,9 @@ const apiBaseUrl = process.env.SHADOW_CLOUD_API_URL ?? "http://localhost:3001";
 
 export async function GET(
   _request: Request,
-  context: { params: Promise<{ slug: string; fileVersionId: string }> },
+  context: { params: Promise<{ gameNumber: string; fileVersionId: string }> },
 ) {
-  const { slug, fileVersionId } = await context.params;
+  const { gameNumber, fileVersionId } = await context.params;
   const session = await getServerAuthSession();
 
   if (!session?.user?.id) {
@@ -26,7 +26,7 @@ export async function GET(
   }
 
   const response = await fetch(
-    `${apiBaseUrl}/v1/games/${encodeURIComponent(slug)}/files/${encodeURIComponent(fileVersionId)}`,
+    `${apiBaseUrl}/v1/games/${encodeURIComponent(gameNumber)}/files/${encodeURIComponent(fileVersionId)}`,
     {
       headers: {
         authorization: `Bearer ${token}`,

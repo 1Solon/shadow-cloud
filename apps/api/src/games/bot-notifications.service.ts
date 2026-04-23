@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 export type UploadNotificationPayload = {
   game: {
     id: string;
+    gameNumber: number;
     slug: string;
     name: string;
     discordThreadId: string | null;

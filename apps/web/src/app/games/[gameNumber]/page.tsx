@@ -17,7 +17,7 @@ import { getGameDetail } from "@/lib/shadow-cloud-api";
 
 type GamePageProps = {
   params: Promise<{
-    slug: string;
+    gameNumber: string;
   }>;
   searchParams: Promise<{
     upload?: string;
@@ -36,11 +36,11 @@ export default async function GameDetailPage({
   params,
   searchParams,
 }: GamePageProps) {
-  const { slug } = await params;
+  const { gameNumber } = await params;
   const query = await searchParams;
   const [session, game] = await Promise.all([
     getServerAuthSession(),
-    getGameDetail(slug),
+    getGameDetail(gameNumber),
   ]);
 
   if (!game) {
@@ -76,7 +76,7 @@ export default async function GameDetailPage({
       <section>
         <GameNotesCard
           canEdit={canEditSeatOrder}
-          gameSlug={game.slug}
+          gameNumber={game.gameNumber}
           notes={game.notes}
         />
       </section>
@@ -95,7 +95,7 @@ export default async function GameDetailPage({
         </CardHeader>
         <CardContent>
           {isActivePlayer ? (
-            <UploadSaveForm gameSlug={game.slug} />
+            <UploadSaveForm gameNumber={game.gameNumber} />
           ) : (
             <div className="rounded-lg border border-orange-400/20 bg-orange-400/5 px-4 py-4 text-sm text-orange-300 font-mono">
               {session?.user
@@ -113,7 +113,7 @@ export default async function GameDetailPage({
           canEdit={canEditSeatOrder}
           dlcMode={game.dlcMode}
           gameMode={game.gameMode}
-          gameSlug={game.slug}
+          gameNumber={game.gameNumber}
           hasAiPlayers={game.hasAiPlayers}
           organizerDisplayName={game.organizerDisplayName}
           playerCount={game.playerCount}
@@ -127,7 +127,7 @@ export default async function GameDetailPage({
         <SeatOrderEditor
           activePlayerEntryId={game.activePlayerEntryId}
           canEdit={canEditSeatOrder}
-          gameSlug={game.slug}
+          gameNumber={game.gameNumber}
           players={game.players}
         />
 
@@ -164,7 +164,7 @@ export default async function GameDetailPage({
                             <DownloadSaveButton
                               className={`inline-flex h-9 items-center rounded-md border px-3 text-xs font-medium uppercase tracking-[0.18em] font-mono transition-colors ${isMostRecent ? "border-black bg-black/10 text-black hover:bg-black hover:text-orange-400" : "border-orange-400 bg-orange-400/10 text-orange-300 hover:bg-orange-400 hover:text-black"}`}
                               fileName={fileVersion.originalName}
-                              href={`/api/games/${game.slug}/files/${fileVersion.id}`}
+                              href={`/api/games/${game.gameNumber}/files/${fileVersion.id}`}
                             />
                           ) : null}
                         </div>

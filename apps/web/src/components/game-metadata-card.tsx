@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/card";
 
 type GameMetadataCardProps = {
-  gameSlug: string;
+  gameNumber: number;
   canEdit: boolean;
   organizerDisplayName: string;
   activePlayerDisplayName: string;
@@ -80,7 +80,7 @@ function createDraft({
   armyCount,
 }: Omit<
   GameMetadataCardProps,
-  "gameSlug" | "canEdit" | "organizerDisplayName" | "activePlayerDisplayName"
+  "gameNumber" | "canEdit" | "organizerDisplayName" | "activePlayerDisplayName"
 >) {
   return {
     roundNumber: String(roundNumber),
@@ -234,7 +234,7 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
 
     startTransition(async () => {
       const response = await fetch(
-        `/api/games/${encodeURIComponent(props.gameSlug)}/metadata`,
+        `/api/games/${encodeURIComponent(String(props.gameNumber))}/metadata`,
         {
           method: "PATCH",
           headers: {

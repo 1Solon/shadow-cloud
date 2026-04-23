@@ -10,17 +10,17 @@ import { getGameDetail } from "@/lib/shadow-cloud-api";
 
 type GameLayoutProps = {
   children: React.ReactNode;
-  params: Promise<{ slug: string }>;
+  params: Promise<{ gameNumber: string }>;
 };
 
 export default async function GameLayout({
   children,
   params,
 }: GameLayoutProps) {
-  const { slug } = await params;
+  const { gameNumber } = await params;
   const [session, game] = await Promise.all([
     getServerAuthSession(),
-    getGameDetail(slug),
+    getGameDetail(gameNumber),
   ]);
   const initialClockTime = new Date();
 
@@ -63,7 +63,7 @@ export default async function GameLayout({
         {/* Status bar */}
         <div className="mt-auto pt-4 border-t border-orange-400 flex justify-between text-xs text-orange-300/70 shrink-0">
           <div>STATUS: TERMINAL ACTIVE</div>
-          <div>WORLD: {game.slug.toUpperCase()} MONITORED</div>
+          <div>WORLD: {`#${game.gameNumber}`} MONITORED</div>
           <div>ENCRYPTION: QUANTUM-256</div>
         </div>
       </div>

@@ -25,6 +25,7 @@ import {
   metadataUpdatedAuditEventType,
   normalizeNotesInput,
 } from './support/game-configuration.helpers';
+import { buildGameIdentifierWhere } from './support/game-lookup.helpers';
 import type {
   GameDetailResponse,
   GameMetadataResponse,
@@ -61,7 +62,7 @@ export class GamesService {
 
     const game = await prisma.game.findFirst({
       where: {
-        OR: [{ id: gameId }, { slug: gameId }],
+        ...buildGameIdentifierWhere(gameId),
       },
       include: {
         players: {
@@ -219,6 +220,7 @@ export class GamesService {
 
     return {
       id: game.id,
+      gameNumber: game.gameNumber,
       slug: game.slug,
       ...nextMetadata,
     };

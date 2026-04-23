@@ -19,6 +19,7 @@ import {
   getDiscordIdentity,
   upsertDiscordUser,
 } from '../support/discord-user.helpers';
+import { buildGameIdentifierWhere } from '../support/game-lookup.helpers';
 import type { UploadedSaveFile } from '../support/game-payload.types';
 import { resolveActivePlayerEntry } from '../support/turn-state.utils';
 
@@ -42,7 +43,7 @@ export class GamesTurnService {
 
     const game = await prisma.game.findFirst({
       where: {
-        OR: [{ id: gameId }, { slug: gameId }],
+        ...buildGameIdentifierWhere(gameId),
       },
       include: {
         organizer: {
@@ -218,6 +219,7 @@ export class GamesTurnService {
       await this.botNotifications.notifySaveUploaded({
         game: {
           id: game.id,
+          gameNumber: game.gameNumber,
           slug: game.slug,
           name: game.name,
           discordThreadId: game.discordThreadId,
@@ -287,7 +289,7 @@ export class GamesTurnService {
 
     const game = await prisma.game.findFirst({
       where: {
-        OR: [{ id: gameId }, { slug: gameId }],
+        ...buildGameIdentifierWhere(gameId),
       },
       include: {
         players: {

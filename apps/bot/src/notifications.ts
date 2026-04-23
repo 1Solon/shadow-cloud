@@ -14,6 +14,7 @@ const ACCENT_COLOR = 0xffa500;
 export type UploadNotificationPayload = {
   game: {
     id: string;
+    gameNumber: number;
     slug: string;
     name: string;
     discordThreadId: string | null;
@@ -257,7 +258,7 @@ export function buildGameInitNotificationMessage(
     payload.organizer.discordId,
   );
   const gameUrl = new URL(
-    `/games/${encodeURIComponent(payload.game.slug)}`,
+    `/games/${encodeURIComponent(String(payload.game.gameNumber))}`,
     webBaseUrl,
   ).toString();
   const settingsLine = buildGameSettingsLine(payload.game);
@@ -292,11 +293,11 @@ export function buildSaveNotificationMessage(
   );
   const uploadedAtLabel = formatUploadedAt(payload.upload.uploadedAt);
   const gameUrl = new URL(
-    `/games/${encodeURIComponent(payload.game.slug)}`,
+    `/games/${encodeURIComponent(String(payload.game.gameNumber))}`,
     webBaseUrl,
   ).toString();
   const downloadUrl = new URL(
-    `/api/games/${encodeURIComponent(payload.game.slug)}/files/${encodeURIComponent(payload.upload.versionId)}`,
+    `/api/games/${encodeURIComponent(String(payload.game.gameNumber))}/files/${encodeURIComponent(payload.upload.versionId)}`,
     webBaseUrl,
   ).toString();
 

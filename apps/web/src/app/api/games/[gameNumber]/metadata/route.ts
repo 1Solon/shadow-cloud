@@ -4,9 +4,9 @@ const apiBaseUrl = process.env.SHADOW_CLOUD_API_URL ?? "http://localhost:3001";
 
 export async function PATCH(
   request: Request,
-  context: { params: Promise<{ slug: string }> },
+  context: { params: Promise<{ gameNumber: string }> },
 ) {
-  const { slug } = await context.params;
+  const { gameNumber } = await context.params;
   const session = await getServerAuthSession();
 
   if (!session?.user?.id) {
@@ -110,7 +110,7 @@ export async function PATCH(
   }
 
   const response = await fetch(
-    `${apiBaseUrl}/v1/games/${encodeURIComponent(slug)}/metadata`,
+    `${apiBaseUrl}/v1/games/${encodeURIComponent(gameNumber)}/metadata`,
     {
       method: "PATCH",
       headers: {

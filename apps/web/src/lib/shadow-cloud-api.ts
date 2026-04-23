@@ -24,6 +24,7 @@ export type GameListItem = {
 
 export type GameDetail = {
   id: string;
+  gameNumber: number;
   slug: string;
   name: string;
   organizerId: string;
@@ -144,10 +145,10 @@ export const listGames = cache(() =>
   fetchShadowCloudApi<GameListItem[]>("/v1/games", "Failed to load games."),
 );
 
-export const getGameDetail = cache(async (slug: string) => {
+export const getGameDetail = cache(async (gameIdentifier: string) => {
   try {
     return await fetchShadowCloudApi<GameDetail>(
-      `/v1/games/${encodeURIComponent(slug)}/detail`,
+      `/v1/games/${encodeURIComponent(gameIdentifier)}/detail`,
       "Failed to load the game.",
     );
   } catch (error) {

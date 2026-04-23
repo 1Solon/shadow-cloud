@@ -16,13 +16,13 @@ import {
 } from "@/components/ui/card";
 
 type GameNotesCardProps = {
-  gameSlug: string;
+  gameNumber: number;
   canEdit: boolean;
   notes: string | null;
 };
 
 export function GameNotesCard({
-  gameSlug,
+  gameNumber,
   canEdit,
   notes,
 }: GameNotesCardProps) {
@@ -47,7 +47,7 @@ export function GameNotesCard({
 
     startTransition(async () => {
       const response = await fetch(
-        `/api/games/${encodeURIComponent(gameSlug)}/metadata`,
+        `/api/games/${encodeURIComponent(String(gameNumber))}/metadata`,
         {
           method: "PATCH",
           headers: {

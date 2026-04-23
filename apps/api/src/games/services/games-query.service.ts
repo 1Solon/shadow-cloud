@@ -12,6 +12,7 @@ import {
 } from '../games-domain';
 import { FileStorageService } from '../file-storage.service';
 import { buildCanonicalThreadName } from '../support/game-configuration.helpers';
+import { buildGameIdentifierWhere } from '../support/game-lookup.helpers';
 import type { GameDetailResponse } from '../support/game-payload.types';
 import { resolveActivePlayerEntry } from '../support/turn-state.utils';
 import type {
@@ -89,7 +90,7 @@ export class GamesQueryService {
   async getGameDetail(gameId: string): Promise<GameDetailResponse> {
     const game = await prisma.game.findFirst({
       where: {
-        OR: [{ id: gameId }, { slug: gameId }],
+        ...buildGameIdentifierWhere(gameId),
       },
       include: {
         organizer: true,
@@ -165,6 +166,7 @@ export class GamesQueryService {
 
     return {
       id: game.id,
+      gameNumber: game.gameNumber,
       slug: game.slug,
       name: game.name,
       organizerId: game.organizerId,
@@ -212,7 +214,7 @@ export class GamesQueryService {
 
     const game = await prisma.game.findFirst({
       where: {
-        OR: [{ id: gameId }, { slug: gameId }],
+        ...buildGameIdentifierWhere(gameId),
       },
       include: {
         organizer: true,
@@ -319,7 +321,7 @@ export class GamesQueryService {
 
     const game = await prisma.game.findFirst({
       where: {
-        OR: [{ id: gameId }, { slug: gameId }],
+        ...buildGameIdentifierWhere(gameId),
       },
       include: {
         players: {

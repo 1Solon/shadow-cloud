@@ -43,7 +43,7 @@ type SeatOrderPlayer = {
 };
 
 type SeatOrderEditorProps = {
-  gameSlug: string;
+  gameNumber: number;
   players: SeatOrderPlayer[];
   activePlayerEntryId: string | null;
   canEdit: boolean;
@@ -274,7 +274,7 @@ function SortableSeatRow({
 }
 
 export function SeatOrderEditor({
-  gameSlug,
+  gameNumber,
   players,
   activePlayerEntryId,
   canEdit,
@@ -398,7 +398,7 @@ export function SeatOrderEditor({
 
     startTransition(async () => {
       const response = await fetch(
-        `/api/games/${encodeURIComponent(gameSlug)}/seat-order`,
+        `/api/games/${encodeURIComponent(String(gameNumber))}/seat-order`,
         {
           method: "POST",
           headers: {

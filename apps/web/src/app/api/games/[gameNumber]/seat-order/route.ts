@@ -4,9 +4,9 @@ const apiBaseUrl = process.env.SHADOW_CLOUD_API_URL ?? "http://localhost:3001";
 
 export async function POST(
   request: Request,
-  context: { params: Promise<{ slug: string }> },
+  context: { params: Promise<{ gameNumber: string }> },
 ) {
-  const { slug } = await context.params;
+  const { gameNumber } = await context.params;
   const session = await getServerAuthSession();
 
   if (!session?.user?.id) {
@@ -69,7 +69,7 @@ export async function POST(
   }
 
   const response = await fetch(
-    `${apiBaseUrl}/v1/games/${encodeURIComponent(slug)}/seat-order`,
+    `${apiBaseUrl}/v1/games/${encodeURIComponent(gameNumber)}/seat-order`,
     {
       method: "POST",
       headers: {

@@ -7,6 +7,7 @@ import type {
 
 export type GameDetailResponse = {
   id: string;
+  gameNumber: number;
   slug: string;
   name: string;
   organizerId: string;
@@ -40,6 +41,7 @@ export type GameDetailResponse = {
 
 export type GameMetadataResponse = {
   id: string;
+  gameNumber: number;
   slug: string;
   roundNumber: number;
   playerCount: number | null;
