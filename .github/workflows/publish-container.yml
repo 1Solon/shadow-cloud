@@ -1,0 +1,100 @@
+name: Publish Containers
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Publish ${{ matrix.service }} image
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: api
+            image: shadow-cloud-api
+            dockerfile: apps/api/Dockerfile
+          - service: bot
+            image: shadow-cloud-bot
+            dockerfile: apps/bot/Dockerfile
+          - service: web
+            image: shadow-cloud-web
+            dockerfile: apps/web/Dockerfile
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Resolve package version
+        id: version
+        shell: pwsh
+        run: |
+          $packagePath = Join-Path $env:GITHUB_WORKSPACE "apps/${{ matrix.service }}/package.json"
+
+          if (-not (Test-Path $packagePath)) {
+            throw "Expected package manifest at '$packagePath'."
+          }
+
+          $package = Get-Content -Raw $packagePath | ConvertFrom-Json
+          $version = [string]$package.version
+
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            throw "Expected a version field in '$packagePath'."
+          }
+
+          if ($version.StartsWith("v")) {
+            $version = $version.Substring(1)
+          }
+
+          if ($version -notmatch '^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$') {
+            throw "Expected '$packagePath' version '$version' to be a valid container tag."
+          }
+
+          "value=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Normalize registry owner
+        id: registry
+        shell: pwsh
+        run: |
+          $owner = "${{ github.repository_owner }}".ToLowerInvariant()
+          "owner=$owner" >> $env:GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract container metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ steps.registry.outputs.owner }}/${{ matrix.image }}
+          tags: |
+            type=raw,value=${{ steps.version.outputs.value }}
+          labels: |
+            org.opencontainers.image.title=${{ matrix.image }}
+            org.opencontainers.image.description=Shadow Cloud ${{ matrix.service }} service
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.value }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false

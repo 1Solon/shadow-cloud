@@ -44,6 +44,13 @@ Shadow Cloud is a PBEM coordination service for Shadow Empire. This repository c
 - The API container runs Prisma migrations on startup, stores the SQLite database at `/data/shadow-cloud.db`, and keeps uploaded saves under `/data/saves` via the named `shadow-cloud-data` volume.
 - Compose overrides internal service URLs so the web and bot call the API at `http://api:3001`, and the API delivers bot notifications to `http://bot:3011`.
 
+## Container Publishing
+
+- `.github/workflows/publish-container.yml` publishes images for `api`, `bot`, and `web` to GitHub Container Registry.
+- The workflow runs on pushes to `main` and can also be triggered manually after updating each app package version.
+- Images are published as `ghcr.io/<owner>/shadow-cloud-api:<version>`, `ghcr.io/<owner>/shadow-cloud-bot:<version>`, and `ghcr.io/<owner>/shadow-cloud-web:<version>`.
+- The workflow reads `<version>` from `apps/<service>/package.json` and uses that value for the published image tag and OCI version label.
+
 ## Tooling Notes
 
 - `apps/api/prisma.config.mjs` owns the Prisma CLI datasource and migration configuration required by Prisma 7.
