@@ -3,14 +3,18 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    env_file:
-      - .env
+    restart: unless-stopped
     environment:
       NODE_ENV: production
       PORT: 3001
       DATABASE_URL: file:/data/shadow-cloud.db
+      AUTH_SECRET: ${AUTH_SECRET:-replace-with-a-long-random-secret}
+      BOT_API_TOKEN: ${BOT_API_TOKEN:-replace-with-a-shared-api-token}
       SHADOW_CLOUD_SAVE_DIR: /data
       SHADOW_CLOUD_BOT_NOTIFY_BASE_URL: http://bot:3011
+      SHADOW_CLOUD_BOT_NOTIFY_SECRET: ${SHADOW_CLOUD_BOT_NOTIFY_SECRET:-replace-with-a-shared-notify-secret}
+    ports:
+      - "${SHADOW_CLOUD_API_PORT:-3001}:3001"
     volumes:
       - shadow-cloud-data:/data
     healthcheck:
@@ -30,14 +34,19 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
-    env_file:
-      - .env
+    restart: unless-stopped
     environment:
       NODE_ENV: production
+      AUTH_SECRET: ${AUTH_SECRET:-replace-with-a-long-random-secret}
+      AUTH_URL: ${AUTH_URL:-https://shadow-cloud.example.com}
+      AUTH_DISCORD_ID: ${AUTH_DISCORD_ID:-your-discord-oauth-client-id}
+      AUTH_DISCORD_SECRET: ${AUTH_DISCORD_SECRET:-your-discord-oauth-client-secret}
       SHADOW_CLOUD_API_URL: http://api:3001
     depends_on:
       api:
         condition: service_healthy
+    ports:
+      - "${SHADOW_CLOUD_WEB_PORT:-3000}:3000"
     healthcheck:
       test:
         [
@@ -55,11 +64,14 @@ services:
     build:
       context: .
       dockerfile: apps/bot/Dockerfile
-    env_file:
-      - .env
+    restart: unless-stopped
     environment:
       NODE_ENV: production
+      AUTH_URL: ${AUTH_URL:-https://shadow-cloud.example.com}
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-your-discord-bot-token}
       SHADOW_CLOUD_API_URL: http://api:3001
+      BOT_API_TOKEN: ${BOT_API_TOKEN:-replace-with-a-shared-api-token}
+      SHADOW_CLOUD_BOT_NOTIFY_SECRET: ${SHADOW_CLOUD_BOT_NOTIFY_SECRET:-replace-with-a-shared-notify-secret}
     depends_on:
       api:
         condition: service_healthy
