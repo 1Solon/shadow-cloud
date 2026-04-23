@@ -40,7 +40,7 @@ export default async function GameLayout({
             >
               &lt; BACK
             </Link>
-            <div className="text-orange-300 text-xl font-mono">{`> ${game.name}`}</div>
+            <div className="text-orange-300 text-xl font-mono">{`> ${game.gameNumber} : ${game.name}`}</div>
           </div>
           <div className="flex items-center gap-4">
             <UserBadge

@@ -43,6 +43,7 @@ export type GameMetadataResponse = {
   id: string;
   gameNumber: number;
   slug: string;
+  name: string;
   roundNumber: number;
   playerCount: number | null;
   hasAiPlayers: boolean | null;

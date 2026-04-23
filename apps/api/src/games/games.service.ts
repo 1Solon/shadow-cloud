@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -23,6 +24,7 @@ import {
   mapGameMode,
   mapZoneCount,
   metadataUpdatedAuditEventType,
+  normalizeGameNameInput,
   normalizeNotesInput,
 } from './support/game-configuration.helpers';
 import { buildGameIdentifierWhere } from './support/game-lookup.helpers';
@@ -85,6 +87,8 @@ export class GamesService {
     }
 
     const previousMetadata = {
+      gameNumber: game.gameNumber,
+      name: game.name,
       roundNumber: game.turnState?.roundNumber ?? 1,
       playerCount: game.playerCount,
       hasAiPlayers: game.hasAiPlayers,
@@ -95,10 +99,21 @@ export class GamesService {
       armyCount: game.armyCount,
       notes: (game as { notes?: string | null }).notes ?? null,
     };
+    const nextName =
+      input.name === undefined
+        ? previousMetadata.name
+        : normalizeGameNameInput(input.name);
+
+    if (nextName == null) {
+      throw new BadRequestException('Game name cannot be empty.');
+    }
+
     const occupiedSeatCount = game.players.filter(
       (player) => player.userId != null,
     ).length;
     const nextMetadata = {
+      gameNumber: input.gameNumber ?? previousMetadata.gameNumber,
+      name: nextName,
       roundNumber: input.roundNumber ?? previousMetadata.roundNumber,
       playerCount: input.playerCount ?? previousMetadata.playerCount,
       hasAiPlayers: input.hasAiPlayers ?? previousMetadata.hasAiPlayers,
@@ -124,9 +139,10 @@ export class GamesService {
           ? previousMetadata.notes
           : normalizeNotesInput(input.notes),
     };
+
     const nextThreadName = buildCanonicalThreadName({
-      gameNumber: game.gameNumber,
-      name: game.name,
+      gameNumber: nextMetadata.gameNumber,
+      name: nextMetadata.name,
       playerCount: nextMetadata.playerCount,
       gameMode: nextMetadata.gameMode,
       techLevel: nextMetadata.techLevel,
@@ -145,6 +161,22 @@ export class GamesService {
     }
 
     await prisma.$transaction(async (transaction) => {
+      if (
+        input.gameNumber != null &&
+        input.gameNumber !== previousMetadata.gameNumber
+      ) {
+        const existingGame = await transaction.game.findUnique({
+          where: { gameNumber: input.gameNumber },
+          select: { id: true },
+        });
+
+        if (existingGame && existingGame.id !== game.id) {
+          throw new ConflictException(
+            `Game number ${input.gameNumber} is already in use.`,
+          );
+        }
+      }
+
       if (input.roundNumber != null) {
         await transaction.turnState.update({
           where: { gameId: game.id },
@@ -155,6 +187,14 @@ export class GamesService {
       }
 
       const gameUpdateData: Prisma.GameUpdateInput = {};
+
+      if (input.gameNumber != null) {
+        gameUpdateData.gameNumber = nextMetadata.gameNumber;
+      }
+
+      if (input.name !== undefined) {
+        gameUpdateData.name = nextMetadata.name;
+      }
 
       if (input.playerCount != null) {
         gameUpdateData.playerCount = nextMetadata.playerCount;
@@ -212,7 +252,7 @@ export class GamesService {
       await this.gamesRegistration.notifyThreadRename({
         id: game.id,
         slug: game.slug,
-        name: game.name,
+        name: nextMetadata.name,
         threadName: nextThreadName,
         discordThreadId: game.discordThreadId,
       });
@@ -220,7 +260,6 @@ export class GamesService {
 
     return {
       id: game.id,
-      gameNumber: game.gameNumber,
       slug: game.slug,
       ...nextMetadata,
     };

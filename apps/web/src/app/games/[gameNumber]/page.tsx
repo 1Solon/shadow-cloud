@@ -20,6 +20,7 @@ type GamePageProps = {
     gameNumber: string;
   }>;
   searchParams: Promise<{
+    metadata?: string;
     upload?: string;
     message?: string;
   }>;
@@ -61,7 +62,16 @@ export default async function GameDetailPage({
     <div className="flex flex-col gap-8">
       <TerminalConfirmationModal
         confirmation={
-          query.upload === "success"
+          query.metadata === "success"
+            ? {
+                command: "game-metadata --commit",
+                lines: [
+                  "[ok] campaign metadata written to the command archive",
+                  "[ok] world configuration refreshed for connected operators",
+                  "<CAMPAIGN DETAILS UPDATED>",
+                ],
+              }
+            : query.upload === "success"
             ? {
                 command: "save-upload --dispatch",
                 lines: [
@@ -115,6 +125,7 @@ export default async function GameDetailPage({
           gameMode={game.gameMode}
           gameNumber={game.gameNumber}
           hasAiPlayers={game.hasAiPlayers}
+          name={game.name}
           organizerDisplayName={game.organizerDisplayName}
           playerCount={game.playerCount}
           roundNumber={game.roundNumber}

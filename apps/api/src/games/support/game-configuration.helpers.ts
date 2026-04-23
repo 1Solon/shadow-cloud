@@ -174,6 +174,12 @@ export function mapArmyCount(
 export const metadataUpdatedAuditEventType =
   'METADATA_UPDATED' as AuditEventType;
 
+export function normalizeGameNameInput(input?: string | null) {
+  const normalizedInput = input?.trim();
+
+  return normalizedInput ? normalizedInput : null;
+}
+
 export function normalizeNotesInput(input?: string | null) {
   const normalizedInput = input?.trim();
 

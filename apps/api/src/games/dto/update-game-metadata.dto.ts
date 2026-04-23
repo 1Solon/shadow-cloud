@@ -19,6 +19,16 @@ export class UpdateGameMetadataDto {
   @IsOptional()
   @IsInt()
   @Min(1)
+  gameNumber?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  name?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
   roundNumber?: number;
 
   @IsOptional()

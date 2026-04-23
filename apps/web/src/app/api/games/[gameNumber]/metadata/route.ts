@@ -26,6 +26,8 @@ export async function PATCH(
   }
 
   const payload = (await request.json().catch(() => null)) as {
+    gameNumber?: unknown;
+    name?: unknown;
     roundNumber?: unknown;
     playerCount?: unknown;
     hasAiPlayers?: unknown;
@@ -40,6 +42,45 @@ export async function PATCH(
   if (!payload || typeof payload !== "object") {
     return Response.json(
       { error: "Game metadata payload is invalid." },
+      { status: 400 },
+    );
+  }
+
+  if (payload.name !== undefined) {
+    if (typeof payload.name !== "string") {
+      return Response.json(
+        { error: "Game name metadata is invalid." },
+        { status: 400 },
+      );
+    }
+
+    const normalizedName = payload.name.trim();
+
+    if (normalizedName.length === 0) {
+      return Response.json(
+        { error: "Game name cannot be empty." },
+        { status: 400 },
+      );
+    }
+
+    if (normalizedName.length > 100) {
+      return Response.json(
+        { error: "Game name cannot exceed 100 characters." },
+        { status: 400 },
+      );
+    }
+
+    payload.name = normalizedName;
+  }
+
+  if (
+    payload.gameNumber !== undefined &&
+    (typeof payload.gameNumber !== "number" ||
+      !Number.isInteger(payload.gameNumber) ||
+      payload.gameNumber < 1)
+  ) {
+    return Response.json(
+      { error: "Game number metadata is invalid." },
       { status: 400 },
     );
   }
@@ -118,6 +159,10 @@ export async function PATCH(
         "content-type": "application/json",
       },
       body: JSON.stringify({
+        ...(payload.gameNumber !== undefined
+          ? { gameNumber: payload.gameNumber }
+          : {}),
+        ...(payload.name !== undefined ? { name: payload.name } : {}),
         ...(payload.roundNumber !== undefined
           ? { roundNumber: payload.roundNumber }
           : {}),

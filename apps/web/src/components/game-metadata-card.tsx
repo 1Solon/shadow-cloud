@@ -18,6 +18,7 @@ import {
 type GameMetadataCardProps = {
   gameNumber: number;
   canEdit: boolean;
+  name: string;
   organizerDisplayName: string;
   activePlayerDisplayName: string;
   roundNumber: number;
@@ -59,6 +60,8 @@ const armyCountOptions = [
 const techLevelOptions = [3, 4, 5] as const;
 
 type MetadataDraft = {
+  gameNumber: string;
+  name: string;
   roundNumber: string;
   playerCount: string;
   hasAiPlayers: string;
@@ -70,6 +73,8 @@ type MetadataDraft = {
 };
 
 function createDraft({
+  gameNumber,
+  name,
   roundNumber,
   playerCount,
   hasAiPlayers,
@@ -83,6 +88,8 @@ function createDraft({
   "gameNumber" | "canEdit" | "organizerDisplayName" | "activePlayerDisplayName"
 >) {
   return {
+    gameNumber: String(gameNumber),
+    name,
     roundNumber: String(roundNumber),
     playerCount: playerCount == null ? "" : String(playerCount),
     hasAiPlayers: hasAiPlayers == null ? "" : hasAiPlayers ? "true" : "false",
@@ -114,6 +121,8 @@ function buildMetadataPayload(
   initialDraft: MetadataDraft,
 ) {
   const payload: {
+    gameNumber?: number;
+    name?: string;
     roundNumber?: number;
     playerCount?: number;
     hasAiPlayers?: boolean;
@@ -123,6 +132,20 @@ function buildMetadataPayload(
     zoneCount?: string;
     armyCount?: string;
   } = {};
+
+  if (
+    draft.gameNumber !== initialDraft.gameNumber &&
+    draft.gameNumber !== ""
+  ) {
+    payload.gameNumber = Number(draft.gameNumber);
+  }
+
+  const normalizedName = draft.name.trim();
+  const initialName = initialDraft.name.trim();
+
+  if (normalizedName !== initialName) {
+    payload.name = normalizedName;
+  }
 
   if (
     draft.roundNumber !== initialDraft.roundNumber &&
@@ -252,7 +275,18 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
         return;
       }
 
+      const body = (await response.json().catch(() => null)) as {
+        gameNumber?: number;
+      } | null;
+      const nextGameNumber = body?.gameNumber ?? props.gameNumber;
+
       setIsEditing(false);
+
+      if (nextGameNumber !== props.gameNumber) {
+        router.push(`/games/${nextGameNumber}?metadata=success`);
+        return;
+      }
+
       setConfirmation({
         command: "game-metadata --commit",
         lines: [
@@ -266,6 +300,8 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
   }
 
   const detailTiles = [
+    { label: "Campagin number", value: props.gameNumber },
+    { label: "Campaign", value: props.name },
     { label: "Overlord", value: props.organizerDisplayName },
     { label: "Active lord", value: props.activePlayerDisplayName },
     { label: "Turn", value: props.roundNumber },
@@ -348,6 +384,35 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
 
         {isEditing ? (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <EditField label="Campagin number">
+              <input
+                className={controlClassName}
+                min={1}
+                step={1}
+                type="number"
+                value={draft.gameNumber}
+                onChange={(event) => {
+                  setDraft((currentDraft) => ({
+                    ...currentDraft,
+                    gameNumber: event.target.value,
+                  }));
+                }}
+              />
+            </EditField>
+            <EditField label="Campaign">
+              <input
+                className={controlClassName}
+                maxLength={100}
+                type="text"
+                value={draft.name}
+                onChange={(event) => {
+                  setDraft((currentDraft) => ({
+                    ...currentDraft,
+                    name: event.target.value,
+                  }));
+                }}
+              />
+            </EditField>
             <DetailTile label="Overlord" value={props.organizerDisplayName} />
             <DetailTile
               label="Active lord"
