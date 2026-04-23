@@ -48,7 +48,7 @@ Shadow Cloud is a PBEM coordination service for Shadow Empire. This repository c
 
 - `.github/workflows/publish-container.yml` publishes images for `api`, `bot`, and `web` to GitHub Container Registry.
 - The workflow runs on pushes to `main` and can also be triggered manually after updating each app package version.
-- Images are published as `ghcr.io/<owner>/shadow-cloud-api:<version>`, `ghcr.io/<owner>/shadow-cloud-bot:<version>`, and `ghcr.io/<owner>/shadow-cloud-web:<version>`.
+- Images are published as `ghcr.io/<owner>/shadow-cloud/api:<version>`, `ghcr.io/<owner>/shadow-cloud/bot:<version>`, and `ghcr.io/<owner>/shadow-cloud/web:<version>`.
 - The workflow reads `<version>` from `apps/<service>/package.json` and uses that value for the published image tag and OCI version label.
 
 ## Tooling Notes

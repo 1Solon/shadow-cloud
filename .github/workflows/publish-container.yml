@@ -19,13 +19,10 @@ jobs:
       matrix:
         include:
           - service: api
-            image: shadow-cloud-api
             dockerfile: apps/api/Dockerfile
           - service: bot
-            image: shadow-cloud-bot
             dockerfile: apps/bot/Dockerfile
           - service: web
-            image: shadow-cloud-web
             dockerfile: apps/web/Dockerfile
 
     steps:
@@ -59,12 +56,14 @@ jobs:
 
           "value=$version" >> $env:GITHUB_OUTPUT
 
-      - name: Normalize registry owner
+      - name: Normalize registry namespace
         id: registry
         shell: pwsh
         run: |
           $owner = "${{ github.repository_owner }}".ToLowerInvariant()
+          $repository = "${{ github.event.repository.name }}".ToLowerInvariant()
           "owner=$owner" >> $env:GITHUB_OUTPUT
+          "repository=$repository" >> $env:GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -80,11 +79,11 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ steps.registry.outputs.owner }}/${{ matrix.image }}
+          images: ghcr.io/${{ steps.registry.outputs.owner }}/${{ steps.registry.outputs.repository }}/${{ matrix.service }}
           tags: |
             type=raw,value=${{ steps.version.outputs.value }}
           labels: |
-            org.opencontainers.image.title=${{ matrix.image }}
+            org.opencontainers.image.title=shadow-cloud-${{ matrix.service }}
             org.opencontainers.image.description=Shadow Cloud ${{ matrix.service }} service
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.version=${{ steps.version.outputs.value }}
