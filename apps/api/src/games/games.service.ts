@@ -17,6 +17,7 @@ import type { ResignDiscordPlayerDto } from './dto/resign-discord-player.dto';
 import type { SkipDiscordPlayerDto } from './dto/skip-discord-player.dto';
 import type { UpdateGameMetadataDto } from './dto/update-game-metadata.dto';
 import {
+  buildCanonicalThreadName,
   mapArmyCount,
   mapDlcMode,
   mapGameMode,
@@ -122,6 +123,15 @@ export class GamesService {
           ? previousMetadata.notes
           : normalizeNotesInput(input.notes),
     };
+    const nextThreadName = buildCanonicalThreadName({
+      gameNumber: game.gameNumber,
+      name: game.name,
+      playerCount: nextMetadata.playerCount,
+      gameMode: nextMetadata.gameMode,
+      techLevel: nextMetadata.techLevel,
+      zoneCount: nextMetadata.zoneCount,
+      armyCount: nextMetadata.armyCount,
+    });
 
     if (
       input.playerCount != null &&
@@ -196,6 +206,16 @@ export class GamesService {
         },
       });
     });
+
+    if (game.discordThreadId) {
+      await this.gamesRegistration.notifyThreadRename({
+        id: game.id,
+        slug: game.slug,
+        name: game.name,
+        threadName: nextThreadName,
+        discordThreadId: game.discordThreadId,
+      });
+    }
 
     return {
       id: game.id,

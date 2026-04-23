@@ -10,9 +10,11 @@ import {
   prisma,
 } from '../../database';
 import { BotNotificationsService } from '../bot-notifications.service';
+import type { ThreadRenameNotificationPayload } from '../bot-notifications.service';
 import type { CreateDiscordGameDto } from '../dto/create-discord-game.dto';
 import type { RegisterDiscordPlayerDto } from '../dto/register-discord-player.dto';
 import {
+  buildCanonicalThreadName,
   mapOptionalArmyCount,
   mapOptionalDlcMode,
   mapOptionalGameMode,
@@ -27,6 +29,10 @@ import {
 @Injectable()
 export class GamesRegistrationService {
   constructor(private readonly botNotifications: BotNotificationsService) {}
+
+  async notifyThreadRename(payload: ThreadRenameNotificationPayload['game']) {
+    await this.botNotifications.notifyThreadRenamed({ game: payload });
+  }
 
   async createGameFromDiscordInit(input: CreateDiscordGameDto) {
     const existingThread = await prisma.game.findUnique({
@@ -137,11 +143,22 @@ export class GamesRegistrationService {
       return createdGame;
     });
 
+    const threadName = buildCanonicalThreadName({
+      gameNumber: game.gameNumber,
+      name: game.name,
+      playerCount: input.playerCount ?? game.playerCount ?? null,
+      gameMode: input.gameMode ?? game.gameMode ?? null,
+      techLevel: input.techLevel ?? game.techLevel ?? null,
+      zoneCount: input.zoneCount ?? game.zoneCount ?? null,
+      armyCount: input.armyCount ?? game.armyCount ?? null,
+    });
+
     await this.botNotifications.notifyGameInitialized({
       game: {
         id: game.id,
         slug: game.slug,
         name: game.name,
+        threadName,
         gameNumber: game.gameNumber,
         discordThreadId: game.discordThreadId,
         playerCount: input.playerCount ?? game.playerCount ?? null,

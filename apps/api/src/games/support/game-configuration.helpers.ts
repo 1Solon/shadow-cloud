@@ -20,6 +20,105 @@ export function slugify(value: string) {
     .slice(0, 48);
 }
 
+const DISCORD_THREAD_NAME_MAX_LENGTH = 100;
+
+type CanonicalThreadNameInput = {
+  gameNumber: number;
+  name: string;
+  playerCount?: number | null;
+  gameMode?: GameMode | null;
+  techLevel?: number | null;
+  zoneCount?: ZoneCountPreset | null;
+  armyCount?: ArmyCountPreset | null;
+};
+
+function mapGameModeLabel(gameMode?: GameMode | null) {
+  switch (gameMode) {
+    case GameMode.TEAMS:
+      return 'Teams';
+    case GameMode.TEAMS_AI:
+      return 'Teams+AI';
+    case GameMode.FFA:
+      return 'FFA';
+    case GameMode.FFA_AI:
+      return 'FFA+AI';
+    default:
+      return null;
+  }
+}
+
+function mapZoneCountLabel(zoneCount?: ZoneCountPreset | null) {
+  switch (zoneCount) {
+    case ZoneCountPreset.CITY_STATE:
+      return '1Z';
+    case ZoneCountPreset.TWO_ZONE_START:
+      return '2Z';
+    case ZoneCountPreset.THREE_ZONE_START:
+      return '3Z';
+    default:
+      return null;
+  }
+}
+
+function mapArmyCountLabel(armyCount?: ArmyCountPreset | null) {
+  switch (armyCount) {
+    case ArmyCountPreset.MILITIA_ONLY:
+      return '0A';
+    case ArmyCountPreset.ONE_PER_ZONE:
+      return '1A';
+    case ArmyCountPreset.TWO_PER_ZONE:
+      return '2A';
+    default:
+      return null;
+  }
+}
+
+function truncateTitle(title: string, maxLength: number) {
+  if (maxLength <= 0) {
+    return '';
+  }
+
+  const trimmedTitle = title.trim();
+
+  if (trimmedTitle.length <= maxLength) {
+    return trimmedTitle;
+  }
+
+  if (maxLength === 1) {
+    return trimmedTitle.slice(0, 1);
+  }
+
+  return `${trimmedTitle.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
+export function buildCanonicalThreadName({
+  gameNumber,
+  name,
+  playerCount,
+  gameMode,
+  techLevel,
+  zoneCount,
+  armyCount,
+}: CanonicalThreadNameInput) {
+  const prefix = `🟠 ${gameNumber} : `;
+  const modeLabel = mapGameModeLabel(gameMode);
+  const zoneLabel = mapZoneCountLabel(zoneCount);
+  const armyLabel = mapArmyCountLabel(armyCount);
+  const metadataTokens = [
+    playerCount != null ? `${playerCount}S` : null,
+    modeLabel,
+    techLevel != null ? `T${techLevel}` : null,
+    zoneLabel,
+    armyLabel,
+  ].filter((token): token is string => token != null);
+  const suffix =
+    metadataTokens.length > 0 ? ` (${metadataTokens.join(' ')})` : '';
+  const maxTitleLength =
+    DISCORD_THREAD_NAME_MAX_LENGTH - prefix.length - suffix.length;
+
+  return `${prefix}${truncateTitle(name, maxTitleLength)}${suffix}`;
+}
+
 export function mapDlcMode(input: CreateDiscordGameDlcMode): GameDlcMode {
   switch (input) {
     case CreateDiscordGameDlcMode.NONE:
