@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim AS base
+FROM node:22.22.2-bookworm-slim@sha256:d415caac2f1f77b98caaf9415c5f807e14bc8d7bdea62561ea2fef4fbd08a73c AS base
 
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
@@ -29,7 +29,7 @@ ENV DATABASE_URL=file:/data/shadow-cloud.db
 RUN pnpm --dir apps/api exec prisma generate --schema prisma/schema.prisma
 RUN pnpm --dir apps/api exec nest build
 
-FROM node:22-bookworm-slim AS runner
+FROM node:22.22.2-bookworm-slim@sha256:d415caac2f1f77b98caaf9415c5f807e14bc8d7bdea62561ea2fef4fbd08a73c AS runner
 
 ENV NODE_ENV=production
 ENV PORT=3001
