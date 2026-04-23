@@ -9,13 +9,13 @@ _Shadow Cloud is a Discord Bot, API and Website hybrid that aims to support play
 
 </div>
 
+---
+
 ## How do I access this?
 
 I run a hosted version via [The War of the Worlds discord](https://discord.gg/WjYatWDdg3) and [shadow-cloud.solonsstuff.com](https://shadow-cloud.solonsstuff.com)
 
 Please notify me if any of the above links ever die!
-
----
 
 ## What does this do?
 
