@@ -19,6 +19,11 @@ import type {
   PlayerSummary,
 } from '../games.types';
 
+type ResignedPlayerAuditPayload = {
+  playerEntryId?: string;
+  playerDisplayName?: string;
+};
+
 @Injectable()
 export class GamesQueryService {
   constructor(private readonly fileStorage: FileStorageService) {}
@@ -56,12 +61,16 @@ export class GamesQueryService {
       return {
         id: game.id,
         slug: game.slug,
+        gameNumber: game.gameNumber,
         name: game.name,
         organizerDisplayName: game.organizer.displayName,
         updatedAt: game.updatedAt.toISOString(),
+        roundNumber: game.turnState?.roundNumber ?? 1,
         activePlayerDisplayName:
           activePlayerEntry?.user?.displayName ?? 'Unassigned',
-        playerCount: game.players.length,
+        playerCount: game.playerCount ?? game.players.length,
+        filledSeatCount: game.players.filter((player) => player.userId != null)
+          .length,
       };
     });
   }
@@ -99,6 +108,14 @@ export class GamesQueryService {
           },
           take: 8,
         },
+        auditEvents: {
+          where: {
+            eventType: AuditEventType.PLAYER_RESIGNED,
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
       },
     });
 
@@ -109,6 +126,31 @@ export class GamesQueryService {
     const activePlayerEntry = game.turnState
       ? resolveActivePlayerEntry(game.players, game.turnState)
       : null;
+    const resignedDisplayNameByEntryId = new Map<string, string>();
+
+    for (const auditEvent of game.auditEvents) {
+      let payload: ResignedPlayerAuditPayload;
+
+      try {
+        payload = JSON.parse(auditEvent.payload) as ResignedPlayerAuditPayload;
+      } catch {
+        continue;
+      }
+
+      if (
+        typeof payload.playerEntryId !== 'string' ||
+        typeof payload.playerDisplayName !== 'string' ||
+        payload.playerDisplayName.length === 0 ||
+        resignedDisplayNameByEntryId.has(payload.playerEntryId)
+      ) {
+        continue;
+      }
+
+      resignedDisplayNameByEntryId.set(
+        payload.playerEntryId,
+        payload.playerDisplayName,
+      );
+    }
 
     return {
       id: game.id,
@@ -116,6 +158,7 @@ export class GamesQueryService {
       name: game.name,
       organizerId: game.organizerId,
       organizerDisplayName: game.organizer.displayName,
+      playerCount: game.playerCount,
       hasAiPlayers: game.hasAiPlayers,
       dlcMode: game.dlcMode,
       gameMode: game.gameMode,
@@ -131,7 +174,10 @@ export class GamesQueryService {
       players: game.players.map((player) => ({
         id: player.id,
         userId: player.userId,
-        displayName: player.user?.displayName ?? null,
+        displayName:
+          player.user?.displayName ??
+          resignedDisplayNameByEntryId.get(player.id) ??
+          null,
         turnOrder: player.turnOrder,
         isOrganizer:
           player.role === GameRole.ORGANIZER ||
@@ -265,7 +311,12 @@ export class GamesQueryService {
         OR: [{ id: gameId }, { slug: gameId }],
       },
       include: {
-        players: true,
+        players: {
+          include: {
+            user: true,
+          },
+        },
+        turnState: true,
       },
     });
 
@@ -296,6 +347,19 @@ export class GamesQueryService {
     const fileStats = await this.fileStorage.verifyFileExists(
       fileVersion.storagePath,
     );
+    const activePlayerEntry = game.turnState
+      ? resolveActivePlayerEntry(game.players, game.turnState)
+      : null;
+    const downloadName =
+      game.turnState && activePlayerEntry?.user?.displayName
+        ? this.fileStorage.createDownloadFileName({
+            gameNumber: game.gameNumber,
+            turn: game.turnState.roundNumber,
+            seat: activePlayerEntry.turnOrder,
+            playerName: activePlayerEntry.user.displayName,
+            originalName: fileVersion.originalName,
+          })
+        : fileVersion.originalName;
 
     await prisma.auditEvent.create({
       data: {
@@ -311,7 +375,7 @@ export class GamesQueryService {
     });
 
     return {
-      originalName: fileVersion.originalName,
+      originalName: downloadName,
       size: fileStats.size,
       lastModified: fileStats.lastModified,
       stream: this.fileStorage.createDownloadStream(fileVersion.storagePath),

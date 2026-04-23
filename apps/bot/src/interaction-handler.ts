@@ -3,6 +3,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   ChannelType,
+  MessageFlags,
   type AnyThreadChannel,
   type ButtonInteraction,
   type ChatInputCommandInteraction,
@@ -21,8 +22,11 @@ import {
   type SupportedCommandName,
 } from "./commands.js";
 import {
+  buildStandardEditReply,
+  buildStandardNotification,
+  buildStandardReply,
   buildApprovalNotificationMessage,
-  buildNotificationResultText,
+  buildApprovalResultMessage,
 } from "./notifications.js";
 
 const APPROVE_PREFIX = "sc_approve_";
@@ -137,10 +141,17 @@ async function handleRegistrationButton(
     );
 
     if (!response.ok) {
-      await interaction.followUp({
-        content: `Failed to ${action} registration.`,
-        ephemeral: true,
-      });
+      const errorMessage = Array.isArray(payload?.message)
+        ? payload.message.join(", ")
+        : (payload?.message ?? payload?.error ?? `Failed to ${action} registration.`);
+
+      await interaction.followUp(
+        buildStandardReply({
+          title: action === "approve" ? "Approval failed" : "Rejection failed",
+          facts: [errorMessage],
+          ephemeral: true,
+        }),
+      );
       return;
     }
 
@@ -161,21 +172,24 @@ async function handleRegistrationButton(
       disabledReject,
     );
 
-    await interaction.editReply({
-      content: buildNotificationResultText({
+    await interaction.editReply(
+      buildApprovalResultMessage({
         approved: action === "approve",
         gameName,
         playerName,
         turnOrder: payload?.player?.turnOrder,
+        actionRow: disabledRow,
       }),
-      components: [disabledRow],
-    });
+    );
   } catch (error) {
     console.error(`Failed to ${action} registration ${requestId}.`, error);
-    await interaction.followUp({
-      content: "Unable to reach the Shadow Cloud API right now.",
-      ephemeral: true,
-    });
+    await interaction.followUp(
+      buildStandardReply({
+        title: "Shadow Cloud unavailable",
+        facts: ["Unable to reach the Shadow Cloud API right now."],
+        ephemeral: true,
+      }),
+    );
   }
 }
 
@@ -196,15 +210,19 @@ function buildCommandErrorReply(
               ? "The API rejected the skip request."
               : "The API rejected the registration request."));
 
-  return commandName === "init"
-    ? `Unable to initialize this game: ${errorMessage}`
-    : commandName === "resign"
-      ? `Unable to resign from this game: ${errorMessage}`
-      : commandName === "replace"
-        ? `Unable to fill this seat: ${errorMessage}`
-        : commandName === "skip"
-          ? `Unable to skip this player: ${errorMessage}`
-          : `Unable to register for this game: ${errorMessage}`;
+  return buildStandardEditReply({
+    title:
+      commandName === "init"
+        ? "Initialization failed"
+        : commandName === "resign"
+          ? "Resignation failed"
+          : commandName === "replace"
+            ? "Replacement failed"
+            : commandName === "skip"
+              ? "Skip failed"
+              : "Registration failed",
+    facts: [errorMessage],
+  });
 }
 
 async function handleSuccessfulCommand(
@@ -224,17 +242,25 @@ async function handleSuccessfulCommand(
     const wasOrganizer = payload?.player?.wasOrganizer ?? false;
 
     await interaction.editReply(
-      `You have successfully resigned from **${gameName}**.`,
+      buildStandardEditReply({
+        title: "Resignation complete",
+        facts: [`You have successfully resigned from **${gameName}**.`],
+      }),
     );
 
     const mention = `<@${interaction.user.id}>`;
     const organizerNote = wasOrganizer
       ? " The organizer role has been transferred."
       : "";
-    await channel.send({
-      content: `**${mention} has resigned from ${gameName}** (seat ${payload?.player?.turnOrder ?? "?"}).${organizerNote} Their seat will be skipped during turn rotation.`,
-      allowedMentions: { users: [interaction.user.id] },
-    });
+    await channel.send(
+      buildStandardNotification({
+        title: `${mention} resigned from ${gameName}`,
+        facts: [
+          `Seat ${payload?.player?.turnOrder ?? "?"} is now empty and will be skipped during turn rotation.${organizerNote}`,
+        ],
+        mentionedUserIds: [interaction.user.id],
+      }),
+    );
     return;
   }
 
@@ -248,17 +274,25 @@ async function handleSuccessfulCommand(
     const tookActiveTurn = payload?.player?.tookActiveTurn ?? false;
 
     await interaction.editReply(
-      `Seat ${seatNumber} has been filled by **${playerDisplayName}** in **${gameName}**.`,
+      buildStandardEditReply({
+        title: "Seat filled",
+        facts: [
+          `Seat ${seatNumber} has been filled by **${playerDisplayName}** in **${gameName}**.`,
+        ],
+      }),
     );
 
     const mention = `<@${newPlayerUser.id}>`;
     const activeTurnNote = tookActiveTurn
       ? ` It is now ${mention}'s turn.`
       : "";
-    await channel.send({
-      content: `**${mention} has joined ${gameName}** and taken seat ${seatNumber}.${activeTurnNote}`,
-      allowedMentions: { users: [newPlayerUser.id] },
-    });
+    await channel.send(
+      buildStandardNotification({
+        title: `${mention} joined ${gameName}`,
+        facts: [`They have taken seat ${seatNumber}.${activeTurnNote}`],
+        mentionedUserIds: [newPlayerUser.id],
+      }),
+    );
     return;
   }
 
@@ -271,17 +305,26 @@ async function handleSuccessfulCommand(
     const nextSeat = payload?.nextPlayer?.turnOrder ?? "?";
 
     await interaction.editReply(
-      `**${skippedName}**'s turn (seat ${skippedSeat}) has been skipped in **${gameName}**.`,
+      buildStandardEditReply({
+        title: "Turn skipped",
+        facts: [
+          `**${skippedName}**'s turn (seat ${skippedSeat}) has been skipped in **${gameName}**.`,
+        ],
+      }),
     );
 
     const nextMention = nextDiscordId
       ? `<@${nextDiscordId}>`
       : `**${nextName}**`;
-    const allowedMentions = nextDiscordId ? { users: [nextDiscordId] } : {};
-    await channel.send({
-      content: `**${skippedName}** (seat ${skippedSeat}) has been skipped in **${gameName}**. It is now ${nextMention}'s turn (seat ${nextSeat}).`,
-      allowedMentions,
-    });
+    await channel.send(
+      buildStandardNotification({
+        title: `Turn advanced in ${gameName}`,
+        facts: [
+          `**${skippedName}** (seat ${skippedSeat}) was skipped. It is now ${nextMention}'s turn (seat ${nextSeat}).`,
+        ],
+        mentionedUserIds: nextDiscordId ? [nextDiscordId] : [],
+      }),
+    );
     return;
   }
 
@@ -294,7 +337,12 @@ async function handleSuccessfulCommand(
   const gameName = payload?.name ?? fallbackName;
 
   await interaction.editReply(
-    `Your registration request for **${gameName}** has been submitted. The game overlord must approve it before you are added.`,
+    buildStandardEditReply({
+      title: "Registration submitted",
+      facts: [
+        `Your registration request for **${gameName}** has been submitted. The game overlord must approve it before you are added.`,
+      ],
+    }),
   );
 
   if (requestId) {
@@ -359,10 +407,17 @@ export function createInteractionHandler(client: Client, config: BotApiConfig) {
         },
       );
 
-      await interaction.reply({
-        content: `Run /${commandName} inside the forum thread that should own the game. Observed channel type: ${observedType}, channel id: ${interaction.channelId}.`,
-        ephemeral: true,
-      });
+      await interaction.reply(
+        buildStandardReply({
+          title: "Wrong channel",
+          facts: [
+            `Run /${commandName} inside the forum thread that should own the game.`,
+            `Observed channel type: ${observedType}`,
+            `Channel id: ${interaction.channelId}`,
+          ],
+          ephemeral: true,
+        }),
+      );
       return;
     }
 
@@ -379,22 +434,28 @@ export function createInteractionHandler(client: Client, config: BotApiConfig) {
     }
 
     if (channel.parent?.type !== ChannelType.GuildForum) {
-      await interaction.reply({
-        content: `Run /${commandName} inside a Discord forum thread.`,
-        ephemeral: true,
-      });
+      await interaction.reply(
+        buildStandardReply({
+          title: "Wrong channel",
+          facts: [`Run /${commandName} inside a Discord forum thread.`],
+          ephemeral: true,
+        }),
+      );
       return;
     }
 
     if (!config.botApiToken) {
-      await interaction.reply({
-        content: "BOT_API_TOKEN is not configured for the bot.",
-        ephemeral: true,
-      });
+      await interaction.reply(
+        buildStandardReply({
+          title: "Bot misconfigured",
+          facts: ["BOT_API_TOKEN is not configured for the bot."],
+          ephemeral: true,
+        }),
+      );
       return;
     }
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
       const { fallbackName, payload, response } = await sendCommandRequest(
@@ -420,7 +481,10 @@ export function createInteractionHandler(client: Client, config: BotApiConfig) {
     } catch (error) {
       console.error(`Failed to ${commandName} game from Discord.`, error);
       await interaction.editReply(
-        "Unable to reach the Shadow Cloud API right now.",
+        buildStandardEditReply({
+          title: "Shadow Cloud unavailable",
+          facts: ["Unable to reach the Shadow Cloud API right now."],
+        }),
       );
     }
   };

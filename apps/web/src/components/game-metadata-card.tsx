@@ -21,6 +21,7 @@ type GameMetadataCardProps = {
   organizerDisplayName: string;
   activePlayerDisplayName: string;
   roundNumber: number;
+  playerCount: number | null;
   hasAiPlayers: boolean | null;
   dlcMode: string | null;
   gameMode: string | null;
@@ -59,6 +60,7 @@ const techLevelOptions = [3, 4, 5] as const;
 
 type MetadataDraft = {
   roundNumber: string;
+  playerCount: string;
   hasAiPlayers: string;
   dlcMode: string;
   gameMode: string;
@@ -69,6 +71,7 @@ type MetadataDraft = {
 
 function createDraft({
   roundNumber,
+  playerCount,
   hasAiPlayers,
   dlcMode,
   gameMode,
@@ -81,6 +84,7 @@ function createDraft({
 >) {
   return {
     roundNumber: String(roundNumber),
+    playerCount: playerCount == null ? "" : String(playerCount),
     hasAiPlayers: hasAiPlayers == null ? "" : hasAiPlayers ? "true" : "false",
     dlcMode: dlcMode ?? "",
     gameMode: gameMode ?? "",
@@ -111,6 +115,7 @@ function buildMetadataPayload(
 ) {
   const payload: {
     roundNumber?: number;
+    playerCount?: number;
     hasAiPlayers?: boolean;
     dlcMode?: string;
     gameMode?: string;
@@ -124,6 +129,13 @@ function buildMetadataPayload(
     draft.roundNumber !== ""
   ) {
     payload.roundNumber = Number(draft.roundNumber);
+  }
+
+  if (
+    draft.playerCount !== initialDraft.playerCount &&
+    draft.playerCount !== ""
+  ) {
+    payload.playerCount = Number(draft.playerCount);
   }
 
   if (
@@ -257,6 +269,7 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
     { label: "Overlord", value: props.organizerDisplayName },
     { label: "Active lord", value: props.activePlayerDisplayName },
     { label: "Turn", value: props.roundNumber },
+    { label: "Seats", value: props.playerCount ?? "Not set" },
     { label: "AI players", value: formatAiPlayers(props.hasAiPlayers) },
     {
       label: "DLC",
@@ -351,6 +364,21 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
                   setDraft((currentDraft) => ({
                     ...currentDraft,
                     roundNumber: event.target.value,
+                  }));
+                }}
+              />
+            </EditField>
+            <EditField label="Seats">
+              <input
+                className={controlClassName}
+                min={1}
+                step={1}
+                type="number"
+                value={draft.playerCount}
+                onChange={(event) => {
+                  setDraft((currentDraft) => ({
+                    ...currentDraft,
+                    playerCount: event.target.value,
                   }));
                 }}
               />

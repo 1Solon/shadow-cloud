@@ -30,6 +30,8 @@ export type CommandResponsePayload = {
 } | null;
 
 type RegistrationApprovalPayload = {
+  message?: string | string[];
+  error?: string;
   name?: string;
   player?: { displayName?: string; turnOrder?: number };
 } | null;

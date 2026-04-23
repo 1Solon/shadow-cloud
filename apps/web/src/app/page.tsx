@@ -82,10 +82,13 @@ export default async function Home() {
                         {/* Left: identity */}
                         <div className="flex flex-col gap-1 border-r border-orange-400/20 pr-6">
                           <div className="text-lg font-semibold text-orange-300">
-                            {game.name}
+                            {`${game.gameNumber} : ${game.name}`}
                           </div>
                           <div className="text-xs text-orange-300/60">
                             Overlord {game.organizerDisplayName}
+                          </div>
+                          <div className="text-xs uppercase tracking-[0.18em] text-orange-300/50 mt-1">
+                            Turn {game.roundNumber}
                           </div>
                           <div className="text-xs uppercase tracking-[0.18em] text-orange-300/40 mt-1">
                             Updated {formatTimestamp(game.updatedAt)}
@@ -112,10 +115,10 @@ export default async function Home() {
                           </div>
                           <div className="flex items-center gap-4 px-1 py-1">
                             <div className="w-32 shrink-0 text-xs uppercase tracking-[0.2em] text-orange-300/70">
-                              Lords
+                              Seats
                             </div>
                             <div className="text-sm font-medium text-orange-300">
-                              {game.playerCount}
+                              {`${game.filledSeatCount} / ${game.playerCount}`}
                             </div>
                           </div>
                         </div>

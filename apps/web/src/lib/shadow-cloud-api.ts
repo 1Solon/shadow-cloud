@@ -12,11 +12,14 @@ type ApiErrorPayload = {
 export type GameListItem = {
   id: string;
   slug: string;
+  gameNumber: number;
   name: string;
   organizerDisplayName: string;
   updatedAt: string;
+  roundNumber: number;
   activePlayerDisplayName: string;
   playerCount: number;
+  filledSeatCount: number;
 };
 
 export type GameDetail = {
@@ -25,6 +28,7 @@ export type GameDetail = {
   name: string;
   organizerId: string;
   organizerDisplayName: string;
+  playerCount: number | null;
   hasAiPlayers: boolean | null;
   dlcMode: string | null;
   gameMode: string | null;

@@ -222,6 +222,16 @@ export class GamesRegistrationService {
       );
     }
 
+    if (game.playerCount != null) {
+      const currentSeatCount = await prisma.gamePlayer.count({
+        where: { gameId: game.id },
+      });
+
+      if (currentSeatCount >= game.playerCount) {
+        throw new ConflictException('This game is already at its seat limit.');
+      }
+    }
+
     const registrationRequest = await prisma.registrationRequest.create({
       data: {
         gameId: game.id,
@@ -301,6 +311,13 @@ export class GamesRegistrationService {
         where: { gameId: request.gameId },
         orderBy: { turnOrder: 'desc' },
       });
+
+      if (
+        request.game.playerCount != null &&
+        (latestSeat?.turnOrder ?? 0) >= request.game.playerCount
+      ) {
+        throw new ConflictException('This game is already at its seat limit.');
+      }
 
       const seat = await transaction.gamePlayer.create({
         data: {

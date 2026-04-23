@@ -11,6 +11,7 @@ export type GameDetailResponse = {
   name: string;
   organizerId: string;
   organizerDisplayName: string;
+  playerCount: number | null;
   hasAiPlayers: boolean | null;
   dlcMode: GameDlcMode | null;
   gameMode: GameMode | null;
@@ -41,6 +42,7 @@ export type GameMetadataResponse = {
   id: string;
   slug: string;
   roundNumber: number;
+  playerCount: number | null;
   hasAiPlayers: boolean | null;
   dlcMode: GameDlcMode | null;
   gameMode: GameMode | null;

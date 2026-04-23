@@ -212,7 +212,9 @@ function SortableSeatRow({
                 : "text-orange-300",
           )}
         >
-          {player.displayName ?? "NULL!"}
+          {isEmptySeat
+            ? `${player.displayName ?? `Player ${index + 1}`} (Resigned)`
+            : player.displayName}
         </div>
         <div
           className={cn(

@@ -22,6 +22,11 @@ export class UpdateGameMetadataDto {
   roundNumber?: number;
 
   @IsOptional()
+  @IsInt()
+  @Min(1)
+  playerCount?: number;
+
+  @IsOptional()
   @IsBoolean()
   hasAiPlayers?: boolean;
 

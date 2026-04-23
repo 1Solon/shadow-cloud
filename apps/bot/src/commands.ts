@@ -54,7 +54,7 @@ const initCommand = new SlashCommandBuilder()
   .addIntegerOption((option) =>
     option
       .setName("player_count")
-      .setDescription("Player count for this game setup.")
+      .setDescription("Total seat limit for this game.")
       .setRequired(false)
       .setMinValue(1),
   )

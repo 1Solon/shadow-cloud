@@ -116,6 +116,7 @@ export default async function GameDetailPage({
           gameSlug={game.slug}
           hasAiPlayers={game.hasAiPlayers}
           organizerDisplayName={game.organizerDisplayName}
+          playerCount={game.playerCount}
           roundNumber={game.roundNumber}
           techLevel={game.techLevel}
           zoneCount={game.zoneCount}

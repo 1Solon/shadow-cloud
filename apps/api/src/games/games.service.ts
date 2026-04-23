@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -62,6 +63,11 @@ export class GamesService {
         OR: [{ id: gameId }, { slug: gameId }],
       },
       include: {
+        players: {
+          select: {
+            userId: true,
+          },
+        },
         turnState: true,
       },
     });
@@ -78,6 +84,7 @@ export class GamesService {
 
     const previousMetadata = {
       roundNumber: game.turnState?.roundNumber ?? 1,
+      playerCount: game.playerCount,
       hasAiPlayers: game.hasAiPlayers,
       dlcMode: game.dlcMode,
       gameMode: game.gameMode,
@@ -86,8 +93,12 @@ export class GamesService {
       armyCount: game.armyCount,
       notes: (game as { notes?: string | null }).notes ?? null,
     };
+    const occupiedSeatCount = game.players.filter(
+      (player) => player.userId != null,
+    ).length;
     const nextMetadata = {
       roundNumber: input.roundNumber ?? previousMetadata.roundNumber,
+      playerCount: input.playerCount ?? previousMetadata.playerCount,
       hasAiPlayers: input.hasAiPlayers ?? previousMetadata.hasAiPlayers,
       dlcMode:
         input.dlcMode == null
@@ -112,6 +123,16 @@ export class GamesService {
           : normalizeNotesInput(input.notes),
     };
 
+    if (
+      input.playerCount != null &&
+      nextMetadata.playerCount != null &&
+      nextMetadata.playerCount < occupiedSeatCount
+    ) {
+      throw new BadRequestException(
+        `Seat limit cannot be lower than the ${occupiedSeatCount} occupied seats in this game.`,
+      );
+    }
+
     await prisma.$transaction(async (transaction) => {
       if (input.roundNumber != null) {
         await transaction.turnState.update({
@@ -123,6 +144,10 @@ export class GamesService {
       }
 
       const gameUpdateData: Prisma.GameUpdateInput = {};
+
+      if (input.playerCount != null) {
+        gameUpdateData.playerCount = nextMetadata.playerCount;
+      }
 
       if (input.hasAiPlayers != null) {
         gameUpdateData.hasAiPlayers = nextMetadata.hasAiPlayers;

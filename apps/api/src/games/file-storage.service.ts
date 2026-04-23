@@ -12,6 +12,20 @@ function sanitizeSegment(value: string) {
   return sanitized || 'save-file';
 }
 
+function buildSaveFileName(input: {
+  gameNumber: number;
+  turn: number;
+  seat: number;
+  playerName: string;
+  originalName: string;
+}) {
+  const sanitizedOriginalName = sanitizeSegment(input.originalName);
+  const extension = extname(sanitizedOriginalName);
+  const sanitizedPlayerName = sanitizeSegment(input.playerName);
+
+  return `${input.gameNumber}-T${input.turn}-S${input.seat}-${sanitizedPlayerName}${extension}`;
+}
+
 @Injectable()
 export class FileStorageService {
   private readonly rootDirectory = resolve(
@@ -33,10 +47,7 @@ export class FileStorageService {
       this.rootDirectory,
       sanitizeSegment(input.gameId),
     );
-    const sanitizedOriginalName = sanitizeSegment(input.originalName);
-    const extension = extname(sanitizedOriginalName);
-    const sanitizedPlayerName = sanitizeSegment(input.playerName);
-    const fileName = `${input.gameNumber}-T${input.turn}-S${input.seat}-${sanitizedPlayerName}${extension}`;
+    const fileName = buildSaveFileName(input);
     const storagePath = join(gameDirectory, fileName);
 
     await mkdir(gameDirectory, { recursive: true });
@@ -46,6 +57,16 @@ export class FileStorageService {
       storagePath,
       fileName,
     };
+  }
+
+  createDownloadFileName(input: {
+    gameNumber: number;
+    turn: number;
+    seat: number;
+    playerName: string;
+    originalName: string;
+  }) {
+    return buildSaveFileName(input);
   }
 
   createDownloadStream(storagePath: string) {

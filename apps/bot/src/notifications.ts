@@ -4,6 +4,8 @@ import {
   ContainerBuilder,
   MessageFlags,
   SeparatorSpacingSize,
+  type InteractionEditReplyOptions,
+  type InteractionReplyOptions,
   type MessageCreateOptions,
 } from "discord.js";
 
@@ -75,13 +77,12 @@ type StandardNotificationOptions = {
   mentionedUserIds?: string[];
 };
 
-function buildStandardNotification({
+function buildStandardNotificationContainer({
   title,
   facts,
   actionLines = [],
   actionRow,
-  mentionedUserIds = [],
-}: StandardNotificationOptions): MessageCreateOptions {
+}: StandardNotificationOptions) {
   const container = new ContainerBuilder()
     .setAccentColor(ACCENT_COLOR)
     .addTextDisplayComponents(
@@ -103,17 +104,54 @@ function buildStandardNotification({
     container.addActionRowComponents(actionRow);
   }
 
+  return container;
+}
+
+function buildAllowedMentions(mentionedUserIds: string[]) {
   const uniqueMentionedUserIds = Array.from(
     new Set(mentionedUserIds.filter((userId) => userId.length > 0)),
   );
 
+  return uniqueMentionedUserIds.length > 0
+    ? { users: uniqueMentionedUserIds }
+    : undefined;
+}
+
+export function buildStandardNotification({
+  mentionedUserIds = [],
+  ...options
+}: StandardNotificationOptions): MessageCreateOptions {
   return {
-    components: [container],
+    components: [buildStandardNotificationContainer(options)],
     flags: MessageFlags.IsComponentsV2,
-    allowedMentions:
-      uniqueMentionedUserIds.length > 0
-        ? { users: uniqueMentionedUserIds }
-        : undefined,
+    allowedMentions: buildAllowedMentions(mentionedUserIds),
+  };
+}
+
+export function buildStandardReply({
+  ephemeral = false,
+  mentionedUserIds = [],
+  ...options
+}: StandardNotificationOptions & {
+  ephemeral?: boolean;
+}): InteractionReplyOptions {
+  return {
+    components: [buildStandardNotificationContainer(options)],
+    flags: ephemeral
+      ? MessageFlags.Ephemeral | MessageFlags.IsComponentsV2
+      : MessageFlags.IsComponentsV2,
+    allowedMentions: buildAllowedMentions(mentionedUserIds),
+  };
+}
+
+export function buildStandardEditReply({
+  mentionedUserIds = [],
+  ...options
+}: StandardNotificationOptions): InteractionEditReplyOptions {
+  return {
+    components: [buildStandardNotificationContainer(options)],
+    flags: MessageFlags.IsComponentsV2,
+    allowedMentions: buildAllowedMentions(mentionedUserIds),
   };
 }
 
@@ -279,12 +317,39 @@ export function buildApprovalNotificationMessage({
   return buildStandardNotification({
     title: `Overlord action needed: ${formatDiscordActor("Overlord", organizerDiscordId)}`,
     facts: [`**World** ${gameName}`, `**Applicant** ${applicantName}`],
-    actionLines: [`Approve or reject this registration request in-thread.`],
+    actionLines: ["Approve or reject this registration request in-thread."],
     actionRow: new ActionRowBuilder<ButtonBuilder>().addComponents(
       approveButton,
       rejectButton,
     ),
     mentionedUserIds: organizerDiscordId ? [organizerDiscordId] : [],
+  });
+}
+
+export function buildApprovalResultMessage({
+  approved,
+  gameName,
+  playerName,
+  turnOrder,
+  actionRow,
+}: {
+  approved: boolean;
+  gameName: string;
+  playerName: string;
+  turnOrder?: number;
+  actionRow?: ActionRowBuilder<ButtonBuilder>;
+}): InteractionEditReplyOptions {
+  return buildStandardEditReply({
+    title: approved ? "Registration approved" : "Registration rejected",
+    facts: [
+      buildNotificationResultText({
+        approved,
+        gameName,
+        playerName,
+        turnOrder,
+      }),
+    ],
+    actionRow,
   });
 }
 

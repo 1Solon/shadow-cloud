@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createApiAccessToken, getServerAuthSession } from "@/auth";
 
 const apiBaseUrl = process.env.SHADOW_CLOUD_API_URL ?? "http://localhost:3001";
+const postRedirectStatus = 303;
 
 function buildGameRedirect(
   request: Request,
@@ -29,6 +30,7 @@ export async function POST(
   if (!session?.user?.id) {
     return NextResponse.redirect(
       buildGameRedirect(request, slug, "error", "Sign in to upload saves."),
+      postRedirectStatus,
     );
   }
 
@@ -42,6 +44,7 @@ export async function POST(
         "error",
         "API authentication is unavailable.",
       ),
+      postRedirectStatus,
     );
   }
 
@@ -56,6 +59,7 @@ export async function POST(
         "error",
         "Choose a save file to upload.",
       ),
+      postRedirectStatus,
     );
   }
 
@@ -84,8 +88,12 @@ export async function POST(
 
     return NextResponse.redirect(
       buildGameRedirect(request, slug, "error", message),
+      postRedirectStatus,
     );
   }
 
-  return NextResponse.redirect(buildGameRedirect(request, slug, "success"));
+  return NextResponse.redirect(
+    buildGameRedirect(request, slug, "success"),
+    postRedirectStatus,
+  );
 }
