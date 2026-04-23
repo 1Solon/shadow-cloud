@@ -4,8 +4,10 @@ import {
   buildGameInitNotificationMessage,
   buildSaveNotificationMessage,
   type GameInitializedNotificationPayload,
+  type ThreadRenameNotificationPayload,
   type UploadNotificationPayload,
 } from "./notifications.js";
+import { renameThreadIfNeeded } from "./thread-name.js";
 
 type NotificationServerConfig = {
   notificationPort: number;
@@ -45,6 +47,7 @@ export function startNotificationServer(
   const server = createServer(async (request, response) => {
     const isSaveUploadedRequest = request.url === "/notify/save-uploaded";
     const isGameInitializedRequest = request.url === "/notify/game-initialized";
+    const isThreadRenameRequest = request.url === "/notify/thread-rename";
 
     if (request.method === "GET" && request.url === "/health") {
       response.writeHead(200).end("ok");
@@ -53,7 +56,9 @@ export function startNotificationServer(
 
     if (
       request.method !== "POST" ||
-      (!isSaveUploadedRequest && !isGameInitializedRequest)
+      (!isSaveUploadedRequest &&
+        !isGameInitializedRequest &&
+        !isThreadRenameRequest)
     ) {
       response.writeHead(404).end("Not found");
       return;
@@ -75,7 +80,8 @@ export function startNotificationServer(
     try {
       const payload = JSON.parse(Buffer.concat(chunks).toString("utf8")) as
         | UploadNotificationPayload
-        | GameInitializedNotificationPayload;
+        | GameInitializedNotificationPayload
+        | ThreadRenameNotificationPayload;
 
       if (!payload.game.discordThreadId) {
         response.writeHead(202).end("No thread configured");
@@ -86,6 +92,23 @@ export function startNotificationServer(
         client,
         payload.game.discordThreadId,
       );
+
+      if (isGameInitializedRequest) {
+        await renameThreadIfNeeded(
+          thread,
+          (payload as GameInitializedNotificationPayload).game.threadName,
+        );
+      }
+
+      if (isThreadRenameRequest) {
+        await renameThreadIfNeeded(
+          thread,
+          (payload as ThreadRenameNotificationPayload).game.threadName,
+        );
+        response.writeHead(204).end();
+        return;
+      }
+
       await thread.send(
         isSaveUploadedRequest
           ? buildSaveNotificationMessage(

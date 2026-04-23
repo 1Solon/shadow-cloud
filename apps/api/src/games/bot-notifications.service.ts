@@ -41,6 +41,7 @@ export type GameInitializedNotificationPayload = {
     id: string;
     slug: string;
     name: string;
+    threadName: string;
     gameNumber: number;
     discordThreadId: string | null;
     playerCount: number | null;
@@ -58,6 +59,16 @@ export type GameInitializedNotificationPayload = {
   };
 };
 
+export type ThreadRenameNotificationPayload = {
+  game: {
+    id: string;
+    slug: string;
+    name: string;
+    threadName: string;
+    discordThreadId: string | null;
+  };
+};
+
 @Injectable()
 export class BotNotificationsService {
   private readonly logger = new Logger(BotNotificationsService.name);
@@ -66,6 +77,7 @@ export class BotNotificationsService {
     'http://127.0.0.1:3011';
   private readonly saveUploadedEndpoint = `${this.notificationBaseUrl}/notify/save-uploaded`;
   private readonly gameInitializedEndpoint = `${this.notificationBaseUrl}/notify/game-initialized`;
+  private readonly threadRenameEndpoint = `${this.notificationBaseUrl}/notify/thread-rename`;
   private readonly secret = process.env.SHADOW_CLOUD_BOT_NOTIFY_SECRET;
 
   async notifySaveUploaded(payload: UploadNotificationPayload) {
@@ -82,6 +94,14 @@ export class BotNotificationsService {
     }
 
     await this.postNotification(this.gameInitializedEndpoint, payload);
+  }
+
+  async notifyThreadRenamed(payload: ThreadRenameNotificationPayload) {
+    if (!this.secret || !payload.game.discordThreadId) {
+      return;
+    }
+
+    await this.postNotification(this.threadRenameEndpoint, payload);
   }
 
   private async postNotification(endpoint: string, payload: unknown) {

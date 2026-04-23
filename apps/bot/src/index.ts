@@ -3,6 +3,7 @@ import { botConfig } from "./config.js";
 import { slashCommands } from "./commands.js";
 import { createInteractionHandler } from "./interaction-handler.js";
 import { startNotificationServer } from "./notification-server.js";
+import { syncStartupThreadNames } from "./startup-thread-sync.js";
 
 const token = botConfig.token;
 
@@ -28,6 +29,11 @@ client.once(Events.ClientReady, async (readyClient) => {
     slashCommands.map((command) => command.toJSON()),
   );
   console.log("Registered Shadow Cloud slash commands.");
+
+  await syncStartupThreadNames(client, {
+    apiBaseUrl: botConfig.apiBaseUrl,
+    botApiToken: botConfig.botApiToken,
+  });
 
   startNotificationServer(client, {
     notificationPort: botConfig.notificationPort,

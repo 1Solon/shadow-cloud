@@ -11,6 +11,7 @@ import {
   trimFileHistory,
 } from '../games-domain';
 import { FileStorageService } from '../file-storage.service';
+import { buildCanonicalThreadName } from '../support/game-configuration.helpers';
 import type { GameDetailResponse } from '../support/game-payload.types';
 import { resolveActivePlayerEntry } from '../support/turn-state.utils';
 import type {
@@ -63,6 +64,16 @@ export class GamesQueryService {
         slug: game.slug,
         gameNumber: game.gameNumber,
         name: game.name,
+        threadName: buildCanonicalThreadName({
+          gameNumber: game.gameNumber,
+          name: game.name,
+          playerCount: game.playerCount,
+          gameMode: game.gameMode,
+          techLevel: game.techLevel,
+          zoneCount: game.zoneCount,
+          armyCount: game.armyCount,
+        }),
+        discordThreadId: game.discordThreadId,
         organizerDisplayName: game.organizer.displayName,
         updatedAt: game.updatedAt.toISOString(),
         roundNumber: game.turnState?.roundNumber ?? 1,

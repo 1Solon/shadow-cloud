@@ -52,6 +52,7 @@ export type GameInitializedNotificationPayload = {
     id: string;
     slug: string;
     name: string;
+    threadName: string;
     gameNumber: number;
     discordThreadId: string | null;
     playerCount: number | null;
@@ -66,6 +67,16 @@ export type GameInitializedNotificationPayload = {
     id: string;
     displayName: string;
     discordId: string | null;
+  };
+};
+
+export type ThreadRenameNotificationPayload = {
+  game: {
+    id: string;
+    slug: string;
+    name: string;
+    threadName: string;
+    discordThreadId: string | null;
   };
 };
 

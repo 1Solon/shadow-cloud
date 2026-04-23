@@ -1,10 +1,10 @@
 {
   "name": "@shadow-cloud/bot",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "node ./scripts/dev.mjs",
     "build": "tsc -p tsconfig.json",
     "format": "prettier --write \"src/**/*.ts\"",
     "lint": "eslint \"src/**/*.ts\"",
