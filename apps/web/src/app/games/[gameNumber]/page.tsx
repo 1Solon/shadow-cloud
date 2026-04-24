@@ -3,14 +3,14 @@ import { getServerAuthSession } from "@/auth";
 import { DownloadSaveButton } from "@/components/download-save-button";
 import { GameMetadataCard } from "@/components/game-metadata-card";
 import { GameNotesCard } from "@/components/game-notes-card";
+import { SaveUploadCard } from "@/components/save-upload-card";
 import { SeatOrderEditor } from "@/components/seat-order-editor";
 import { TerminalConfirmationModal } from "@/components/terminal-confirmation-modal";
-import { UploadSaveForm } from "@/components/upload-save-form";
 import {
-  Card,
   CardContent,
-  CardDescription,
   CardHeader,
+  Card,
+  CardDescription,
   CardTitle,
 } from "@/components/ui/card";
 import { getGameDetail } from "@/lib/shadow-cloud-api";
@@ -96,25 +96,14 @@ export default async function GameDetailPage({
         </div>
       ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Save Upload:</CardTitle>
-          <CardDescription>
-            Only the active lord can submit the next save for this round.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isActivePlayer ? (
-            <UploadSaveForm gameNumber={game.gameNumber} />
-          ) : (
-            <div className="rounded-lg border border-orange-400/20 bg-orange-400/5 px-4 py-4 text-sm text-orange-300 font-mono">
-              {session?.user
-                ? `Waiting for ${game.activePlayerDisplayName} to upload the current turn.`
-                : "Sign in with Discord to upload or download game saves."}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <section className="scroll-mt-6" id="save-upload">
+        <SaveUploadCard
+          activePlayerDisplayName={game.activePlayerDisplayName}
+          gameNumber={game.gameNumber}
+          isActivePlayer={isActivePlayer}
+          isSignedIn={Boolean(session?.user)}
+        />
+      </section>
 
       <section>
         <GameMetadataCard
