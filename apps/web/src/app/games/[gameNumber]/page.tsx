@@ -83,13 +83,6 @@ export default async function GameDetailPage({
               : null
         }
       />
-      <section>
-        <GameNotesCard
-          canEdit={canEditSeatOrder}
-          gameNumber={game.gameNumber}
-          notes={game.notes}
-        />
-      </section>
       {query.upload === "error" ? (
         <div className="rounded-lg border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-300 font-mono">
           {uploadMessage ?? "The save upload failed."}
@@ -102,6 +95,14 @@ export default async function GameDetailPage({
           gameNumber={game.gameNumber}
           isActivePlayer={isActivePlayer}
           isSignedIn={Boolean(session?.user)}
+        />
+      </section>
+
+      <section>
+        <GameNotesCard
+          canEdit={canEditSeatOrder}
+          gameNumber={game.gameNumber}
+          notes={game.notes}
         />
       </section>
 
