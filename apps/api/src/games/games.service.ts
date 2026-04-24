@@ -28,6 +28,7 @@ import {
   normalizeNotesInput,
 } from './support/game-configuration.helpers';
 import { buildGameIdentifierWhere } from './support/game-lookup.helpers';
+import { syncGameSeatCount } from './support/seat-count.helpers';
 import type {
   GameDetailResponse,
   GameMetadataResponse,
@@ -69,6 +70,8 @@ export class GamesService {
       include: {
         players: {
           select: {
+            id: true,
+            turnOrder: true,
             userId: true,
           },
         },
@@ -183,6 +186,15 @@ export class GamesService {
           data: {
             roundNumber: nextMetadata.roundNumber,
           },
+        });
+      }
+
+      if (input.playerCount != null && nextMetadata.playerCount != null) {
+        await syncGameSeatCount({
+          transaction,
+          gameId: game.id,
+          players: game.players,
+          targetPlayerCount: nextMetadata.playerCount,
         });
       }
 

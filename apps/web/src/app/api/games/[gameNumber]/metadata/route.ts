@@ -101,7 +101,8 @@ export async function PATCH(
     payload.playerCount !== undefined &&
     (typeof payload.playerCount !== "number" ||
       !Number.isInteger(payload.playerCount) ||
-      payload.playerCount < 1)
+      payload.playerCount < 1 ||
+      payload.playerCount > 100)
   ) {
     return Response.json(
       { error: "Seat limit metadata is invalid." },

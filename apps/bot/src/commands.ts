@@ -56,7 +56,8 @@ const initCommand = new SlashCommandBuilder()
       .setName("player_count")
       .setDescription("Total seat limit for this game.")
       .setRequired(false)
-      .setMinValue(1),
+      .setMinValue(1)
+      .setMaxValue(100),
   )
   .addBooleanOption((option) =>
     option

@@ -25,6 +25,7 @@ import {
   getDiscordIdentity,
   upsertDiscordUser,
 } from '../support/discord-user.helpers';
+import { syncGameSeatCount } from '../support/seat-count.helpers';
 
 @Injectable()
 export class GamesRegistrationService {
@@ -117,6 +118,21 @@ export class GamesRegistrationService {
           roundNumber: 1,
         },
       });
+
+      if (input.playerCount != null) {
+        await syncGameSeatCount({
+          transaction,
+          gameId: createdGame.id,
+          players: [
+            {
+              id: organizerEntry.id,
+              turnOrder: organizerEntry.turnOrder,
+              userId: organizerEntry.userId,
+            },
+          ],
+          targetPlayerCount: input.playerCount,
+        });
+      }
 
       await transaction.auditEvent.create({
         data: {
@@ -240,11 +256,16 @@ export class GamesRegistrationService {
     }
 
     if (game.playerCount != null) {
-      const currentSeatCount = await prisma.gamePlayer.count({
-        where: { gameId: game.id },
+      const currentOccupiedSeatCount = await prisma.gamePlayer.count({
+        where: {
+          gameId: game.id,
+          userId: {
+            not: null,
+          },
+        },
       });
 
-      if (currentSeatCount >= game.playerCount) {
+      if (currentOccupiedSeatCount >= game.playerCount) {
         throw new ConflictException('This game is already at its seat limit.');
       }
     }
@@ -324,27 +345,44 @@ export class GamesRegistrationService {
         displayName: request.playerDisplayName,
       });
 
+      const availableSeat = await transaction.gamePlayer.findFirst({
+        where: {
+          gameId: request.gameId,
+          userId: null,
+        },
+        orderBy: { turnOrder: 'asc' },
+      });
+
       const latestSeat = await transaction.gamePlayer.findFirst({
         where: { gameId: request.gameId },
         orderBy: { turnOrder: 'desc' },
       });
 
       if (
+        !availableSeat &&
         request.game.playerCount != null &&
         (latestSeat?.turnOrder ?? 0) >= request.game.playerCount
       ) {
         throw new ConflictException('This game is already at its seat limit.');
       }
 
-      const seat = await transaction.gamePlayer.create({
-        data: {
-          gameId: request.gameId,
-          userId: player.id,
-          turnOrder: (latestSeat?.turnOrder ?? 0) + 1,
-          role: GameRole.PLAYER,
-        },
-        include: { user: true },
-      });
+      const seat = availableSeat
+        ? await transaction.gamePlayer.update({
+            where: { id: availableSeat.id },
+            data: {
+              userId: player.id,
+            },
+            include: { user: true },
+          })
+        : await transaction.gamePlayer.create({
+            data: {
+              gameId: request.gameId,
+              userId: player.id,
+              turnOrder: (latestSeat?.turnOrder ?? 0) + 1,
+              role: GameRole.PLAYER,
+            },
+            include: { user: true },
+          });
 
       await transaction.auditEvent.create({
         data: {

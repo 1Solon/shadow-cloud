@@ -168,6 +168,11 @@ function SortableSeatRow({
 }: SortableSeatRowProps) {
   const isActive = player.id === activePlayerEntryId;
   const isEmptySeat = player.userId == null;
+  const playerLabel = isEmptySeat
+    ? player.displayName != null
+      ? `${player.displayName} (Resigned)`
+      : '[Open]'
+    : player.displayName;
   const showActiveRowHighlight = isActive && !isEditing;
   const {
     attributes,
@@ -210,7 +215,7 @@ function SortableSeatRow({
           )}
           style={{
             backgroundImage:
-              "repeating-linear-gradient(45deg, transparent 0, transparent 10px, rgba(251, 146, 60, 0.22) 10px, rgba(251, 146, 60, 0.22) 16px), repeating-linear-gradient(-45deg, transparent 0, transparent 10px, rgba(251, 146, 60, 0.18) 10px, rgba(251, 146, 60, 0.18) 16px)",
+              "repeating-linear-gradient(315deg, transparent 0, transparent 10px, rgba(251, 146, 60, 0.22) 10px, rgba(251, 146, 60, 0.22) 16px)",
           }}
         />
       ) : null}
@@ -225,9 +230,7 @@ function SortableSeatRow({
                 : "text-orange-300",
           )}
         >
-          {isEmptySeat
-            ? `${player.displayName ?? `Player ${index + 1}`} (Resigned)`
-            : player.displayName}
+          {playerLabel}
         </div>
         <div
           className={cn(

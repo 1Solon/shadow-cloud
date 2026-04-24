@@ -433,6 +433,7 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
             <EditField label="Seats">
               <input
                 className={controlClassName}
+                max={100}
                 min={1}
                 step={1}
                 type="number"
