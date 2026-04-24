@@ -29,6 +29,21 @@ type GameMetadataCardProps = {
   techLevel: number | null;
   zoneCount: string | null;
   armyCount: string | null;
+  players: Array<{
+    id: string;
+    userId: string | null;
+    displayName: string | null;
+    turnOrder: number;
+    isOrganizer: boolean;
+  }>;
+};
+
+type PendingHostTransfer = {
+  seatEntryId: string;
+  seatNumber: number;
+  displayName: string;
+  metadataPayload: ReturnType<typeof buildMetadataPayload>;
+  gameNumber: number;
 };
 
 const dlcOptions = [
@@ -225,6 +240,62 @@ function EditField({
 const controlClassName =
   "h-11 w-full rounded-md border border-orange-400/30 bg-black px-3 text-sm font-mono text-orange-200 outline-none transition focus:border-orange-300";
 
+function HostTransferConfirmationDialog({
+  target,
+  isPending,
+  onCancel,
+  onConfirm,
+}: {
+  target: PendingHostTransfer | null;
+  isPending: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  if (!target) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6">
+      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-orange-400/30 bg-[#0a0711] shadow-2xl shadow-orange-950/40">
+        <div className="flex items-center justify-between border-b border-orange-400/20 bg-orange-400/10 px-4 py-3 font-mono text-[11px] uppercase tracking-[0.28em] text-orange-200">
+          <span>Confirm Overlord Transfer</span>
+          <button
+            aria-label="Close confirmation"
+            className="text-orange-300/70 transition-colors hover:text-orange-200"
+            type="button"
+            onClick={onCancel}
+          >
+            X
+          </button>
+        </div>
+        <div className="space-y-4 bg-black/70 px-4 py-4 font-mono text-sm text-orange-300">
+          <div className="space-y-1 text-orange-200/85">
+            <div>&gt; overlord --transfer seat-{target.seatNumber}</div>
+            <div className="whitespace-pre-wrap break-words leading-6">
+              {target.displayName} will receive campaign control and become the
+              new Overlord.
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              disabled={isPending}
+              type="button"
+              variant="secondary"
+              onClick={onCancel}
+            >
+              Cancel
+            </Button>
+            <Button disabled={isPending} type="button" onClick={onConfirm}>
+              Confirm
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function GameMetadataCard(props: GameMetadataCardProps) {
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
@@ -233,51 +304,105 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
   const [confirmation, setConfirmation] =
     useState<TerminalConfirmationSpec | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [pendingTransfer, setPendingTransfer] =
+    useState<PendingHostTransfer | null>(null);
+  const organizerOptions = props.players.filter((player) => player.userId != null);
+  const currentOrganizerEntry =
+    organizerOptions.find((player) => player.isOrganizer) ?? null;
+  const [organizerEntryId, setOrganizerEntryId] = useState(
+    currentOrganizerEntry?.id ?? "",
+  );
+  const [isTransferPending, startTransferTransition] = useTransition();
+  const isMutating = isPending || isTransferPending;
+
+  async function applyMetadataUpdate(
+    payload: ReturnType<typeof buildMetadataPayload>,
+  ) {
+    if (Object.keys(payload).length === 0) {
+      return props.gameNumber;
+    }
+
+    const response = await fetch(
+      `/api/games/${encodeURIComponent(String(props.gameNumber))}/metadata`,
+      {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      },
+    );
+
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as {
+        error?: string;
+      } | null;
+      setErrorMessage(body?.error ?? "The game metadata update failed.");
+      return null;
+    }
+
+    const body = (await response.json().catch(() => null)) as {
+      gameNumber?: number;
+    } | null;
+
+    return body?.gameNumber ?? props.gameNumber;
+  }
 
   function cancelEditing() {
     setDraft(createDraft(props));
+    setOrganizerEntryId(currentOrganizerEntry?.id ?? "");
     setIsEditing(false);
     setErrorMessage(null);
     setConfirmation(null);
+    setPendingTransfer(null);
   }
 
   function saveMetadata() {
-    const payload = buildMetadataPayload(draft, createDraft(props));
+    const initialDraft = createDraft(props);
+    const payload = buildMetadataPayload(draft, initialDraft);
+    const selectedOrganizer = organizerOptions.find(
+      (player) => player.id === organizerEntryId,
+    );
+    const organizerChanged =
+      organizerEntryId.length > 0 && organizerEntryId !== (currentOrganizerEntry?.id ?? "");
 
-    if (Object.keys(payload).length === 0) {
+    if (Object.keys(payload).length === 0 && !organizerChanged) {
       setErrorMessage("Change at least one detail before saving.");
+      return;
+    }
+
+    if (organizerChanged) {
+      if (!selectedOrganizer?.userId || selectedOrganizer.isOrganizer) {
+        setErrorMessage("Select an occupied non-Overlord seat.");
+        return;
+      }
+
+      setErrorMessage(null);
+      setConfirmation(null);
+      setPendingTransfer({
+        seatEntryId: selectedOrganizer.id,
+        seatNumber: selectedOrganizer.turnOrder,
+        displayName:
+          selectedOrganizer.displayName ?? `Seat ${selectedOrganizer.turnOrder}`,
+        metadataPayload: payload,
+        gameNumber: props.gameNumber,
+      });
       return;
     }
 
     setErrorMessage(null);
     setConfirmation(null);
+    setPendingTransfer(null);
 
     startTransition(async () => {
-      const response = await fetch(
-        `/api/games/${encodeURIComponent(String(props.gameNumber))}/metadata`,
-        {
-          method: "PATCH",
-          headers: {
-            "content-type": "application/json",
-          },
-          body: JSON.stringify(payload),
-        },
-      );
+      const nextGameNumber = await applyMetadataUpdate(payload);
 
-      if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as {
-          error?: string;
-        } | null;
-        setErrorMessage(body?.error ?? "The game metadata update failed.");
+      if (nextGameNumber == null) {
         return;
       }
 
-      const body = (await response.json().catch(() => null)) as {
-        gameNumber?: number;
-      } | null;
-      const nextGameNumber = body?.gameNumber ?? props.gameNumber;
-
       setIsEditing(false);
+      setOrganizerEntryId(organizerEntryId);
 
       if (nextGameNumber !== props.gameNumber) {
         router.push(`/games/${nextGameNumber}?metadata=success`);
@@ -290,6 +415,62 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
           "[ok] campaign metadata written to the command archive",
           "[ok] world configuration refreshed for connected operators",
           "<CAMPAIGN DETAILS UPDATED>",
+        ],
+      });
+      router.refresh();
+    });
+  }
+
+  function confirmTransfer() {
+    if (!pendingTransfer) {
+      return;
+    }
+
+    startTransferTransition(async () => {
+      const nextGameNumber = await applyMetadataUpdate(
+        pendingTransfer.metadataPayload,
+      );
+
+      if (nextGameNumber == null) {
+        return;
+      }
+
+      const response = await fetch(
+        `/api/games/${encodeURIComponent(String(nextGameNumber))}/transfer-host`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            targetPlayerEntryId: pendingTransfer.seatEntryId,
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        setErrorMessage(body?.error ?? "The Overlord transfer failed.");
+        return;
+      }
+
+      setOrganizerEntryId(pendingTransfer.seatEntryId);
+      setIsEditing(false);
+      setPendingTransfer(null);
+
+      if (nextGameNumber !== props.gameNumber) {
+        router.push(`/games/${nextGameNumber}`);
+        return;
+      }
+
+      setConfirmation({
+        command: `overlord --transfer seat-${pendingTransfer.seatNumber}`,
+        lines: [
+          `[ok] campaign control reassigned to ${pendingTransfer.displayName}`,
+          "[ok] organizer-only controls refreshed for the active campaign view",
+          "<OVERLORD TRANSFERRED>",
         ],
       });
       router.refresh();
@@ -334,6 +515,14 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
           setConfirmation(null);
         }}
       />
+      <HostTransferConfirmationDialog
+        target={pendingTransfer}
+        isPending={isTransferPending}
+        onCancel={() => {
+          setPendingTransfer(null);
+        }}
+        onConfirm={confirmTransfer}
+      />
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <CardTitle>Campaign details:</CardTitle>
@@ -345,25 +534,28 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
           isEditing ? (
             <div className="flex gap-2">
               <Button
-                disabled={isPending}
+                disabled={isMutating}
                 type="button"
                 variant="secondary"
                 onClick={cancelEditing}
               >
                 Cancel
               </Button>
-              <Button disabled={isPending} type="button" onClick={saveMetadata}>
+              <Button disabled={isMutating} type="button" onClick={saveMetadata}>
                 {isPending ? "Saving..." : "Save details"}
               </Button>
             </div>
           ) : (
             <Button
+              disabled={isMutating}
               type="button"
               variant="secondary"
               onClick={() => {
                 setDraft(createDraft(props));
+                setOrganizerEntryId(currentOrganizerEntry?.id ?? "");
                 setErrorMessage(null);
                 setConfirmation(null);
+                setPendingTransfer(null);
                 setIsEditing(true);
               }}
             >
@@ -410,7 +602,25 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
                 }}
               />
             </EditField>
-            <DetailTile label="Overlord" value={props.organizerDisplayName} />
+            <EditField label="Overlord">
+              <select
+                className={controlClassName}
+                disabled={isMutating || organizerOptions.length === 0}
+                value={organizerEntryId}
+                onChange={(event) => {
+                  setOrganizerEntryId(event.target.value);
+                  setErrorMessage(null);
+                  setConfirmation(null);
+                  setPendingTransfer(null);
+                }}
+              >
+                {organizerOptions.map((player) => (
+                  <option key={player.id} value={player.id}>
+                    {`Seat ${player.turnOrder}: ${player.displayName ?? "Unknown player"}`}
+                  </option>
+                ))}
+              </select>
+            </EditField>
             <DetailTile
               label="Active lord"
               value={props.activePlayerDisplayName}

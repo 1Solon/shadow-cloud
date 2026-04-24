@@ -15,6 +15,7 @@ import type { ReorderSeatOrderDto } from '../dto/reorder-seat-order.dto';
 import type { ReplaceDiscordPlayerDto } from '../dto/replace-discord-player.dto';
 import type { ResignDiscordPlayerDto } from '../dto/resign-discord-player.dto';
 import type { SkipDiscordPlayerDto } from '../dto/skip-discord-player.dto';
+import type { TransferHostDto } from '../dto/transfer-host.dto';
 import {
   getDiscordIdentity,
   upsertDiscordUser,
@@ -696,6 +697,113 @@ export class GamesTurnService {
     };
   }
 
+  async transferHost(
+    gameId: string,
+    userId: string | undefined,
+    input: TransferHostDto,
+  ) {
+    if (!userId) {
+      throw new UnauthorizedException(
+        'Authenticated user id is missing from the token.',
+      );
+    }
+
+    const game = await prisma.game.findFirst({
+      where: {
+        ...buildGameIdentifierWhere(gameId),
+      },
+      include: {
+        players: {
+          include: {
+            user: true,
+          },
+          orderBy: {
+            turnOrder: 'asc',
+          },
+        },
+      },
+    });
+
+    if (!game) {
+      throw new NotFoundException(`Game ${gameId} was not found.`);
+    }
+
+    if (game.organizerId !== userId) {
+      throw new ForbiddenException(
+        'Only the game organizer can transfer host control.',
+      );
+    }
+
+    const targetEntry = game.players.find(
+      (player) => player.id === input.targetPlayerEntryId,
+    );
+
+    if (!targetEntry || !targetEntry.userId || !targetEntry.user) {
+      throw new NotFoundException(
+        'The selected host transfer target is not an active player in this game.',
+      );
+    }
+
+    const targetUser = targetEntry.user;
+
+    if (targetEntry.userId === game.organizerId) {
+      throw new BadRequestException(
+        'Select a different player to transfer host control.',
+      );
+    }
+
+    const previousOrganizerEntry =
+      game.players.find((player) => player.userId === game.organizerId) ?? null;
+
+    await prisma.$transaction(async (transaction) => {
+      if (previousOrganizerEntry) {
+        await transaction.gamePlayer.update({
+          where: { id: previousOrganizerEntry.id },
+          data: { role: GameRole.PLAYER },
+        });
+      }
+
+      await transaction.game.update({
+        where: { id: game.id },
+        data: { organizerId: targetEntry.userId! },
+      });
+
+      await transaction.gamePlayer.update({
+        where: { id: targetEntry.id },
+        data: { role: GameRole.ORGANIZER },
+      });
+
+      await transaction.auditEvent.create({
+        data: {
+          gameId: game.id,
+          actorId: userId,
+          eventType: AuditEventType.ROSTER_UPDATED,
+          payload: JSON.stringify({
+            action: 'host_transferred',
+            previousOrganizerEntryId: previousOrganizerEntry?.id ?? null,
+            previousOrganizerDisplayName:
+              previousOrganizerEntry?.user?.displayName ?? null,
+            nextOrganizerEntryId: targetEntry.id,
+            nextOrganizerDisplayName: targetUser.displayName,
+          }),
+        },
+      });
+    });
+
+    return {
+      gameId: game.id,
+      gameNumber: game.gameNumber,
+      slug: game.slug,
+      name: game.name,
+      organizerId: targetEntry.userId,
+      organizerDisplayName: targetUser.displayName,
+      player: {
+        displayName: targetUser.displayName,
+        turnOrder: targetEntry.turnOrder,
+      },
+    };
+  }
+
   async resignPlayerFromDiscord(input: ResignDiscordPlayerDto) {
     const game = await prisma.game.findUnique({
       where: { discordThreadId: input.discordThreadId },
@@ -747,42 +855,6 @@ export class GamesTurnService {
     const wasOrganizer =
       resigningEntry.role === GameRole.ORGANIZER ||
       game.organizerId === resigningEntry.userId;
-    let newOrganizerEntry: (typeof orderedPlayers)[number] | null = null;
-
-    if (wasOrganizer) {
-      if (!input.newOrganizerDiscordId) {
-        throw new BadRequestException(
-          'Organizers must designate a new organizer before resigning.',
-        );
-      }
-
-      const newOrganizerIdentity = await prisma.authIdentity.findUnique({
-        where: {
-          provider_providerId: {
-            provider: 'discord',
-            providerId: input.newOrganizerDiscordId,
-          },
-        },
-      });
-
-      newOrganizerEntry = newOrganizerIdentity
-        ? (orderedPlayers.find(
-            (player) => player.userId === newOrganizerIdentity.userId,
-          ) ?? null)
-        : null;
-
-      if (!newOrganizerEntry) {
-        throw new NotFoundException(
-          'The designated new organizer is not registered in this game.',
-        );
-      }
-
-      if (newOrganizerEntry.id === resigningEntry.id) {
-        throw new BadRequestException(
-          'The new organizer must be a different player.',
-        );
-      }
-    }
 
     const activeEntry = game.turnState
       ? resolveActivePlayerEntry(game.players, game.turnState)
@@ -805,14 +877,10 @@ export class GamesTurnService {
     }
 
     await prisma.$transaction(async (transaction) => {
-      if (wasOrganizer && newOrganizerEntry) {
-        await transaction.game.update({
-          where: { id: game.id },
-          data: { organizerId: newOrganizerEntry.userId! },
-        });
+      if (wasOrganizer && resigningEntry.role === GameRole.ORGANIZER) {
         await transaction.gamePlayer.update({
-          where: { id: newOrganizerEntry.id },
-          data: { role: GameRole.ORGANIZER },
+          where: { id: resigningEntry.id },
+          data: { role: GameRole.PLAYER },
         });
       }
 
@@ -842,9 +910,6 @@ export class GamesTurnService {
             playerEntryId: resigningEntry.id,
             turnOrder: resigningEntry.turnOrder,
             wasOrganizer,
-            newOrganizerEntryId: newOrganizerEntry?.id ?? null,
-            newOrganizerDisplayName:
-              newOrganizerEntry?.user?.displayName ?? null,
             turnAdvanced: isActivePlayer,
           }),
         },

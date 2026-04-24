@@ -109,14 +109,7 @@ const registerCommand = new SlashCommandBuilder()
 
 const resignCommand = new SlashCommandBuilder()
   .setName("resign")
-  .setDescription("Remove yourself from the current Shadow Cloud game thread.")
-  .addUserOption((option) =>
-    option
-      .setName("new_organizer")
-      .setDescription(
-        "Required if you are the organizer: the player who will take over as organizer.",
-      ),
-  );
+  .setDescription("Remove yourself from the current Shadow Cloud game thread.");
 
 const replaceCommand = new SlashCommandBuilder()
   .setName("replace")

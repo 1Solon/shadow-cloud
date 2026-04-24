@@ -186,16 +186,12 @@ export async function sendCommandRequest(
     }
 
     case "resign": {
-      const newOrganizerUser = interaction.options.getUser("new_organizer");
       const response = await postJson(
         `${config.apiBaseUrl}/v1/games/resign`,
         config.botApiToken,
         {
           discordThreadId: channel.id,
           playerDiscordId: interaction.user.id,
-          ...(newOrganizerUser
-            ? { newOrganizerDiscordId: newOrganizerUser.id }
-            : {}),
         },
       );
 

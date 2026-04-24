@@ -278,8 +278,8 @@ function SortableSeatRow({
             </Button>
             {player.isOrganizer ? (
               <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-56 -translate-x-1/2 rounded-md border border-orange-400/30 bg-black px-3 py-2 text-[10px] normal-case tracking-normal text-orange-200 shadow-lg group-hover:block group-focus-within:block">
-                The Overlord must be transferred to another Lord before they can
-                be removed from their seat.
+                Transfer the Overlord to another occupied seat before removing
+                this seat.
               </span>
             ) : null}
           </span>
@@ -298,8 +298,8 @@ function SortableSeatRow({
             </Button>
             {player.isOrganizer ? (
               <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-56 -translate-x-1/2 rounded-md border border-orange-400/30 bg-black px-3 py-2 text-[10px] normal-case tracking-normal text-orange-200 shadow-lg group-hover:block group-focus-within:block">
-                The Overlord must be transferred to another Lord before they can
-                be removed from their seat.
+                Transfer the Overlord to another occupied seat before removing
+                this seat.
               </span>
             ) : null}
           </span>
@@ -486,6 +486,7 @@ export function SeatOrderEditor({
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
+  const isMutating = isPending;
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -761,7 +762,7 @@ export function SeatOrderEditor({
       />
       <SeatActionConfirmationDialog
         action={pendingSeatAction}
-        isPending={isPending}
+        isPending={isMutating}
         onCancel={() => {
           setPendingSeatAction(null);
         }}
@@ -780,7 +781,7 @@ export function SeatOrderEditor({
           isEditing ? (
             <div className="flex gap-2">
               <Button
-                disabled={isPending}
+                disabled={isMutating}
                 type="button"
                 variant="secondary"
                 onClick={cancelEdit}
@@ -788,7 +789,7 @@ export function SeatOrderEditor({
                 Cancel
               </Button>
               <Button
-                disabled={isPending}
+                disabled={isMutating}
                 type="button"
                 onClick={saveSeatOrder}
               >
@@ -797,6 +798,7 @@ export function SeatOrderEditor({
             </div>
           ) : (
             <Button
+              disabled={isMutating}
               type="button"
               variant="secondary"
               onClick={() => {
@@ -846,7 +848,7 @@ export function SeatOrderEditor({
                 }
                 index={index}
                 isEditing={isEditing}
-                isPending={isPending}
+                isPending={isMutating}
                 onClearPlayer={clearPlayerFromSeat}
                 onMakeActive={makeSeatActive}
                 onRemoveSeat={removeSeatFromGame}

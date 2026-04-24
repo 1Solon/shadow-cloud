@@ -23,6 +23,7 @@ import { ReorderSeatOrderDto } from './dto/reorder-seat-order.dto';
 import { ReplaceDiscordPlayerDto } from './dto/replace-discord-player.dto';
 import { ResignDiscordPlayerDto } from './dto/resign-discord-player.dto';
 import { SkipDiscordPlayerDto } from './dto/skip-discord-player.dto';
+import { TransferHostDto } from './dto/transfer-host.dto';
 import { UpdateGameMetadataDto } from './dto/update-game-metadata.dto';
 import { ApproveRegistrationRequestDto } from './dto/approve-registration-request.dto';
 import { GamesService, type UploadedSaveFile } from './games.service';
@@ -81,6 +82,16 @@ export class GamesController {
     @Body() input: ReorderSeatOrderDto,
   ) {
     return this.gamesService.reorderSeatOrder(gameId, request.user?.sub, input);
+  }
+
+  @Post(':gameId/transfer-host')
+  @UseGuards(AppAuthGuard)
+  transferHost(
+    @Param('gameId') gameId: string,
+    @Req() request: AuthenticatedRequest,
+    @Body() input: TransferHostDto,
+  ) {
+    return this.gamesService.transferHost(gameId, request.user?.sub, input);
   }
 
   @Patch(':gameId/metadata')

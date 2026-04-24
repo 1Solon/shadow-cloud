@@ -16,6 +16,7 @@ import type { ReorderSeatOrderDto } from './dto/reorder-seat-order.dto';
 import type { ReplaceDiscordPlayerDto } from './dto/replace-discord-player.dto';
 import type { ResignDiscordPlayerDto } from './dto/resign-discord-player.dto';
 import type { SkipDiscordPlayerDto } from './dto/skip-discord-player.dto';
+import type { TransferHostDto } from './dto/transfer-host.dto';
 import type { UpdateGameMetadataDto } from './dto/update-game-metadata.dto';
 import {
   buildCanonicalThreadName,
@@ -299,6 +300,14 @@ export class GamesService {
     input: ReorderSeatOrderDto,
   ) {
     return this.gamesTurn.reorderSeatOrder(gameId, userId, input);
+  }
+
+  async transferHost(
+    gameId: string,
+    userId: string | undefined,
+    input: TransferHostDto,
+  ) {
+    return this.gamesTurn.transferHost(gameId, userId, input);
   }
 
   async createGameFromDiscordInit(input: CreateDiscordGameDto) {

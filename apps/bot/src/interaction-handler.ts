@@ -260,7 +260,7 @@ async function handleSuccessfulCommand(
 
     const mention = `<@${interaction.user.id}>`;
     const organizerNote = wasOrganizer
-      ? " The organizer role has been transferred."
+      ? " They remain the Overlord until campaign control is transferred in the web app."
       : "";
     await channel.send(
       buildStandardNotification({
