@@ -28,10 +28,18 @@ export async function POST(
   const payload = (await request.json().catch(() => null)) as {
     seatEntryIds?: unknown;
     clearedSeatEntryIds?: unknown;
+    removedSeatEntryIds?: unknown;
     activePlayerEntryId?: unknown;
   } | null;
 
   if (!Array.isArray(payload?.seatEntryIds)) {
+    return Response.json(
+      { error: "Seat order payload is invalid." },
+      { status: 400 },
+    );
+  }
+
+  if (payload.seatEntryIds.some((entryId) => typeof entryId !== "string")) {
     return Response.json(
       { error: "Seat order payload is invalid." },
       { status: 400 },
@@ -49,11 +57,31 @@ export async function POST(
   }
 
   if (
+    payload.removedSeatEntryIds != null &&
+    !Array.isArray(payload.removedSeatEntryIds)
+  ) {
+    return Response.json(
+      { error: "Removed seat payload is invalid." },
+      { status: 400 },
+    );
+  }
+
+  if (
     Array.isArray(payload.clearedSeatEntryIds) &&
     payload.clearedSeatEntryIds.some((entryId) => typeof entryId !== "string")
   ) {
     return Response.json(
       { error: "Cleared seat payload is invalid." },
+      { status: 400 },
+    );
+  }
+
+  if (
+    Array.isArray(payload.removedSeatEntryIds) &&
+    payload.removedSeatEntryIds.some((entryId) => typeof entryId !== "string")
+  ) {
+    return Response.json(
+      { error: "Removed seat payload is invalid." },
       { status: 400 },
     );
   }
@@ -79,6 +107,7 @@ export async function POST(
       body: JSON.stringify({
         seatEntryIds: payload.seatEntryIds,
         clearedSeatEntryIds: payload.clearedSeatEntryIds,
+        removedSeatEntryIds: payload.removedSeatEntryIds,
         activePlayerEntryId: payload.activePlayerEntryId,
       }),
       cache: "no-store",

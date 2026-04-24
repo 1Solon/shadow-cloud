@@ -317,10 +317,11 @@ export class GamesTurnService {
     const currentSeatIds = game.players.map((player) => player.id);
     const requestedSeatIds = input.seatEntryIds;
     const clearedSeatIds = input.clearedSeatEntryIds ?? [];
+    const removedSeatIds = input.removedSeatEntryIds ?? [];
 
-    if (requestedSeatIds.length !== currentSeatIds.length) {
+    if (requestedSeatIds.length === 0) {
       throw new BadRequestException(
-        'Seat order must include every seat in the game exactly once.',
+        'Seat order must retain at least one seat in the game.',
       );
     }
 
@@ -338,6 +339,35 @@ export class GamesTurnService {
       );
     }
 
+    const uniqueRemovedSeatIds = new Set(removedSeatIds);
+
+    if (uniqueRemovedSeatIds.size !== removedSeatIds.length) {
+      throw new BadRequestException(
+        'Seat deletion contains duplicate seat entries.',
+      );
+    }
+
+    if (removedSeatIds.some((seatId) => !currentSeatIds.includes(seatId))) {
+      throw new BadRequestException(
+        'Seat deletion contains a seat that does not belong to this game.',
+      );
+    }
+
+    if (removedSeatIds.some((seatId) => uniqueSeatIds.has(seatId))) {
+      throw new BadRequestException(
+        'Removed seats cannot remain in the requested seat order.',
+      );
+    }
+
+    if (
+      requestedSeatIds.length + removedSeatIds.length !==
+      currentSeatIds.length
+    ) {
+      throw new BadRequestException(
+        'Seat order must include every existing seat exactly once unless it is explicitly removed.',
+      );
+    }
+
     const uniqueClearedSeatIds = new Set(clearedSeatIds);
 
     if (uniqueClearedSeatIds.size !== clearedSeatIds.length) {
@@ -352,16 +382,21 @@ export class GamesTurnService {
       );
     }
 
+    if (clearedSeatIds.some((seatId) => uniqueRemovedSeatIds.has(seatId))) {
+      throw new BadRequestException('Removed seats cannot also be cleared.');
+    }
+
     if (
       game.players.some(
         (player) =>
-          uniqueClearedSeatIds.has(player.id) &&
+          (uniqueClearedSeatIds.has(player.id) ||
+            uniqueRemovedSeatIds.has(player.id)) &&
           (player.role === GameRole.ORGANIZER ||
             player.userId === game.organizerId),
       )
     ) {
       throw new BadRequestException(
-        'The organizer seat cannot be removed from seat order.',
+        'The organizer seat cannot be cleared or removed.',
       );
     }
 
@@ -419,6 +454,13 @@ export class GamesTurnService {
       displayName: seat.user?.displayName ?? null,
     }));
     const temporaryTurnOrderBase = game.players.length * 2;
+    const nextPlayerCount =
+      game.playerCount == null
+        ? reorderedSeats.length
+        : Math.max(
+            reorderedSeats.length,
+            game.playerCount - removedSeatIds.length,
+          );
 
     const nextActiveSeat = explicitActiveEntry
       ? explicitActiveEntry
@@ -440,6 +482,24 @@ export class GamesTurnService {
           data: {
             turnOrder: temporaryTurnOrderBase + index + 1,
             userId: seat.userId,
+          },
+        });
+      }
+
+      if (removedSeatIds.length > 0) {
+        await transaction.gamePlayer.deleteMany({
+          where: {
+            gameId: game.id,
+            id: {
+              in: removedSeatIds,
+            },
+          },
+        });
+
+        await transaction.game.update({
+          where: { id: game.id },
+          data: {
+            playerCount: nextPlayerCount,
           },
         });
       }
@@ -472,6 +532,9 @@ export class GamesTurnService {
           payload: JSON.stringify({
             previousOrder: currentOrder,
             nextOrder: requestedOrder,
+            removedSeatEntryIds: removedSeatIds,
+            previousPlayerCount: game.playerCount,
+            nextPlayerCount,
             previousActivePlayerEntryId:
               game.turnState?.activePlayerEntryId ?? null,
             previousActivePlayerId: game.turnState?.activePlayerId ?? null,

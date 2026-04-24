@@ -12,6 +12,11 @@ export class ReorderSeatOrderDto {
   clearedSeatEntryIds?: string[];
 
   @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  removedSeatEntryIds?: string[];
+
+  @IsOptional()
   @IsString()
   activePlayerEntryId?: string;
 }

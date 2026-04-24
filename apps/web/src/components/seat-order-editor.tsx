@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import {
   closestCenter,
   DndContext,
@@ -48,6 +48,15 @@ type SeatOrderEditorProps = {
   activePlayerEntryId: string | null;
   canEdit: boolean;
 };
+
+type PendingSeatAction = {
+  type: "clear" | "remove";
+  seatEntryId: string;
+  seatNumber: number;
+  displayName: string;
+};
+
+const SEAT_ACTION_TEXT_ENTER_DELAY_MS = 140;
 
 function isNoDragTarget(target: EventTarget | null) {
   return (
@@ -135,23 +144,27 @@ function getNextOccupiedSeatEntryId(
 type SortableSeatRowProps = {
   player: SeatOrderPlayer;
   index: number;
-  canRemovePlayer: boolean;
+  canClearPlayer: boolean;
+  canRemoveSeat: boolean;
   activePlayerEntryId: string | null;
   isEditing: boolean;
   isPending: boolean;
   onMakeActive: (index: number) => void;
-  onRemovePlayer: (index: number) => void;
+  onClearPlayer: (index: number) => void;
+  onRemoveSeat: (index: number) => void;
 };
 
 function SortableSeatRow({
   player,
   index,
-  canRemovePlayer,
+  canClearPlayer,
+  canRemoveSeat,
   activePlayerEntryId,
   isEditing,
   isPending,
   onMakeActive,
-  onRemovePlayer,
+  onClearPlayer,
+  onRemoveSeat,
 }: SortableSeatRowProps) {
   const isActive = player.id === activePlayerEntryId;
   const isEmptySeat = player.userId == null;
@@ -250,15 +263,35 @@ function SortableSeatRow({
                 isPending ||
                 player.userId == null ||
                 player.isOrganizer ||
-                !canRemovePlayer
+                !canClearPlayer
               }
               type="button"
               variant="outline"
               onClick={() => {
-                onRemovePlayer(index);
+                onClearPlayer(index);
               }}
             >
-              Remove Lord
+              Clear seat
+            </Button>
+            {player.isOrganizer ? (
+              <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-56 -translate-x-1/2 rounded-md border border-orange-400/30 bg-black px-3 py-2 text-[10px] normal-case tracking-normal text-orange-200 shadow-lg group-hover:block group-focus-within:block">
+                The Overlord must be transferred to another Lord before they can
+                be removed from their seat.
+              </span>
+            ) : null}
+          </span>
+          <span className="group relative inline-flex" data-no-drag="true">
+            <Button
+              data-no-drag="true"
+              className="w-28 shrink-0"
+              disabled={isPending || player.isOrganizer || !canRemoveSeat}
+              type="button"
+              variant="outline"
+              onClick={() => {
+                onRemoveSeat(index);
+              }}
+            >
+              Remove seat
             </Button>
             {player.isOrganizer ? (
               <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-56 -translate-x-1/2 rounded-md border border-orange-400/30 bg-black px-3 py-2 text-[10px] normal-case tracking-normal text-orange-200 shadow-lg group-hover:block group-focus-within:block">
@@ -269,6 +302,150 @@ function SortableSeatRow({
           </span>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+type SeatActionConfirmationDialogProps = {
+  action: PendingSeatAction | null;
+  isPending: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+};
+
+function SeatActionConfirmationDialog({
+  action,
+  isPending,
+  onCancel,
+  onConfirm,
+}: SeatActionConfirmationDialogProps) {
+  const [renderedLines, setRenderedLines] = useState<string[]>([]);
+  const [activeLineIndex, setActiveLineIndex] = useState<number | null>(null);
+  const timeoutIdsRef = useRef<number[]>([]);
+
+  function clearScheduledTimeouts() {
+    timeoutIdsRef.current.forEach((timeoutId) =>
+      window.clearTimeout(timeoutId),
+    );
+    timeoutIdsRef.current = [];
+  }
+
+  function scheduleTimeout(callback: () => void, delay: number) {
+    const timeoutId = window.setTimeout(callback, delay);
+    timeoutIdsRef.current.push(timeoutId);
+  }
+
+  useEffect(
+    () => () => {
+      clearScheduledTimeouts();
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!action) {
+      clearScheduledTimeouts();
+      scheduleTimeout(() => {
+        setRenderedLines([]);
+        setActiveLineIndex(null);
+      }, 0);
+
+      return () => {
+        clearScheduledTimeouts();
+      };
+    }
+
+    const description =
+      action.type === "clear"
+        ? `${action.displayName} will be removed from seat ${action.seatNumber}, but the seat will remain in the turn order.`
+        : `Seat ${action.seatNumber} will be deleted from the game and the remaining seats will be renumbered.`;
+    const command =
+      action.type === "clear"
+        ? `seat-order --clear seat-${action.seatNumber}`
+        : `seat-order --remove seat-${action.seatNumber}`;
+    const terminalLines = [`> ${command}`, description];
+    let elapsed = SEAT_ACTION_TEXT_ENTER_DELAY_MS;
+
+    clearScheduledTimeouts();
+    scheduleTimeout(() => {
+      setRenderedLines([]);
+      setActiveLineIndex(null);
+    }, 0);
+
+    terminalLines.forEach((line, lineIndex) => {
+      for (let charIndex = 1; charIndex <= line.length; charIndex += 1) {
+        const snapshot = [
+          ...terminalLines.slice(0, lineIndex),
+          line.slice(0, charIndex),
+        ];
+
+        scheduleTimeout(() => {
+          setRenderedLines(snapshot);
+          setActiveLineIndex(lineIndex);
+        }, elapsed);
+        elapsed += lineIndex === 0 ? 18 : 12;
+      }
+
+      elapsed += 110;
+    });
+
+    scheduleTimeout(() => {
+      setRenderedLines(terminalLines);
+      setActiveLineIndex(null);
+    }, elapsed);
+
+    return () => {
+      clearScheduledTimeouts();
+    };
+  }, [action]);
+
+  if (!action) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6">
+      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-orange-400/30 bg-[#0a0711] shadow-2xl shadow-orange-950/40">
+        <div className="flex items-center justify-between border-b border-orange-400/20 bg-orange-400/10 px-4 py-3 font-mono text-[11px] uppercase tracking-[0.28em] text-orange-200">
+          <span>Confirm seat change</span>
+          <button
+            aria-label="Close confirmation"
+            className="text-orange-300/70 transition-colors hover:text-orange-200"
+            type="button"
+            onClick={onCancel}
+          >
+            X
+          </button>
+        </div>
+        <div className="space-y-4 bg-black/70 px-4 py-4 font-mono text-sm text-orange-300">
+          <div className="min-h-20 space-y-1 text-orange-200/85">
+            {renderedLines.map((line, index) => (
+              <div
+                key={`${action.seatEntryId}-${index}`}
+                className="min-h-5 whitespace-pre-wrap break-words leading-6"
+              >
+                {line}
+                {activeLineIndex === index ? (
+                  <span className="ml-1 inline-block h-4 w-2 animate-pulse align-[-2px] bg-orange-300" />
+                ) : null}
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              disabled={isPending}
+              type="button"
+              variant="secondary"
+              onClick={onCancel}
+            >
+              Cancel
+            </Button>
+            <Button disabled={isPending} type="button" onClick={onConfirm}>
+              Confirm
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -287,6 +464,8 @@ export function SeatOrderEditor({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [confirmation, setConfirmation] =
     useState<TerminalConfirmationSpec | null>(null);
+  const [pendingSeatAction, setPendingSeatAction] =
+    useState<PendingSeatAction | null>(null);
   const [isPending, startTransition] = useTransition();
   const sensors = useSensors(
     useSensor(NoDragPointerSensor, {
@@ -328,6 +507,7 @@ export function SeatOrderEditor({
     });
     setErrorMessage(null);
     setConfirmation(null);
+    setPendingSeatAction(null);
   }
 
   function makeSeatActive(index: number) {
@@ -343,10 +523,26 @@ export function SeatOrderEditor({
     setDraftActivePlayerEntryId(selectedPlayer.id);
     setErrorMessage(null);
     setConfirmation(null);
+    setPendingSeatAction(null);
   }
 
-  function removePlayerFromSeat(index: number) {
+  function getSeatAction(index: number, type: PendingSeatAction["type"]) {
     const selectedPlayer = draftPlayers[index];
+
+    if (!selectedPlayer) {
+      return null;
+    }
+
+    return {
+      type,
+      seatEntryId: selectedPlayer.id,
+      seatNumber: index + 1,
+      displayName: selectedPlayer.displayName ?? `Player ${index + 1}`,
+    } satisfies PendingSeatAction;
+  }
+
+  function applyClearPlayerFromSeat(seatEntryId: string) {
+    const selectedPlayer = draftPlayers.find((player) => player.id === seatEntryId);
 
     if (!selectedPlayer?.userId || selectedPlayer.isOrganizer) {
       return;
@@ -361,8 +557,8 @@ export function SeatOrderEditor({
     }
 
     setDraftPlayers((currentPlayers) =>
-      currentPlayers.map((player, playerIndex) => {
-        if (playerIndex !== index) {
+      currentPlayers.map((player) => {
+        if (player.id !== seatEntryId) {
           return player;
         }
 
@@ -377,11 +573,109 @@ export function SeatOrderEditor({
       getNextOccupiedSeatEntryId(
         draftPlayers,
         draftActivePlayerEntryId,
-        selectedPlayer.id,
+        seatEntryId,
       ),
     );
     setErrorMessage(null);
     setConfirmation(null);
+    setPendingSeatAction(null);
+  }
+
+  function applyRemoveSeatFromGame(seatEntryId: string) {
+    const selectedPlayer = draftPlayers.find((player) => player.id === seatEntryId);
+
+    if (!selectedPlayer || selectedPlayer.isOrganizer) {
+      return;
+    }
+
+    const occupiedSeatCount = draftPlayers.filter(
+      (player) => player.userId != null,
+    ).length;
+
+    if (selectedPlayer.userId != null && occupiedSeatCount <= 1) {
+      return;
+    }
+
+    setDraftPlayers((currentPlayers) =>
+      normalizeSeatOrder(
+        currentPlayers.filter((player) => player.id !== seatEntryId),
+      ),
+    );
+    setDraftActivePlayerEntryId(
+      getNextOccupiedSeatEntryId(
+        draftPlayers,
+        draftActivePlayerEntryId,
+        seatEntryId,
+      ),
+    );
+    setErrorMessage(null);
+    setConfirmation(null);
+    setPendingSeatAction(null);
+  }
+
+  function clearPlayerFromSeat(index: number) {
+    const seatAction = getSeatAction(index, "clear");
+
+    if (!seatAction) {
+      return;
+    }
+
+    const selectedPlayer = draftPlayers[index];
+
+    if (!selectedPlayer?.userId || selectedPlayer.isOrganizer) {
+      return;
+    }
+
+    const occupiedSeatCount = draftPlayers.filter(
+      (player) => player.userId != null,
+    ).length;
+
+    if (occupiedSeatCount <= 1) {
+      return;
+    }
+
+    setPendingSeatAction(seatAction);
+    setErrorMessage(null);
+    setConfirmation(null);
+  }
+
+  function removeSeatFromGame(index: number) {
+    const seatAction = getSeatAction(index, "remove");
+
+    if (!seatAction) {
+      return;
+    }
+
+    const selectedPlayer = draftPlayers[index];
+
+    if (!selectedPlayer || selectedPlayer.isOrganizer) {
+      return;
+    }
+
+    const occupiedSeatCount = draftPlayers.filter(
+      (player) => player.userId != null,
+    ).length;
+
+    if (selectedPlayer.userId != null && occupiedSeatCount <= 1) {
+      return;
+    }
+
+    setPendingSeatAction(seatAction);
+    setErrorMessage(null);
+    setConfirmation(null);
+  }
+
+  function confirmPendingSeatAction() {
+    if (!pendingSeatAction) {
+      return;
+    }
+
+    if (pendingSeatAction.type === "clear") {
+      applyClearPlayerFromSeat(pendingSeatAction.seatEntryId);
+      return;
+    }
+
+    applyRemoveSeatFromGame(pendingSeatAction.seatEntryId);
   }
 
   function cancelEdit() {
@@ -390,11 +684,13 @@ export function SeatOrderEditor({
     setIsEditing(false);
     setErrorMessage(null);
     setConfirmation(null);
+    setPendingSeatAction(null);
   }
 
   function saveSeatOrder() {
     setErrorMessage(null);
     setConfirmation(null);
+    setPendingSeatAction(null);
 
     startTransition(async () => {
       const response = await fetch(
@@ -413,6 +709,14 @@ export function SeatOrderEditor({
                   draftPlayers.find(
                     (draftPlayer) => draftPlayer.id === player.id,
                   )?.userId == null,
+              )
+              .map((player) => player.id),
+            removedSeatEntryIds: players
+              .filter(
+                (player) =>
+                  !draftPlayers.some(
+                    (draftPlayer) => draftPlayer.id === player.id,
+                  ),
               )
               .map((player) => player.id),
             activePlayerEntryId: draftActivePlayerEntryId,
@@ -452,12 +756,20 @@ export function SeatOrderEditor({
           setConfirmation(null);
         }}
       />
+      <SeatActionConfirmationDialog
+        action={pendingSeatAction}
+        isPending={isPending}
+        onCancel={() => {
+          setPendingSeatAction(null);
+        }}
+        onConfirm={confirmPendingSeatAction}
+      />
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <CardTitle>Seat order:</CardTitle>
           <CardDescription>
             {isEditing
-              ? "Drag a seat card to reorder turns, or choose which player is active."
+              ? "Drag a seat card to reorder turns, clear or remove seats, or choose which player is active."
               : "The current lords and the active seat."}
           </CardDescription>
         </div>
@@ -518,7 +830,13 @@ export function SeatOrderEditor({
                 activePlayerEntryId={
                   isEditing ? draftActivePlayerEntryId : activePlayerEntryId
                 }
-                canRemovePlayer={
+                canClearPlayer={
+                  visiblePlayers.filter(
+                    (visiblePlayer) => visiblePlayer.userId != null,
+                  ).length > 1
+                }
+                canRemoveSeat={
+                  player.userId == null ||
                   visiblePlayers.filter(
                     (visiblePlayer) => visiblePlayer.userId != null,
                   ).length > 1
@@ -526,8 +844,9 @@ export function SeatOrderEditor({
                 index={index}
                 isEditing={isEditing}
                 isPending={isPending}
+                onClearPlayer={clearPlayerFromSeat}
                 onMakeActive={makeSeatActive}
-                onRemovePlayer={removePlayerFromSeat}
+                onRemoveSeat={removeSeatFromGame}
                 player={player}
               />
             ))}
