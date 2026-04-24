@@ -590,17 +590,17 @@ export class GamesTurnService {
       );
     }
 
-    const seat = game.players.find(
-      (player) => player.turnOrder === input.seatNumber,
-    );
+    const seat =
+      game.players.find((player) => player.turnOrder === input.seatNumber) ??
+      null;
 
-    if (!seat) {
-      throw new NotFoundException(
-        `Seat ${input.seatNumber} does not exist in this game.`,
+    if (game.playerCount != null && input.seatNumber > game.playerCount) {
+      throw new BadRequestException(
+        `Seat ${input.seatNumber} exceeds this game's seat limit.`,
       );
     }
 
-    if (seat.userId !== null) {
+    if (seat?.userId != null) {
       throw new ConflictException(
         `Seat ${input.seatNumber} is already occupied.`,
       );
@@ -628,9 +628,10 @@ export class GamesTurnService {
     }
 
     const wasActiveSeat =
-      game.turnState?.activePlayerEntryId === seat.id ||
-      (game.turnState?.activePlayerId != null &&
-        game.turnState.activePlayerId === seat.userId);
+      seat != null &&
+      (game.turnState?.activePlayerEntryId === seat.id ||
+        (game.turnState?.activePlayerId != null &&
+          game.turnState.activePlayerId === seat.userId));
 
     const updatedSeat = await prisma.$transaction(async (transaction) => {
       const newPlayer = await upsertDiscordUser(transaction, {
@@ -638,8 +639,19 @@ export class GamesTurnService {
         displayName: input.newPlayerDisplayName,
       });
 
+      const seatRecord =
+        seat ??
+        (await transaction.gamePlayer.create({
+          data: {
+            gameId: game.id,
+            userId: null,
+            turnOrder: input.seatNumber,
+            role: GameRole.PLAYER,
+          },
+        }));
+
       const filled = await transaction.gamePlayer.update({
-        where: { id: seat.id },
+        where: { id: seatRecord.id },
         data: { userId: newPlayer.id },
         include: { user: true },
       });
@@ -649,7 +661,7 @@ export class GamesTurnService {
           where: { gameId: game.id },
           data: {
             activePlayerId: newPlayer.id,
-            activePlayerEntryId: seat.id,
+            activePlayerEntryId: seatRecord.id,
           },
         });
       }
@@ -660,8 +672,8 @@ export class GamesTurnService {
           actorId: newPlayer.id,
           eventType: AuditEventType.PLAYER_REPLACED,
           payload: JSON.stringify({
-            seatNumber: seat.turnOrder,
-            seatEntryId: seat.id,
+            seatNumber: seatRecord.turnOrder,
+            seatEntryId: seatRecord.id,
             newPlayerDiscordId: input.newPlayerDiscordId,
             newPlayerDisplayName: input.newPlayerDisplayName,
             tookActiveTurn: wasActiveSeat,
