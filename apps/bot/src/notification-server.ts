@@ -7,7 +7,7 @@ import {
   type ThreadRenameNotificationPayload,
   type UploadNotificationPayload,
 } from "./notifications.js";
-import { renameThreadIfNeeded } from "./thread-name.js";
+import { ensureShadowCloudTag, renameThreadIfNeeded } from "./thread-name.js";
 
 type NotificationServerConfig = {
   notificationPort: number;
@@ -27,6 +27,22 @@ async function resolveNotificationThread(client: Client, threadId: string) {
   }
 
   return channel;
+}
+
+async function syncShadowCloudTag(thread: Awaited<ReturnType<typeof resolveNotificationThread>>, gameName: string) {
+  const tagResult = await ensureShadowCloudTag(thread);
+
+  if (tagResult.status === "missing-tag") {
+    console.warn(
+      `Skipping Shadow Cloud tag for ${gameName} (${thread.id}): parent channel is missing the "🟠 Shadow Cloud" tag.`,
+    );
+  }
+
+  if (tagResult.status === "unsupported") {
+    console.warn(
+      `Skipping Shadow Cloud tag for ${gameName} (${thread.id}): thread does not support forum tags.`,
+    );
+  }
 }
 
 export function startNotificationServer(
@@ -98,6 +114,7 @@ export function startNotificationServer(
           thread,
           (payload as GameInitializedNotificationPayload).game.threadName,
         );
+        await syncShadowCloudTag(thread, payload.game.name);
       }
 
       if (isThreadRenameRequest) {
@@ -105,6 +122,7 @@ export function startNotificationServer(
           thread,
           (payload as ThreadRenameNotificationPayload).game.threadName,
         );
+        await syncShadowCloudTag(thread, payload.game.name);
         response.writeHead(204).end();
         return;
       }

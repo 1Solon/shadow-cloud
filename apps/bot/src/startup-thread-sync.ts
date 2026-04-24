@@ -1,6 +1,8 @@
 import type { Client } from "discord.js";
 import type { BotApiConfig } from "./bot-api.js";
-import { renameThreadIfNeeded } from "./thread-name.js";
+import { ensureShadowCloudTag, renameThreadIfNeeded } from "./thread-name.js";
+
+type StartupThreadSyncConfig = Pick<BotApiConfig, "apiBaseUrl" | "botApiToken">;
 
 type StartupThreadRecord = {
   id: string;
@@ -9,7 +11,7 @@ type StartupThreadRecord = {
   discordThreadId: string | null;
 };
 
-async function fetchStartupThreads(config: BotApiConfig) {
+async function fetchStartupThreads(config: StartupThreadSyncConfig) {
   const response = await fetch(`${config.apiBaseUrl}/v1/games`, {
     cache: "no-store",
   });
@@ -23,7 +25,7 @@ async function fetchStartupThreads(config: BotApiConfig) {
 
 export async function syncStartupThreadNames(
   client: Client,
-  config: BotApiConfig,
+  config: StartupThreadSyncConfig,
 ) {
   let games: StartupThreadRecord[];
 
@@ -47,6 +49,7 @@ export async function syncStartupThreadNames(
 
   let renamedCount = 0;
   let unchangedCount = 0;
+  let taggedCount = 0;
 
   for (const game of linkedGames) {
     const threadId = game.discordThreadId;
@@ -70,11 +73,28 @@ export async function syncStartupThreadNames(
       }
 
       const renamed = await renameThreadIfNeeded(channel, game.threadName);
+      const tagResult = await ensureShadowCloudTag(channel);
 
       if (renamed) {
         renamedCount += 1;
       } else {
         unchangedCount += 1;
+      }
+
+      if (tagResult.status === "applied") {
+        taggedCount += 1;
+      }
+
+      if (tagResult.status === "missing-tag") {
+        console.warn(
+          `Skipping startup tag sync for ${game.name} (${threadId}): parent channel is missing the "🟠 Shadow Cloud" tag.`,
+        );
+      }
+
+      if (tagResult.status === "unsupported") {
+        console.warn(
+          `Skipping startup tag sync for ${game.name} (${threadId}): thread does not support forum tags.`,
+        );
       }
     } catch (error) {
       console.warn(
@@ -85,6 +105,6 @@ export async function syncStartupThreadNames(
   }
 
   console.log(
-    `Startup thread sync complete. Renamed ${renamedCount}, already synced ${unchangedCount}, scanned ${linkedGames.length}.`,
+    `Startup thread sync complete. Renamed ${renamedCount}, already synced ${unchangedCount}, tagged ${taggedCount}, scanned ${linkedGames.length}.`,
   );
 }
