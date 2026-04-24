@@ -329,7 +329,6 @@ export function buildApprovalNotificationMessage({
   return buildStandardNotification({
     title: `Overlord action needed: ${formatDiscordActor("Overlord", organizerDiscordId)}`,
     facts: [`**World** ${gameName}`, `**Applicant** ${applicantName}`],
-    actionLines: ["Approve or reject this registration request in-thread."],
     actionRow: new ActionRowBuilder<ButtonBuilder>().addComponents(
       approveButton,
       rejectButton,
