@@ -418,6 +418,7 @@ export class GamesTurnService {
       turnOrder: seat.turnOrder,
       displayName: seat.user?.displayName ?? null,
     }));
+    const temporaryTurnOrderBase = game.players.length * 2;
 
     const nextActiveSeat = explicitActiveEntry
       ? explicitActiveEntry
@@ -433,6 +434,16 @@ export class GamesTurnService {
           : remainingOccupiedSeats[0];
 
     await prisma.$transaction(async (transaction) => {
+      for (const [index, seat] of reorderedSeats.entries()) {
+        await transaction.gamePlayer.update({
+          where: { id: seat.id },
+          data: {
+            turnOrder: temporaryTurnOrderBase + index + 1,
+            userId: seat.userId,
+          },
+        });
+      }
+
       for (const seat of reorderedSeats) {
         await transaction.gamePlayer.update({
           where: { id: seat.id },
