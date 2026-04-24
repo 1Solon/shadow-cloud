@@ -2,6 +2,7 @@ import type { AnyThreadChannel, ChatInputCommandInteraction } from "discord.js";
 
 export type BotApiConfig = {
   apiBaseUrl: string;
+  webBaseUrl: string;
   botApiToken?: string;
 };
 
@@ -32,6 +33,7 @@ export type CommandResponsePayload = {
 type RegistrationApprovalPayload = {
   message?: string | string[];
   error?: string;
+  gameNumber?: number;
   name?: string;
   player?: { displayName?: string; turnOrder?: number };
 } | null;

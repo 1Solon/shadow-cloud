@@ -341,12 +341,14 @@ export function buildApprovalNotificationMessage({
 export function buildApprovalResultMessage({
   approved,
   gameName,
+  gameUrl,
   playerName,
   turnOrder,
   actionRow,
 }: {
   approved: boolean;
   gameName: string;
+  gameUrl?: string;
   playerName: string;
   turnOrder?: number;
   actionRow?: ActionRowBuilder<ButtonBuilder>;
@@ -357,6 +359,7 @@ export function buildApprovalResultMessage({
       buildNotificationResultText({
         approved,
         gameName,
+        gameUrl,
         playerName,
         turnOrder,
       }),
@@ -368,19 +371,23 @@ export function buildApprovalResultMessage({
 export function buildNotificationResultText({
   approved,
   gameName,
+  gameUrl,
   playerName,
   turnOrder,
 }: {
   approved: boolean;
   gameName: string;
+  gameUrl?: string;
   playerName: string;
   turnOrder?: number;
 }) {
+  const gameLabel = gameUrl ? `[${gameName}](${gameUrl})` : gameName;
+
   if (!approved) {
-    return `❌ Rejected **${playerName}** for **${gameName}**.`;
+    return `❌ Rejected **${playerName}** for **${gameLabel}**.`;
   }
 
-  return `✅ Approved **${playerName}** for **${gameName}** as seat ${turnOrder ?? "unknown"}.`;
+  return `✅ Approved **${playerName}** for **${gameLabel}** as seat ${turnOrder ?? "unknown"}.`;
 }
 
 export { ACCENT_COLOR };

@@ -159,6 +159,13 @@ async function handleRegistrationButton(
 
     const playerName = payload?.player?.displayName ?? "Player";
     const gameName = payload?.name ?? "the game";
+    const gameUrl =
+      payload?.gameNumber != null
+        ? new URL(
+            `/games/${encodeURIComponent(String(payload.gameNumber))}`,
+            config.webBaseUrl,
+          ).toString()
+        : undefined;
     const disabledApprove = new ButtonBuilder()
       .setCustomId(`${APPROVE_PREFIX}${requestId}`)
       .setLabel("Approve")
@@ -178,6 +185,7 @@ async function handleRegistrationButton(
       buildApprovalResultMessage({
         approved: action === "approve",
         gameName,
+        gameUrl,
         playerName,
         turnOrder: payload?.player?.turnOrder,
         actionRow: disabledRow,

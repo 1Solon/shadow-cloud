@@ -419,6 +419,7 @@ export class GamesRegistrationService {
 
     return {
       gameId: request.gameId,
+      gameNumber: request.game.gameNumber,
       slug: request.game.slug,
       name: request.game.name,
       player: {

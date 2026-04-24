@@ -46,6 +46,7 @@ client.on(
   Events.InteractionCreate,
   createInteractionHandler(client, {
     apiBaseUrl: botConfig.apiBaseUrl,
+    webBaseUrl: botConfig.webBaseUrl,
     botApiToken: botConfig.botApiToken,
   }),
 );
