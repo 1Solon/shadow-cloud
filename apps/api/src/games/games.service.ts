@@ -321,20 +321,24 @@ export class GamesService {
   async approveRegistrationRequest(
     requestId: string,
     discordMessageId?: string,
+    approverDiscordId?: string,
   ) {
     return this.gamesRegistration.approveRegistrationRequest(
       requestId,
       discordMessageId,
+      approverDiscordId,
     );
   }
 
   async rejectRegistrationRequest(
     requestId: string,
     discordMessageId?: string,
+    approverDiscordId?: string,
   ) {
     return this.gamesRegistration.rejectRegistrationRequest(
       requestId,
       discordMessageId,
+      approverDiscordId,
     );
   }
 

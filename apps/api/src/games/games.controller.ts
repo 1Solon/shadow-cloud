@@ -172,6 +172,7 @@ export class GamesController {
     return this.gamesService.approveRegistrationRequest(
       requestId,
       input.discordMessageId,
+      input.approverDiscordId,
     );
   }
 
@@ -184,6 +185,7 @@ export class GamesController {
     return this.gamesService.rejectRegistrationRequest(
       requestId,
       input.discordMessageId,
+      input.approverDiscordId,
     );
   }
 }

@@ -5,4 +5,8 @@ export class ApproveRegistrationRequestDto {
   @IsString()
   @MaxLength(100)
   discordMessageId?: string;
+
+  @IsString()
+  @MaxLength(100)
+  approverDiscordId!: string;
 }

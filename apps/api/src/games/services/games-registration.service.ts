@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -312,10 +313,13 @@ export class GamesRegistrationService {
   async approveRegistrationRequest(
     requestId: string,
     discordMessageId?: string,
+    approverDiscordId?: string,
   ) {
     const request = await prisma.registrationRequest.findUnique({
       where: { id: requestId },
-      include: { game: true },
+      include: {
+        game: { include: { organizer: { include: { identities: true } } } },
+      },
     });
 
     if (!request) {
@@ -327,6 +331,14 @@ export class GamesRegistrationService {
     if (request.status !== RegistrationRequestStatus.PENDING) {
       throw new ConflictException(
         `Registration request ${requestId} has already been ${request.status.toLowerCase()}.`,
+      );
+    }
+
+    const organizerDiscordId = getDiscordIdentity(request.game.organizer);
+
+    if (!approverDiscordId || approverDiscordId !== organizerDiscordId) {
+      throw new ForbiddenException(
+        'Only the game overlord can approve registration requests.',
       );
     }
 
@@ -435,10 +447,13 @@ export class GamesRegistrationService {
   async rejectRegistrationRequest(
     requestId: string,
     discordMessageId?: string,
+    approverDiscordId?: string,
   ) {
     const request = await prisma.registrationRequest.findUnique({
       where: { id: requestId },
-      include: { game: true },
+      include: {
+        game: { include: { organizer: { include: { identities: true } } } },
+      },
     });
 
     if (!request) {
@@ -450,6 +465,14 @@ export class GamesRegistrationService {
     if (request.status !== RegistrationRequestStatus.PENDING) {
       throw new ConflictException(
         `Registration request ${requestId} has already been ${request.status.toLowerCase()}.`,
+      );
+    }
+
+    const organizerDiscordId = getDiscordIdentity(request.game.organizer);
+
+    if (!approverDiscordId || approverDiscordId !== organizerDiscordId) {
+      throw new ForbiddenException(
+        'Only the game overlord can reject registration requests.',
       );
     }
 

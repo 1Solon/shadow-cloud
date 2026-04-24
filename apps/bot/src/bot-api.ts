@@ -217,12 +217,13 @@ export async function sendRegistrationApprovalRequest(
   requestId: string,
   action: ApprovalAction,
   discordMessageId: string,
+  approverDiscordId: string,
   config: BotApiConfig,
 ): Promise<ParsedBotResponse<RegistrationApprovalPayload>> {
   const response = await postJson(
     `${config.apiBaseUrl}/v1/games/registration-requests/${encodeURIComponent(requestId)}/${action}`,
     config.botApiToken,
-    { discordMessageId },
+    { discordMessageId, approverDiscordId },
   );
 
   return {

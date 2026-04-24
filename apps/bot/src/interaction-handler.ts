@@ -137,6 +137,7 @@ async function handleRegistrationButton(
       requestId,
       action,
       interaction.message.id,
+      interaction.user.id,
       config,
     );
 
