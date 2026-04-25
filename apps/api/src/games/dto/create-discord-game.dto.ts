@@ -7,6 +7,7 @@ import {
   IsString,
   MaxLength,
   Min,
+  MinLength,
 } from 'class-validator';
 
 export enum CreateDiscordGameDlcMode {
@@ -41,6 +42,7 @@ export class CreateDiscordGameDto {
   gameNumber!: number;
 
   @IsString()
+  @MinLength(1)
   @MaxLength(100)
   name!: string;
 
@@ -82,10 +84,12 @@ export class CreateDiscordGameDto {
   slug?: string;
 
   @IsString()
+  @MinLength(1)
   @MaxLength(100)
   organizerDiscordId!: string;
 
   @IsString()
+  @MinLength(1)
   @MaxLength(100)
   organizerDisplayName!: string;
 
@@ -95,14 +99,17 @@ export class CreateDiscordGameDto {
   organizerUsername?: string;
 
   @IsString()
+  @MinLength(1)
   @MaxLength(100)
   discordGuildId!: string;
 
   @IsString()
+  @MinLength(1)
   @MaxLength(100)
   discordChannelId!: string;
 
   @IsString()
+  @MinLength(1)
   @MaxLength(100)
   discordThreadId!: string;
 }

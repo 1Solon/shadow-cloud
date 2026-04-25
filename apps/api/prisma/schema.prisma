@@ -33,6 +33,19 @@ enum RegistrationRequestStatus {
   REJECTED
 }
 
+enum NotificationDeliveryEvent {
+  SAVE_UPLOADED
+  GAME_INITIALIZED
+  THREAD_RENAMED
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  PROCESSING
+  DELIVERED
+  FAILED
+}
+
 enum GameDlcMode {
   NONE
   OCEANIA
@@ -174,4 +187,22 @@ model AuditEvent {
   createdAt DateTime       @default(now())
   game      Game           @relation(fields: [gameId], references: [id], onDelete: Cascade)
   actor     User?          @relation("ActorEvents", fields: [actorId], references: [id])
+}
+
+model NotificationDelivery {
+  id                String                     @id @default(cuid())
+  event             NotificationDeliveryEvent
+  status            NotificationDeliveryStatus @default(PENDING)
+  gameId            String
+  gameSlug          String
+  payload           String
+  attempts          Int                        @default(0)
+  nextAttemptAt     DateTime                   @default(now())
+  processingStartedAt DateTime?
+  deliveredAt       DateTime?
+  lastError         String?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+
+  @@index([status, nextAttemptAt, createdAt])
 }
