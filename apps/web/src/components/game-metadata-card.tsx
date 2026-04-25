@@ -306,7 +306,9 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
   const [isPending, startTransition] = useTransition();
   const [pendingTransfer, setPendingTransfer] =
     useState<PendingHostTransfer | null>(null);
-  const organizerOptions = props.players.filter((player) => player.userId != null);
+  const organizerOptions = props.players.filter(
+    (player) => player.userId != null,
+  );
   const currentOrganizerEntry =
     organizerOptions.find((player) => player.isOrganizer) ?? null;
   const [organizerEntryId, setOrganizerEntryId] = useState(
@@ -364,7 +366,8 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
       (player) => player.id === organizerEntryId,
     );
     const organizerChanged =
-      organizerEntryId.length > 0 && organizerEntryId !== (currentOrganizerEntry?.id ?? "");
+      organizerEntryId.length > 0 &&
+      organizerEntryId !== (currentOrganizerEntry?.id ?? "");
 
     if (Object.keys(payload).length === 0 && !organizerChanged) {
       setErrorMessage("Change at least one detail before saving.");
@@ -383,7 +386,8 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
         seatEntryId: selectedOrganizer.id,
         seatNumber: selectedOrganizer.turnOrder,
         displayName:
-          selectedOrganizer.displayName ?? `Seat ${selectedOrganizer.turnOrder}`,
+          selectedOrganizer.displayName ??
+          `Seat ${selectedOrganizer.turnOrder}`,
         metadataPayload: payload,
         gameNumber: props.gameNumber,
       });
@@ -541,7 +545,11 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
               >
                 Cancel
               </Button>
-              <Button disabled={isMutating} type="button" onClick={saveMetadata}>
+              <Button
+                disabled={isMutating}
+                type="button"
+                onClick={saveMetadata}
+              >
                 {isPending ? "Saving..." : "Save details"}
               </Button>
             </div>

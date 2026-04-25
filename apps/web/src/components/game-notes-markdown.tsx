@@ -153,7 +153,10 @@ export function GameNotesMarkdown({
             </div>
           ),
           thead: ({ node: _node, className: headClassName, ...props }) => (
-            <thead className={cn("bg-orange-400/10", headClassName)} {...props} />
+            <thead
+              className={cn("bg-orange-400/10", headClassName)}
+              {...props}
+            />
           ),
           th: ({ node: _node, className: cellClassName, ...props }) => (
             <th
@@ -192,7 +195,10 @@ export function GameNotesMarkdown({
 
             if (isBlock) {
               return (
-                <code className={cn("text-orange-100", codeClassName)} {...props}>
+                <code
+                  className={cn("text-orange-100", codeClassName)}
+                  {...props}
+                >
                   {children}
                 </code>
               );

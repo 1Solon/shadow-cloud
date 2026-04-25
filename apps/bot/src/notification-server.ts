@@ -29,7 +29,10 @@ async function resolveNotificationThread(client: Client, threadId: string) {
   return channel;
 }
 
-async function syncShadowCloudTag(thread: Awaited<ReturnType<typeof resolveNotificationThread>>, gameName: string) {
+async function syncShadowCloudTag(
+  thread: Awaited<ReturnType<typeof resolveNotificationThread>>,
+  gameName: string,
+) {
   const tagResult = await ensureShadowCloudTag(thread);
 
   if (tagResult.status === "missing-tag") {

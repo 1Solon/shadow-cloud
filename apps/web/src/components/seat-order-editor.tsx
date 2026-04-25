@@ -171,7 +171,7 @@ function SortableSeatRow({
   const playerLabel = isEmptySeat
     ? player.displayName != null
       ? `${player.displayName} (Resigned)`
-      : '[Open]'
+      : "[Open]"
     : player.displayName;
   const showActiveRowHighlight = isActive && !isEditing;
   const {
@@ -546,7 +546,9 @@ export function SeatOrderEditor({
   }
 
   function applyClearPlayerFromSeat(seatEntryId: string) {
-    const selectedPlayer = draftPlayers.find((player) => player.id === seatEntryId);
+    const selectedPlayer = draftPlayers.find(
+      (player) => player.id === seatEntryId,
+    );
 
     if (!selectedPlayer?.userId || selectedPlayer.isOrganizer) {
       return;
@@ -586,7 +588,9 @@ export function SeatOrderEditor({
   }
 
   function applyRemoveSeatFromGame(seatEntryId: string) {
-    const selectedPlayer = draftPlayers.find((player) => player.id === seatEntryId);
+    const selectedPlayer = draftPlayers.find(
+      (player) => player.id === seatEntryId,
+    );
 
     if (!selectedPlayer || selectedPlayer.isOrganizer) {
       return;

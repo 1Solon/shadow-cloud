@@ -1,6 +1,11 @@
 "use client";
 
-import { useEffect, useState, type KeyboardEvent, type MouseEvent } from "react";
+import {
+  useEffect,
+  useState,
+  type MouseEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import { useRouter } from "next/navigation";
 import { SaveUploadCard } from "@/components/save-upload-card";
 import { Button } from "@/components/ui/button";
@@ -55,7 +60,7 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
     setIsUploadModalOpen(true);
   }
 
-  function handleCardKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+  function handleCardKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
     if (event.key !== "Enter" && event.key !== " ") {
       return;
     }
@@ -93,7 +98,9 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
               <div
                 className={cn(
                   "text-lg font-semibold text-orange-300 group-focus-visible:text-black",
-                  !isUploadButtonHighlighted ? "group-hover:text-orange-200" : null,
+                  !isUploadButtonHighlighted
+                    ? "group-hover:text-orange-200"
+                    : null,
                 )}
               >
                 {`${game.gameNumber} : ${game.name}`}
@@ -101,7 +108,9 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
               <div
                 className={cn(
                   "text-xs text-orange-300/60 group-focus-visible:text-black/70",
-                  !isUploadButtonHighlighted ? "group-hover:text-orange-200/70" : null,
+                  !isUploadButtonHighlighted
+                    ? "group-hover:text-orange-200/70"
+                    : null,
                 )}
               >
                 Overlord {game.organizerDisplayName}
@@ -109,7 +118,9 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
               <div
                 className={cn(
                   "mt-1 text-xs uppercase tracking-[0.18em] text-orange-300/50 group-focus-visible:text-black/60",
-                  !isUploadButtonHighlighted ? "group-hover:text-orange-200/60" : null,
+                  !isUploadButtonHighlighted
+                    ? "group-hover:text-orange-200/60"
+                    : null,
                 )}
               >
                 Turn {game.roundNumber}
@@ -117,7 +128,9 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
               <div
                 className={cn(
                   "mt-1 text-xs uppercase tracking-[0.18em] text-orange-300/40 group-focus-visible:text-black/55",
-                  !isUploadButtonHighlighted ? "group-hover:text-orange-200/55" : null,
+                  !isUploadButtonHighlighted
+                    ? "group-hover:text-orange-200/55"
+                    : null,
                 )}
               >
                 Updated {formatTimestamp(game.updatedAt)}
@@ -129,7 +142,9 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
                 <div
                   className={cn(
                     "w-32 shrink-0 text-xs uppercase tracking-[0.2em] text-orange-300/70 group-focus-visible:text-black/70",
-                    !isUploadButtonHighlighted ? "group-hover:text-orange-200/70" : null,
+                    !isUploadButtonHighlighted
+                      ? "group-hover:text-orange-200/70"
+                      : null,
                   )}
                 >
                   Active lord
@@ -137,7 +152,9 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
                 <div
                   className={cn(
                     "text-sm font-medium text-orange-300 transition-all group-focus-visible:text-black",
-                    !isUploadButtonHighlighted ? "group-hover:text-orange-200" : null,
+                    !isUploadButtonHighlighted
+                      ? "group-hover:text-orange-200"
+                      : null,
                   )}
                 >
                   {game.activePlayerDisplayName}
@@ -147,7 +164,9 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
                 <div
                   className={cn(
                     "w-32 shrink-0 text-xs uppercase tracking-[0.2em] text-orange-300/70 group-focus-visible:text-black/70",
-                    !isUploadButtonHighlighted ? "group-hover:text-orange-200/70" : null,
+                    !isUploadButtonHighlighted
+                      ? "group-hover:text-orange-200/70"
+                      : null,
                   )}
                 >
                   Overlord
@@ -155,7 +174,9 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
                 <div
                   className={cn(
                     "text-sm font-medium text-orange-300 group-focus-visible:text-black",
-                    !isUploadButtonHighlighted ? "group-hover:text-orange-200" : null,
+                    !isUploadButtonHighlighted
+                      ? "group-hover:text-orange-200"
+                      : null,
                   )}
                 >
                   {game.organizerDisplayName}
@@ -165,7 +186,9 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
                 <div
                   className={cn(
                     "w-32 shrink-0 text-xs uppercase tracking-[0.2em] text-orange-300/70 group-focus-visible:text-black/70",
-                    !isUploadButtonHighlighted ? "group-hover:text-orange-200/70" : null,
+                    !isUploadButtonHighlighted
+                      ? "group-hover:text-orange-200/70"
+                      : null,
                   )}
                 >
                   Seats
@@ -173,7 +196,9 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
                 <div
                   className={cn(
                     "text-sm font-medium text-orange-300 group-focus-visible:text-black",
-                    !isUploadButtonHighlighted ? "group-hover:text-orange-200" : null,
+                    !isUploadButtonHighlighted
+                      ? "group-hover:text-orange-200"
+                      : null,
                   )}
                 >
                   {`${game.filledSeatCount} / ${game.playerCount}`}
