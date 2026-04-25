@@ -30,7 +30,9 @@ describe("POST /api/games/[gameNumber]/files", () => {
 
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+      .mockResolvedValue(
+        new Response(JSON.stringify({ ok: true }), { status: 200 }),
+      );
 
     const formData = new FormData();
     formData.set(
@@ -41,10 +43,13 @@ describe("POST /api/games/[gameNumber]/files", () => {
       "turn-22.se1",
     );
 
-    const request = new Request("http://shadow-cloud-web:3000/api/games/22/files", {
-      method: "POST",
-      body: formData,
-    });
+    const request = new Request(
+      "http://shadow-cloud-web:3000/api/games/22/files",
+      {
+        method: "POST",
+        body: formData,
+      },
+    );
 
     const response = await POST(request, {
       params: Promise.resolve({ gameNumber: "22" }),

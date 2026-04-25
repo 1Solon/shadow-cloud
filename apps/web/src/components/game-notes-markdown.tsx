@@ -47,7 +47,7 @@ export function GameNotesMarkdown({
         remarkPlugins={[remarkGfm]}
         urlTransform={defaultUrlTransform}
         components={{
-          h1: ({ node: _node, className: headingClassName, ...props }) => (
+          h1: ({ className: headingClassName, ...props }) => (
             <h1
               className={cn(
                 "mt-5 mb-2 text-base font-semibold uppercase tracking-[0.18em] text-orange-100 first:mt-0",
@@ -56,7 +56,7 @@ export function GameNotesMarkdown({
               {...props}
             />
           ),
-          h2: ({ node: _node, className: headingClassName, ...props }) => (
+          h2: ({ className: headingClassName, ...props }) => (
             <h2
               className={cn(
                 "mt-5 mb-2 text-sm font-semibold uppercase tracking-[0.14em] text-orange-100 first:mt-0",
@@ -65,7 +65,7 @@ export function GameNotesMarkdown({
               {...props}
             />
           ),
-          h3: ({ node: _node, className: headingClassName, ...props }) => (
+          h3: ({ className: headingClassName, ...props }) => (
             <h3
               className={cn(
                 "mt-4 mb-2 text-sm font-semibold text-orange-100 first:mt-0",
@@ -74,7 +74,7 @@ export function GameNotesMarkdown({
               {...props}
             />
           ),
-          p: ({ node: _node, className: paragraphClassName, ...props }) => (
+          p: ({ className: paragraphClassName, ...props }) => (
             <p
               className={cn(
                 "my-3 whitespace-pre-wrap break-words leading-6 first:mt-0 last:mb-0",
@@ -83,7 +83,7 @@ export function GameNotesMarkdown({
               {...props}
             />
           ),
-          ul: ({ node: _node, className: listClassName, ...props }) => (
+          ul: ({ className: listClassName, ...props }) => (
             <ul
               className={cn(
                 "my-3 list-disc space-y-2 pl-6 marker:text-orange-300",
@@ -92,7 +92,7 @@ export function GameNotesMarkdown({
               {...props}
             />
           ),
-          ol: ({ node: _node, className: listClassName, ...props }) => (
+          ol: ({ className: listClassName, ...props }) => (
             <ol
               className={cn(
                 "my-3 list-decimal space-y-2 pl-6 marker:text-orange-300",
@@ -101,10 +101,10 @@ export function GameNotesMarkdown({
               {...props}
             />
           ),
-          li: ({ node: _node, className: itemClassName, ...props }) => (
+          li: ({ className: itemClassName, ...props }) => (
             <li className={cn("pl-1", itemClassName)} {...props} />
           ),
-          a: ({ node: _node, className: linkClassName, href, ...props }) => {
+          a: ({ className: linkClassName, href, ...props }) => {
             if (!href) {
               return <span {...props} />;
             }
@@ -122,11 +122,7 @@ export function GameNotesMarkdown({
               />
             );
           },
-          blockquote: ({
-            node: _node,
-            className: quoteClassName,
-            ...props
-          }) => (
+          blockquote: ({ className: quoteClassName, ...props }) => (
             <blockquote
               className={cn(
                 "my-3 border-l-2 border-orange-300/40 pl-4 text-orange-200/85 italic",
@@ -135,13 +131,13 @@ export function GameNotesMarkdown({
               {...props}
             />
           ),
-          hr: ({ node: _node, className: ruleClassName, ...props }) => (
+          hr: ({ className: ruleClassName, ...props }) => (
             <hr
               className={cn("my-4 border-orange-400/20", ruleClassName)}
               {...props}
             />
           ),
-          table: ({ node: _node, className: tableClassName, ...props }) => (
+          table: ({ className: tableClassName, ...props }) => (
             <div className="my-4 overflow-x-auto">
               <table
                 className={cn(
@@ -152,13 +148,13 @@ export function GameNotesMarkdown({
               />
             </div>
           ),
-          thead: ({ node: _node, className: headClassName, ...props }) => (
+          thead: ({ className: headClassName, ...props }) => (
             <thead
               className={cn("bg-orange-400/10", headClassName)}
               {...props}
             />
           ),
-          th: ({ node: _node, className: cellClassName, ...props }) => (
+          th: ({ className: cellClassName, ...props }) => (
             <th
               className={cn(
                 "border border-orange-400/20 px-3 py-2 font-semibold text-orange-100",
@@ -167,7 +163,7 @@ export function GameNotesMarkdown({
               {...props}
             />
           ),
-          td: ({ node: _node, className: cellClassName, ...props }) => (
+          td: ({ className: cellClassName, ...props }) => (
             <td
               className={cn(
                 "border border-orange-400/20 px-3 py-2 align-top text-orange-200/90",
@@ -176,7 +172,7 @@ export function GameNotesMarkdown({
               {...props}
             />
           ),
-          pre: ({ node: _node, className: preClassName, ...props }) => (
+          pre: ({ className: preClassName, ...props }) => (
             <pre
               className={cn(
                 "my-4 overflow-x-auto rounded-md border border-orange-400/20 bg-black/70 px-3 py-3 text-orange-100",
@@ -185,12 +181,7 @@ export function GameNotesMarkdown({
               {...props}
             />
           ),
-          code: ({
-            node: _node,
-            className: codeClassName,
-            children,
-            ...props
-          }) => {
+          code: ({ className: codeClassName, children, ...props }) => {
             const isBlock = codeClassName?.includes("language-");
 
             if (isBlock) {

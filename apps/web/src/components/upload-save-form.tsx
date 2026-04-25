@@ -53,7 +53,9 @@ export function UploadSaveForm({ gameNumber }: UploadSaveFormProps) {
           ).catch(() => null);
 
           if (!response) {
-            setErrorMessage("The save upload request failed before reaching the server.");
+            setErrorMessage(
+              "The save upload request failed before reaching the server.",
+            );
             return;
           }
 
