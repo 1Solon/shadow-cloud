@@ -45,4 +45,4 @@ WORKDIR /app/apps/web
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+CMD ["sh", "-c", "export NEXT_DEPLOYMENT_ID=\"${NEXT_DEPLOYMENT_ID:-$(cat .next/BUILD_ID)}\"; exec node server.js"]
