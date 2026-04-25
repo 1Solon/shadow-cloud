@@ -11,7 +11,7 @@ CREATE TABLE "NotificationDelivery" (
     "deliveredAt" DATETIME,
     "lastError" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX "NotificationDelivery_status_nextAttemptAt_createdAt_idx"
