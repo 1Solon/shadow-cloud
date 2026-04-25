@@ -14,6 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { GameNotesMarkdown } from "@/components/game-notes-markdown";
 
 type GameNotesCardProps = {
   gameNumber: number;
@@ -134,17 +135,29 @@ export function GameNotesCard({
         ) : null}
 
         {isEditing ? (
-          <textarea
-            className="min-h-40 w-full rounded-md border border-orange-400/30 bg-black px-3 py-3 text-sm font-mono text-orange-200 outline-none transition focus:border-orange-300"
-            value={draftNotes}
-            onChange={(event) => {
-              setDraftNotes(event.target.value);
-            }}
-          />
-        ) : (
-          <div className="rounded-lg border border-orange-400/20 bg-orange-400/5 px-4 py-4 whitespace-pre-wrap text-sm font-mono text-orange-200">
-            {notes?.trim() || "No notes recorded for this world."}
+          <div className="space-y-2">
+            <textarea
+              className="min-h-40 w-full rounded-md border border-orange-400/30 bg-black px-3 py-3 text-sm font-mono text-orange-200 outline-none transition focus:border-orange-300"
+              value={draftNotes}
+              onChange={(event) => {
+                setDraftNotes(event.target.value);
+              }}
+            />
+            <p className="text-xs font-mono text-orange-300/70">
+              Markdown is supported. Links render in the notes view; raw HTML
+              and images are ignored.
+            </p>
           </div>
+        ) : (
+          <>
+            {notes?.trim() ? (
+              <GameNotesMarkdown content={notes} />
+            ) : (
+              <div className="rounded-lg border border-orange-400/20 bg-orange-400/5 px-4 py-4 text-sm font-mono text-orange-200">
+                No notes recorded for this world.
+              </div>
+            )}
+          </>
         )}
       </CardContent>
     </Card>
