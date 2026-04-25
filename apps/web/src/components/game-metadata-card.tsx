@@ -554,21 +554,23 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
               </Button>
             </div>
           ) : (
-            <Button
-              disabled={isMutating}
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setDraft(createDraft(props));
-                setOrganizerEntryId(currentOrganizerEntry?.id ?? "");
-                setErrorMessage(null);
-                setConfirmation(null);
-                setPendingTransfer(null);
-                setIsEditing(true);
-              }}
-            >
-              Edit
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                disabled={isMutating}
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setDraft(createDraft(props));
+                  setOrganizerEntryId(currentOrganizerEntry?.id ?? "");
+                  setErrorMessage(null);
+                  setConfirmation(null);
+                  setPendingTransfer(null);
+                  setIsEditing(true);
+                }}
+              >
+                Edit
+              </Button>
+            </div>
           )
         ) : null}
       </CardHeader>

@@ -6,6 +6,14 @@
   --card: rgba(0, 0, 0, 0.9);
   --card-foreground: #fb923c;
   --ring: #fb923c;
+  --terminal-scanline-color: rgba(251, 146, 60, 0.15);
+}
+
+.terminal-override-active {
+  --foreground: #f87171;
+  --card-foreground: #f87171;
+  --ring: #f87171;
+  --terminal-scanline-color: rgba(248, 113, 113, 0.18);
 }
 
 @theme inline {
@@ -23,6 +31,169 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-mono), monospace;
+}
+
+.terminal-override-active .text-orange-400 {
+  color: #f87171 !important;
+}
+
+.terminal-override-active .text-orange-400\/80 {
+  color: rgba(248, 113, 113, 0.8) !important;
+}
+
+.terminal-override-active .text-orange-400\/70 {
+  color: rgba(248, 113, 113, 0.7) !important;
+}
+
+.terminal-override-active .text-orange-400\/60 {
+  color: rgba(248, 113, 113, 0.6) !important;
+}
+
+.terminal-override-active .text-orange-400\/50 {
+  color: rgba(248, 113, 113, 0.5) !important;
+}
+
+.terminal-override-active .text-orange-300 {
+  color: #fca5a5 !important;
+}
+
+.terminal-override-active .text-orange-300\/70 {
+  color: rgba(252, 165, 165, 0.7) !important;
+}
+
+.terminal-override-active .text-orange-300\/60 {
+  color: rgba(252, 165, 165, 0.6) !important;
+}
+
+.terminal-override-active .text-orange-300\/50 {
+  color: rgba(252, 165, 165, 0.5) !important;
+}
+
+.terminal-override-active .text-orange-300\/40 {
+  color: rgba(252, 165, 165, 0.4) !important;
+}
+
+.terminal-override-active .text-orange-200 {
+  color: #fecaca !important;
+}
+
+.terminal-override-active .text-orange-200\/90 {
+  color: rgba(254, 202, 202, 0.9) !important;
+}
+
+.terminal-override-active .text-orange-200\/85 {
+  color: rgba(254, 202, 202, 0.85) !important;
+}
+
+.terminal-override-active .text-orange-100 {
+  color: #fee2e2 !important;
+}
+
+.terminal-override-active .text-orange-50,
+.terminal-override-active .hover\:text-orange-50:hover {
+  color: #fff1f2 !important;
+}
+
+.terminal-override-active .border-orange-400 {
+  border-color: #f87171 !important;
+}
+
+.terminal-override-active .border-orange-400\/60 {
+  border-color: rgba(248, 113, 113, 0.6) !important;
+}
+
+.terminal-override-active .border-orange-400\/30 {
+  border-color: rgba(248, 113, 113, 0.3) !important;
+}
+
+.terminal-override-active .border-orange-400\/20 {
+  border-color: rgba(248, 113, 113, 0.2) !important;
+}
+
+.terminal-override-active .border-orange-300 {
+  border-color: #fca5a5 !important;
+}
+
+.terminal-override-active .border-orange-300\/40 {
+  border-color: rgba(252, 165, 165, 0.4) !important;
+}
+
+.terminal-override-active .border-orange-300\/30 {
+  border-color: rgba(252, 165, 165, 0.3) !important;
+}
+
+.terminal-override-active .bg-orange-400 {
+  background-color: #f87171 !important;
+}
+
+.terminal-override-active .bg-orange-400\/20,
+.terminal-override-active .hover\:bg-orange-400\/20:hover {
+  background-color: rgba(248, 113, 113, 0.2) !important;
+}
+
+.terminal-override-active .bg-orange-400\/10,
+.terminal-override-active .hover\:bg-orange-400\/10:hover {
+  background-color: rgba(248, 113, 113, 0.1) !important;
+}
+
+.terminal-override-active .bg-orange-400\/5 {
+  background-color: rgba(248, 113, 113, 0.05) !important;
+}
+
+.terminal-override-active .bg-black\/90 {
+  background-color: rgba(24, 4, 4, 0.9) !important;
+}
+
+.terminal-override-active .bg-black\/80 {
+  background-color: rgba(22, 3, 3, 0.8) !important;
+}
+
+.terminal-override-active .bg-black\/70 {
+  background-color: rgba(20, 3, 3, 0.7) !important;
+}
+
+.terminal-override-active .bg-black\/60 {
+  background-color: rgba(18, 2, 2, 0.6) !important;
+}
+
+.terminal-override-active .bg-black\/50 {
+  background-color: rgba(16, 2, 2, 0.5) !important;
+}
+
+.terminal-override-active .bg-black\/10 {
+  background-color: rgba(35, 6, 6, 0.1) !important;
+}
+
+.terminal-override-active .shadow-orange-400\/20 {
+  --tw-shadow-color: rgba(248, 113, 113, 0.2) !important;
+}
+
+.terminal-override-active .shadow-orange-400\/10 {
+  --tw-shadow-color: rgba(248, 113, 113, 0.1) !important;
+}
+
+.terminal-override-active .hover\:bg-orange-400:hover {
+  background-color: #f87171 !important;
+}
+
+.terminal-override-active .hover\:bg-orange-300:hover {
+  background-color: #fca5a5 !important;
+}
+
+.terminal-override-active .hover\:text-orange-400:hover {
+  color: #f87171 !important;
+}
+
+.terminal-override-active .hover\:text-orange-200:hover {
+  color: #fecaca !important;
+}
+
+.terminal-override-active .focus\:border-orange-300:focus {
+  border-color: #fca5a5 !important;
+}
+
+.terminal-override-active .focus-visible\:ring-orange-300:focus-visible {
+  --tw-ring-color: #fca5a5 !important;
 }
 
 @keyframes terminal-powerup {

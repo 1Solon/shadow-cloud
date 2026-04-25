@@ -6,10 +6,12 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { AuthService } from '../auth/auth.service';
 import { prisma, type Prisma } from '../database';
 import { GamesQueryService } from './services/games-query.service';
 import { GamesRegistrationService } from './services/games-registration.service';
 import { GamesTurnService } from './services/games-turn.service';
+import { FileStorageService } from './file-storage.service';
 import type { CreateDiscordGameDto } from './dto/create-discord-game.dto';
 import type { RegisterDiscordPlayerDto } from './dto/register-discord-player.dto';
 import type { ReorderSeatOrderDto } from './dto/reorder-seat-order.dto';
@@ -40,10 +42,30 @@ export type { UploadedSaveFile } from './support/game-payload.types';
 @Injectable()
 export class GamesService {
   constructor(
+    private readonly authService: AuthService,
     private readonly gamesQuery: GamesQueryService,
     private readonly gamesRegistration: GamesRegistrationService,
     private readonly gamesTurn: GamesTurnService,
+    private readonly fileStorage: FileStorageService,
   ) {}
+
+  private async assertGameManagementAccess(input: {
+    organizerId: string;
+    userId: string;
+    deniedMessage: string;
+  }) {
+    if (input.organizerId === input.userId) {
+      return;
+    }
+
+    const hasShadowOverride = await this.authService.isUserShadowOverride(
+      input.userId,
+    );
+
+    if (!hasShadowOverride) {
+      throw new ForbiddenException(input.deniedMessage);
+    }
+  }
 
   async listGames() {
     return this.gamesQuery.listGames();
@@ -84,11 +106,11 @@ export class GamesService {
       throw new NotFoundException(`Game ${gameId} was not found.`);
     }
 
-    if (game.organizerId !== userId) {
-      throw new ForbiddenException(
-        'Only the game organizer can edit game metadata.',
-      );
-    }
+    await this.assertGameManagementAccess({
+      organizerId: game.organizerId,
+      userId,
+      deniedMessage: 'Only the game organizer can edit game metadata.',
+    });
 
     const previousMetadata = {
       gameNumber: game.gameNumber,
@@ -292,6 +314,62 @@ export class GamesService {
 
   async downloadSave(gameId: string, fileVersionId: string, userId?: string) {
     return this.gamesQuery.downloadSave(gameId, fileVersionId, userId);
+  }
+
+  async deleteGame(gameId: string, userId: string | undefined) {
+    if (!userId) {
+      throw new UnauthorizedException(
+        'Authenticated user id is missing from the token.',
+      );
+    }
+
+    const game = await prisma.game.findFirst({
+      where: {
+        ...buildGameIdentifierWhere(gameId),
+      },
+      select: {
+        id: true,
+        gameNumber: true,
+        slug: true,
+        name: true,
+        organizerId: true,
+        fileVersions: {
+          select: {
+            storagePath: true,
+          },
+        },
+      },
+    });
+
+    if (!game) {
+      throw new NotFoundException(`Game ${gameId} was not found.`);
+    }
+
+    await this.assertGameManagementAccess({
+      organizerId: game.organizerId,
+      userId,
+      deniedMessage: 'Only the game organizer can delete this game.',
+    });
+
+    await prisma.game.delete({
+      where: {
+        id: game.id,
+      },
+    });
+
+    await Promise.all(
+      game.fileVersions.map((fileVersion) =>
+        this.fileStorage.removeFile(fileVersion.storagePath),
+      ),
+    );
+
+    return {
+      id: game.id,
+      gameNumber: game.gameNumber,
+      slug: game.slug,
+      name: game.name,
+      deleted: true,
+    };
   }
 
   async reorderSeatOrder(

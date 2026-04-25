@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -106,6 +107,15 @@ export class GamesController {
       request.user?.sub,
       input,
     );
+  }
+
+  @Delete(':gameId')
+  @UseGuards(AppAuthGuard)
+  deleteGame(
+    @Param('gameId') gameId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.gamesService.deleteGame(gameId, request.user?.sub);
   }
 
   @Get(':gameId/files/:fileVersionId')

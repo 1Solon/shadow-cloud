@@ -69,6 +69,7 @@ async function syncDiscordIdentity(input: {
     id: string;
     email: string;
     displayName: string;
+    isShadowOverride: boolean;
   }>;
 }
 
@@ -100,6 +101,7 @@ export const authOptions: NextAuthOptions = {
 
         token.userId = shadowUser.id;
         token.discordId = account.providerAccountId;
+        token.isShadowOverride = shadowUser.isShadowOverride;
         token.picture = user.image ?? null;
       }
 
@@ -112,6 +114,10 @@ export const authOptions: NextAuthOptions = {
 
       if (session.user && token.discordId) {
         session.user.discordId = token.discordId;
+      }
+
+      if (session.user) {
+        session.user.isShadowOverride = token.isShadowOverride === true;
       }
 
       return session;

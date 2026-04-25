@@ -361,7 +361,7 @@ export class GamesQueryService {
       );
     }
 
-    const fileStats = await this.fileStorage.verifyFileExists(
+    const downloadFile = await this.fileStorage.openDownload(
       fileVersion.storagePath,
     );
     const activePlayerEntry = game.turnState
@@ -393,9 +393,9 @@ export class GamesQueryService {
 
     return {
       originalName: downloadName,
-      size: fileStats.size,
-      lastModified: fileStats.lastModified,
-      stream: this.fileStorage.createDownloadStream(fileVersion.storagePath),
+      size: downloadFile.size,
+      lastModified: downloadFile.lastModified,
+      stream: downloadFile.stream,
     };
   }
 }

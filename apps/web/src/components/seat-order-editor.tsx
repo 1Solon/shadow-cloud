@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import {
   closestCenter,
   DndContext,
@@ -32,6 +32,10 @@ import {
   TerminalConfirmationModal,
   type TerminalConfirmationSpec,
 } from "@/components/terminal-confirmation-modal";
+import {
+  TerminalActionConfirmationDialog,
+  type TerminalActionConfirmationSpec,
+} from "@/components/terminal-action-confirmation-dialog";
 import { cn } from "@/lib/utils";
 
 type SeatOrderPlayer = {
@@ -55,8 +59,6 @@ type PendingSeatAction = {
   seatNumber: number;
   displayName: string;
 };
-
-const SEAT_ACTION_TEXT_ENTER_DELAY_MS = 140;
 
 function isNoDragTarget(target: EventTarget | null) {
   return (
@@ -309,150 +311,6 @@ function SortableSeatRow({
   );
 }
 
-type SeatActionConfirmationDialogProps = {
-  action: PendingSeatAction | null;
-  isPending: boolean;
-  onCancel: () => void;
-  onConfirm: () => void;
-};
-
-function SeatActionConfirmationDialog({
-  action,
-  isPending,
-  onCancel,
-  onConfirm,
-}: SeatActionConfirmationDialogProps) {
-  const [renderedLines, setRenderedLines] = useState<string[]>([]);
-  const [activeLineIndex, setActiveLineIndex] = useState<number | null>(null);
-  const timeoutIdsRef = useRef<number[]>([]);
-
-  function clearScheduledTimeouts() {
-    timeoutIdsRef.current.forEach((timeoutId) =>
-      window.clearTimeout(timeoutId),
-    );
-    timeoutIdsRef.current = [];
-  }
-
-  function scheduleTimeout(callback: () => void, delay: number) {
-    const timeoutId = window.setTimeout(callback, delay);
-    timeoutIdsRef.current.push(timeoutId);
-  }
-
-  useEffect(
-    () => () => {
-      clearScheduledTimeouts();
-    },
-    [],
-  );
-
-  useEffect(() => {
-    if (!action) {
-      clearScheduledTimeouts();
-      scheduleTimeout(() => {
-        setRenderedLines([]);
-        setActiveLineIndex(null);
-      }, 0);
-
-      return () => {
-        clearScheduledTimeouts();
-      };
-    }
-
-    const description =
-      action.type === "clear"
-        ? `${action.displayName} will be removed from seat ${action.seatNumber}, but the seat will remain in the turn order.`
-        : `Seat ${action.seatNumber} will be deleted from the game and the remaining seats will be renumbered.`;
-    const command =
-      action.type === "clear"
-        ? `seat-order --clear seat-${action.seatNumber}`
-        : `seat-order --remove seat-${action.seatNumber}`;
-    const terminalLines = [`> ${command}`, description];
-    let elapsed = SEAT_ACTION_TEXT_ENTER_DELAY_MS;
-
-    clearScheduledTimeouts();
-    scheduleTimeout(() => {
-      setRenderedLines([]);
-      setActiveLineIndex(null);
-    }, 0);
-
-    terminalLines.forEach((line, lineIndex) => {
-      for (let charIndex = 1; charIndex <= line.length; charIndex += 1) {
-        const snapshot = [
-          ...terminalLines.slice(0, lineIndex),
-          line.slice(0, charIndex),
-        ];
-
-        scheduleTimeout(() => {
-          setRenderedLines(snapshot);
-          setActiveLineIndex(lineIndex);
-        }, elapsed);
-        elapsed += lineIndex === 0 ? 18 : 12;
-      }
-
-      elapsed += 110;
-    });
-
-    scheduleTimeout(() => {
-      setRenderedLines(terminalLines);
-      setActiveLineIndex(null);
-    }, elapsed);
-
-    return () => {
-      clearScheduledTimeouts();
-    };
-  }, [action]);
-
-  if (!action) {
-    return null;
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6">
-      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-orange-400/30 bg-[#0a0711] shadow-2xl shadow-orange-950/40">
-        <div className="flex items-center justify-between border-b border-orange-400/20 bg-orange-400/10 px-4 py-3 font-mono text-[11px] uppercase tracking-[0.28em] text-orange-200">
-          <span>Confirm seat change</span>
-          <button
-            aria-label="Close confirmation"
-            className="text-orange-300/70 transition-colors hover:text-orange-200"
-            type="button"
-            onClick={onCancel}
-          >
-            X
-          </button>
-        </div>
-        <div className="space-y-4 bg-black/70 px-4 py-4 font-mono text-sm text-orange-300">
-          <div className="min-h-20 space-y-1 text-orange-200/85">
-            {renderedLines.map((line, index) => (
-              <div
-                key={`${action.seatEntryId}-${index}`}
-                className="min-h-5 whitespace-pre-wrap break-words leading-6"
-              >
-                {line}
-                {activeLineIndex === index ? (
-                  <span className="ml-1 inline-block h-4 w-2 animate-pulse align-[-2px] bg-orange-300" />
-                ) : null}
-              </div>
-            ))}
-          </div>
-          <div className="flex justify-end gap-2 pt-2">
-            <Button
-              disabled={isPending}
-              type="button"
-              variant="secondary"
-              onClick={onCancel}
-            >
-              Cancel
-            </Button>
-            <Button disabled={isPending} type="button" onClick={onConfirm}>
-              Confirm
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function SeatOrderEditor({
   gameNumber,
   players,
@@ -487,6 +345,21 @@ export function SeatOrderEditor({
     }),
   );
   const isMutating = isPending;
+  const pendingSeatConfirmation: TerminalActionConfirmationSpec | null =
+    pendingSeatAction
+      ? {
+          title: "Confirm seat change",
+          command:
+            pendingSeatAction.type === "clear"
+              ? `seat-order --clear seat-${pendingSeatAction.seatNumber}`
+              : `seat-order --remove seat-${pendingSeatAction.seatNumber}`,
+          lines: [
+            pendingSeatAction.type === "clear"
+              ? `${pendingSeatAction.displayName} will be removed from seat ${pendingSeatAction.seatNumber}, but the seat will remain in the turn order.`
+              : `Seat ${pendingSeatAction.seatNumber} will be deleted from the game and the remaining seats will be renumbered.`,
+          ],
+        }
+      : null;
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -764,8 +637,8 @@ export function SeatOrderEditor({
           setConfirmation(null);
         }}
       />
-      <SeatActionConfirmationDialog
-        action={pendingSeatAction}
+      <TerminalActionConfirmationDialog
+        confirmation={pendingSeatConfirmation}
         isPending={isMutating}
         onCancel={() => {
           setPendingSeatAction(null);

@@ -6,6 +6,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { AuthService } from '../../auth/auth.service';
 import { AuditEventType, GameRole, prisma } from '../../database';
 import { getNextActivePlayer } from '../games-domain';
 import type { PlayerSummary } from '../games.types';
@@ -27,9 +28,28 @@ import { resolveActivePlayerEntry } from '../support/turn-state.utils';
 @Injectable()
 export class GamesTurnService {
   constructor(
+    private readonly authService: AuthService,
     private readonly fileStorage: FileStorageService,
     private readonly botNotifications: BotNotificationsService,
   ) {}
+
+  private async assertGameManagementAccess(input: {
+    organizerId: string;
+    userId: string;
+    deniedMessage: string;
+  }) {
+    if (input.organizerId === input.userId) {
+      return;
+    }
+
+    const hasShadowOverride = await this.authService.isUserShadowOverride(
+      input.userId,
+    );
+
+    if (!hasShadowOverride) {
+      throw new ForbiddenException(input.deniedMessage);
+    }
+  }
 
   async uploadSave(
     gameId: string,
@@ -309,11 +329,11 @@ export class GamesTurnService {
       throw new NotFoundException(`Game ${gameId} was not found.`);
     }
 
-    if (game.organizerId !== userId) {
-      throw new ForbiddenException(
-        'Only the game organizer can edit seat order.',
-      );
-    }
+    await this.assertGameManagementAccess({
+      organizerId: game.organizerId,
+      userId,
+      deniedMessage: 'Only the game organizer can edit seat order.',
+    });
 
     const currentSeatIds = game.players.map((player) => player.id);
     const requestedSeatIds = input.seatEntryIds;
@@ -728,11 +748,11 @@ export class GamesTurnService {
       throw new NotFoundException(`Game ${gameId} was not found.`);
     }
 
-    if (game.organizerId !== userId) {
-      throw new ForbiddenException(
-        'Only the game organizer can transfer host control.',
-      );
-    }
+    await this.assertGameManagementAccess({
+      organizerId: game.organizerId,
+      userId,
+      deniedMessage: 'Only the game organizer can transfer host control.',
+    });
 
     const targetEntry = game.players.find(
       (player) => player.id === input.targetPlayerEntryId,

@@ -4,7 +4,9 @@ import { TerminalClock } from "@/components/terminal-clock";
 import { UserBadge } from "@/components/user-badge";
 import { SignOutButton } from "@/components/sign-out-button";
 import { LoginButton } from "@/components/login-button";
+import { ShadowOverrideButton } from "@/components/shadow-override-button";
 import { listGames } from "@/lib/shadow-cloud-api";
+import { getShadowOverrideEnabled } from "@/lib/shadow-override";
 import { formatTerminalClock } from "@/lib/terminal-clock";
 import {
   Card,
@@ -57,9 +59,10 @@ function CampaignList({
 }
 
 export default async function Home() {
-  const [session, games] = await Promise.all([
+  const [session, games, shadowOverrideEnabled] = await Promise.all([
     getServerAuthSession(),
     listGames(),
+    getShadowOverrideEnabled(),
   ]);
   const initialClockTime = new Date();
   const userId = session?.user?.id;
@@ -83,13 +86,34 @@ export default async function Home() {
 
   const signedInIdentity =
     session?.user?.name ?? session?.user?.email ?? "Guest lord";
+  const shellTextClassName = shadowOverrideEnabled
+    ? "text-red-400"
+    : "text-orange-400";
+  const shellFrameClassName = shadowOverrideEnabled
+    ? "border-red-400 shadow-red-400/20"
+    : "border-orange-400 shadow-orange-400/20";
+  const shellHeaderClassName = shadowOverrideEnabled
+    ? "border-red-400"
+    : "border-orange-400";
+  const shellTitleClassName = shadowOverrideEnabled
+    ? "text-red-300"
+    : "text-orange-300";
+  const shellStatusClassName = shadowOverrideEnabled
+    ? "border-red-400 text-red-300/70"
+    : "border-orange-400 text-orange-300/70";
 
   return (
-    <main className="h-screen overflow-hidden bg-black text-orange-400 font-mono p-4 flex flex-col">
-      <div className="flex-1 min-h-0 w-full border border-orange-400 rounded-lg p-6 bg-black/90 shadow-2xl shadow-orange-400/20 flex flex-col overflow-hidden">
+    <main
+      className={`h-screen overflow-hidden bg-black font-mono p-4 flex flex-col ${shellTextClassName}`}
+    >
+      <div
+        className={`flex-1 min-h-0 w-full rounded-lg border p-6 bg-black/90 shadow-2xl flex flex-col overflow-hidden ${shellFrameClassName}`}
+      >
         {/* Terminal header bar */}
-        <div className="flex items-center justify-between border-b border-orange-400 pb-4 mb-6">
-          <div className="text-orange-300 text-xl font-mono">{`> SHADOW CLOUD TERMINAL`}</div>
+        <div
+          className={`flex items-center justify-between border-b pb-4 mb-6 ${shellHeaderClassName}`}
+        >
+          <div className={`text-xl font-mono ${shellTitleClassName}`}>{`> SHADOW CLOUD TERMINAL`}</div>
           <div className="flex items-center gap-6">
             <UserBadge
               name={signedInIdentity}
@@ -97,6 +121,9 @@ export default async function Home() {
               isSignedIn={Boolean(session?.user)}
             />
             {session?.user ? <SignOutButton /> : <LoginButton />}
+            {session?.user?.isShadowOverride ? (
+              <ShadowOverrideButton enabled={shadowOverrideEnabled} />
+            ) : null}
             <TerminalClock
               initialTime={formatTerminalClock(initialClockTime)}
             />
@@ -128,7 +155,9 @@ export default async function Home() {
           />
         </div>
         {/* Status bar */}
-        <div className="mt-6 pt-4 border-t border-orange-400 flex justify-between text-xs text-orange-300/70">
+        <div
+          className={`mt-6 pt-4 border-t flex justify-between text-xs ${shellStatusClassName}`}
+        >
           <div>STATUS: TERMINAL ACTIVE</div>
           <div>CAMPAIGNS: {games.length} MONITORED</div>
           <div>ENCRYPTION: QUANTUM-256</div>

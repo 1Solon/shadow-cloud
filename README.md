@@ -45,6 +45,7 @@ DISCORD_BOT_TOKEN="your-discord-bot-token"
 SHADOW_CLOUD_API_URL="http://localhost:3001"
 BOT_API_TOKEN="replace-with-a-shared-api-token"
 SHADOW_CLOUD_BOT_NOTIFY_SECRET="replace-with-a-shared-notify-secret"
+SHADOW_OVERRIDE_DISCORD_ROLE_ID="your-shadow-role-id"
 ```
 
 Notes:
@@ -53,6 +54,7 @@ Notes:
 * `AUTH_DISCORD_ID` and `AUTH_DISCORD_SECRET` are the Discord OAuth app credentials used for sign-in.
 * `DISCORD_BOT_TOKEN` is the token for the Discord bot itself.
 * `BOT_API_TOKEN` and `SHADOW_CLOUD_BOT_NOTIFY_SECRET` must match across the bot and API because they are used for bot-authenticated requests and notification webhooks.
+* `SHADOW_OVERRIDE_DISCORD_ROLE_ID` enables the web/API Shadow override for users who hold that Discord role in any Discord guild currently linked to Shadow Cloud.
 
 ### Running With PNPM
 
@@ -130,6 +132,7 @@ Optional runtime overrides:
 * `AUTH_DISCORD_ID` and `AUTH_DISCORD_SECRET` to enable Discord sign-in
 * `DISCORD_BOT_TOKEN` to enable the Discord bot
 * `BOT_API_TOKEN` and `SHADOW_CLOUD_BOT_NOTIFY_SECRET` to secure bot-to-API traffic
+* `SHADOW_OVERRIDE_DISCORD_ROLE_ID` to enable the Shadow override role check
 * `SHADOW_CLOUD_WEB_PORT` to change the published web port
 * `SHADOW_CLOUD_API_PORT` to change the published API port
 

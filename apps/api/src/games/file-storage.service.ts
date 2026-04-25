@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { createReadStream } from 'node:fs';
 import { mkdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { basename, extname, join, resolve } from 'node:path';
+import type { ReadStream } from 'node:fs';
 
 function sanitizeSegment(value: string) {
   const trimmed = basename(value).trim();
@@ -69,16 +70,33 @@ export class FileStorageService {
     return buildSaveFileName(input);
   }
 
-  createDownloadStream(storagePath: string) {
-    return createReadStream(storagePath);
-  }
-
-  async verifyFileExists(storagePath: string) {
+  async openDownload(storagePath: string): Promise<{
+    size: number;
+    lastModified: Date;
+    stream: ReadStream;
+  }> {
     const fileStats = await stat(storagePath);
+
+    const stream = await new Promise<ReadStream>((resolveStream, reject) => {
+      const nextStream = createReadStream(storagePath);
+
+      const handleOpen = () => {
+        nextStream.off('error', handleError);
+        resolveStream(nextStream);
+      };
+      const handleError = (error: Error) => {
+        nextStream.off('open', handleOpen);
+        reject(error);
+      };
+
+      nextStream.once('open', handleOpen);
+      nextStream.once('error', handleError);
+    });
 
     return {
       size: fileStats.size,
       lastModified: fileStats.mtime,
+      stream,
     };
   }
 

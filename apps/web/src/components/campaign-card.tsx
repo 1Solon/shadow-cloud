@@ -3,8 +3,8 @@
 import {
   useEffect,
   useState,
-  type MouseEvent,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent,
 } from "react";
 import { useRouter } from "next/navigation";
 import { SaveUploadCard } from "@/components/save-upload-card";
@@ -25,7 +25,10 @@ function formatTimestamp(timestamp: string) {
   }).format(new Date(timestamp));
 }
 
-export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
+export function CampaignCard({
+  currentUserId,
+  game,
+}: CampaignCardProps) {
   const router = useRouter();
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isUploadButtonHighlighted, setIsUploadButtonHighlighted] =
@@ -207,25 +210,27 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
             </div>
 
             {isUsersTurn ? (
-              <Button
-                className="relative z-10 w-full md:col-span-2"
-                type="button"
-                onBlur={() => {
-                  setIsUploadButtonHighlighted(false);
-                }}
-                onClick={openUploadModal}
-                onFocus={() => {
-                  setIsUploadButtonHighlighted(true);
-                }}
-                onMouseEnter={() => {
-                  setIsUploadButtonHighlighted(true);
-                }}
-                onMouseLeave={() => {
-                  setIsUploadButtonHighlighted(false);
-                }}
-              >
-                {"> Upload your turn"}
-              </Button>
+              <div className="relative z-10 w-full md:col-span-2">
+                <Button
+                  className="w-full"
+                  type="button"
+                  onBlur={() => {
+                    setIsUploadButtonHighlighted(false);
+                  }}
+                  onClick={openUploadModal}
+                  onFocus={() => {
+                    setIsUploadButtonHighlighted(true);
+                  }}
+                  onMouseEnter={() => {
+                    setIsUploadButtonHighlighted(true);
+                  }}
+                  onMouseLeave={() => {
+                    setIsUploadButtonHighlighted(false);
+                  }}
+                >
+                  {"> Upload your turn"}
+                </Button>
+              </div>
             ) : null}
           </CardContent>
         </Card>

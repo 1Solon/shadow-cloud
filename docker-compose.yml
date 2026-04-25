@@ -13,6 +13,7 @@ services:
       SHADOW_CLOUD_SAVE_DIR: /data
       SHADOW_CLOUD_BOT_NOTIFY_BASE_URL: http://bot:3011
       SHADOW_CLOUD_BOT_NOTIFY_SECRET: ${SHADOW_CLOUD_BOT_NOTIFY_SECRET:-replace-with-a-shared-notify-secret}
+      SHADOW_OVERRIDE_DISCORD_ROLE_ID: ${SHADOW_OVERRIDE_DISCORD_ROLE_ID:-your-shadow-role-id}
     ports:
       - "${SHADOW_CLOUD_API_PORT:-3001}:3001"
     volumes:

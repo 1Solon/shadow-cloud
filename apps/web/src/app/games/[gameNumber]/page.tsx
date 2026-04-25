@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { AdministratorActionsCard } from "@/components/administrator-actions-card";
 import { getServerAuthSession } from "@/auth";
 import { DownloadSaveButton } from "@/components/download-save-button";
 import { GameMetadataCard } from "@/components/game-metadata-card";
@@ -13,6 +14,7 @@ import {
   CardDescription,
   CardTitle,
 } from "@/components/ui/card";
+import { getShadowOverrideEnabled } from "@/lib/shadow-override";
 import { getGameDetail } from "@/lib/shadow-cloud-api";
 
 type GamePageProps = {
@@ -39,9 +41,10 @@ export default async function GameDetailPage({
 }: GamePageProps) {
   const { gameNumber } = await params;
   const query = await searchParams;
-  const [session, game] = await Promise.all([
+  const [session, game, shadowOverrideEnabled] = await Promise.all([
     getServerAuthSession(),
     getGameDetail(gameNumber),
+    getShadowOverrideEnabled(),
   ]);
 
   if (!game) {
@@ -52,7 +55,12 @@ export default async function GameDetailPage({
     session?.user?.id && game.activePlayerUserId === session.user.id,
   );
   const canEditSeatOrder = Boolean(
-    session?.user?.id && session.user.id === game.organizerId,
+    session?.user?.id &&
+      (session.user.id === game.organizerId ||
+        (session.user.isShadowOverride && shadowOverrideEnabled)),
+  );
+  const canDeleteGame = Boolean(
+    session?.user?.isShadowOverride && shadowOverrideEnabled,
   );
   const uploadMessage = query.message
     ? decodeURIComponent(query.message)
@@ -87,6 +95,15 @@ export default async function GameDetailPage({
         <div className="rounded-lg border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-300 font-mono">
           {uploadMessage ?? "The save upload failed."}
         </div>
+      ) : null}
+
+      {canDeleteGame ? (
+        <section>
+          <AdministratorActionsCard
+            gameName={game.name}
+            gameNumber={game.gameNumber}
+          />
+        </section>
       ) : null}
 
       <section className="scroll-mt-6" id="save-upload">

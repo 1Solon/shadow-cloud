@@ -5,6 +5,7 @@ declare module "next-auth" {
     user: DefaultSession["user"] & {
       id: string;
       discordId?: string;
+      isShadowOverride?: boolean;
     };
   }
 }
@@ -13,5 +14,6 @@ declare module "next-auth/jwt" {
   interface JWT {
     userId?: string;
     discordId?: string;
+    isShadowOverride?: boolean;
   }
 }
