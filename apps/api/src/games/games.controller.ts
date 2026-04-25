@@ -119,17 +119,14 @@ export class GamesController {
   }
 
   @Get(':gameId/files/:fileVersionId')
-  @UseGuards(AppAuthGuard)
   async downloadSave(
     @Param('gameId') gameId: string,
     @Param('fileVersionId') fileVersionId: string,
-    @Req() request: AuthenticatedRequest,
     @Res({ passthrough: true }) response: Response,
   ) {
     const download = await this.gamesService.downloadSave(
       gameId,
       fileVersionId,
-      request.user?.sub,
     );
 
     response.setHeader('content-type', 'application/octet-stream');

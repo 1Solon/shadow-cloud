@@ -316,13 +316,7 @@ export class GamesQueryService {
     });
   }
 
-  async downloadSave(gameId: string, fileVersionId: string, userId?: string) {
-    if (!userId) {
-      throw new UnauthorizedException(
-        'Authenticated user id is missing from the token.',
-      );
-    }
-
+  async downloadSave(gameId: string, fileVersionId: string) {
     const game = await prisma.game.findFirst({
       where: {
         ...buildGameIdentifierWhere(gameId),
@@ -339,13 +333,6 @@ export class GamesQueryService {
 
     if (!game) {
       throw new NotFoundException(`Game ${gameId} was not found.`);
-    }
-
-    const isOrganizer = game.organizerId === userId;
-    const membership = game.players.find((player) => player.userId === userId);
-
-    if (!isOrganizer && !membership) {
-      throw new ForbiddenException(`You do not have access to game ${gameId}.`);
     }
 
     const fileVersion = await prisma.fileVersion.findFirst({
@@ -381,7 +368,6 @@ export class GamesQueryService {
     await prisma.auditEvent.create({
       data: {
         gameId: game.id,
-        actorId: userId,
         eventType: AuditEventType.FILE_DOWNLOADED,
         payload: JSON.stringify({
           fileVersionId: fileVersion.id,

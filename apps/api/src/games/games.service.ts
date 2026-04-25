@@ -312,8 +312,8 @@ export class GamesService {
     return this.gamesTurn.uploadSave(gameId, userId, file);
   }
 
-  async downloadSave(gameId: string, fileVersionId: string, userId?: string) {
-    return this.gamesQuery.downloadSave(gameId, fileVersionId, userId);
+  async downloadSave(gameId: string, fileVersionId: string) {
+    return this.gamesQuery.downloadSave(gameId, fileVersionId);
   }
 
   async deleteGame(gameId: string, userId: string | undefined) {

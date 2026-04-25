@@ -1,5 +1,3 @@
-import { createApiAccessToken, getServerAuthSession } from "@/auth";
-
 const apiBaseUrl = process.env.SHADOW_CLOUD_API_URL ?? "http://localhost:3001";
 
 export async function GET(
@@ -7,30 +5,10 @@ export async function GET(
   context: { params: Promise<{ gameNumber: string; fileVersionId: string }> },
 ) {
   const { gameNumber, fileVersionId } = await context.params;
-  const session = await getServerAuthSession();
-
-  if (!session?.user?.id) {
-    return Response.json(
-      { error: "Authentication is required." },
-      { status: 401 },
-    );
-  }
-
-  const token = await createApiAccessToken(session).catch(() => null);
-
-  if (!token) {
-    return Response.json(
-      { error: "API authentication is unavailable." },
-      { status: 500 },
-    );
-  }
 
   const response = await fetch(
     `${apiBaseUrl}/v1/games/${encodeURIComponent(gameNumber)}/files/${encodeURIComponent(fileVersionId)}`,
     {
-      headers: {
-        authorization: `Bearer ${token}`,
-      },
       cache: "no-store",
     },
   );
