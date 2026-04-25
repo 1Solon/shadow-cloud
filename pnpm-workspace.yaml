@@ -7,3 +7,5 @@ allowBuilds:
   better-sqlite3: true
   prisma: true
   '@prisma/engines': true
+  sharp: true
+  unrs-resolver: true
