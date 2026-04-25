@@ -25,10 +25,7 @@ function formatTimestamp(timestamp: string) {
   }).format(new Date(timestamp));
 }
 
-export function CampaignCard({
-  currentUserId,
-  game,
-}: CampaignCardProps) {
+export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
   const router = useRouter();
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isUploadButtonHighlighted, setIsUploadButtonHighlighted] =

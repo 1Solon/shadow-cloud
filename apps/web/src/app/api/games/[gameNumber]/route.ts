@@ -43,9 +43,7 @@ export async function DELETE(
     } | null;
     const message = Array.isArray(payload?.message)
       ? payload.message.join(", ")
-      : (payload?.message ??
-        payload?.error ??
-        "The game delete failed.");
+      : (payload?.message ?? payload?.error ?? "The game delete failed.");
 
     return Response.json(
       { error: message },

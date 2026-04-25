@@ -113,7 +113,9 @@ export default async function Home() {
         <div
           className={`flex items-center justify-between border-b pb-4 mb-6 ${shellHeaderClassName}`}
         >
-          <div className={`text-xl font-mono ${shellTitleClassName}`}>{`> SHADOW CLOUD TERMINAL`}</div>
+          <div
+            className={`text-xl font-mono ${shellTitleClassName}`}
+          >{`> SHADOW CLOUD TERMINAL`}</div>
           <div className="flex items-center gap-6">
             <UserBadge
               name={signedInIdentity}

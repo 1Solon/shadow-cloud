@@ -56,8 +56,8 @@ export default async function GameDetailPage({
   );
   const canEditSeatOrder = Boolean(
     session?.user?.id &&
-      (session.user.id === game.organizerId ||
-        (session.user.isShadowOverride && shadowOverrideEnabled)),
+    (session.user.id === game.organizerId ||
+      (session.user.isShadowOverride && shadowOverrideEnabled)),
   );
   const canDeleteGame = Boolean(
     session?.user?.isShadowOverride && shadowOverrideEnabled,
