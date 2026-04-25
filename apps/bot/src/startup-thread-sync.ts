@@ -1,6 +1,10 @@
 import type { Client } from "discord.js";
 import type { BotApiConfig } from "./bot-api.js";
-import { ensureShadowCloudTag, renameThreadIfNeeded } from "./thread-name.js";
+import {
+  ensureShadowCloudTag,
+  renameThreadIfNeeded,
+  SHADOW_CLOUD_TAG_NAME,
+} from "./thread-name.js";
 
 type StartupThreadSyncConfig = Pick<BotApiConfig, "apiBaseUrl" | "botApiToken">;
 
@@ -87,13 +91,19 @@ export async function syncStartupThreadNames(
 
       if (tagResult.status === "missing-tag") {
         console.warn(
-          `Skipping startup tag sync for ${game.name} (${threadId}): parent channel is missing the "🟠 Shadow Cloud" tag.`,
+          `Skipping startup tag sync for ${game.name} (${threadId}): parent channel is missing the "${SHADOW_CLOUD_TAG_NAME}" tag.`,
         );
       }
 
       if (tagResult.status === "unsupported") {
         console.warn(
           `Skipping startup tag sync for ${game.name} (${threadId}): thread does not support forum tags.`,
+        );
+      }
+
+      if (tagResult.status === "max-tags") {
+        console.warn(
+          `Skipping startup tag sync for ${game.name} (${threadId}): thread already has ${tagResult.appliedTagCount} forum tags, which is Discord's limit.`,
         );
       }
     } catch (error) {

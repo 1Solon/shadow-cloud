@@ -1,11 +1,13 @@
 import type { AnyThreadChannel, Snowflake } from "discord.js";
 
+const MAX_FORUM_TAGS = 5;
 const THREAD_RENAME_TIMEOUT_MS = 15_000;
 export const SHADOW_CLOUD_TAG_NAME = "Shadow Cloud";
 
 export type ShadowCloudTagSyncResult =
   | { status: "applied"; tagId: Snowflake }
   | { status: "unchanged"; tagId: Snowflake }
+  | { status: "max-tags"; tagId: Snowflake; appliedTagCount: number }
   | { status: "unsupported" }
   | { status: "missing-tag" };
 
@@ -109,6 +111,14 @@ export async function ensureShadowCloudTag(
 
   if (resolvedThread.appliedTags.includes(shadowCloudTag.id)) {
     return { status: "unchanged", tagId: shadowCloudTag.id };
+  }
+
+  if (resolvedThread.appliedTags.length >= MAX_FORUM_TAGS) {
+    return {
+      status: "max-tags",
+      tagId: shadowCloudTag.id,
+      appliedTagCount: resolvedThread.appliedTags.length,
+    };
   }
 
   await withTimeout(

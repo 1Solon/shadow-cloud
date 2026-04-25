@@ -50,10 +50,10 @@ export function UploadSaveForm({ gameNumber }: UploadSaveFormProps) {
               method: "POST",
               body: formData,
             },
-          );
+          ).catch(() => null);
 
-          if (response.redirected) {
-            window.location.assign(response.url);
+          if (!response) {
+            setErrorMessage("The save upload request failed before reaching the server.");
             return;
           }
 
@@ -62,6 +62,15 @@ export function UploadSaveForm({ gameNumber }: UploadSaveFormProps) {
               error?: string;
             } | null;
             setErrorMessage(payload?.error ?? "The save upload failed.");
+            return;
+          }
+
+          const payload = (await response.json().catch(() => null)) as {
+            redirectTo?: string;
+          } | null;
+
+          if (payload?.redirectTo) {
+            router.replace(payload.redirectTo, { scroll: false });
             return;
           }
 

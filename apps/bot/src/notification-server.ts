@@ -7,7 +7,11 @@ import {
   type ThreadRenameNotificationPayload,
   type UploadNotificationPayload,
 } from "./notifications.js";
-import { ensureShadowCloudTag, renameThreadIfNeeded } from "./thread-name.js";
+import {
+  ensureShadowCloudTag,
+  renameThreadIfNeeded,
+  SHADOW_CLOUD_TAG_NAME,
+} from "./thread-name.js";
 
 type NotificationServerConfig = {
   notificationPort: number;
@@ -33,17 +37,45 @@ async function syncShadowCloudTag(
   thread: Awaited<ReturnType<typeof resolveNotificationThread>>,
   gameName: string,
 ) {
-  const tagResult = await ensureShadowCloudTag(thread);
+  try {
+    const tagResult = await ensureShadowCloudTag(thread);
 
-  if (tagResult.status === "missing-tag") {
+    if (tagResult.status === "missing-tag") {
+      console.warn(
+        `Skipping Shadow Cloud tag for ${gameName} (${thread.id}): parent channel is missing the "${SHADOW_CLOUD_TAG_NAME}" tag.`,
+      );
+    }
+
+    if (tagResult.status === "unsupported") {
+      console.warn(
+        `Skipping Shadow Cloud tag for ${gameName} (${thread.id}): thread does not support forum tags.`,
+      );
+    }
+
+    if (tagResult.status === "max-tags") {
+      console.warn(
+        `Skipping Shadow Cloud tag for ${gameName} (${thread.id}): thread already has ${tagResult.appliedTagCount} forum tags, which is Discord's limit.`,
+      );
+    }
+  } catch (error) {
     console.warn(
-      `Skipping Shadow Cloud tag for ${gameName} (${thread.id}): parent channel is missing the "🟠 Shadow Cloud" tag.`,
+      `Skipping Shadow Cloud tag for ${gameName} (${thread.id}) because Discord rejected the update.`,
+      error,
     );
   }
+}
 
-  if (tagResult.status === "unsupported") {
+async function renameThreadForNotification(
+  thread: Awaited<ReturnType<typeof resolveNotificationThread>>,
+  nextName: string,
+  gameName: string,
+) {
+  try {
+    await renameThreadIfNeeded(thread, nextName);
+  } catch (error) {
     console.warn(
-      `Skipping Shadow Cloud tag for ${gameName} (${thread.id}): thread does not support forum tags.`,
+      `Skipping thread rename for ${gameName} (${thread.id}) because Discord did not complete the update in time.`,
+      error,
     );
   }
 }
@@ -113,17 +145,19 @@ export function startNotificationServer(
       );
 
       if (isGameInitializedRequest) {
-        await renameThreadIfNeeded(
+        await renameThreadForNotification(
           thread,
           (payload as GameInitializedNotificationPayload).game.threadName,
+          payload.game.name,
         );
         await syncShadowCloudTag(thread, payload.game.name);
       }
 
       if (isThreadRenameRequest) {
-        await renameThreadIfNeeded(
+        await renameThreadForNotification(
           thread,
           (payload as ThreadRenameNotificationPayload).game.threadName,
+          payload.game.name,
         );
         await syncShadowCloudTag(thread, payload.game.name);
         response.writeHead(204).end();
