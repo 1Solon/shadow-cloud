@@ -7,6 +7,7 @@ services:
       PORT: 3001
       DATABASE_URL: file:/data/shadow-cloud.db
       AUTH_SECRET: ${AUTH_SECRET:-replace-with-a-long-random-secret}
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-your-discord-bot-token}
       BOT_API_TOKEN: ${BOT_API_TOKEN:-replace-with-a-shared-api-token}
       SHADOW_CLOUD_SAVE_DIR: /data
       SHADOW_CLOUD_BOT_NOTIFY_BASE_URL: http://bot:3011
