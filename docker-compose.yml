@@ -1,8 +1,6 @@
 services:
   api:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
+    image: ghcr.io/1solon/shadow-cloud/api:latest
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -32,9 +30,7 @@ services:
       start_period: 20s
 
   web:
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
+    image: ghcr.io/1solon/shadow-cloud/web:latest
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -62,9 +58,7 @@ services:
       start_period: 15s
 
   bot:
-    build:
-      context: .
-      dockerfile: apps/bot/Dockerfile
+    image: ghcr.io/1solon/shadow-cloud/bot:latest
     restart: unless-stopped
     environment:
       NODE_ENV: production

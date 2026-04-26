@@ -98,13 +98,14 @@ Prerequisites:
 
 * Docker Desktop or another Docker Engine install with Compose support
 * Optional: shell environment variables or a custom Compose env file if you want to override the built-in defaults
+* Access to the published GHCR images if you are deploying from a private repository
 
 The compose file does not require a root `.env` file. It provides inline example defaults in the actual service definitions, and you can override them with normal Docker Compose environment handling.
 
 For a local containerized run:
 
 ```bash
-docker compose up --build
+docker compose up
 ```
 
 This publishes:
@@ -117,13 +118,14 @@ The API stores its SQLite database and uploaded save data in the named Docker vo
 For a hosted deployment, provide real values for the auth and Discord variables and then run:
 
 ```bash
-docker compose up --build -d
+docker compose pull
+docker compose up -d
 ```
 
 Example override patterns:
 
-* `docker compose --env-file compose.env up --build -d`
-* `AUTH_URL=https://shadow-cloud.example.com docker compose up --build -d`
+* `docker compose --env-file compose.env pull && docker compose --env-file compose.env up -d`
+* `AUTH_URL=https://shadow-cloud.example.com docker compose up -d`
 
 Optional runtime overrides:
 
