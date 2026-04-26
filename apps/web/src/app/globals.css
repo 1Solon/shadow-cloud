@@ -339,3 +339,60 @@ body {
 .animate-terminal-scanin {
   animation: terminal-scanin 260ms ease-out forwards;
 }
+
+@keyframes terminal-title-cursor-blink {
+  0%,
+  46% {
+    opacity: 1;
+  }
+
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes terminal-title-flicker {
+  0%,
+  18%,
+  22%,
+  56%,
+  100% {
+    opacity: 1;
+    text-shadow:
+      0 0 7px color-mix(in srgb, currentColor 42%, transparent),
+      0 0 18px color-mix(in srgb, currentColor 18%, transparent);
+  }
+
+  20% {
+    opacity: 0.88;
+    text-shadow:
+      0 0 5px color-mix(in srgb, currentColor 32%, transparent),
+      0 0 12px color-mix(in srgb, currentColor 12%, transparent);
+  }
+
+  58% {
+    opacity: 0.94;
+    text-shadow:
+      0 0 6px color-mix(in srgb, currentColor 38%, transparent),
+      0 0 14px color-mix(in srgb, currentColor 16%, transparent);
+  }
+}
+
+.terminal-title-effect {
+  display: inline-flex;
+  align-items: baseline;
+  letter-spacing: 0.04em;
+  animation: terminal-title-flicker 3.2s steps(1, end) infinite;
+}
+
+.terminal-title-cursor {
+  display: inline-block;
+  width: 0.12em;
+  height: 0.95em;
+  margin-left: 0.24em;
+  vertical-align: -0.08em;
+  background: currentColor;
+  box-shadow: 0 0 10px color-mix(in srgb, currentColor 75%, transparent);
+  animation: terminal-title-cursor-blink 1.15s steps(1, end) infinite;
+}
