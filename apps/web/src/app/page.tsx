@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/card";
 
 export const metadata = {
-  title: "Shadow Terminal",
+  title: "Shadow-Cloud",
   description: "Current Shadow Cloud PBEM campaigns and turn status.",
 };
 
