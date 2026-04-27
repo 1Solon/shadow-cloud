@@ -114,8 +114,7 @@ export default async function Home() {
           className={`flex items-center justify-between border-b pb-4 mb-6 ${shellHeaderClassName}`}
         >
           <div className={`terminal-title-effect text-xl font-mono ${shellTitleClassName}`}>
-            <span>{`> SHADOW-CLOUD: `}</span>
-            <span>TERMINAL</span>
+            <span>{`> SHADOW-CLOUD`}</span>
             <span aria-hidden="true" className="terminal-title-cursor" />
           </div>
           <div className="flex items-center gap-6">

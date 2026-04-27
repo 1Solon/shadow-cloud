@@ -381,7 +381,7 @@ body {
 
 .terminal-title-effect {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   letter-spacing: 0.04em;
   animation: terminal-title-flicker 3.2s steps(1, end) infinite;
 }
@@ -389,9 +389,9 @@ body {
 .terminal-title-cursor {
   display: inline-block;
   width: 0.12em;
-  height: 0.95em;
+  height: 1em;
   margin-left: 0.24em;
-  vertical-align: -0.08em;
+  align-self: center;
   background: currentColor;
   box-shadow: 0 0 10px color-mix(in srgb, currentColor 75%, transparent);
   animation: terminal-title-cursor-blink 1.15s steps(1, end) infinite;

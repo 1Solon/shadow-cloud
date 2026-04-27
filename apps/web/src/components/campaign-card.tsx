@@ -72,7 +72,7 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
   return (
     <>
       <div
-        className="group block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+        className="group block h-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
         role="link"
         tabIndex={0}
         onClick={() => {
@@ -82,7 +82,7 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
       >
         <Card
           className={cn(
-            "bg-black/50 border-orange-400 transition-all group-focus-visible:bg-orange-400 group-focus-visible:text-black group-focus-visible:shadow-lg group-focus-visible:shadow-orange-400/20",
+            "h-full bg-black/50 border-orange-400 transition-all group-focus-visible:bg-orange-400 group-focus-visible:text-black group-focus-visible:shadow-lg group-focus-visible:shadow-orange-400/20",
             cardHighlightClassName,
           )}
         >
