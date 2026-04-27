@@ -8,7 +8,6 @@ import {
 } from '@nestjs/common';
 import { AuthService } from '../../auth/auth.service';
 import { AuditEventType, GameRole, prisma } from '../../database';
-import { getNextActivePlayer } from '../games-domain';
 import type { PlayerSummary } from '../games.types';
 import { BotNotificationsService } from '../bot-notifications.service';
 import { FileStorageService } from '../file-storage.service';
@@ -23,6 +22,7 @@ import {
 } from '../support/discord-user.helpers';
 import { buildGameIdentifierWhere } from '../support/game-lookup.helpers';
 import type { UploadedSaveFile } from '../support/game-payload.types';
+import { resolveUploadSaveNaming } from '../support/upload-save-naming';
 import { resolveActivePlayerEntry } from '../support/turn-state.utils';
 
 @Injectable()
@@ -144,6 +144,11 @@ export class GamesTurnService {
       );
     }
 
+    const uploadSaveNaming = resolveUploadSaveNaming(
+      orderedPlayers,
+      activePlayerEntry.id,
+    );
+
     let storedPath: string | null = null;
 
     try {
@@ -162,8 +167,8 @@ export class GamesTurnService {
           gameId: game.id,
           gameNumber: game.gameNumber,
           turn: game.turnState!.roundNumber,
-          seat: activePlayerEntry.turnOrder,
-          playerName: activePlayerEntry.user!.displayName,
+          seat: uploadSaveNaming.seat,
+          playerName: uploadSaveNaming.playerName,
           originalName: file.originalname,
           content: file.buffer,
         });
@@ -192,19 +197,15 @@ export class GamesTurnService {
             }),
           },
         });
-
-        const nextActivePlayer = getNextActivePlayer(
-          orderedPlayers,
-          activePlayerEntry.id,
-        );
-        const roundAdvanced = nextActivePlayer.id === firstPlayer.id;
+        const roundAdvanced =
+          uploadSaveNaming.nextActivePlayer.id === firstPlayer.id;
         const updatedTurnState = await transaction.turnState.update({
           where: {
             gameId: game.id,
           },
           data: {
-            activePlayerId: nextActivePlayer.userId!,
-            activePlayerEntryId: nextActivePlayer.id,
+            activePlayerId: uploadSaveNaming.nextActivePlayer.userId!,
+            activePlayerEntryId: uploadSaveNaming.nextActivePlayer.id,
             roundNumber: {
               increment: roundAdvanced ? 1 : 0,
             },
@@ -219,8 +220,8 @@ export class GamesTurnService {
             payload: JSON.stringify({
               previousActivePlayerEntryId: activePlayerEntry.id,
               previousActivePlayerUserId: activePlayerEntry.userId,
-              nextActivePlayerEntryId: nextActivePlayer.id,
-              nextActivePlayerUserId: nextActivePlayer.userId,
+              nextActivePlayerEntryId: uploadSaveNaming.nextActivePlayer.id,
+              nextActivePlayerUserId: uploadSaveNaming.nextActivePlayer.userId,
               roundNumber: updatedTurnState.roundNumber,
               roundAdvanced,
               fileVersionId: fileVersion.id,
@@ -231,7 +232,7 @@ export class GamesTurnService {
         return {
           fileVersion,
           versionNumber,
-          nextActivePlayer,
+          nextActivePlayer: uploadSaveNaming.nextActivePlayer,
           roundNumber: updatedTurnState.roundNumber,
           roundAdvanced,
         };

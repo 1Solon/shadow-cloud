@@ -14,6 +14,7 @@
     "start:debug": "dotenv -e ../../.env -- nest start --debug --watch",
     "start:prod": "dotenv -e ../../.env -- node dist/main",
     "lint": "eslint \"src/**/*.ts\"",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "prisma:generate": "dotenv -e ../../.env -- prisma generate --schema prisma/schema.prisma",
     "prisma:migrate": "dotenv -e ../../.env -- prisma migrate dev --schema prisma/schema.prisma",
@@ -52,6 +53,7 @@
     "ts-node": "10.9.2",
     "tsconfig-paths": "4.2.0",
     "typescript": "6.0.3",
-    "typescript-eslint": "8.59.0"
+    "typescript-eslint": "8.59.0",
+    "vitest": "3.2.4"
   }
 }
