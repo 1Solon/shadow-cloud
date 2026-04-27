@@ -221,7 +221,7 @@ function buildCommandErrorReply(
               ? "The API rejected the skip request."
               : commandName === "link"
                 ? "The API rejected the link request."
-              : "The API rejected the registration request."));
+                : "The API rejected the registration request."));
 
   return buildStandardEditReply({
     title:
@@ -235,7 +235,7 @@ function buildCommandErrorReply(
               ? "Skip failed"
               : commandName === "link"
                 ? "Link failed"
-              : "Registration failed",
+                : "Registration failed",
     facts: [errorMessage],
   });
 }
@@ -490,9 +490,7 @@ export function createInteractionHandler(client: Client, config: BotApiConfig) {
     }
 
     await interaction.deferReply(
-      commandName === "link"
-        ? undefined
-        : { flags: MessageFlags.Ephemeral },
+      commandName === "link" ? undefined : { flags: MessageFlags.Ephemeral },
     );
 
     try {
