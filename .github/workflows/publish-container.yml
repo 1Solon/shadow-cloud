@@ -85,6 +85,7 @@ jobs:
           images: ghcr.io/${{ steps.registry.outputs.owner }}/${{ steps.registry.outputs.repository }}/${{ matrix.service }}
           tags: |
             type=raw,value=${{ steps.version.outputs.value }}
+            type=raw,value=latest
           labels: |
             org.opencontainers.image.title=shadow-cloud-${{ matrix.service }}
             org.opencontainers.image.description=Shadow Cloud ${{ matrix.service }} service
