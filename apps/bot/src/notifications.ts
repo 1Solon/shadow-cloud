@@ -82,7 +82,7 @@ export type ThreadRenameNotificationPayload = {
 };
 
 type StandardNotificationOptions = {
-  title: string;
+  title?: string;
   facts: string[];
   actionLines?: string[];
   actionRow?: ActionRowBuilder<ButtonBuilder>;
@@ -95,12 +95,17 @@ function buildStandardNotificationContainer({
   actionLines = [],
   actionRow,
 }: StandardNotificationOptions) {
-  const container = new ContainerBuilder()
-    .setAccentColor(ACCENT_COLOR)
-    .addTextDisplayComponents(
-      (textDisplay) => textDisplay.setContent(`## ${title}`),
-      (textDisplay) => textDisplay.setContent(facts.join("\n")),
+  const container = new ContainerBuilder().setAccentColor(ACCENT_COLOR);
+
+  if (title) {
+    container.addTextDisplayComponents((textDisplay) =>
+      textDisplay.setContent(`## ${title}`),
     );
+  }
+
+  container.addTextDisplayComponents((textDisplay) =>
+    textDisplay.setContent(facts.join("\n")),
+  );
 
   if (actionLines.length > 0) {
     container

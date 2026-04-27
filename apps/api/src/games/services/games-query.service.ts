@@ -5,6 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { AuditEventType, GameRole, prisma } from '../../database';
+import type { LinkDiscordThreadDto } from '../dto/link-discord-thread.dto';
 import {
   buildGameStatus,
   getActivePlayer,
@@ -29,6 +30,29 @@ type ResignedPlayerAuditPayload = {
 @Injectable()
 export class GamesQueryService {
   constructor(private readonly fileStorage: FileStorageService) {}
+
+  async getGameLinkByDiscordThread(input: LinkDiscordThreadDto) {
+    const game = await prisma.game.findUnique({
+      where: { discordThreadId: input.discordThreadId },
+      select: {
+        gameNumber: true,
+        name: true,
+        slug: true,
+      },
+    });
+
+    if (!game) {
+      throw new NotFoundException(
+        `Thread ${input.discordThreadId} is not linked to a game.`,
+      );
+    }
+
+    return {
+      gameNumber: game.gameNumber,
+      name: game.name,
+      slug: game.slug,
+    };
+  }
 
   async listGames() {
     const games = await prisma.game.findMany({

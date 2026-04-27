@@ -132,12 +132,19 @@ const skipCommand = new SlashCommandBuilder()
   .setName("skip")
   .setDescription("Skip the current active player's turn (overlord only).");
 
+const linkCommand = new SlashCommandBuilder()
+  .setName("link")
+  .setDescription(
+    "Post the Shadow Cloud game link for the current forum thread.",
+  );
+
 export const supportedCommandNames = [
   "init",
   "register",
   "resign",
   "replace",
   "skip",
+  "link",
 ] as const;
 
 export type SupportedCommandName = (typeof supportedCommandNames)[number];
@@ -156,4 +163,5 @@ export const slashCommands = [
   resignCommand,
   replaceCommand,
   skipCommand,
+  linkCommand,
 ] as const;

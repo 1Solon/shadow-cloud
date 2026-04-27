@@ -19,6 +19,7 @@ import type { Response } from 'express';
 import { AppAuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { BotAuthGuard } from '../auth/bot-auth.guard';
 import { CreateDiscordGameDto } from './dto/create-discord-game.dto';
+import { LinkDiscordThreadDto } from './dto/link-discord-thread.dto';
 import { RegisterDiscordPlayerDto } from './dto/register-discord-player.dto';
 import { ReorderSeatOrderDto } from './dto/reorder-seat-order.dto';
 import { ReplaceDiscordPlayerDto } from './dto/replace-discord-player.dto';
@@ -168,6 +169,12 @@ export class GamesController {
   @UseGuards(BotAuthGuard)
   skipPlayerTurn(@Body() input: SkipDiscordPlayerDto) {
     return this.gamesService.skipPlayerTurn(input);
+  }
+
+  @Post('link')
+  @UseGuards(BotAuthGuard)
+  linkGameFromDiscordThread(@Body() input: LinkDiscordThreadDto) {
+    return this.gamesService.linkGameFromDiscordThread(input);
   }
 
   @Post('registration-requests/:requestId/approve')

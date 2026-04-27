@@ -219,6 +219,8 @@ function buildCommandErrorReply(
             ? "The API rejected the replacement request."
             : commandName === "skip"
               ? "The API rejected the skip request."
+              : commandName === "link"
+                ? "The API rejected the link request."
               : "The API rejected the registration request."));
 
   return buildStandardEditReply({
@@ -231,6 +233,8 @@ function buildCommandErrorReply(
             ? "Replacement failed"
             : commandName === "skip"
               ? "Skip failed"
+              : commandName === "link"
+                ? "Link failed"
               : "Registration failed",
     facts: [errorMessage],
   });
@@ -239,6 +243,7 @@ function buildCommandErrorReply(
 async function handleSuccessfulCommand(
   interaction: ChatInputCommandInteraction,
   channel: AnyThreadChannel,
+  config: BotApiConfig,
   commandName: SupportedCommandName,
   payload: CommandResponsePayload,
   fallbackName: string,
@@ -334,6 +339,24 @@ async function handleSuccessfulCommand(
           `**${skippedName}** (seat ${skippedSeat}) was skipped. It is now ${nextMention}'s turn (seat ${nextSeat}).`,
         ],
         mentionedUserIds: nextDiscordId ? [nextDiscordId] : [],
+      }),
+    );
+    return;
+  }
+
+  if (commandName === "link") {
+    const gameNumber = payload?.gameNumber;
+    const gameUrl =
+      gameNumber != null
+        ? new URL(
+            `/games/${encodeURIComponent(String(gameNumber))}`,
+            config.webBaseUrl,
+          ).toString()
+        : config.webBaseUrl;
+
+    await interaction.editReply(
+      buildStandardEditReply({
+        facts: [`<${gameUrl}>`],
       }),
     );
     return;
@@ -466,7 +489,11 @@ export function createInteractionHandler(client: Client, config: BotApiConfig) {
       return;
     }
 
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    await interaction.deferReply(
+      commandName === "link"
+        ? undefined
+        : { flags: MessageFlags.Ephemeral },
+    );
 
     try {
       const { fallbackName, payload, response } = await sendCommandRequest(
@@ -485,6 +512,7 @@ export function createInteractionHandler(client: Client, config: BotApiConfig) {
       await handleSuccessfulCommand(
         interaction,
         channel,
+        config,
         commandName,
         payload,
         fallbackName,

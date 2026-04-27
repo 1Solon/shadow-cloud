@@ -13,6 +13,7 @@ import { GamesRegistrationService } from './services/games-registration.service'
 import { GamesTurnService } from './services/games-turn.service';
 import { FileStorageService } from './file-storage.service';
 import type { CreateDiscordGameDto } from './dto/create-discord-game.dto';
+import type { LinkDiscordThreadDto } from './dto/link-discord-thread.dto';
 import type { RegisterDiscordPlayerDto } from './dto/register-discord-player.dto';
 import type { ReorderSeatOrderDto } from './dto/reorder-seat-order.dto';
 import type { ReplaceDiscordPlayerDto } from './dto/replace-discord-player.dto';
@@ -430,5 +431,9 @@ export class GamesService {
 
   async skipPlayerTurn(input: SkipDiscordPlayerDto) {
     return this.gamesTurn.skipPlayerTurn(input);
+  }
+
+  async linkGameFromDiscordThread(input: LinkDiscordThreadDto) {
+    return this.gamesQuery.getGameLinkByDiscordThread(input);
   }
 }

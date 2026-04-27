@@ -114,6 +114,25 @@ async function sendSkipRequest(
   };
 }
 
+async function sendLinkRequest(
+  channel: AnyThreadChannel,
+  config: BotApiConfig,
+): Promise<CommandRequestResult> {
+  const response = await postJson(
+    `${config.apiBaseUrl}/v1/games/link`,
+    config.botApiToken,
+    {
+      discordThreadId: channel.id,
+    },
+  );
+
+  return {
+    response,
+    payload: await parseJson<CommandResponsePayload>(response),
+    fallbackName: channel.name,
+  };
+}
+
 export async function sendCommandRequest(
   interaction: ChatInputCommandInteraction,
   channel: AnyThreadChannel,
@@ -207,6 +226,9 @@ export async function sendCommandRequest(
 
     case "skip":
       return sendSkipRequest(interaction, channel, config);
+
+    case "link":
+      return sendLinkRequest(channel, config);
 
     default:
       throw new Error(`Unsupported command: ${interaction.commandName}`);
