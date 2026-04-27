@@ -179,13 +179,11 @@ export default async function GameDetailPage({
                           {fileVersion.originalName}
                         </div>
                         <div className="flex items-center gap-3">
-                          {session?.user ? (
-                            <DownloadSaveButton
-                              className={`inline-flex h-9 items-center rounded-md border px-3 text-xs font-medium uppercase tracking-[0.18em] font-mono transition-colors ${isMostRecent ? "border-black bg-black/10 text-black hover:bg-black hover:text-orange-400" : "border-orange-400 bg-orange-400/10 text-orange-300 hover:bg-orange-400 hover:text-black"}`}
-                              fileName={fileVersion.originalName}
-                              href={`/api/games/${game.gameNumber}/files/${fileVersion.id}`}
-                            />
-                          ) : null}
+                          <DownloadSaveButton
+                            className={`inline-flex h-9 items-center rounded-md border px-3 text-xs font-medium uppercase tracking-[0.18em] font-mono transition-colors ${isMostRecent ? "border-black bg-black/10 text-black hover:bg-black hover:text-orange-400" : "border-orange-400 bg-orange-400/10 text-orange-300 hover:bg-orange-400 hover:text-black"}`}
+                            fileName={fileVersion.originalName}
+                            href={`/api/games/${game.gameNumber}/files/${fileVersion.id}`}
+                          />
                         </div>
                       </div>
                       <div
