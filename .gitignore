@@ -2,6 +2,9 @@ node_modules
 .turbo
 .next
 dist
+target
+apps/desktop/src-tauri/gen/schemas
+apps/desktop/.updater-secrets/
 *.tsbuildinfo
 coverage
 .env
@@ -10,5 +13,7 @@ coverage
 packages/database/prisma/dev.db
 packages/database/prisma/dev.db-journal
 storage
+!apps/desktop/src/storage/
+!apps/desktop/src/storage/**
 saves
 dev.db

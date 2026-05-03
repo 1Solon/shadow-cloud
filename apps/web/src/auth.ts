@@ -153,3 +153,27 @@ export async function createApiAccessToken(
     .setSubject(session.user.id)
     .sign(encoder.encode(nextAuthSecret));
 }
+
+export async function createDesktopApiAccessToken(
+  session: Awaited<ReturnType<typeof getServerAuthSession>>,
+) {
+  if (!session?.user?.id) {
+    return null;
+  }
+
+  if (!nextAuthSecret) {
+    throw new Error("NEXTAUTH_SECRET is not configured.");
+  }
+
+  return new SignJWT({
+    email: session.user.email ?? undefined,
+    picture: session.user.image ?? undefined,
+    name: session.user.name ?? undefined,
+    tokenUse: "desktop-sync",
+  })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("180d")
+    .setSubject(session.user.id)
+    .sign(encoder.encode(nextAuthSecret));
+}

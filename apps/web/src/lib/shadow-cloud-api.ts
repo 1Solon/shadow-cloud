@@ -54,6 +54,7 @@ export type GameDetail = {
     id: string;
     originalName: string;
     uploadedAt: string;
+    uploadedById: string;
     uploadedByDisplayName: string;
   }>;
 };

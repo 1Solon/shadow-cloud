@@ -1,4 +1,7 @@
 import { spawn } from "node:child_process";
+import { loadRootEnv } from "../../../scripts/dev-env.mjs";
+
+await loadRootEnv();
 
 const defaultApiBaseUrl = "http://localhost:3001";
 const apiBaseUrl = process.env.SHADOW_CLOUD_API_URL ?? defaultApiBaseUrl;
@@ -9,10 +12,7 @@ const apiStartupTimeoutMs = Number.parseInt(
 );
 const apiStartupPollIntervalMs = 500;
 const shouldWaitForApi = process.env.SHADOW_CLOUD_SKIP_API_WAIT !== "1";
-const pnpmCommand =
-  process.platform === "win32"
-    ? "pnpm exec tsx watch src/index.ts"
-    : "pnpm exec tsx watch src/index.ts";
+const pnpmCommand = "pnpm exec tsx watch src/index.ts";
 
 function delay(milliseconds) {
   return new Promise((resolve) => {

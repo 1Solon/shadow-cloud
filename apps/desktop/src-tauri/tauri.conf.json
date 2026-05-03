@@ -1,0 +1,48 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Shadow Cloud Local",
+  "version": "0.1.0",
+  "identifier": "com.shadowcloud.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm vite --host 127.0.0.1",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "pnpm vite build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Shadow Cloud: Local",
+        "width": 1120,
+        "height": 760,
+        "minWidth": 860,
+        "minHeight": 560
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "createUpdaterArtifacts": false,
+    "targets": "all",
+    "icon": ["icons/icon.ico"]
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["shadow-cloud"]
+      }
+    },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEUyOTNBNkZERDgxRDJBQTQKUldTa0toM1kvYWFUNGxubVdGZzBRbVdVaVhXMW56cUFBRnZUQWEraERYekcvd214VU9wcFhjR3MK",
+      "endpoints": [
+        "https://github.com/1Solon/shadow-cloud/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
+}

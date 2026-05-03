@@ -13,6 +13,7 @@ import {
 } from '../games-domain';
 import { FileStorageService } from '../file-storage.service';
 import { buildCanonicalThreadName } from '../support/game-configuration.helpers';
+import { buildGameDetailFileVersionPayload } from '../support/game-detail-file-version-payload';
 import { buildGameIdentifierWhere } from '../support/game-lookup.helpers';
 import type { GameDetailResponse } from '../support/game-payload.types';
 import { resolveActivePlayerEntry } from '../support/turn-state.utils';
@@ -224,12 +225,7 @@ export class GamesQueryService {
           player.role === GameRole.ORGANIZER ||
           player.userId === game.organizerId,
       })),
-      fileVersions: game.fileVersions.map((fileVersion) => ({
-        id: fileVersion.id,
-        originalName: fileVersion.originalName,
-        uploadedAt: fileVersion.uploadedAt.toISOString(),
-        uploadedByDisplayName: fileVersion.uploadedBy.displayName,
-      })),
+      fileVersions: game.fileVersions.map(buildGameDetailFileVersionPayload),
     };
   }
 
