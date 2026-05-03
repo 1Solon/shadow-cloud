@@ -131,6 +131,14 @@ select option:checked {
   font-size: 12px;
 }
 
+.update-check-button.is-update-available {
+  border-color: #ffedd5;
+  background: rgba(251, 146, 60, 0.26);
+  box-shadow: 0 0 18px rgba(251, 146, 60, 0.55);
+  color: #ffffff;
+  animation: update-available-flash 820ms steps(2, end) infinite;
+}
+
 .user-badge {
   display: flex;
   align-items: center;
@@ -591,6 +599,31 @@ select option:checked {
     0 0 42px rgba(251, 146, 60, 0.18);
 }
 
+.settings-confirmation-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.72);
+  padding: 24px;
+}
+
+.settings-confirmation-panel {
+  width: min(520px, calc(100% - 48px));
+  overflow: hidden;
+  border: 1px solid rgba(251, 146, 60, 0.42);
+  border-radius: 8px;
+  background: #0a0711;
+  box-shadow:
+    0 22px 70px rgba(0, 0, 0, 0.72),
+    0 0 42px rgba(251, 146, 60, 0.22);
+  animation: settings-confirmation-powerup 260ms
+    cubic-bezier(0.2, 0.8, 0.22, 1) forwards;
+  transform-origin: bottom right;
+}
+
 .settings-header {
   display: flex;
   align-items: center;
@@ -659,6 +692,98 @@ select option:checked {
   padding-top: 14px;
 }
 
+.settings-danger-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border: 1px solid rgba(248, 113, 113, 0.42);
+  background: rgba(127, 29, 29, 0.18);
+  padding: 12px;
+}
+
+.settings-danger-zone div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.settings-danger-zone strong {
+  color: #fecaca;
+  font-size: 13px;
+}
+
+.settings-danger-zone span {
+  color: rgba(254, 202, 202, 0.76);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.settings-danger-button {
+  border-color: rgba(248, 113, 113, 0.72);
+  background: rgba(127, 29, 29, 0.3);
+  color: #fecaca;
+}
+
+.settings-danger-button:hover {
+  background: rgba(248, 113, 113, 0.28);
+  color: #ffffff;
+}
+
+.settings-confirmation-body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 16px;
+}
+
+.settings-confirmation-body::before {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(251, 146, 60, 0.12) 0,
+    rgba(251, 146, 60, 0.12) 1px,
+    transparent 1px,
+    transparent 4px
+  );
+  content: "";
+  opacity: 0.7;
+  animation: terminal-scanin 260ms ease-out forwards;
+}
+
+.settings-confirmation-terminal {
+  position: relative;
+  z-index: 1;
+  min-height: 120px;
+  border: 1px solid rgba(251, 146, 60, 0.18);
+  background: rgba(0, 0, 0, 0.52);
+  color: rgba(253, 186, 116, 0.9);
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 12px;
+  animation: terminal-powerup-text 220ms ease-out forwards;
+}
+
+.settings-confirmation-terminal div {
+  min-height: 1.6em;
+  overflow-wrap: anywhere;
+}
+
+.settings-confirmation-caret {
+  display: inline-block;
+  width: 0.58em;
+  height: 1.1em;
+  margin-left: 0.32em;
+  background: #fdba74;
+  vertical-align: -0.18em;
+  animation: blink 1.15s steps(1, end) infinite;
+}
+
 .settings-checkbox {
   display: flex;
   align-items: center;
@@ -700,6 +825,47 @@ select option:checked {
   50%,
   100% {
     opacity: 0;
+  }
+}
+
+@keyframes update-available-flash {
+  0%,
+  100% {
+    filter: brightness(1);
+    box-shadow: 0 0 12px rgba(251, 146, 60, 0.36);
+  }
+
+  50% {
+    filter: brightness(1.45);
+    box-shadow:
+      0 0 22px rgba(251, 146, 60, 0.7),
+      0 0 36px rgba(253, 186, 116, 0.24);
+  }
+}
+
+@keyframes settings-confirmation-powerup {
+  0% {
+    opacity: 0;
+    filter: brightness(0.55);
+    transform: translate3d(14px, 18px, 0) scale(0.2, 0.02);
+  }
+
+  28% {
+    opacity: 0.95;
+    filter: brightness(0.82);
+    transform: translate3d(8px, 10px, 0) scale(1.03, 0.12);
+  }
+
+  64% {
+    opacity: 1;
+    filter: brightness(1.08);
+    transform: translate3d(0, 0, 0) scale(1, 0.94);
+  }
+
+  100% {
+    opacity: 1;
+    filter: brightness(1);
+    transform: translate3d(0, 0, 0) scale(1, 1);
   }
 }
 
@@ -882,5 +1048,18 @@ select option:checked {
 
   .settings-actions button {
     flex: 1 1 100%;
+  }
+
+  .settings-danger-zone {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settings-confirmation-panel {
+    width: 100%;
+  }
+
+  .settings-confirmation-overlay {
+    padding: 12px;
   }
 }

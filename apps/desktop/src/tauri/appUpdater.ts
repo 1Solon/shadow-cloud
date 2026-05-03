@@ -15,10 +15,12 @@ export type UpdateCheckResult = {
 
 type CheckForUpdate = () => Promise<DesktopUpdate | null>;
 type ConfirmInstall = (message: string) => boolean | Promise<boolean>;
+type UpdateAvailableHandler = (version: string) => void;
 
 type CheckForDesktopUpdateOptions = {
   check?: CheckForUpdate;
   confirmInstall?: ConfirmInstall;
+  onUpdateAvailable?: UpdateAvailableHandler;
 };
 
 function defaultConfirmInstall(message: string) {
@@ -33,6 +35,7 @@ function defaultConfirmInstall(message: string) {
 export async function checkForDesktopUpdate({
   check = checkTauriUpdate,
   confirmInstall = defaultConfirmInstall,
+  onUpdateAvailable,
 }: CheckForDesktopUpdateOptions = {}): Promise<UpdateCheckResult> {
   const update = await check();
 
@@ -42,6 +45,8 @@ export async function checkForDesktopUpdate({
       message: "Shadow Cloud Local is up to date.",
     };
   }
+
+  onUpdateAvailable?.(update.version);
 
   const shouldInstall = await confirmInstall(
     `Update ${update.version} is available. Download and install it now?`,

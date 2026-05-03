@@ -157,9 +157,7 @@ export async function runSyncOnce(
     ...state,
     lastStatus: undefined,
     lastError: undefined,
-    campaigns: {
-      ...state.campaigns,
-    },
+    campaigns: state.campaigns,
   };
 
   try {
@@ -167,9 +165,10 @@ export async function runSyncOnce(
     const participatingGames = games.filter((game) =>
       game.participantUserIds.includes(currentUserId),
     );
+    const nextCampaigns: Record<string, CampaignSyncState> = {};
 
     for (const game of participatingGames) {
-      const previousCampaignState = getCampaignState(nextState, game.id);
+      const previousCampaignState = getCampaignState(state, game.id);
       const detail = await adapters.getGameDetail(state.token, game.gameNumber);
       const directoryName = buildCampaignDirectoryName(
         detail.gameNumber,
@@ -249,9 +248,10 @@ export async function runSyncOnce(
         }
       }
 
-      nextState.campaigns[game.id] = campaignState;
+      nextCampaigns[game.id] = campaignState;
     }
 
+    nextState.campaigns = nextCampaigns;
     nextState.lastStatus = `Synced ${participatingGames.length} campaign(s)`;
     return nextState;
   } catch (error) {

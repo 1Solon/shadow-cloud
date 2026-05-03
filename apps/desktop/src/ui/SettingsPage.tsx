@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   defaultDesktopSettings,
   defaultRemoteSettings,
@@ -14,7 +14,16 @@ type SettingsPageProps = {
     remotes: RemoteSettings,
     desktopSettings: DesktopSettings,
   ) => Promise<void>;
+  onResetAppState: () => Promise<void>;
 };
+
+const confirmationTextEnterDelayMs = 240;
+const confirmationLines = [
+  "> desktop-state --reset --all",
+  "Desktop token and save root will be removed.",
+  "Remote URLs, desktop preferences, and sync cache reset.",
+  "Tracked campaign folders and their save files will be deleted.",
+];
 
 function isHttpUrl(value: string) {
   try {
@@ -46,6 +55,7 @@ export function SettingsPage({
   remotes,
   onClose,
   onSave,
+  onResetAppState,
 }: SettingsPageProps) {
   const [apiBaseUrl, setApiBaseUrl] = useState(remotes.apiBaseUrl);
   const [webBaseUrl, setWebBaseUrl] = useState(remotes.webBaseUrl);
@@ -54,6 +64,81 @@ export function SettingsPage({
   );
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isResetConfirmationOpen, setIsResetConfirmationOpen] =
+    useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [renderedConfirmationLines, setRenderedConfirmationLines] = useState<
+    string[]
+  >([]);
+  const [activeConfirmationLineIndex, setActiveConfirmationLineIndex] =
+    useState<number | null>(null);
+  const confirmationTimeoutIdsRef = useRef<number[]>([]);
+
+  function clearConfirmationTimeouts() {
+    confirmationTimeoutIdsRef.current.forEach((timeoutId) => {
+      window.clearTimeout(timeoutId);
+    });
+    confirmationTimeoutIdsRef.current = [];
+  }
+
+  function scheduleConfirmationTimeout(callback: () => void, delay: number) {
+    const timeoutId = window.setTimeout(callback, delay);
+    confirmationTimeoutIdsRef.current.push(timeoutId);
+  }
+
+  function closeResetConfirmation() {
+    clearConfirmationTimeouts();
+    setRenderedConfirmationLines([]);
+    setActiveConfirmationLineIndex(null);
+    setIsResetConfirmationOpen(false);
+  }
+
+  useEffect(
+    () => () => {
+      clearConfirmationTimeouts();
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!isResetConfirmationOpen) {
+      return;
+    }
+
+    let elapsed = confirmationTextEnterDelayMs;
+
+    clearConfirmationTimeouts();
+    scheduleConfirmationTimeout(() => {
+      setRenderedConfirmationLines([]);
+      setActiveConfirmationLineIndex(null);
+    }, 0);
+
+    confirmationLines.forEach((line, lineIndex) => {
+      for (let charIndex = 1; charIndex <= line.length; charIndex += 1) {
+        const snapshot = [
+          ...confirmationLines.slice(0, lineIndex),
+          line.slice(0, charIndex),
+        ];
+
+        scheduleConfirmationTimeout(() => {
+          setRenderedConfirmationLines(snapshot);
+          setActiveConfirmationLineIndex(lineIndex);
+        }, elapsed);
+        elapsed += lineIndex === 0 ? 16 : 9;
+      }
+
+      elapsed += 80;
+    });
+
+    scheduleConfirmationTimeout(() => {
+      setRenderedConfirmationLines(confirmationLines);
+      setActiveConfirmationLineIndex(null);
+    }, elapsed);
+
+    return () => {
+      clearConfirmationTimeouts();
+    };
+  }, [isResetConfirmationOpen]);
 
   async function saveSettings(
     nextRemotes: RemoteSettings,
@@ -76,6 +161,19 @@ export function SettingsPage({
     }
   }
 
+  async function resetAppState() {
+    setError(null);
+    setIsResetting(true);
+
+    try {
+      await onResetAppState();
+    } finally {
+      setIsResetting(false);
+    }
+  }
+
+  const isBusy = isSaving || isResetting;
+
   return (
     <div className="settings-overlay">
       <section aria-label="Settings" className="settings-panel">
@@ -84,7 +182,7 @@ export function SettingsPage({
           <button
             aria-label="Close settings"
             className="settings-close"
-            disabled={isSaving}
+            disabled={isBusy}
             type="button"
             onClick={onClose}
           >
@@ -151,11 +249,33 @@ export function SettingsPage({
             <span>Minimize to tray when closing</span>
           </label>
 
+          <div className="settings-section-heading">Danger Zone</div>
+
+          <div className="settings-danger-zone">
+            <div>
+              <strong>Reset all app state</strong>
+              <span>
+                Clears sign-in, save root, sync cache, remote settings, desktop
+                preferences, onboarding flags, and tracked campaign folders.
+              </span>
+            </div>
+            <button
+              className="settings-danger-button"
+              disabled={isBusy}
+              type="button"
+              onClick={() => {
+                setIsResetConfirmationOpen(true);
+              }}
+            >
+              Reset all app state
+            </button>
+          </div>
+
           {error ? <div className="settings-error">{error}</div> : null}
 
           <div className="settings-actions">
             <button
-              disabled={isSaving}
+              disabled={isBusy}
               type="button"
               onClick={() => {
                 setApiBaseUrl(defaultRemoteSettings.apiBaseUrl);
@@ -172,15 +292,76 @@ export function SettingsPage({
             >
               Reset defaults
             </button>
-            <button disabled={isSaving} type="button" onClick={onClose}>
+            <button disabled={isBusy} type="button" onClick={onClose}>
               Cancel
             </button>
-            <button disabled={isSaving} type="submit">
+            <button disabled={isBusy} type="submit">
               Save settings
             </button>
           </div>
         </form>
       </section>
+      {isResetConfirmationOpen ? (
+        <div
+          className="settings-confirmation-overlay"
+          onClick={closeResetConfirmation}
+        >
+          <section
+            aria-label="Confirm app state reset"
+            className="settings-confirmation-panel"
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
+          >
+            <header className="settings-header">
+              <span>Confirm App State Reset</span>
+              <button
+                aria-label="Close confirmation"
+                className="settings-close"
+                disabled={isResetting}
+                type="button"
+                onClick={closeResetConfirmation}
+              >
+                X
+              </button>
+            </header>
+            <div className="settings-confirmation-body">
+              <div className="settings-confirmation-terminal">
+                {renderedConfirmationLines.map((line, index) => (
+                  <div key={`reset-confirmation-${index}`}>
+                    {line}
+                    {activeConfirmationLineIndex === index ? (
+                      <span
+                        aria-hidden="true"
+                        className="settings-confirmation-caret"
+                      />
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+              <div className="settings-actions">
+                <button
+                  disabled={isResetting}
+                  type="button"
+                  onClick={closeResetConfirmation}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="settings-danger-button"
+                  disabled={isResetting}
+                  type="button"
+                  onClick={() => {
+                    void resetAppState();
+                  }}
+                >
+                  {isResetting ? "Resetting..." : "Reset"}
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -11,11 +11,13 @@ import { buildWebGameUrl } from "@/navigation/webGameLinks";
 import {
   defaultDesktopSettings,
   defaultRemoteSettings,
+  defaultSyncState,
   hasSeenDesktopHelp,
   loadDesktopSettings,
   loadRemoteSettings,
   loadSyncState,
   markDesktopHelpSeen,
+  resetDesktopAppState,
   saveDesktopSettings,
   saveRemoteSettings,
   saveSyncState,
@@ -28,6 +30,7 @@ import { checkForDesktopUpdate } from "@/tauri/appUpdater";
 import {
   createTauriSyncAdapters,
   decodeTokenSubject,
+  deleteTrackedCampaignDirectories,
 } from "@/tauri/fileAdapters";
 import { setMinimizeToTrayOnClose } from "@/tauri/windowBehavior";
 import { sortCampaignEntries } from "./campaignOrdering";
@@ -63,6 +66,8 @@ function getNextSyncTime(state: SyncState | null, lastSyncAt: Date | null) {
   );
 }
 
+const desktopVersion = import.meta.env.npm_package_version ?? "unknown";
+
 export function App() {
   const [state, setState] = useState<SyncState | null>(null);
   const [desktopSettings, setDesktopSettings] =
@@ -75,10 +80,13 @@ export function App() {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCheckingForUpdates, setIsCheckingForUpdates] = useState(false);
+  const [isUpdateAvailableFlashActive, setIsUpdateAvailableFlashActive] =
+    useState(false);
   const stateRef = useRef<SyncState | null>(null);
   const desktopSettingsRef = useRef<DesktopSettings>(defaultDesktopSettings);
   const remoteSettingsRef = useRef<RemoteSettings>(defaultRemoteSettings);
   const helpOnboardingCheckedRef = useRef(false);
+  const updateAvailableFlashTimeoutRef = useRef<number | null>(null);
   const runnerRef = useRef(
     createNonOverlappingRunner(async () => {
       if (!stateRef.current) {
@@ -130,6 +138,14 @@ export function App() {
     }, 1_000);
 
     return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (updateAvailableFlashTimeoutRef.current != null) {
+        window.clearTimeout(updateAvailableFlashTimeoutRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -243,11 +259,54 @@ export function App() {
     }));
   }
 
+  async function resetAppState() {
+    if (stateRef.current) {
+      await deleteTrackedCampaignDirectories(
+        stateRef.current.saveRoot,
+        stateRef.current.campaigns,
+      );
+    }
+
+    await resetDesktopAppState();
+    remoteSettingsRef.current = defaultRemoteSettings;
+    desktopSettingsRef.current = defaultDesktopSettings;
+
+    const nextState: SyncState = {
+      ...defaultSyncState,
+      lastStatus: "App state reset",
+      lastError: undefined,
+    };
+
+    stateRef.current = nextState;
+    setState(nextState);
+    setRemoteSettings(defaultRemoteSettings);
+    setDesktopSettings(defaultDesktopSettings);
+    setLastSyncAt(null);
+    helpOnboardingCheckedRef.current = true;
+    await setMinimizeToTrayOnClose(
+      defaultDesktopSettings.minimizeToTrayOnClose,
+    );
+    setIsSettingsOpen(false);
+  }
+
   async function checkForUpdates() {
     setIsCheckingForUpdates(true);
+    setIsUpdateAvailableFlashActive(false);
 
     try {
-      const result = await checkForDesktopUpdate();
+      const result = await checkForDesktopUpdate({
+        onUpdateAvailable: () => {
+          if (updateAvailableFlashTimeoutRef.current != null) {
+            window.clearTimeout(updateAvailableFlashTimeoutRef.current);
+          }
+
+          setIsUpdateAvailableFlashActive(true);
+          updateAvailableFlashTimeoutRef.current = window.setTimeout(() => {
+            setIsUpdateAvailableFlashActive(false);
+            updateAvailableFlashTimeoutRef.current = null;
+          }, 4_000);
+        },
+      });
 
       await updateState((current) => ({
         ...current,
@@ -421,13 +480,20 @@ export function App() {
               Help
             </button>
             <button
+              className={`update-check-button${
+                isUpdateAvailableFlashActive ? " is-update-available" : ""
+              }`}
               disabled={isCheckingForUpdates}
               type="button"
               onClick={() => {
                 void checkForUpdates();
               }}
             >
-              {isCheckingForUpdates ? "Checking..." : "Check for updates"}
+              {isUpdateAvailableFlashActive
+                ? "Update available"
+                : isCheckingForUpdates
+                  ? "Checking..."
+                  : "Check for updates"}
             </button>
             <span>{formatTime(clock)}</span>
           </div>
@@ -540,9 +606,7 @@ export function App() {
         </section>
 
         <footer className="terminal-footer">
-          <span>
-            AUTH: {state.token ? "DESKTOP TOKEN STORED" : "DISCONNECTED"}
-          </span>
+          <span>VERSION: {desktopVersion}</span>
           <span>CAMPAIGNS: {campaigns.length} MONITORED</span>
           <span>TIMER: {state.paused ? "PAUSED" : "ACTIVE"}</span>
         </footer>
@@ -561,6 +625,7 @@ export function App() {
           onClose={() => {
             setIsSettingsOpen(false);
           }}
+          onResetAppState={resetAppState}
           onSave={updateSettings}
         />
       ) : null}

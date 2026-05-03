@@ -191,6 +191,45 @@ describe("runSyncOnce", () => {
     });
   });
 
+  it("removes campaigns that are no longer assigned to the current user", async () => {
+    const state: SyncState = {
+      ...createBaseState(),
+      campaigns: {
+        "game-1": {
+          gameNumber: 1,
+          name: "Ashes",
+          directoryName: "1 - Ashes",
+          lastSyncedAt: "2026-05-03T09:00:00.000Z",
+        },
+        "game-2": {
+          gameNumber: 2,
+          name: "Cinders",
+          directoryName: "2 - Cinders",
+          lastSyncedAt: "2026-05-03T09:00:00.000Z",
+        },
+      },
+    };
+    const adapters = createAdapters({
+      listGames: vi.fn(async () => [
+        {
+          id: "game-2",
+          slug: "cinders",
+          gameNumber: 2,
+          name: "Cinders",
+          roundNumber: 1,
+          activePlayerUserId: "user-2",
+          activePlayerDisplayName: "Other",
+          participantUserIds: ["user-2"],
+        },
+      ]),
+    });
+
+    const nextState = await runSyncOnce(state, adapters);
+
+    expect(nextState.campaigns).toEqual({});
+    expect(nextState.lastStatus).toBe("Synced 0 campaign(s)");
+  });
+
   it("keeps unauthenticated state visible without calling the API", async () => {
     const state = { ...createBaseState(), token: null };
     const adapters = createAdapters();

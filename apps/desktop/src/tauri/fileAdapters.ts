@@ -3,14 +3,20 @@ import {
   mkdir,
   readDir,
   readFile,
+  remove,
   rename,
   stat,
   writeFile,
 } from "@tauri-apps/plugin-fs";
 import type { SyncAdapters } from "@/sync/sync-engine";
-import { isShadowEmpireSave, type LocalSaveFile } from "@/sync/sync-files";
+import {
+  getTrackedCampaignDirectoryNames,
+  isShadowEmpireSave,
+  type LocalSaveFile,
+} from "@/sync/sync-files";
 import { createShadowCloudApiClient } from "@/api/shadowCloudApi";
 import { decodeDesktopTokenSubject } from "@/auth/desktopToken";
+import type { CampaignSyncState } from "@/sync/sync-engine";
 
 export const decodeTokenSubject = decodeDesktopTokenSubject;
 
@@ -92,4 +98,30 @@ export function createTauriSyncAdapters(
 
 export async function getPathBaseName(path: string) {
   return basename(path);
+}
+
+export async function deleteTrackedCampaignDirectories(
+  saveRoot: string | null,
+  campaigns: Record<string, CampaignSyncState>,
+) {
+  if (!saveRoot) {
+    return;
+  }
+
+  for (const directoryName of getTrackedCampaignDirectoryNames(campaigns)) {
+    const directoryPath = await join(saveRoot, directoryName);
+    let fileInfo;
+
+    try {
+      fileInfo = await stat(directoryPath);
+    } catch {
+      continue;
+    }
+
+    if (!fileInfo.isDirectory) {
+      continue;
+    }
+
+    await remove(directoryPath, { recursive: true });
+  }
 }

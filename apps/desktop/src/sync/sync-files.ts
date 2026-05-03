@@ -1,5 +1,8 @@
+import type { CampaignSyncState } from "./sync-engine";
+
 const windowsReservedNamePattern = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
 const unsafeFileNameCharactersPattern = /[<>:"/\\|?*\u0000-\u001f]/g;
+const pathSeparatorPattern = /[\\/]/;
 
 export type DirectoryEntry = {
   name: string;
@@ -99,4 +102,23 @@ export function getConflictSafeFileName(
   }
 
   throw new Error(`Could not find a conflict-free name for ${fileName}.`);
+}
+
+export function getTrackedCampaignDirectoryNames(
+  campaigns: Record<string, CampaignSyncState>,
+) {
+  const directoryNames = new Set<string>();
+
+  for (const campaign of Object.values(campaigns)) {
+    if (
+      !campaign.directoryName ||
+      pathSeparatorPattern.test(campaign.directoryName)
+    ) {
+      continue;
+    }
+
+    directoryNames.add(campaign.directoryName);
+  }
+
+  return [...directoryNames];
 }

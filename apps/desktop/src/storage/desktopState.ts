@@ -98,3 +98,9 @@ export async function saveDesktopSettings(settings: DesktopSettings) {
   await store.set(desktopSettingsKey, settings);
   await store.save();
 }
+
+export async function resetDesktopAppState() {
+  const store = await load(storeFileName, { autoSave: true, defaults: {} });
+  await store.clear();
+  await store.save();
+}

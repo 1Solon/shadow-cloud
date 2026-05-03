@@ -36,6 +36,27 @@ describe("checkForDesktopUpdate", () => {
     });
   });
 
+  it("reports when an update is available before asking to install", async () => {
+    const events: string[] = [];
+    const downloadAndInstall = vi.fn();
+
+    await checkForDesktopUpdate({
+      check: async () => ({
+        version: "0.8.0",
+        downloadAndInstall,
+      }),
+      confirmInstall: async () => {
+        events.push("confirm");
+        return false;
+      },
+      onUpdateAvailable: (version) => {
+        events.push(`available:${version}`);
+      },
+    });
+
+    expect(events).toEqual(["available:0.8.0", "confirm"]);
+  });
+
   it("uses the Tauri dialog confirmation by default", async () => {
     const downloadAndInstall = vi.fn();
     vi.mocked(confirmDialog).mockResolvedValue(true);

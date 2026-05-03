@@ -4,6 +4,7 @@ import {
   chooseNewestPendingSave,
   createFileFingerprint,
   getConflictSafeFileName,
+  getTrackedCampaignDirectoryNames,
   isShadowEmpireSave,
 } from "./sync-files";
 
@@ -54,5 +55,17 @@ describe("sync file helpers", () => {
 
     expect(getConflictSafeFileName("turn.se1", existing)).toBe("turn (2).se1");
     expect(getConflictSafeFileName("fresh.se1", existing)).toBe("fresh.se1");
+  });
+
+  it("returns unique tracked campaign directory names for reset deletion", () => {
+    expect(
+      getTrackedCampaignDirectoryNames({
+        "game-1": { directoryName: "1 - Ashes" },
+        "game-2": { directoryName: "2 - Cinders" },
+        "game-3": { directoryName: "1 - Ashes" },
+        "game-4": { directoryName: "../outside" },
+        "game-5": {},
+      }),
+    ).toEqual(["1 - Ashes", "2 - Cinders"]);
   });
 });
