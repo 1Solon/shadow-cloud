@@ -30,3 +30,12 @@ export function resolveCorsOrigins(environment: CorsEnvironment) {
 
   return origins;
 }
+
+export function resolveCorsOptions(environment: CorsEnvironment) {
+  return {
+    allowedHeaders: ['authorization', 'content-type'],
+    exposedHeaders: ['content-disposition'],
+    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    origin: resolveCorsOrigins(environment),
+  };
+}
