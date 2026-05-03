@@ -78,4 +78,5 @@ jobs:
           prerelease: ${{ github.event_name == 'release' && github.event.release.prerelease || false }}
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
+          tauriScript: pnpm tauri
           args: --config src-tauri/tauri.release.conf.json ${{ matrix.args }}
