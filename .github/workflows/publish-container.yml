@@ -24,41 +24,7 @@ jobs:
 
       - name: Check for container-affecting changes
         id: changes
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "should_publish=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          current_tag="${{ github.event.release.tag_name }}"
-          previous_tag="$(git tag --sort=-creatordate | grep -vxF "$current_tag" | head -n 1 || true)"
-
-          if [[ -z "$previous_tag" ]]; then
-            echo "should_publish=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          changed_files="$(git diff --name-only "$previous_tag" "$current_tag" -- \
-            .dockerignore \
-            docker-compose.yml \
-            package.json \
-            pnpm-lock.yaml \
-            pnpm-workspace.yaml \
-            turbo.json \
-            apps/api \
-            apps/bot \
-            apps/web \
-            packages \
-            .github/workflows/publish-container.yml)"
-
-          if [[ -n "$changed_files" ]]; then
-            echo "should_publish=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "should_publish=false" >> "$GITHUB_OUTPUT"
-          fi
+        run: node scripts/detect-container-changes.mjs
 
   publish:
     name: Publish ${{ matrix.service }} image
