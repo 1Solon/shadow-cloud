@@ -7,6 +7,13 @@
   text-rendering: optimizeLegibility;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -41,7 +48,9 @@ select:focus-visible {
 }
 
 .terminal-screen {
-  min-height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
   padding: 16px;
   color: #fb923c;
   background:
@@ -57,7 +66,8 @@ select:focus-visible {
 
 .terminal-frame {
   display: flex;
-  min-height: calc(100vh - 32px);
+  height: calc(100dvh - 32px);
+  min-height: 0;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid #fb923c;
@@ -71,6 +81,7 @@ select:focus-visible {
 .terminal-footer,
 .status-strip {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
@@ -105,15 +116,73 @@ select:focus-visible {
   font-size: 12px;
 }
 
-.identity {
-  max-width: 180px;
+.user-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-badge-avatar {
+  position: relative;
+  display: flex;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(251, 146, 60, 0.6);
+  border-radius: 999px;
+  background: rgba(251, 146, 60, 0.1);
   overflow: hidden;
+}
+
+.user-badge-avatar span {
+  color: rgba(251, 146, 60, 0.7);
+  font-size: 9px;
+  line-height: 1;
+}
+
+.user-badge-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.user-badge-avatar-tint {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: rgba(251, 146, 60, 0.15);
+  mix-blend-mode: overlay;
+}
+
+.user-badge-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  line-height: 1;
+}
+
+.user-badge-label {
+  color: rgba(251, 146, 60, 0.5);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.user-badge-name {
+  max-width: 160px;
+  overflow: hidden;
+  color: #fdba74;
+  font-size: 14px;
+  line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .control-grid {
   display: grid;
+  flex-shrink: 0;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   padding: 20px 0;
@@ -138,14 +207,17 @@ select:focus-visible {
 }
 
 .campaign-section {
+  display: flex;
   min-height: 0;
   flex: 1;
-  overflow: auto;
+  flex-direction: column;
+  overflow: hidden;
   padding: 22px 2px;
 }
 
 .campaign-section h1 {
-  margin: 0 0 14px;
+  flex-shrink: 0;
+  margin: 0 0 20px;
   color: #fdba74;
   font-size: 18px;
   font-weight: 500;
@@ -165,61 +237,160 @@ select:focus-visible {
 
 .campaign-list {
   display: flex;
+  min-height: 0;
+  flex: 1;
   flex-direction: column;
   gap: 12px;
+  overflow-y: auto;
+  padding: 2px 8px 0 0;
+}
+
+.campaign-list::-webkit-scrollbar {
+  width: 10px;
+}
+
+.campaign-list::-webkit-scrollbar-track {
+  background: rgba(251, 146, 60, 0.08);
+}
+
+.campaign-list::-webkit-scrollbar-thumb {
+  border: 2px solid #050100;
+  border-radius: 999px;
+  background: rgba(251, 146, 60, 0.72);
 }
 
 .campaign-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(280px, 0.9fr) minmax(180px, 0.7fr);
+  grid-template-columns: minmax(220px, 0.85fr) minmax(280px, 1fr) minmax(170px, 0.55fr);
+  align-items: stretch;
   gap: 18px;
-  padding: 16px;
+  border-color: #fb923c;
+  background: rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  padding: 16px 18px;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.campaign-row:hover,
+.campaign-row:focus-visible {
+  border-color: #fdba74;
+  background: rgba(251, 146, 60, 0.1);
+  box-shadow: 0 10px 28px rgba(251, 146, 60, 0.12);
+  transform: translateY(-1px);
+}
+
+.campaign-row:focus-visible {
+  outline: 2px solid #fdba74;
+  outline-offset: 2px;
+}
+
+.campaign-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  border-right: 1px solid rgba(251, 146, 60, 0.22);
+  padding-right: 18px;
+}
+
+.campaign-row:hover .campaign-main,
+.campaign-row:focus-visible .campaign-main {
+  border-color: rgba(253, 186, 116, 0.36);
 }
 
 .campaign-title {
+  overflow-wrap: anywhere;
   color: #fdba74;
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
-.campaign-folder,
+.turn-label {
+  align-self: flex-start;
+  border: 1px solid #fdba74;
+  background: rgba(251, 146, 60, 0.16);
+  box-shadow: 0 0 14px rgba(251, 146, 60, 0.16);
+  color: #ffedd5;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1;
+  margin-top: 8px;
+  padding: 6px 7px;
+}
+
 .campaign-status {
-  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 0;
   color: rgba(253, 186, 116, 0.62);
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .campaign-meta {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+
+.campaign-meta > div {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 110px minmax(0, 1fr);
+  align-items: center;
   gap: 12px;
+  padding: 2px 4px;
 }
 
 .campaign-meta span {
   display: block;
-  color: rgba(253, 186, 116, 0.5);
-  font-size: 11px;
+  color: rgba(253, 186, 116, 0.68);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
 }
 
 .campaign-meta strong {
   display: block;
   overflow-wrap: anywhere;
-  color: #fed7aa;
-  font-size: 13px;
-  font-weight: 600;
+  color: #fdba74;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .campaign-status {
-  align-self: center;
   justify-self: end;
   text-align: right;
 }
 
 .terminal-footer {
+  width: 100%;
+  margin-top: 24px;
   border-top: 1px solid #fb923c;
-  color: rgba(253, 186, 116, 0.72);
+  color: rgba(253, 186, 116, 0.7);
   font-size: 12px;
+  line-height: 1rem;
   padding-top: 16px;
+}
+
+.terminal-footer span {
+  min-width: 0;
+}
+
+.terminal-footer span:nth-child(2) {
+  text-align: center;
+}
+
+.terminal-footer span:last-child {
+  text-align: right;
 }
 
 @keyframes blink {
@@ -240,20 +411,36 @@ select:focus-visible {
   }
 
   .terminal-header,
-  .terminal-footer,
   .status-strip {
     align-items: flex-start;
     flex-direction: column;
   }
 
+  .terminal-footer {
+    gap: 12px;
+  }
+
   .control-grid,
   .campaign-row,
-  .campaign-meta {
+  .campaign-meta > div {
     grid-template-columns: 1fr;
+  }
+
+  .campaign-row {
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .campaign-main {
+    border-right: 0;
+    border-bottom: 1px solid rgba(251, 146, 60, 0.22);
+    padding-right: 0;
+    padding-bottom: 14px;
   }
 
   .campaign-status {
     justify-self: start;
+    justify-content: flex-start;
     text-align: left;
   }
 }

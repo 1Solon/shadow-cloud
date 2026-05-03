@@ -1,8 +1,20 @@
-import { getCurrent, onOpenUrl, register } from '@tauri-apps/plugin-deep-link';
+import {
+  getCurrent,
+  isRegistered,
+  onOpenUrl,
+  register,
+} from '@tauri-apps/plugin-deep-link';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { webBaseUrl } from '@/api/shadowCloudApi';
 
 const protocol = 'shadow-cloud';
+
+type DesktopSignInDependencies = {
+  isRegistered: (protocol: string) => Promise<boolean>;
+  openWebHandoff: (url: string) => Promise<unknown>;
+  register: (protocol: string) => Promise<unknown>;
+  webBaseUrl: string;
+};
 
 export function readTokenFromDeepLink(url: string) {
   try {
@@ -19,14 +31,32 @@ export function readTokenFromDeepLink(url: string) {
 }
 
 export async function startDesktopSignIn() {
-  await register(protocol).catch(() => undefined);
-  await openUrl(`${webBaseUrl}/api/auth/desktop`);
+  await createDesktopSignIn({
+    isRegistered,
+    openWebHandoff: openUrl,
+    register,
+    webBaseUrl,
+  })();
+}
+
+export function createDesktopSignIn(dependencies: DesktopSignInDependencies) {
+  return async () => {
+    await dependencies.register(protocol);
+
+    if (!(await dependencies.isRegistered(protocol))) {
+      throw new Error('Desktop protocol registration did not complete.');
+    }
+
+    await dependencies.openWebHandoff(
+      `${dependencies.webBaseUrl}/api/auth/desktop?handoff=1`,
+    );
+  };
 }
 
 export async function listenForDesktopAuth(
   onToken: (token: string) => void,
 ) {
-  await register(protocol).catch(() => undefined);
+  await register(protocol);
 
   const consumeUrls = (urls: string[] | null) => {
     for (const url of urls ?? []) {

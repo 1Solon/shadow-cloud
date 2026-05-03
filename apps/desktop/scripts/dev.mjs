@@ -1,7 +1,10 @@
 import { spawn } from 'node:child_process';
+import { loadRootEnv, resolveWebUrl } from '../../../scripts/dev-env.mjs';
+
+await loadRootEnv();
 
 const apiUrl = process.env.SHADOW_CLOUD_API_URL ?? 'http://localhost:3001';
-const webUrl = process.env.SHADOW_CLOUD_WEB_URL ?? 'http://localhost:3000';
+const webUrl = resolveWebUrl();
 
 async function waitFor(url, label) {
   const deadline = Date.now() + 90_000;
@@ -24,7 +27,7 @@ async function waitFor(url, label) {
 }
 
 await Promise.all([
-  waitFor(`${apiUrl}/v1/games`, 'API'),
+  waitFor(`${apiUrl}/v1`, 'API'),
   waitFor(webUrl, 'Web'),
 ]);
 

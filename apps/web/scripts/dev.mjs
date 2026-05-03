@@ -1,18 +1,19 @@
 import { spawn } from "node:child_process";
+import { loadRootEnv, resolveWebPort } from "../../../scripts/dev-env.mjs";
+
+await loadRootEnv();
 
 const defaultApiBaseUrl = "http://localhost:3001";
 const apiBaseUrl = process.env.SHADOW_CLOUD_API_URL ?? defaultApiBaseUrl;
 const apiHealthUrl = new URL("/v1", apiBaseUrl).toString();
+const webPort = resolveWebPort();
 const apiStartupTimeoutMs = Number.parseInt(
   process.env.SHADOW_CLOUD_API_STARTUP_TIMEOUT_MS ?? "60000",
   10,
 );
 const apiStartupPollIntervalMs = 500;
 const shouldWaitForApi = process.env.SHADOW_CLOUD_SKIP_API_WAIT !== "1";
-const pnpmCommand =
-  process.platform === "win32"
-    ? "pnpm exec dotenv -e ../../.env -- next dev"
-    : "pnpm exec dotenv -e ../../.env -- next dev";
+const pnpmCommand = `pnpm exec next dev --port ${webPort}`;
 const duplicateServerMessage = "Another next dev server is already running.";
 
 function delay(milliseconds) {

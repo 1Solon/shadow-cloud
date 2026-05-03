@@ -29,9 +29,7 @@ export function sanitizeDirectoryName(name: string) {
 }
 
 export function buildCampaignDirectoryName(gameNumber: number, name: string) {
-  return `G${String(gameNumber).padStart(4, '0')} - ${sanitizeDirectoryName(
-    name,
-  )}`;
+  return `${gameNumber} - ${sanitizeDirectoryName(name)}`;
 }
 
 export function isShadowEmpireSave(entry: DirectoryEntry) {

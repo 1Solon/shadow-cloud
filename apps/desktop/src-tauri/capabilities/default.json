@@ -6,8 +6,23 @@
   "permissions": [
     "core:default",
     "deep-link:default",
+    "deep-link:allow-is-registered",
+    "deep-link:allow-register",
     "dialog:default",
     "fs:default",
+    "fs:allow-mkdir",
+    "fs:allow-read-dir",
+    "fs:allow-read-file",
+    "fs:allow-rename",
+    "fs:allow-stat",
+    "fs:allow-write-file",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        "$DOCUMENT/My Games/Shadow Empire",
+        "$DOCUMENT/My Games/Shadow Empire/**"
+      ]
+    },
     "opener:default",
     "store:default"
   ]

@@ -8,9 +8,9 @@ import {
 } from './sync-files';
 
 describe('sync file helpers', () => {
-  it('builds sanitized campaign directory names with a padded game number', () => {
+  it('builds sanitized campaign directory names with the web game number format', () => {
     expect(buildCampaignDirectoryName(7, '  Ashes: <North>?  ')).toBe(
-      'G0007 - Ashes North',
+      '7 - Ashes North',
     );
   });
 

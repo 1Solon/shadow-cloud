@@ -2,6 +2,7 @@ use tauri::{Emitter, Manager};
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             if let Some(url) = argv
                 .iter()
@@ -14,7 +15,6 @@ pub fn run() {
                 let _ = app.emit("deep-link://new-url", vec![url.to_string()]);
             }
         }))
-        .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())

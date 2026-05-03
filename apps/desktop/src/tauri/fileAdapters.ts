@@ -15,27 +15,9 @@ import {
   listGames,
   uploadSave,
 } from '@/api/shadowCloudApi';
+import { decodeDesktopTokenSubject } from '@/auth/desktopToken';
 
-function decodeBase64Url(input: string) {
-  const padded = input.padEnd(input.length + ((4 - (input.length % 4)) % 4), '=');
-  const base64 = padded.replace(/-/g, '+').replace(/_/g, '/');
-  return atob(base64);
-}
-
-export function decodeTokenSubject(token: string) {
-  const payload = token.split('.')[1];
-
-  if (!payload) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(decodeBase64Url(payload)) as { sub?: unknown };
-    return typeof parsed.sub === 'string' ? parsed.sub : null;
-  } catch {
-    return null;
-  }
-}
+export const decodeTokenSubject = decodeDesktopTokenSubject;
 
 async function listLocalSaves(campaignDirectoryPath: string) {
   const entries = await readDir(campaignDirectoryPath);
@@ -91,6 +73,9 @@ export function createTauriSyncAdapters(): SyncAdapters {
     getGameDetail,
     ensureDir: async (path) => {
       await mkdir(path, { recursive: true });
+    },
+    renameDir: async (fromPath, toPath) => {
+      await rename(fromPath, toPath);
     },
     listLocalSaves,
     uploadSave,

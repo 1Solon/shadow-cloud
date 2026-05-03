@@ -38,10 +38,11 @@ function createAdapters(overrides: Partial<SyncAdapters> = {}): SyncAdapters {
       fileVersions: [],
     })),
     ensureDir: vi.fn(async () => undefined),
+    renameDir: vi.fn(async () => undefined),
     listLocalSaves: vi.fn(async () => [
       {
         name: 'turn.se1',
-        path: 'C:/ShadowEmpire/Saves/G0001 - Ashes/turn.se1',
+        path: 'C:/ShadowEmpire/Saves/1 - Ashes/turn.se1',
         modifiedAt: 2,
         size: 3,
         bytes: new Uint8Array([1, 2, 3]),
@@ -112,6 +113,35 @@ describe('runSyncOnce', () => {
     expect(nextState.campaigns['game-1']).toMatchObject({
       lastDownloadedFileVersionId: 'remote-2',
       status: 'Downloaded remote.se1',
+    });
+  });
+
+  it('renames tracked campaign directories when API number or name changes', async () => {
+    const state: SyncState = {
+      ...createBaseState(),
+      campaigns: {
+        'game-1': {
+          gameNumber: 1,
+          name: 'Old Ashes',
+          directoryName: 'G0001 - Old Ashes',
+        },
+      },
+    };
+    const adapters = createAdapters({
+      listLocalSaves: vi.fn(async () => []),
+    });
+
+    const nextState = await runSyncOnce(state, adapters);
+
+    expect(adapters.renameDir).toHaveBeenCalledWith(
+      'C:/ShadowEmpire/Saves/G0001 - Old Ashes',
+      'C:/ShadowEmpire/Saves/1 - Ashes',
+    );
+    expect(adapters.ensureDir).toHaveBeenCalledWith(
+      'C:/ShadowEmpire/Saves/1 - Ashes',
+    );
+    expect(nextState.campaigns['game-1']).toMatchObject({
+      directoryName: '1 - Ashes',
     });
   });
 

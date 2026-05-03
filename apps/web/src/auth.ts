@@ -167,6 +167,7 @@ export async function createDesktopApiAccessToken(
 
   return new SignJWT({
     email: session.user.email ?? undefined,
+    picture: session.user.image ?? undefined,
     name: session.user.name ?? undefined,
     tokenUse: "desktop-sync",
   })

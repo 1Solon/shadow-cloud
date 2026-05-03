@@ -49,6 +49,10 @@ function getApiErrorMessage(payload: unknown, fallback: string) {
   return fallback;
 }
 
+function getApiUnavailableError() {
+  return new Error(`Could not reach Shadow-Cloud API at ${apiBaseUrl}.`);
+}
+
 async function fetchJson<T>(
   path: string,
   token: string,
@@ -62,6 +66,8 @@ async function fetchJson<T>(
       authorization: `Bearer ${token}`,
     },
     cache: 'no-store',
+  }).catch(() => {
+    throw getApiUnavailableError();
   });
 
   if (!response.ok) {
@@ -134,7 +140,9 @@ export async function downloadFile(
       },
       cache: 'no-store',
     },
-  );
+  ).catch(() => {
+    throw getApiUnavailableError();
+  });
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null);

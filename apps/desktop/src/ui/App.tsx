@@ -1,10 +1,19 @@
 import { open } from '@tauri-apps/plugin-dialog';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  decodeDesktopTokenAvatarUrl,
+  decodeDesktopTokenDisplayName,
+} from '@/auth/desktopToken';
 import { listenForDesktopAuth, startDesktopSignIn } from '@/auth/deepLinkAuth';
+import { webBaseUrl } from '@/api/shadowCloudApi';
+import { getErrorMessage } from '@/errors/error-message';
+import { buildWebGameUrl } from '@/navigation/webGameLinks';
 import { loadSyncState, saveSyncState } from '@/storage/desktopState';
 import { runSyncOnce, type SyncState } from '@/sync/sync-engine';
 import { createNonOverlappingRunner } from '@/sync/sync-runner';
 import { createTauriSyncAdapters, decodeTokenSubject } from '@/tauri/fileAdapters';
+import { sortCampaignEntries } from './campaignOrdering';
 
 function formatTime(date: Date) {
   return new Intl.DateTimeFormat('en-US', {
@@ -101,6 +110,12 @@ export function App() {
         await saveSyncState(nextState);
       }).then((nextUnlisten) => {
         unlisten = nextUnlisten;
+      }).catch((error) => {
+        void updateState((current) => ({
+          ...current,
+          lastStatus: 'Desktop auth listener failed',
+          lastError: getErrorMessage(error, 'Desktop auth listener failed.'),
+        }));
       });
 
     return () => {
@@ -163,6 +178,18 @@ export function App() {
     }));
   }
 
+  async function signIn() {
+    try {
+      await startDesktopSignIn();
+    } catch (error) {
+      await updateState((current) => ({
+        ...current,
+        lastStatus: 'Desktop protocol registration failed',
+        lastError: getErrorMessage(error, 'Desktop sign-in failed.'),
+      }));
+    }
+  }
+
   async function togglePaused() {
     await updateState((current) => ({
       ...current,
@@ -179,11 +206,30 @@ export function App() {
     }));
   }
 
-  const campaigns = Object.entries(state?.campaigns ?? {}).sort(
-    ([_leftId, left], [_rightId, right]) =>
-      (left.gameNumber ?? 0) - (right.gameNumber ?? 0),
-  );
+  async function openCampaignInWeb(gameNumber?: number) {
+    if (!gameNumber) {
+      return;
+    }
+
+    try {
+      await openUrl(buildWebGameUrl(webBaseUrl, gameNumber));
+    } catch (error) {
+      await updateState((current) => ({
+        ...current,
+        lastStatus: 'Web handoff failed',
+        lastError: getErrorMessage(error, 'Could not open campaign in web UI.'),
+      }));
+    }
+  }
+
   const currentUserId = state?.token ? decodeTokenSubject(state.token) : null;
+  const currentUserName = state?.token
+    ? decodeDesktopTokenDisplayName(state.token)
+    : null;
+  const currentUserAvatarUrl = state?.token
+    ? decodeDesktopTokenAvatarUrl(state.token)
+    : null;
+  const campaigns = sortCampaignEntries(state?.campaigns ?? {}, currentUserId);
 
   if (!state) {
     return (
@@ -198,19 +244,39 @@ export function App() {
       <section className="terminal-frame">
         <header className="terminal-header">
           <div className="terminal-title">
-            <span>{'> SHADOW-CLOUD DESKTOP'}</span>
+            <span>{'> SHADOW CLOUD: LOCAL'}</span>
             <span aria-hidden="true" className="terminal-cursor" />
           </div>
           <div className="terminal-header-actions">
-            <span className="identity">
-              {currentUserId ? `USER ${currentUserId.slice(0, 8)}` : 'GUEST'}
-            </span>
+            <div className="user-badge">
+              <div className="user-badge-avatar">
+                {currentUserAvatarUrl ? (
+                  <>
+                    <img
+                      alt={currentUserName ?? 'Connected user'}
+                      src={currentUserAvatarUrl}
+                    />
+                    <span aria-hidden="true" className="user-badge-avatar-tint" />
+                  </>
+                ) : (
+                  <span>USR</span>
+                )}
+              </div>
+              <div className="user-badge-copy">
+                <span className="user-badge-label">
+                  {state.token ? 'Connected as' : 'Identity'}
+                </span>
+                <span className="user-badge-name">
+                  {state.token ? (currentUserName ?? 'SIGNED IN') : '[GUEST]'}
+                </span>
+              </div>
+            </div>
             {state.token ? (
               <button type="button" onClick={signOut}>
                 Sign out
               </button>
             ) : (
-              <button type="button" onClick={startDesktopSignIn}>
+              <button type="button" onClick={signIn}>
                 Sign in
               </button>
             )}
@@ -258,37 +324,60 @@ export function App() {
             </div>
           ) : (
             <div className="campaign-list">
-              {campaigns.map(([campaignId, campaign]) => (
-                <article className="campaign-row" key={campaignId}>
-                  <div className="campaign-main">
-                    <div className="campaign-title">
-                      {`G${String(campaign.gameNumber ?? 0).padStart(4, '0')} : ${
-                        campaign.name ?? campaignId
-                      }`}
+              {campaigns.map(([campaignId, campaign]) => {
+                const isUsersTurn = Boolean(
+                  currentUserId &&
+                    campaign.activePlayerUserId === currentUserId,
+                );
+
+                return (
+                  <article
+                    className={`campaign-row${isUsersTurn ? ' is-users-turn' : ''}`}
+                    key={campaignId}
+                    role="link"
+                    tabIndex={0}
+                    onClick={() => {
+                      void openCampaignInWeb(campaign.gameNumber);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter' && event.key !== ' ') {
+                        return;
+                      }
+
+                      event.preventDefault();
+                      void openCampaignInWeb(campaign.gameNumber);
+                    }}
+                  >
+                    <div className="campaign-main">
+                      <div className="campaign-title">
+                        {`${campaign.gameNumber ?? 0} : ${
+                          campaign.name ?? campaignId
+                        }`}
+                      </div>
+                      {isUsersTurn ? (
+                        <div className="turn-label">{'> Save your turn'}</div>
+                      ) : null}
                     </div>
-                    <div className="campaign-folder">
-                      {campaign.directoryName ?? 'folder pending'}
+                    <div className="campaign-meta">
+                      <div>
+                        <span>ACTIVE LORD</span>
+                        <strong>{campaign.activePlayerDisplayName ?? 'unknown'}</strong>
+                      </div>
+                      <div>
+                        <span>TURN</span>
+                        <strong>{campaign.roundNumber ?? '-'}</strong>
+                      </div>
+                      <div>
+                        <span>LAST</span>
+                        <strong>{formatTimestamp(campaign.lastSyncedAt)}</strong>
+                      </div>
                     </div>
-                  </div>
-                  <div className="campaign-meta">
-                    <div>
-                      <span>ACTIVE</span>
-                      <strong>{campaign.activePlayerDisplayName ?? 'unknown'}</strong>
+                    <div className="campaign-status">
+                      {campaign.error ?? campaign.status ?? 'waiting'}
                     </div>
-                    <div>
-                      <span>TURN</span>
-                      <strong>{campaign.roundNumber ?? '-'}</strong>
-                    </div>
-                    <div>
-                      <span>LAST</span>
-                      <strong>{formatTimestamp(campaign.lastSyncedAt)}</strong>
-                    </div>
-                  </div>
-                  <div className="campaign-status">
-                    {campaign.error ?? campaign.status ?? 'waiting'}
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>

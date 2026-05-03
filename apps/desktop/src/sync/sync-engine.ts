@@ -1,3 +1,4 @@
+import { getErrorMessage } from '@/errors/error-message';
 import {
   buildCampaignDirectoryName,
   chooseNewestPendingSave,
@@ -64,6 +65,7 @@ export type SyncAdapters = {
   listGames: (token: string) => Promise<GameListItem[]>;
   getGameDetail: (token: string, gameNumber: number) => Promise<GameDetail>;
   ensureDir: (path: string) => Promise<void>;
+  renameDir: (fromPath: string, toPath: string) => Promise<void>;
   listLocalSaves: (campaignDirectoryPath: string) => Promise<LocalSaveFile[]>;
   uploadSave: (
     token: string,
@@ -87,12 +89,28 @@ function joinPath(left: string, right: string) {
   return `${left.replace(/[\\/]+$/g, '')}/${right}`;
 }
 
-function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : 'Sync failed';
-}
-
 function getCampaignState(state: SyncState, gameId: string) {
   return state.campaigns[gameId] ?? {};
+}
+
+async function ensureCanonicalCampaignDirectory(
+  saveRoot: string,
+  previousDirectoryName: string | undefined,
+  directoryName: string,
+  adapters: SyncAdapters,
+) {
+  const campaignDirectoryPath = joinPath(saveRoot, directoryName);
+
+  if (previousDirectoryName && previousDirectoryName !== directoryName) {
+    await adapters.renameDir(
+      joinPath(saveRoot, previousDirectoryName),
+      campaignDirectoryPath,
+    );
+  }
+
+  await adapters.ensureDir(campaignDirectoryPath);
+
+  return campaignDirectoryPath;
 }
 
 export async function runSyncOnce(
@@ -152,15 +170,18 @@ export async function runSyncOnce(
 
     for (const game of participatingGames) {
       const previousCampaignState = getCampaignState(nextState, game.id);
-      const directoryName = buildCampaignDirectoryName(
-        game.gameNumber,
-        game.name,
-      );
-      const campaignDirectoryPath = joinPath(state.saveRoot, directoryName);
-
-      await adapters.ensureDir(campaignDirectoryPath);
-
       const detail = await adapters.getGameDetail(state.token, game.gameNumber);
+      const directoryName = buildCampaignDirectoryName(
+        detail.gameNumber,
+        detail.name,
+      );
+      const campaignDirectoryPath = await ensureCanonicalCampaignDirectory(
+        state.saveRoot,
+        previousCampaignState.directoryName,
+        directoryName,
+        adapters,
+      );
+
       const campaignState: CampaignSyncState = {
         ...previousCampaignState,
         gameNumber: detail.gameNumber,
@@ -187,7 +208,7 @@ export async function runSyncOnce(
         } else {
           const upload = await adapters.uploadSave(
             state.token,
-            game.gameNumber,
+            detail.gameNumber,
             pendingSave.file,
           );
           uploadedFingerprints.add(pendingSave.fingerprint);
@@ -207,7 +228,7 @@ export async function runSyncOnce(
         } else {
           const download = await adapters.downloadFile(
             state.token,
-            game.gameNumber,
+            detail.gameNumber,
             remoteFile.id,
           );
           const fileName = getConflictSafeFileName(
@@ -233,7 +254,7 @@ export async function runSyncOnce(
   } catch (error) {
     return {
       ...nextState,
-      lastError: getErrorMessage(error),
+      lastError: getErrorMessage(error, 'Sync failed'),
     };
   }
 }
