@@ -35,6 +35,7 @@ export type GameDetailResponse = {
     id: string;
     originalName: string;
     uploadedAt: string;
+    uploadedById: string;
     uploadedByDisplayName: string;
   }>;
 };

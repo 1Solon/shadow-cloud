@@ -1,0 +1,24 @@
+[package]
+name = "shadow-cloud-desktop"
+version = "0.7.0"
+description = "Shadow-Cloud desktop sync client"
+authors = ["Shadow-Cloud"]
+edition = "2021"
+
+[lib]
+name = "shadow_cloud_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.5.5", features = [] }
+
+[dependencies]
+tauri = { version = "2.11.0", features = [] }
+tauri-plugin-deep-link = "2.4.9"
+tauri-plugin-dialog = "2.7.1"
+tauri-plugin-fs = "2.5.1"
+tauri-plugin-opener = "2.5.4"
+tauri-plugin-single-instance = "2.3.4"
+tauri-plugin-store = "2.4.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

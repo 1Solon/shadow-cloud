@@ -2,6 +2,8 @@ node_modules
 .turbo
 .next
 dist
+target
+apps/desktop/src-tauri/gen/schemas
 *.tsbuildinfo
 coverage
 .env
