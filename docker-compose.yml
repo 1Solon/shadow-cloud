@@ -1,6 +1,6 @@
 services:
   api:
-    image: ghcr.io/1solon/shadow-cloud/api:0.8.0
+    image: ghcr.io/1solon/shadow-cloud/api:0.8.1
     restart: unless-stopped
     environment:
       NODE_ENV: production
