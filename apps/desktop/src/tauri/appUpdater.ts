@@ -2,6 +2,7 @@ import {
   check as checkTauriUpdate,
   type Update,
 } from "@tauri-apps/plugin-updater";
+import { confirm as confirmDialog } from "@tauri-apps/plugin-dialog";
 
 type DesktopUpdate = Pick<Update, "version" | "downloadAndInstall">;
 
@@ -21,7 +22,12 @@ type CheckForDesktopUpdateOptions = {
 };
 
 function defaultConfirmInstall(message: string) {
-  return window.confirm(message);
+  return confirmDialog(message, {
+    title: "Shadow Cloud Local",
+    kind: "info",
+    okLabel: "Install",
+    cancelLabel: "Cancel",
+  });
 }
 
 export async function checkForDesktopUpdate({

@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
+import { confirm as confirmDialog } from "@tauri-apps/plugin-dialog";
 import { checkForDesktopUpdate } from "./appUpdater";
+
+vi.mock("@tauri-apps/plugin-dialog", () => ({
+  confirm: vi.fn(),
+}));
 
 describe("checkForDesktopUpdate", () => {
   it("reports when there is no available update", async () => {
@@ -29,6 +34,29 @@ describe("checkForDesktopUpdate", () => {
       status: "installed",
       message: "Update 0.8.0 installed. Restart Shadow Cloud Local to finish.",
     });
+  });
+
+  it("uses the Tauri dialog confirmation by default", async () => {
+    const downloadAndInstall = vi.fn();
+    vi.mocked(confirmDialog).mockResolvedValue(true);
+
+    await checkForDesktopUpdate({
+      check: async () => ({
+        version: "0.8.0",
+        downloadAndInstall,
+      }),
+    });
+
+    expect(confirmDialog).toHaveBeenCalledWith(
+      "Update 0.8.0 is available. Download and install it now?",
+      {
+        title: "Shadow Cloud Local",
+        kind: "info",
+        okLabel: "Install",
+        cancelLabel: "Cancel",
+      },
+    );
+    expect(downloadAndInstall).toHaveBeenCalledOnce();
   });
 
   it("does not install an available update when cancelled", async () => {
