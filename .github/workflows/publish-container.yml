@@ -11,9 +11,60 @@ permissions:
   packages: write
 
 jobs:
+  detect-container-changes:
+    name: Detect container changes
+    runs-on: ubuntu-latest
+    outputs:
+      should_publish: ${{ steps.changes.outputs.should_publish }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Check for container-affecting changes
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          current_tag="${{ github.event.release.tag_name }}"
+          previous_tag="$(git tag --sort=-creatordate | grep -vxF "$current_tag" | head -n 1 || true)"
+
+          if [[ -z "$previous_tag" ]]; then
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed_files="$(git diff --name-only "$previous_tag" "$current_tag" -- \
+            .dockerignore \
+            docker-compose.yml \
+            package.json \
+            pnpm-lock.yaml \
+            pnpm-workspace.yaml \
+            turbo.json \
+            apps/api \
+            apps/bot \
+            apps/web \
+            packages \
+            .github/workflows/publish-container.yml)"
+
+          if [[ -n "$changed_files" ]]; then
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
   publish:
     name: Publish ${{ matrix.service }} image
     runs-on: ubuntu-latest
+    needs: detect-container-changes
+    if: needs.detect-container-changes.outputs.should_publish == 'true'
     strategy:
       fail-fast: false
       matrix:
