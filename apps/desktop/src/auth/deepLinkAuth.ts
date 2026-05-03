@@ -30,12 +30,12 @@ export function readTokenFromDeepLink(url: string) {
   }
 }
 
-export async function startDesktopSignIn() {
+export async function startDesktopSignIn(nextWebBaseUrl = webBaseUrl) {
   await createDesktopSignIn({
     isRegistered,
     openWebHandoff: openUrl,
     register,
-    webBaseUrl,
+    webBaseUrl: nextWebBaseUrl,
   })();
 }
 

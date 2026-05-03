@@ -26,6 +26,7 @@ body {
 }
 
 button,
+input,
 select {
   border: 1px solid rgba(251, 146, 60, 0.72);
   background: rgba(251, 146, 60, 0.08);
@@ -36,15 +37,27 @@ select {
 }
 
 button:hover,
+input:hover,
 select:hover {
   background: rgba(251, 146, 60, 0.18);
   color: #fff7ed;
 }
 
 button:focus-visible,
+input:focus-visible,
 select:focus-visible {
   outline: 2px solid #fdba74;
   outline-offset: 2px;
+}
+
+select option {
+  background: #1b120b;
+  color: #ffedd5;
+}
+
+select option:checked {
+  background: #5f5f5f;
+  color: #ffffff;
 }
 
 .terminal-screen {
@@ -393,6 +406,282 @@ select:focus-visible {
   text-align: right;
 }
 
+.desktop-help-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.72);
+  padding: 24px;
+}
+
+.desktop-help-modal {
+  position: relative;
+  width: min(720px, 100%);
+  max-height: min(680px, calc(100dvh - 48px));
+  overflow: hidden;
+  border: 1px solid rgba(251, 146, 60, 0.42);
+  border-radius: 8px;
+  background: #0a0711;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.62), 0 0 42px rgba(251, 146, 60, 0.18);
+}
+
+.desktop-help-modal-enter {
+  animation: terminal-powerup 260ms cubic-bezier(0.2, 0.8, 0.22, 1) forwards;
+  transform-origin: bottom right;
+}
+
+.desktop-help-modal-visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.desktop-help-modal-exit {
+  animation: terminal-powerdown 260ms cubic-bezier(0.42, 0, 0.7, 0.2) forwards;
+  transform-origin: bottom right;
+}
+
+.desktop-help-scanin,
+.desktop-help-scanout {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(251, 146, 60, 0.12) 0,
+    rgba(251, 146, 60, 0.12) 1px,
+    transparent 1px,
+    transparent 4px
+  );
+  opacity: 0.7;
+}
+
+.desktop-help-scanin {
+  animation: terminal-scanin 260ms ease-out forwards;
+}
+
+.desktop-help-scanout {
+  animation: terminal-scanout 260ms ease-out forwards;
+}
+
+.desktop-help-header {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(251, 146, 60, 0.22);
+  background: rgba(251, 146, 60, 0.1);
+  color: #fed7aa;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  padding: 12px 14px;
+  text-transform: uppercase;
+}
+
+.desktop-help-close {
+  min-height: 28px;
+  padding: 0 9px;
+}
+
+.desktop-help-body {
+  position: relative;
+  z-index: 1;
+  height: min(540px, calc(100dvh - 132px));
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fdba74;
+  font-size: 14px;
+  line-height: 1.55;
+  padding: 18px;
+}
+
+.desktop-help-body-enter {
+  animation: terminal-powerup-text 220ms ease-out forwards;
+}
+
+.desktop-help-body-exit {
+  animation: terminal-powerdown-text 220ms ease-out forwards;
+}
+
+.desktop-help-line {
+  min-height: 1.55em;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.desktop-help-command {
+  margin-bottom: 8px;
+  color: rgba(253, 186, 116, 0.74);
+}
+
+.desktop-help-title-line {
+  color: #ffedd5;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.desktop-help-section-line {
+  margin-top: 12px;
+  color: #ffedd5;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.desktop-help-list-line {
+  color: rgba(253, 186, 116, 0.92);
+  padding-left: 8px;
+}
+
+.desktop-help-path-line {
+  display: inline-block;
+  max-width: 100%;
+  border-left: 2px solid rgba(251, 146, 60, 0.58);
+  background: rgba(251, 146, 60, 0.08);
+  color: #ffedd5;
+  margin: 4px 0 6px 28px;
+  padding: 4px 8px;
+}
+
+.desktop-help-spacer-line {
+  min-height: 0.7em;
+}
+
+.desktop-help-caret {
+  display: inline-block;
+  width: 0.58em;
+  height: 1.1em;
+  margin-left: 0.32em;
+  background: #fdba74;
+  vertical-align: -0.18em;
+  animation: blink 1.15s steps(1, end) infinite;
+}
+
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.72);
+  padding: 24px;
+}
+
+.settings-panel {
+  width: min(680px, 100%);
+  overflow: hidden;
+  border: 1px solid rgba(251, 146, 60, 0.42);
+  border-radius: 8px;
+  background: #0a0711;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.62), 0 0 42px rgba(251, 146, 60, 0.18);
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(251, 146, 60, 0.22);
+  background: rgba(251, 146, 60, 0.1);
+  color: #fed7aa;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  padding: 12px 14px;
+  text-transform: uppercase;
+}
+
+.settings-close {
+  min-height: 28px;
+  padding: 0 9px;
+}
+
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 20px;
+}
+
+.settings-intro {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: rgba(253, 186, 116, 0.76);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.settings-intro strong {
+  color: #ffedd5;
+  font-size: 15px;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-field span {
+  color: rgba(253, 186, 116, 0.72);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.settings-field input {
+  width: 100%;
+  min-height: 42px;
+}
+
+.settings-section-heading {
+  border-top: 1px solid rgba(251, 146, 60, 0.18);
+  color: #ffedd5;
+  font-size: 15px;
+  font-weight: 700;
+  padding-top: 14px;
+}
+
+.settings-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: rgba(253, 186, 116, 0.82);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.settings-checkbox input {
+  width: 18px;
+  height: 18px;
+  accent-color: #fb923c;
+}
+
+.settings-error {
+  border: 1px solid rgba(248, 113, 113, 0.55);
+  background: rgba(127, 29, 29, 0.28);
+  color: #fecaca;
+  font-size: 12px;
+  line-height: 1.45;
+  padding: 10px 12px;
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 4px;
+}
+
 @keyframes blink {
   0%,
   46% {
@@ -402,6 +691,126 @@ select:focus-visible {
   50%,
   100% {
     opacity: 0;
+  }
+}
+
+@keyframes terminal-powerup {
+  0% {
+    opacity: 0;
+    filter: brightness(0.55);
+    transform: translate3d(14px, 18px, 0) scale(0.2, 0.02);
+  }
+
+  28% {
+    opacity: 0.95;
+    filter: brightness(0.82);
+    transform: translate3d(8px, 10px, 0) scale(1.03, 0.12);
+  }
+
+  64% {
+    opacity: 1;
+    filter: brightness(1.08);
+    transform: translate3d(0, 0, 0) scale(1, 0.94);
+  }
+
+  100% {
+    opacity: 1;
+    filter: brightness(1);
+    transform: translate3d(0, 0, 0) scale(1, 1);
+  }
+}
+
+@keyframes terminal-powerup-text {
+  0% {
+    opacity: 0;
+    filter: brightness(0.45);
+  }
+
+  52% {
+    opacity: 0.88;
+    filter: brightness(1.08);
+  }
+
+  100% {
+    opacity: 1;
+    filter: brightness(1);
+  }
+}
+
+@keyframes terminal-powerdown {
+  0% {
+    opacity: 1;
+    filter: brightness(1);
+    transform: translate3d(0, 0, 0) scale(1, 1);
+  }
+
+  35% {
+    opacity: 1;
+    filter: brightness(1.08);
+    transform: translate3d(0, 0, 0) scale(1, 0.94);
+  }
+
+  72% {
+    opacity: 0.9;
+    filter: brightness(0.82);
+    transform: translate3d(8px, 10px, 0) scale(1.03, 0.12);
+  }
+
+  100% {
+    opacity: 0;
+    filter: brightness(0.55);
+    transform: translate3d(14px, 18px, 0) scale(0.2, 0.02);
+  }
+}
+
+@keyframes terminal-powerdown-text {
+  0% {
+    opacity: 1;
+    filter: brightness(1);
+  }
+
+  55% {
+    opacity: 0.92;
+    filter: brightness(0.9);
+  }
+
+  100% {
+    opacity: 0;
+    filter: brightness(0.5);
+  }
+}
+
+@keyframes terminal-scanout {
+  0% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+
+  20% {
+    opacity: 0.28;
+    transform: translateY(0);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@keyframes terminal-scanin {
+  0% {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+
+  30% {
+    opacity: 0.32;
+    transform: translateY(-4px);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(0);
   }
 }
 
@@ -442,5 +851,27 @@ select:focus-visible {
     justify-self: start;
     justify-content: flex-start;
     text-align: left;
+  }
+
+  .desktop-help-overlay {
+    align-items: stretch;
+    padding: 12px;
+  }
+
+  .desktop-help-body {
+    max-height: calc(100dvh - 96px);
+  }
+
+  .settings-overlay {
+    align-items: stretch;
+    padding: 12px;
+  }
+
+  .settings-actions {
+    justify-content: stretch;
+  }
+
+  .settings-actions button {
+    flex: 1 1 100%;
   }
 }

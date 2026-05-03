@@ -9,12 +9,7 @@ import {
 } from '@tauri-apps/plugin-fs';
 import type { SyncAdapters } from '@/sync/sync-engine';
 import { isShadowEmpireSave, type LocalSaveFile } from '@/sync/sync-files';
-import {
-  downloadFile,
-  getGameDetail,
-  listGames,
-  uploadSave,
-} from '@/api/shadowCloudApi';
+import { createShadowCloudApiClient } from '@/api/shadowCloudApi';
 import { decodeDesktopTokenSubject } from '@/auth/desktopToken';
 
 export const decodeTokenSubject = decodeDesktopTokenSubject;
@@ -65,12 +60,22 @@ async function writeFileAtomically(
   return finalPath;
 }
 
-export function createTauriSyncAdapters(): SyncAdapters {
+type TauriSyncAdaptersOptions = {
+  apiBaseUrl?: string;
+};
+
+export function createTauriSyncAdapters(
+  options: TauriSyncAdaptersOptions = {},
+): SyncAdapters {
+  const apiClient = createShadowCloudApiClient({
+    apiBaseUrl: options.apiBaseUrl,
+  });
+
   return {
     now: () => new Date(),
     decodeUserId: decodeTokenSubject,
-    listGames,
-    getGameDetail,
+    listGames: apiClient.listGames,
+    getGameDetail: apiClient.getGameDetail,
     ensureDir: async (path) => {
       await mkdir(path, { recursive: true });
     },
@@ -78,8 +83,8 @@ export function createTauriSyncAdapters(): SyncAdapters {
       await rename(fromPath, toPath);
     },
     listLocalSaves,
-    uploadSave,
-    downloadFile,
+    uploadSave: apiClient.uploadSave,
+    downloadFile: apiClient.downloadFile,
     listExistingFileNames,
     writeFileAtomically,
   };

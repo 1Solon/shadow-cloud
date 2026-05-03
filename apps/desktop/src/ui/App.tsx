@@ -1,19 +1,34 @@
 import { open } from '@tauri-apps/plugin-dialog';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   decodeDesktopTokenAvatarUrl,
   decodeDesktopTokenDisplayName,
 } from '@/auth/desktopToken';
 import { listenForDesktopAuth, startDesktopSignIn } from '@/auth/deepLinkAuth';
-import { webBaseUrl } from '@/api/shadowCloudApi';
 import { getErrorMessage } from '@/errors/error-message';
 import { buildWebGameUrl } from '@/navigation/webGameLinks';
-import { loadSyncState, saveSyncState } from '@/storage/desktopState';
+import {
+  defaultDesktopSettings,
+  defaultRemoteSettings,
+  hasSeenDesktopHelp,
+  loadDesktopSettings,
+  loadRemoteSettings,
+  loadSyncState,
+  markDesktopHelpSeen,
+  saveDesktopSettings,
+  saveRemoteSettings,
+  saveSyncState,
+  type DesktopSettings,
+  type RemoteSettings,
+} from '@/storage/desktopState';
 import { runSyncOnce, type SyncState } from '@/sync/sync-engine';
 import { createNonOverlappingRunner } from '@/sync/sync-runner';
 import { createTauriSyncAdapters, decodeTokenSubject } from '@/tauri/fileAdapters';
+import { setMinimizeToTrayOnClose } from '@/tauri/windowBehavior';
 import { sortCampaignEntries } from './campaignOrdering';
+import { DesktopHelpModal } from './DesktopHelpModal';
+import { SettingsPage } from './SettingsPage';
 
 function formatTime(date: Date) {
   return new Intl.DateTimeFormat('en-US', {
@@ -45,17 +60,28 @@ function getNextSyncTime(state: SyncState | null, lastSyncAt: Date | null) {
 }
 
 export function App() {
-  const adapters = useMemo(() => createTauriSyncAdapters(), []);
   const [state, setState] = useState<SyncState | null>(null);
+  const [desktopSettings, setDesktopSettings] =
+    useState<DesktopSettings | null>(null);
+  const [remoteSettings, setRemoteSettings] =
+    useState<RemoteSettings | null>(null);
   const [clock, setClock] = useState(() => new Date());
   const [lastSyncAt, setLastSyncAt] = useState<Date | null>(null);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const stateRef = useRef<SyncState | null>(null);
+  const desktopSettingsRef = useRef<DesktopSettings>(defaultDesktopSettings);
+  const remoteSettingsRef = useRef<RemoteSettings>(defaultRemoteSettings);
+  const helpOnboardingCheckedRef = useRef(false);
   const runnerRef = useRef(
     createNonOverlappingRunner(async () => {
       if (!stateRef.current) {
         return;
       }
 
+      const adapters = createTauriSyncAdapters({
+        apiBaseUrl: remoteSettingsRef.current.apiBaseUrl,
+      });
       const nextState = await runSyncOnce(stateRef.current, adapters);
       stateRef.current = nextState;
       setState(nextState);
@@ -67,13 +93,24 @@ export function App() {
   useEffect(() => {
     let mounted = true;
 
-    void loadSyncState().then((loadedState) => {
+    void Promise.all([
+      loadSyncState(),
+      loadRemoteSettings(),
+      loadDesktopSettings(),
+    ]).then(([loadedState, loadedRemoteSettings, loadedDesktopSettings]) => {
       if (!mounted) {
         return;
       }
 
       stateRef.current = loadedState;
+      desktopSettingsRef.current = loadedDesktopSettings;
+      remoteSettingsRef.current = loadedRemoteSettings;
       setState(loadedState);
+      setDesktopSettings(loadedDesktopSettings);
+      setRemoteSettings(loadedRemoteSettings);
+      void setMinimizeToTrayOnClose(
+        loadedDesktopSettings.minimizeToTrayOnClose,
+      );
     });
 
     return () => {
@@ -88,6 +125,31 @@ export function App() {
 
     return () => window.clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!state || helpOnboardingCheckedRef.current) {
+      return;
+    }
+
+    helpOnboardingCheckedRef.current = true;
+
+    void hasSeenDesktopHelp()
+      .then(async (hasSeenHelp) => {
+        if (hasSeenHelp) {
+          return;
+        }
+
+        setIsHelpOpen(true);
+        await markDesktopHelpSeen();
+      })
+      .catch((error) => {
+        void updateState((current) => ({
+          ...current,
+          lastStatus: 'Help onboarding state failed',
+          lastError: getErrorMessage(error, 'Could not load help onboarding state.'),
+        }));
+      });
+  }, [state]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -150,6 +212,26 @@ export function App() {
     await saveSyncState(nextState);
   }
 
+  async function updateSettings(
+    nextRemoteSettings: RemoteSettings,
+    nextDesktopSettings: DesktopSettings,
+  ) {
+    remoteSettingsRef.current = nextRemoteSettings;
+    desktopSettingsRef.current = nextDesktopSettings;
+    setRemoteSettings(nextRemoteSettings);
+    setDesktopSettings(nextDesktopSettings);
+    await saveRemoteSettings(nextRemoteSettings);
+    await saveDesktopSettings(nextDesktopSettings);
+    await setMinimizeToTrayOnClose(nextDesktopSettings.minimizeToTrayOnClose);
+    setIsSettingsOpen(false);
+
+    await updateState((current) => ({
+      ...current,
+      lastStatus: 'Settings saved',
+      lastError: undefined,
+    }));
+  }
+
   async function selectSaveRoot() {
     const selected = await open({
       directory: true,
@@ -180,7 +262,7 @@ export function App() {
 
   async function signIn() {
     try {
-      await startDesktopSignIn();
+      await startDesktopSignIn(remoteSettingsRef.current.webBaseUrl);
     } catch (error) {
       await updateState((current) => ({
         ...current,
@@ -212,7 +294,9 @@ export function App() {
     }
 
     try {
-      await openUrl(buildWebGameUrl(webBaseUrl, gameNumber));
+      await openUrl(
+        buildWebGameUrl(remoteSettingsRef.current.webBaseUrl, gameNumber),
+      );
     } catch (error) {
       await updateState((current) => ({
         ...current,
@@ -231,7 +315,7 @@ export function App() {
     : null;
   const campaigns = sortCampaignEntries(state?.campaigns ?? {}, currentUserId);
 
-  if (!state) {
+  if (!state || !remoteSettings || !desktopSettings) {
     return (
       <main className="terminal-screen">
         <section className="terminal-frame">BOOTING SHADOW-CLOUD SYNC...</section>
@@ -280,6 +364,24 @@ export function App() {
                 Sign in
               </button>
             )}
+            <button
+              aria-haspopup="dialog"
+              type="button"
+              onClick={() => {
+                setIsSettingsOpen(true);
+              }}
+            >
+              Settings
+            </button>
+            <button
+              aria-haspopup="dialog"
+              type="button"
+              onClick={() => {
+                setIsHelpOpen(true);
+              }}
+            >
+              Help
+            </button>
             <span>{formatTime(clock)}</span>
           </div>
         </header>
@@ -388,6 +490,23 @@ export function App() {
           <span>TIMER: {state.paused ? 'PAUSED' : 'ACTIVE'}</span>
         </footer>
       </section>
+      {isHelpOpen ? (
+        <DesktopHelpModal
+          onClose={() => {
+            setIsHelpOpen(false);
+          }}
+        />
+      ) : null}
+      {isSettingsOpen ? (
+        <SettingsPage
+          desktopSettings={desktopSettings}
+          remotes={remoteSettings}
+          onClose={() => {
+            setIsSettingsOpen(false);
+          }}
+          onSave={updateSettings}
+        />
+      ) : null}
     </main>
   );
 }

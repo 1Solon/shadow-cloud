@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Shadow Cloud: Local",
+  "productName": "Shadow Cloud Local",
   "version": "0.7.0",
   "identifier": "com.shadowcloud.desktop",
   "build": {
