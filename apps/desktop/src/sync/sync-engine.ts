@@ -218,13 +218,13 @@ export async function runSyncOnce(
         }
       } else {
         const remoteFile = detail.fileVersions.find(
-          (fileVersion) =>
-            fileVersion.uploadedById !== currentUserId &&
-            fileVersion.id !==
-              previousCampaignState.lastDownloadedFileVersionId,
+          (fileVersion) => fileVersion.uploadedById !== currentUserId,
         );
 
-        if (!remoteFile) {
+        if (
+          !remoteFile ||
+          remoteFile.id === previousCampaignState.lastDownloadedFileVersionId
+        ) {
           campaignState.status = "No remote save to download";
         } else {
           const download = await adapters.downloadFile(

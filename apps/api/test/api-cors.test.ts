@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveCorsOrigins } from '../src/api-cors';
+import { resolveCorsOptions, resolveCorsOrigins } from '../src/api-cors';
 
 describe('resolveCorsOrigins', () => {
   it('allows local web and Tauri dev origins by default', () => {
@@ -26,5 +26,11 @@ describe('resolveCorsOrigins', () => {
       'http://tauri.localhost',
       'tauri://localhost',
     ]);
+  });
+
+  it('exposes download filename headers to desktop clients', () => {
+    expect(resolveCorsOptions({}).exposedHeaders).toContain(
+      'content-disposition',
+    );
   });
 });

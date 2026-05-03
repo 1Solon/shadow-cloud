@@ -116,6 +116,52 @@ describe("runSyncOnce", () => {
     });
   });
 
+  it("does not download older remote saves after the newest remote save was already downloaded", async () => {
+    const state: SyncState = {
+      ...createBaseState(),
+      campaigns: {
+        "game-1": {
+          lastDownloadedFileVersionId: "remote-newest",
+        },
+      },
+    };
+    const adapters = createAdapters({
+      getGameDetail: vi.fn(async () => ({
+        id: "game-1",
+        gameNumber: 1,
+        slug: "ashes",
+        name: "Ashes",
+        roundNumber: 4,
+        activePlayerUserId: "user-2",
+        activePlayerDisplayName: "Other",
+        fileVersions: [
+          {
+            id: "remote-newest",
+            originalName: "newest.se1",
+            uploadedAt: "2026-05-03T09:55:00.000Z",
+            uploadedById: "user-2",
+            uploadedByDisplayName: "Other",
+          },
+          {
+            id: "remote-older",
+            originalName: "older.se1",
+            uploadedAt: "2026-05-03T09:45:00.000Z",
+            uploadedById: "user-2",
+            uploadedByDisplayName: "Other",
+          },
+        ],
+      })),
+    });
+
+    const nextState = await runSyncOnce(state, adapters);
+
+    expect(adapters.downloadFile).not.toHaveBeenCalled();
+    expect(nextState.campaigns["game-1"]).toMatchObject({
+      lastDownloadedFileVersionId: "remote-newest",
+      status: "No remote save to download",
+    });
+  });
+
   it("renames tracked campaign directories when API number or name changes", async () => {
     const state: SyncState = {
       ...createBaseState(),
