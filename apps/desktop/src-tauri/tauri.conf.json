@@ -27,7 +27,7 @@
     "active": true,
     "createUpdaterArtifacts": false,
     "targets": "all",
-    "icon": ["icons/icon.ico"]
+    "icon": ["icons/icon.png", "icons/icon.ico"]
   },
   "plugins": {
     "deep-link": {

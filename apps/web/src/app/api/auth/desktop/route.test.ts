@@ -55,4 +55,23 @@ describe("GET /api/auth/desktop", () => {
       "shadow-cloud://auth?token=desktop-token",
     );
   });
+
+  it("starts Discord sign-in with a POST handoff when no session exists", async () => {
+    mockedGetServerAuthSession.mockResolvedValue(null);
+
+    const response = await GET(
+      new Request("http://localhost:3200/api/auth/desktop?handoff=1"),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/html");
+
+    const body = await response.text();
+
+    expect(body).toContain('method="POST"');
+    expect(body).toContain('action="/api/auth/signin/discord"');
+    expect(body).toContain('name="callbackUrl"');
+    expect(body).toContain('/api/auth/desktop?handoff=1');
+    expect(body).not.toContain("/api/auth/signin/discord?callbackUrl=");
+  });
 });
