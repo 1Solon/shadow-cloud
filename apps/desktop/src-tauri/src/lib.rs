@@ -55,6 +55,7 @@ pub fn run() {
     let menu_state = Arc::clone(&tray_close_state);
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(tray_close_state)
         .setup(|app| {
             let menu = MenuBuilder::new(app)

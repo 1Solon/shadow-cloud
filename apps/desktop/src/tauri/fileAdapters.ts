@@ -1,4 +1,4 @@
-import { basename, join } from '@tauri-apps/api/path';
+import { basename, join } from "@tauri-apps/api/path";
 import {
   mkdir,
   readDir,
@@ -6,11 +6,11 @@ import {
   rename,
   stat,
   writeFile,
-} from '@tauri-apps/plugin-fs';
-import type { SyncAdapters } from '@/sync/sync-engine';
-import { isShadowEmpireSave, type LocalSaveFile } from '@/sync/sync-files';
-import { createShadowCloudApiClient } from '@/api/shadowCloudApi';
-import { decodeDesktopTokenSubject } from '@/auth/desktopToken';
+} from "@tauri-apps/plugin-fs";
+import type { SyncAdapters } from "@/sync/sync-engine";
+import { isShadowEmpireSave, type LocalSaveFile } from "@/sync/sync-files";
+import { createShadowCloudApiClient } from "@/api/shadowCloudApi";
+import { decodeDesktopTokenSubject } from "@/auth/desktopToken";
 
 export const decodeTokenSubject = decodeDesktopTokenSubject;
 

@@ -3,7 +3,7 @@ export function getErrorMessage(error: unknown, fallback: string) {
     return error.message;
   }
 
-  if (typeof error === 'string' && error.trim()) {
+  if (typeof error === "string" && error.trim()) {
     return error;
   }
 

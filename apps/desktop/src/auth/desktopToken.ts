@@ -6,13 +6,16 @@ type DesktopTokenPayload = {
 };
 
 function decodeBase64Url(input: string) {
-  const padded = input.padEnd(input.length + ((4 - (input.length % 4)) % 4), '=');
-  const base64 = padded.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = input.padEnd(
+    input.length + ((4 - (input.length % 4)) % 4),
+    "=",
+  );
+  const base64 = padded.replace(/-/g, "+").replace(/_/g, "/");
   return atob(base64);
 }
 
 function decodeDesktopTokenPayload(token: string): DesktopTokenPayload | null {
-  const payload = token.split('.')[1];
+  const payload = token.split(".")[1];
 
   if (!payload) {
     return null;
@@ -26,7 +29,7 @@ function decodeDesktopTokenPayload(token: string): DesktopTokenPayload | null {
 }
 
 function cleanString(value: unknown) {
-  return typeof value === 'string' && value.trim().length > 0
+  return typeof value === "string" && value.trim().length > 0
     ? value.trim()
     : null;
 }
@@ -44,7 +47,7 @@ export function decodeDesktopTokenDisplayName(token: string) {
   }
 
   const email = cleanString(payload?.email);
-  return email ? email.split('@')[0] : null;
+  return email ? email.split("@")[0] : null;
 }
 
 export function decodeDesktopTokenAvatarUrl(token: string) {

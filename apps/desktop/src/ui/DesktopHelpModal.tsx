@@ -118,21 +118,21 @@ export function DesktopHelpModal({ onClose }: DesktopHelpModalProps) {
   }
 
   function getLineClassName(line: string, index: number) {
-    const classNames = ['desktop-help-line'];
+    const classNames = ["desktop-help-line"];
 
     if (index === 0) {
-      classNames.push('desktop-help-command');
-    } else if (line.endsWith(':')) {
-      classNames.push('desktop-help-section-line');
-    } else if (line.trim().startsWith('-') || /^\s+\d+\./.test(line)) {
-      classNames.push('desktop-help-list-line');
-    } else if (line.includes('C:\\')) {
-      classNames.push('desktop-help-path-line');
-    } else if (line === '') {
-      classNames.push('desktop-help-spacer-line');
+      classNames.push("desktop-help-command");
+    } else if (line.endsWith(":")) {
+      classNames.push("desktop-help-section-line");
+    } else if (line.trim().startsWith("-") || /^\s+\d+\./.test(line)) {
+      classNames.push("desktop-help-list-line");
+    } else if (line.includes("C:\\")) {
+      classNames.push("desktop-help-path-line");
+    } else if (line === "") {
+      classNames.push("desktop-help-spacer-line");
     }
 
-    return classNames.join(' ');
+    return classNames.join(" ");
   }
 
   return (

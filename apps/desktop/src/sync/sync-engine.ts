@@ -1,10 +1,10 @@
-import { getErrorMessage } from '@/errors/error-message';
+import { getErrorMessage } from "@/errors/error-message";
 import {
   buildCampaignDirectoryName,
   chooseNewestPendingSave,
   getConflictSafeFileName,
   type LocalSaveFile,
-} from './sync-files';
+} from "./sync-files";
 
 export type GameListItem = {
   id: string;
@@ -86,7 +86,7 @@ export type SyncAdapters = {
 };
 
 function joinPath(left: string, right: string) {
-  return `${left.replace(/[\\/]+$/g, '')}/${right}`;
+  return `${left.replace(/[\\/]+$/g, "")}/${right}`;
 }
 
 function getCampaignState(state: SyncState, gameId: string) {
@@ -122,7 +122,7 @@ export async function runSyncOnce(
   if (state.paused) {
     return {
       ...state,
-      lastStatus: 'Sync paused',
+      lastStatus: "Sync paused",
       lastError: undefined,
     };
   }
@@ -130,7 +130,7 @@ export async function runSyncOnce(
   if (!state.token) {
     return {
       ...state,
-      lastStatus: 'Sign in required',
+      lastStatus: "Sign in required",
       lastError: undefined,
     };
   }
@@ -138,7 +138,7 @@ export async function runSyncOnce(
   if (!state.saveRoot) {
     return {
       ...state,
-      lastStatus: 'Select a save root',
+      lastStatus: "Select a save root",
       lastError: undefined,
     };
   }
@@ -148,8 +148,8 @@ export async function runSyncOnce(
   if (!currentUserId) {
     return {
       ...state,
-      lastStatus: 'Sign in required',
-      lastError: 'Desktop token is missing a subject.',
+      lastStatus: "Sign in required",
+      lastError: "Desktop token is missing a subject.",
     };
   }
 
@@ -204,7 +204,7 @@ export async function runSyncOnce(
         );
 
         if (!pendingSave) {
-          campaignState.status = 'No pending .se1 saves';
+          campaignState.status = "No pending .se1 saves";
         } else {
           const upload = await adapters.uploadSave(
             state.token,
@@ -220,11 +220,12 @@ export async function runSyncOnce(
         const remoteFile = detail.fileVersions.find(
           (fileVersion) =>
             fileVersion.uploadedById !== currentUserId &&
-            fileVersion.id !== previousCampaignState.lastDownloadedFileVersionId,
+            fileVersion.id !==
+              previousCampaignState.lastDownloadedFileVersionId,
         );
 
         if (!remoteFile) {
-          campaignState.status = 'No remote save to download';
+          campaignState.status = "No remote save to download";
         } else {
           const download = await adapters.downloadFile(
             state.token,
@@ -233,7 +234,9 @@ export async function runSyncOnce(
           );
           const fileName = getConflictSafeFileName(
             download.fileName,
-            new Set(await adapters.listExistingFileNames(campaignDirectoryPath)),
+            new Set(
+              await adapters.listExistingFileNames(campaignDirectoryPath),
+            ),
           );
 
           await adapters.writeFileAtomically(
@@ -254,7 +257,7 @@ export async function runSyncOnce(
   } catch (error) {
     return {
       ...nextState,
-      lastError: getErrorMessage(error, 'Sync failed'),
+      lastError: getErrorMessage(error, "Sync failed"),
     };
   }
 }

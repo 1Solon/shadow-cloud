@@ -10,7 +10,7 @@
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "format": "turbo run format",
-    "pr": "turbo run format && turbo run lint && turbo run typecheck && turbo run test && turbo run build"
+    "pr": "turbo run format lint typecheck test build --continue=always"
   },
   "devDependencies": {
     "turbo": "2.9.6",

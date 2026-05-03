@@ -1,15 +1,16 @@
 export type SyncTickResult =
   | {
-      status: 'completed';
+      status: "completed";
     }
   | {
-      status: 'skipped';
-      reason: 'sync-already-running';
+      status: "skipped";
+      reason: "sync-already-running";
     };
 
-export function createNonOverlappingRunner(
-  sync: () => Promise<void>,
-): { tick: () => Promise<SyncTickResult>; isRunning: () => boolean } {
+export function createNonOverlappingRunner(sync: () => Promise<void>): {
+  tick: () => Promise<SyncTickResult>;
+  isRunning: () => boolean;
+} {
   let running = false;
 
   return {
@@ -19,8 +20,8 @@ export function createNonOverlappingRunner(
     async tick() {
       if (running) {
         return {
-          status: 'skipped',
-          reason: 'sync-already-running',
+          status: "skipped",
+          reason: "sync-already-running",
         };
       }
 
@@ -29,7 +30,7 @@ export function createNonOverlappingRunner(
       try {
         await sync();
         return {
-          status: 'completed',
+          status: "completed",
         };
       } finally {
         running = false;

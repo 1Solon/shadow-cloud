@@ -123,7 +123,9 @@ select option:checked {
 
 .terminal-header-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 14px;
   color: rgba(253, 186, 116, 0.75);
   font-size: 12px;
@@ -274,7 +276,10 @@ select option:checked {
 
 .campaign-row {
   display: grid;
-  grid-template-columns: minmax(220px, 0.85fr) minmax(280px, 1fr) minmax(170px, 0.55fr);
+  grid-template-columns: minmax(220px, 0.85fr) minmax(280px, 1fr) minmax(
+      170px,
+      0.55fr
+    );
   align-items: stretch;
   gap: 18px;
   border-color: #fb923c;
@@ -425,7 +430,9 @@ select option:checked {
   border: 1px solid rgba(251, 146, 60, 0.42);
   border-radius: 8px;
   background: #0a0711;
-  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.62), 0 0 42px rgba(251, 146, 60, 0.18);
+  box-shadow:
+    0 22px 70px rgba(0, 0, 0, 0.62),
+    0 0 42px rgba(251, 146, 60, 0.18);
 }
 
 .desktop-help-modal-enter {
@@ -579,7 +586,9 @@ select option:checked {
   border: 1px solid rgba(251, 146, 60, 0.42);
   border-radius: 8px;
   background: #0a0711;
-  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.62), 0 0 42px rgba(251, 146, 60, 0.18);
+  box-shadow:
+    0 22px 70px rgba(0, 0, 0, 0.62),
+    0 0 42px rgba(251, 146, 60, 0.18);
 }
 
 .settings-header {

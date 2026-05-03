@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   defaultDesktopSettings,
   defaultRemoteSettings,
@@ -8,12 +8,12 @@ import {
   markDesktopHelpSeen,
   saveDesktopSettings,
   saveRemoteSettings,
-} from './desktopState';
+} from "./desktopState";
 
 const storeValues = new Map<string, unknown>();
 const save = vi.fn(async () => undefined);
 
-vi.mock('@tauri-apps/plugin-store', () => ({
+vi.mock("@tauri-apps/plugin-store", () => ({
   load: vi.fn(async () => ({
     get: vi.fn(async (key: string) => storeValues.get(key)),
     set: vi.fn(async (key: string, value: unknown) => {
@@ -23,13 +23,13 @@ vi.mock('@tauri-apps/plugin-store', () => ({
   })),
 }));
 
-describe('desktop help onboarding state', () => {
+describe("desktop help onboarding state", () => {
   beforeEach(() => {
     storeValues.clear();
     save.mockClear();
   });
 
-  it('defaults to not seen, then persists the seen flag', async () => {
+  it("defaults to not seen, then persists the seen flag", async () => {
     await expect(hasSeenDesktopHelp()).resolves.toBe(false);
 
     await markDesktopHelpSeen();
@@ -39,18 +39,18 @@ describe('desktop help onboarding state', () => {
   });
 });
 
-describe('desktop remote settings', () => {
+describe("desktop remote settings", () => {
   beforeEach(() => {
     storeValues.clear();
     save.mockClear();
   });
 
-  it('loads default remotes, then persists custom remotes', async () => {
+  it("loads default remotes, then persists custom remotes", async () => {
     await expect(loadRemoteSettings()).resolves.toEqual(defaultRemoteSettings);
 
     const customRemotes = {
-      apiBaseUrl: 'https://api.example.test',
-      webBaseUrl: 'https://shadow.example.test',
+      apiBaseUrl: "https://api.example.test",
+      webBaseUrl: "https://shadow.example.test",
     };
 
     await saveRemoteSettings(customRemotes);
@@ -60,14 +60,16 @@ describe('desktop remote settings', () => {
   });
 });
 
-describe('desktop app settings', () => {
+describe("desktop app settings", () => {
   beforeEach(() => {
     storeValues.clear();
     save.mockClear();
   });
 
-  it('defaults close-to-tray off, then persists the preference', async () => {
-    await expect(loadDesktopSettings()).resolves.toEqual(defaultDesktopSettings);
+  it("defaults close-to-tray off, then persists the preference", async () => {
+    await expect(loadDesktopSettings()).resolves.toEqual(
+      defaultDesktopSettings,
+    );
 
     await saveDesktopSettings({
       ...defaultDesktopSettings,

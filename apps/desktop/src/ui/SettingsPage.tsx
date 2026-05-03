@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState } from "react";
 import {
   defaultDesktopSettings,
   defaultRemoteSettings,
   type DesktopSettings,
   type RemoteSettings,
-} from '@/storage/desktopState';
+} from "@/storage/desktopState";
 
 type SettingsPageProps = {
   desktopSettings: DesktopSettings;
@@ -19,23 +19,23 @@ type SettingsPageProps = {
 function isHttpUrl(value: string) {
   try {
     const url = new URL(value);
-    return url.protocol === 'http:' || url.protocol === 'https:';
+    return url.protocol === "http:" || url.protocol === "https:";
   } catch {
     return false;
   }
 }
 
 function normalizeRemoteUrl(value: string) {
-  return value.trim().replace(/\/+$/g, '');
+  return value.trim().replace(/\/+$/g, "");
 }
 
 function validateRemotes(remotes: RemoteSettings) {
   if (!isHttpUrl(remotes.apiBaseUrl)) {
-    return 'API remote must be an http or https URL.';
+    return "API remote must be an http or https URL.";
   }
 
   if (!isHttpUrl(remotes.webBaseUrl)) {
-    return 'Web remote must be an http or https URL.';
+    return "Web remote must be an http or https URL.";
   }
 
   return null;
@@ -80,7 +80,7 @@ export function SettingsPage({
     <div className="settings-overlay">
       <section aria-label="Settings" className="settings-panel">
         <header className="settings-header">
-          <span>{'> SETTINGS'}</span>
+          <span>{"> SETTINGS"}</span>
           <button
             aria-label="Close settings"
             className="settings-close"
@@ -164,7 +164,10 @@ export function SettingsPage({
                   defaultDesktopSettings.minimizeToTrayOnClose,
                 );
                 setError(null);
-                void saveSettings(defaultRemoteSettings, defaultDesktopSettings);
+                void saveSettings(
+                  defaultRemoteSettings,
+                  defaultDesktopSettings,
+                );
               }}
             >
               Reset defaults

@@ -16,13 +16,13 @@ export type LocalSaveFile = {
 
 export function sanitizeDirectoryName(name: string) {
   const sanitized = name
-    .replace(unsafeFileNameCharactersPattern, '')
-    .replace(/\s+/g, ' ')
+    .replace(unsafeFileNameCharactersPattern, "")
+    .replace(/\s+/g, " ")
     .trim()
-    .replace(/[. ]+$/g, '');
+    .replace(/[. ]+$/g, "");
 
   if (!sanitized || windowsReservedNamePattern.test(sanitized)) {
-    return 'Campaign';
+    return "Campaign";
   }
 
   return sanitized.slice(0, 96);
@@ -33,20 +33,20 @@ export function buildCampaignDirectoryName(gameNumber: number, name: string) {
 }
 
 export function isShadowEmpireSave(entry: DirectoryEntry) {
-  return entry.isFile && entry.name.toLowerCase().endsWith('.se1');
+  return entry.isFile && entry.name.toLowerCase().endsWith(".se1");
 }
 
 export async function createFileFingerprint(file: LocalSaveFile) {
   const digest = await globalThis.crypto.subtle.digest(
-    'SHA-256',
+    "SHA-256",
     file.bytes.buffer.slice(
       file.bytes.byteOffset,
       file.bytes.byteOffset + file.bytes.byteLength,
     ) as ArrayBuffer,
   );
   const hash = [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 
   return `${file.size}:${hash}`;
 }
@@ -85,10 +85,10 @@ export function getConflictSafeFileName(
     return fileName;
   }
 
-  const extensionIndex = fileName.lastIndexOf('.');
+  const extensionIndex = fileName.lastIndexOf(".");
   const baseName =
     extensionIndex > 0 ? fileName.slice(0, extensionIndex) : fileName;
-  const extension = extensionIndex > 0 ? fileName.slice(extensionIndex) : '';
+  const extension = extensionIndex > 0 ? fileName.slice(extensionIndex) : "";
 
   for (let index = 1; index < 10_000; index += 1) {
     const candidate = `${baseName} (${index})${extension}`;

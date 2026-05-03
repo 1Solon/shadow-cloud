@@ -1,13 +1,13 @@
-import { open } from '@tauri-apps/plugin-dialog';
-import { openUrl } from '@tauri-apps/plugin-opener';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { open } from "@tauri-apps/plugin-dialog";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   decodeDesktopTokenAvatarUrl,
   decodeDesktopTokenDisplayName,
-} from '@/auth/desktopToken';
-import { listenForDesktopAuth, startDesktopSignIn } from '@/auth/deepLinkAuth';
-import { getErrorMessage } from '@/errors/error-message';
-import { buildWebGameUrl } from '@/navigation/webGameLinks';
+} from "@/auth/desktopToken";
+import { listenForDesktopAuth, startDesktopSignIn } from "@/auth/deepLinkAuth";
+import { getErrorMessage } from "@/errors/error-message";
+import { buildWebGameUrl } from "@/navigation/webGameLinks";
 import {
   defaultDesktopSettings,
   defaultRemoteSettings,
@@ -21,37 +21,41 @@ import {
   saveSyncState,
   type DesktopSettings,
   type RemoteSettings,
-} from '@/storage/desktopState';
-import { runSyncOnce, type SyncState } from '@/sync/sync-engine';
-import { createNonOverlappingRunner } from '@/sync/sync-runner';
-import { createTauriSyncAdapters, decodeTokenSubject } from '@/tauri/fileAdapters';
-import { setMinimizeToTrayOnClose } from '@/tauri/windowBehavior';
-import { sortCampaignEntries } from './campaignOrdering';
-import { DesktopHelpModal } from './DesktopHelpModal';
-import { SettingsPage } from './SettingsPage';
+} from "@/storage/desktopState";
+import { runSyncOnce, type SyncState } from "@/sync/sync-engine";
+import { createNonOverlappingRunner } from "@/sync/sync-runner";
+import { checkForDesktopUpdate } from "@/tauri/appUpdater";
+import {
+  createTauriSyncAdapters,
+  decodeTokenSubject,
+} from "@/tauri/fileAdapters";
+import { setMinimizeToTrayOnClose } from "@/tauri/windowBehavior";
+import { sortCampaignEntries } from "./campaignOrdering";
+import { DesktopHelpModal } from "./DesktopHelpModal";
+import { SettingsPage } from "./SettingsPage";
 
 function formatTime(date: Date) {
-  return new Intl.DateTimeFormat('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
   }).format(date);
 }
 
 function formatTimestamp(timestamp?: string) {
   if (!timestamp) {
-    return 'never';
+    return "never";
   }
 
-  return new Intl.DateTimeFormat('en-US', {
-    dateStyle: 'short',
-    timeStyle: 'medium',
+  return new Intl.DateTimeFormat("en-US", {
+    dateStyle: "short",
+    timeStyle: "medium",
   }).format(new Date(timestamp));
 }
 
 function getNextSyncTime(state: SyncState | null, lastSyncAt: Date | null) {
   if (!state || state.paused || !lastSyncAt) {
-    return 'paused';
+    return "paused";
   }
 
   return formatTime(
@@ -63,12 +67,14 @@ export function App() {
   const [state, setState] = useState<SyncState | null>(null);
   const [desktopSettings, setDesktopSettings] =
     useState<DesktopSettings | null>(null);
-  const [remoteSettings, setRemoteSettings] =
-    useState<RemoteSettings | null>(null);
+  const [remoteSettings, setRemoteSettings] = useState<RemoteSettings | null>(
+    null,
+  );
   const [clock, setClock] = useState(() => new Date());
   const [lastSyncAt, setLastSyncAt] = useState<Date | null>(null);
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isCheckingForUpdates, setIsCheckingForUpdates] = useState(false);
   const stateRef = useRef<SyncState | null>(null);
   const desktopSettingsRef = useRef<DesktopSettings>(defaultDesktopSettings);
   const remoteSettingsRef = useRef<RemoteSettings>(defaultRemoteSettings);
@@ -145,8 +151,11 @@ export function App() {
       .catch((error) => {
         void updateState((current) => ({
           ...current,
-          lastStatus: 'Help onboarding state failed',
-          lastError: getErrorMessage(error, 'Could not load help onboarding state.'),
+          lastStatus: "Help onboarding state failed",
+          lastError: getErrorMessage(
+            error,
+            "Could not load help onboarding state.",
+          ),
         }));
       });
   }, [state]);
@@ -155,28 +164,30 @@ export function App() {
     let unlisten: (() => void) | undefined;
 
     void listenForDesktopAuth(async (token) => {
-        const nextState = {
-          ...(stateRef.current ?? {
-            saveRoot: null,
-            token: null,
-            syncIntervalSeconds: 120,
-            paused: false,
-            campaigns: {},
-          }),
-          token,
-          lastStatus: 'Signed in through Discord',
-          lastError: undefined,
-        };
-        stateRef.current = nextState;
-        setState(nextState);
-        await saveSyncState(nextState);
-      }).then((nextUnlisten) => {
+      const nextState = {
+        ...(stateRef.current ?? {
+          saveRoot: null,
+          token: null,
+          syncIntervalSeconds: 120,
+          paused: false,
+          campaigns: {},
+        }),
+        token,
+        lastStatus: "Signed in through Discord",
+        lastError: undefined,
+      };
+      stateRef.current = nextState;
+      setState(nextState);
+      await saveSyncState(nextState);
+    })
+      .then((nextUnlisten) => {
         unlisten = nextUnlisten;
-      }).catch((error) => {
+      })
+      .catch((error) => {
         void updateState((current) => ({
           ...current,
-          lastStatus: 'Desktop auth listener failed',
-          lastError: getErrorMessage(error, 'Desktop auth listener failed.'),
+          lastStatus: "Desktop auth listener failed",
+          lastError: getErrorMessage(error, "Desktop auth listener failed."),
         }));
       });
 
@@ -227,26 +238,48 @@ export function App() {
 
     await updateState((current) => ({
       ...current,
-      lastStatus: 'Settings saved',
+      lastStatus: "Settings saved",
       lastError: undefined,
     }));
+  }
+
+  async function checkForUpdates() {
+    setIsCheckingForUpdates(true);
+
+    try {
+      const result = await checkForDesktopUpdate();
+
+      await updateState((current) => ({
+        ...current,
+        lastStatus: result.message,
+        lastError: undefined,
+      }));
+    } catch (error) {
+      await updateState((current) => ({
+        ...current,
+        lastStatus: "Update check failed",
+        lastError: getErrorMessage(error, "Could not check for updates."),
+      }));
+    } finally {
+      setIsCheckingForUpdates(false);
+    }
   }
 
   async function selectSaveRoot() {
     const selected = await open({
       directory: true,
       multiple: false,
-      title: 'Select Shadow Empire save root',
+      title: "Select Shadow Empire save root",
     });
 
-    if (typeof selected !== 'string') {
+    if (typeof selected !== "string") {
       return;
     }
 
     await updateState((current) => ({
       ...current,
       saveRoot: selected,
-      lastStatus: 'Save root selected',
+      lastStatus: "Save root selected",
       lastError: undefined,
     }));
   }
@@ -255,7 +288,7 @@ export function App() {
     await updateState((current) => ({
       ...current,
       token: null,
-      lastStatus: 'Signed out',
+      lastStatus: "Signed out",
       lastError: undefined,
     }));
   }
@@ -266,8 +299,8 @@ export function App() {
     } catch (error) {
       await updateState((current) => ({
         ...current,
-        lastStatus: 'Desktop protocol registration failed',
-        lastError: getErrorMessage(error, 'Desktop sign-in failed.'),
+        lastStatus: "Desktop protocol registration failed",
+        lastError: getErrorMessage(error, "Desktop sign-in failed."),
       }));
     }
   }
@@ -276,7 +309,7 @@ export function App() {
     await updateState((current) => ({
       ...current,
       paused: !current.paused,
-      lastStatus: !current.paused ? 'Sync paused' : 'Sync resumed',
+      lastStatus: !current.paused ? "Sync paused" : "Sync resumed",
       lastError: undefined,
     }));
   }
@@ -300,8 +333,8 @@ export function App() {
     } catch (error) {
       await updateState((current) => ({
         ...current,
-        lastStatus: 'Web handoff failed',
-        lastError: getErrorMessage(error, 'Could not open campaign in web UI.'),
+        lastStatus: "Web handoff failed",
+        lastError: getErrorMessage(error, "Could not open campaign in web UI."),
       }));
     }
   }
@@ -318,7 +351,9 @@ export function App() {
   if (!state || !remoteSettings || !desktopSettings) {
     return (
       <main className="terminal-screen">
-        <section className="terminal-frame">BOOTING SHADOW-CLOUD SYNC...</section>
+        <section className="terminal-frame">
+          BOOTING SHADOW-CLOUD SYNC...
+        </section>
       </main>
     );
   }
@@ -328,7 +363,7 @@ export function App() {
       <section className="terminal-frame">
         <header className="terminal-header">
           <div className="terminal-title">
-            <span>{'> SHADOW CLOUD: LOCAL'}</span>
+            <span>{"> SHADOW CLOUD: LOCAL"}</span>
             <span aria-hidden="true" className="terminal-cursor" />
           </div>
           <div className="terminal-header-actions">
@@ -337,10 +372,13 @@ export function App() {
                 {currentUserAvatarUrl ? (
                   <>
                     <img
-                      alt={currentUserName ?? 'Connected user'}
+                      alt={currentUserName ?? "Connected user"}
                       src={currentUserAvatarUrl}
                     />
-                    <span aria-hidden="true" className="user-badge-avatar-tint" />
+                    <span
+                      aria-hidden="true"
+                      className="user-badge-avatar-tint"
+                    />
                   </>
                 ) : (
                   <span>USR</span>
@@ -348,10 +386,10 @@ export function App() {
               </div>
               <div className="user-badge-copy">
                 <span className="user-badge-label">
-                  {state.token ? 'Connected as' : 'Identity'}
+                  {state.token ? "Connected as" : "Identity"}
                 </span>
                 <span className="user-badge-name">
-                  {state.token ? (currentUserName ?? 'SIGNED IN') : '[GUEST]'}
+                  {state.token ? (currentUserName ?? "SIGNED IN") : "[GUEST]"}
                 </span>
               </div>
             </div>
@@ -382,6 +420,15 @@ export function App() {
             >
               Help
             </button>
+            <button
+              disabled={isCheckingForUpdates}
+              type="button"
+              onClick={() => {
+                void checkForUpdates();
+              }}
+            >
+              {isCheckingForUpdates ? "Checking..." : "Check for updates"}
+            </button>
             <span>{formatTime(clock)}</span>
           </div>
         </header>
@@ -394,7 +441,7 @@ export function App() {
             Sync now
           </button>
           <button type="button" onClick={togglePaused}>
-            {state.paused ? 'Resume timer' : 'Pause timer'}
+            {state.paused ? "Resume timer" : "Pause timer"}
           </button>
           <label className="interval-control">
             <span>Interval</span>
@@ -413,13 +460,17 @@ export function App() {
         </section>
 
         <section className="status-strip">
-          <div>ROOT: {state.saveRoot ?? 'not selected'}</div>
+          <div>ROOT: {state.saveRoot ?? "not selected"}</div>
           <div>NEXT SYNC: {getNextSyncTime(state, lastSyncAt)}</div>
-          <div>{state.lastError ? `ERROR: ${state.lastError}` : `STATUS: ${state.lastStatus ?? 'idle'}`}</div>
+          <div>
+            {state.lastError
+              ? `ERROR: ${state.lastError}`
+              : `STATUS: ${state.lastStatus ?? "idle"}`}
+          </div>
         </section>
 
         <section className="campaign-section">
-          <h1>{'> Your Campaigns'}</h1>
+          <h1>{"> Your Campaigns"}</h1>
           {campaigns.length === 0 ? (
             <div className="empty-panel">
               Sign in, choose a save root, then run sync to populate campaigns.
@@ -429,12 +480,12 @@ export function App() {
               {campaigns.map(([campaignId, campaign]) => {
                 const isUsersTurn = Boolean(
                   currentUserId &&
-                    campaign.activePlayerUserId === currentUserId,
+                  campaign.activePlayerUserId === currentUserId,
                 );
 
                 return (
                   <article
-                    className={`campaign-row${isUsersTurn ? ' is-users-turn' : ''}`}
+                    className={`campaign-row${isUsersTurn ? " is-users-turn" : ""}`}
                     key={campaignId}
                     role="link"
                     tabIndex={0}
@@ -442,7 +493,7 @@ export function App() {
                       void openCampaignInWeb(campaign.gameNumber);
                     }}
                     onKeyDown={(event) => {
-                      if (event.key !== 'Enter' && event.key !== ' ') {
+                      if (event.key !== "Enter" && event.key !== " ") {
                         return;
                       }
 
@@ -457,25 +508,29 @@ export function App() {
                         }`}
                       </div>
                       {isUsersTurn ? (
-                        <div className="turn-label">{'> Save your turn'}</div>
+                        <div className="turn-label">{"> Save your turn"}</div>
                       ) : null}
                     </div>
                     <div className="campaign-meta">
                       <div>
                         <span>ACTIVE LORD</span>
-                        <strong>{campaign.activePlayerDisplayName ?? 'unknown'}</strong>
+                        <strong>
+                          {campaign.activePlayerDisplayName ?? "unknown"}
+                        </strong>
                       </div>
                       <div>
                         <span>TURN</span>
-                        <strong>{campaign.roundNumber ?? '-'}</strong>
+                        <strong>{campaign.roundNumber ?? "-"}</strong>
                       </div>
                       <div>
                         <span>LAST</span>
-                        <strong>{formatTimestamp(campaign.lastSyncedAt)}</strong>
+                        <strong>
+                          {formatTimestamp(campaign.lastSyncedAt)}
+                        </strong>
                       </div>
                     </div>
                     <div className="campaign-status">
-                      {campaign.error ?? campaign.status ?? 'waiting'}
+                      {campaign.error ?? campaign.status ?? "waiting"}
                     </div>
                   </article>
                 );
@@ -485,9 +540,11 @@ export function App() {
         </section>
 
         <footer className="terminal-footer">
-          <span>AUTH: {state.token ? 'DESKTOP TOKEN STORED' : 'DISCONNECTED'}</span>
+          <span>
+            AUTH: {state.token ? "DESKTOP TOKEN STORED" : "DISCONNECTED"}
+          </span>
           <span>CAMPAIGNS: {campaigns.length} MONITORED</span>
-          <span>TIMER: {state.paused ? 'PAUSED' : 'ACTIVE'}</span>
+          <span>TIMER: {state.paused ? "PAUSED" : "ACTIVE"}</span>
         </footer>
       </section>
       {isHelpOpen ? (

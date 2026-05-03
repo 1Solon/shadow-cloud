@@ -4,6 +4,7 @@ node_modules
 dist
 target
 apps/desktop/src-tauri/gen/schemas
+apps/desktop/.updater-secrets/
 *.tsbuildinfo
 coverage
 .env

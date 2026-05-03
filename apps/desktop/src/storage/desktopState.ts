@@ -1,11 +1,11 @@
-import { load } from '@tauri-apps/plugin-store';
-import type { SyncState } from '@/sync/sync-engine';
+import { load } from "@tauri-apps/plugin-store";
+import type { SyncState } from "@/sync/sync-engine";
 
-const storeFileName = 'shadow-cloud-desktop.json';
-const storeKey = 'sync-state';
-const desktopHelpSeenKey = 'desktop-help-seen';
-const remoteSettingsKey = 'remote-settings';
-const desktopSettingsKey = 'desktop-settings';
+const storeFileName = "shadow-cloud-desktop.json";
+const storeKey = "sync-state";
+const desktopHelpSeenKey = "desktop-help-seen";
+const remoteSettingsKey = "remote-settings";
+const desktopSettingsKey = "desktop-settings";
 
 export type RemoteSettings = {
   apiBaseUrl: string;
@@ -19,10 +19,10 @@ export type DesktopSettings = {
 export const defaultRemoteSettings: RemoteSettings = {
   apiBaseUrl:
     import.meta.env.VITE_SHADOW_CLOUD_API_URL ??
-    'https://shadow-cloud.solonsstuff.com/',
+    "https://shadow-cloud.solonsstuff.com/",
   webBaseUrl:
     import.meta.env.VITE_SHADOW_CLOUD_WEB_URL ??
-    'https://shadow-cloud.solonsstuff.com/',
+    "https://shadow-cloud.solonsstuff.com/",
 };
 
 export const defaultDesktopSettings: DesktopSettings = {
@@ -67,7 +67,8 @@ export async function markDesktopHelpSeen() {
 
 export async function loadRemoteSettings() {
   const store = await load(storeFileName, { autoSave: true, defaults: {} });
-  const storedSettings = await store.get<Partial<RemoteSettings>>(remoteSettingsKey);
+  const storedSettings =
+    await store.get<Partial<RemoteSettings>>(remoteSettingsKey);
 
   return {
     ...defaultRemoteSettings,

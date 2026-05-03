@@ -1,12 +1,12 @@
-import type { GameDetail, GameListItem } from '@/sync/sync-engine';
-import type { LocalSaveFile } from '@/sync/sync-files';
+import type { GameDetail, GameListItem } from "@/sync/sync-engine";
+import type { LocalSaveFile } from "@/sync/sync-files";
 
 export const defaultApiBaseUrl =
   import.meta.env.VITE_SHADOW_CLOUD_API_URL ??
-  'https://shadow-cloud.solonsstuff.com/';
+  "https://shadow-cloud.solonsstuff.com/";
 export const defaultWebBaseUrl =
   import.meta.env.VITE_SHADOW_CLOUD_WEB_URL ??
-  'https://shadow-cloud.solonsstuff.com/';
+  "https://shadow-cloud.solonsstuff.com/";
 export const webBaseUrl = defaultWebBaseUrl;
 
 type ShadowCloudApiClientOptions = {
@@ -19,7 +19,7 @@ type UploadResponse = {
 };
 
 function normalizeBaseUrl(baseUrl: string) {
-  return baseUrl.replace(/\/+$/g, '');
+  return baseUrl.replace(/\/+$/g, "");
 }
 
 function toArrayBuffer(bytes: Uint8Array) {
@@ -32,27 +32,27 @@ function toArrayBuffer(bytes: Uint8Array) {
 function getApiErrorMessage(payload: unknown, fallback: string) {
   if (
     payload &&
-    typeof payload === 'object' &&
-    'message' in payload &&
+    typeof payload === "object" &&
+    "message" in payload &&
     Array.isArray(payload.message)
   ) {
-    return payload.message.join(', ');
+    return payload.message.join(", ");
   }
 
   if (
     payload &&
-    typeof payload === 'object' &&
-    'message' in payload &&
-    typeof payload.message === 'string'
+    typeof payload === "object" &&
+    "message" in payload &&
+    typeof payload.message === "string"
   ) {
     return payload.message;
   }
 
   if (
     payload &&
-    typeof payload === 'object' &&
-    'error' in payload &&
-    typeof payload.error === 'string'
+    typeof payload === "object" &&
+    "error" in payload &&
+    typeof payload.error === "string"
   ) {
     return payload.error;
   }
@@ -87,7 +87,7 @@ function createFetchJson(apiBaseUrl: string) {
         ...(init.headers ?? {}),
         authorization: `Bearer ${token}`,
       },
-      cache: 'no-store',
+      cache: "no-store",
     }).catch(() => {
       throw getApiUnavailableError(apiBaseUrl);
     });
@@ -109,23 +109,27 @@ export function createShadowCloudApiClient(
 
   return {
     listGames(token: string) {
-      return fetchJson<GameListItem[]>('/v1/games', token, 'Failed to load games.');
+      return fetchJson<GameListItem[]>(
+        "/v1/games",
+        token,
+        "Failed to load games.",
+      );
     },
 
     getGameDetail(token: string, gameNumber: number) {
       return fetchJson<GameDetail>(
         `/v1/games/${encodeURIComponent(gameNumber)}/detail`,
         token,
-        'Failed to load campaign detail.',
+        "Failed to load campaign detail.",
       );
     },
 
     async uploadSave(token: string, gameNumber: number, file: LocalSaveFile) {
       const formData = new FormData();
       formData.set(
-        'file',
+        "file",
         new File([toArrayBuffer(file.bytes)], file.name, {
-          type: 'application/octet-stream',
+          type: "application/octet-stream",
           lastModified: file.modifiedAt,
         }),
       );
@@ -133,9 +137,9 @@ export function createShadowCloudApiClient(
       return fetchJson<UploadResponse>(
         `/v1/games/${encodeURIComponent(gameNumber)}/files`,
         token,
-        'The save upload failed.',
+        "The save upload failed.",
         {
-          method: 'POST',
+          method: "POST",
           body: formData,
         },
       );
@@ -154,7 +158,7 @@ export function createShadowCloudApiClient(
           headers: {
             authorization: `Bearer ${token}`,
           },
-          cache: 'no-store',
+          cache: "no-store",
         },
       ).catch(() => {
         throw getApiUnavailableError(apiBaseUrl);
@@ -162,13 +166,15 @@ export function createShadowCloudApiClient(
 
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
-        throw new Error(getApiErrorMessage(payload, 'The save download failed.'));
+        throw new Error(
+          getApiErrorMessage(payload, "The save download failed."),
+        );
       }
 
       const bytes = new Uint8Array(await response.arrayBuffer());
       const fileName =
         parseContentDispositionFileName(
-          response.headers.get('content-disposition'),
+          response.headers.get("content-disposition"),
         ) ?? `${fileVersionId}.se1`;
 
       return {

@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import { createNonOverlappingRunner } from './sync-runner';
+import { describe, expect, it } from "vitest";
+import { createNonOverlappingRunner } from "./sync-runner";
 
-describe('createNonOverlappingRunner', () => {
-  it('skips ticks while a sync is already running', async () => {
+describe("createNonOverlappingRunner", () => {
+  it("skips ticks while a sync is already running", async () => {
     let releaseSync!: () => void;
     let calls = 0;
     const runner = createNonOverlappingRunner(async () => {
@@ -16,8 +16,8 @@ describe('createNonOverlappingRunner', () => {
     const second = runner.tick();
 
     await expect(second).resolves.toEqual({
-      status: 'skipped',
-      reason: 'sync-already-running',
+      status: "skipped",
+      reason: "sync-already-running",
     });
 
     releaseSync();

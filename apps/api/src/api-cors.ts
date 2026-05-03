@@ -18,7 +18,9 @@ export function resolveCorsOrigins(environment: CorsEnvironment) {
   addOrigin(origins, environment.AUTH_URL);
   addOrigin(
     origins,
-    environment.WEB_PORT ? `http://localhost:${environment.WEB_PORT}` : undefined,
+    environment.WEB_PORT
+      ? `http://localhost:${environment.WEB_PORT}`
+      : undefined,
   );
   addOrigin(origins, environment.SHADOW_CLOUD_DESKTOP_ORIGIN);
   addOrigin(origins, 'http://127.0.0.1:1420');

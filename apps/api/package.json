@@ -1,6 +1,6 @@
 {
   "name": "@shadow-cloud/api",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "",
   "author": "",
   "private": true,
@@ -15,7 +15,7 @@
     "start:prod": "dotenv -e ../../.env -- node dist/main",
     "lint": "eslint \"src/**/*.ts\"",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "pnpm run prisma:generate && tsc --noEmit",
     "prisma:generate": "dotenv -e ../../.env -- prisma generate --schema prisma/schema.prisma",
     "prisma:migrate": "dotenv -e ../../.env -- prisma migrate dev --schema prisma/schema.prisma",
     "prisma:push": "dotenv -e ../../.env -- prisma db push --schema prisma/schema.prisma"

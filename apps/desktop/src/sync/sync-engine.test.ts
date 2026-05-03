@@ -1,10 +1,10 @@
-import { describe, expect, it, vi } from 'vitest';
-import { runSyncOnce, type SyncAdapters, type SyncState } from './sync-engine';
+import { describe, expect, it, vi } from "vitest";
+import { runSyncOnce, type SyncAdapters, type SyncState } from "./sync-engine";
 
 function createBaseState(): SyncState {
   return {
-    saveRoot: 'C:/ShadowEmpire/Saves',
-    token: 'desktop-token',
+    saveRoot: "C:/ShadowEmpire/Saves",
+    token: "desktop-token",
     syncIntervalSeconds: 120,
     paused: false,
     campaigns: {},
@@ -13,91 +13,91 @@ function createBaseState(): SyncState {
 
 function createAdapters(overrides: Partial<SyncAdapters> = {}): SyncAdapters {
   return {
-    now: () => new Date('2026-05-03T10:00:00.000Z'),
-    decodeUserId: () => 'user-1',
+    now: () => new Date("2026-05-03T10:00:00.000Z"),
+    decodeUserId: () => "user-1",
     listGames: vi.fn(async () => [
       {
-        id: 'game-1',
-        slug: 'ashes',
+        id: "game-1",
+        slug: "ashes",
         gameNumber: 1,
-        name: 'Ashes',
+        name: "Ashes",
         roundNumber: 4,
-        activePlayerUserId: 'user-1',
-        activePlayerDisplayName: 'Solon',
-        participantUserIds: ['user-1', 'user-2'],
+        activePlayerUserId: "user-1",
+        activePlayerDisplayName: "Solon",
+        participantUserIds: ["user-1", "user-2"],
       },
     ]),
     getGameDetail: vi.fn(async () => ({
-      id: 'game-1',
+      id: "game-1",
       gameNumber: 1,
-      slug: 'ashes',
-      name: 'Ashes',
+      slug: "ashes",
+      name: "Ashes",
       roundNumber: 4,
-      activePlayerUserId: 'user-1',
-      activePlayerDisplayName: 'Solon',
+      activePlayerUserId: "user-1",
+      activePlayerDisplayName: "Solon",
       fileVersions: [],
     })),
     ensureDir: vi.fn(async () => undefined),
     renameDir: vi.fn(async () => undefined),
     listLocalSaves: vi.fn(async () => [
       {
-        name: 'turn.se1',
-        path: 'C:/ShadowEmpire/Saves/1 - Ashes/turn.se1',
+        name: "turn.se1",
+        path: "C:/ShadowEmpire/Saves/1 - Ashes/turn.se1",
         modifiedAt: 2,
         size: 3,
         bytes: new Uint8Array([1, 2, 3]),
       },
     ]),
     uploadSave: vi.fn(async () => ({
-      fileVersionId: 'remote-1',
-      originalName: 'uploaded.se1',
+      fileVersionId: "remote-1",
+      originalName: "uploaded.se1",
     })),
     downloadFile: vi.fn(async () => ({
       bytes: new Uint8Array([9, 8, 7]),
-      fileName: 'remote.se1',
+      fileName: "remote.se1",
     })),
-    writeFileAtomically: vi.fn(async () => 'C:/ShadowEmpire/Saves/remote.se1'),
+    writeFileAtomically: vi.fn(async () => "C:/ShadowEmpire/Saves/remote.se1"),
     listExistingFileNames: vi.fn(async () => []),
     ...overrides,
   };
 }
 
-describe('runSyncOnce', () => {
-  it('uploads the newest pending save when it is the user turn', async () => {
+describe("runSyncOnce", () => {
+  it("uploads the newest pending save when it is the user turn", async () => {
     const state = createBaseState();
     const adapters = createAdapters();
 
     const nextState = await runSyncOnce(state, adapters);
 
     expect(adapters.uploadSave).toHaveBeenCalledWith(
-      'desktop-token',
+      "desktop-token",
       1,
-      expect.objectContaining({ name: 'turn.se1' }),
+      expect.objectContaining({ name: "turn.se1" }),
     );
-    expect(nextState.campaigns['game-1']).toMatchObject({
-      lastUploadedFileVersionId: 'remote-1',
-      status: 'Uploaded turn.se1',
+    expect(nextState.campaigns["game-1"]).toMatchObject({
+      lastUploadedFileVersionId: "remote-1",
+      status: "Uploaded turn.se1",
     });
   });
 
-  it('downloads the newest remote save from another user when it is not the user turn', async () => {
+  it("downloads the newest remote save from another user when it is not the user turn", async () => {
     const state = createBaseState();
     const adapters = createAdapters({
       getGameDetail: vi.fn(async () => ({
-        id: 'game-1',
+        id: "game-1",
         gameNumber: 1,
-        slug: 'ashes',
-        name: 'Ashes',
+        slug: "ashes",
+        name: "Ashes",
         roundNumber: 4,
-        activePlayerUserId: 'user-2',
-        activePlayerDisplayName: 'Other',
+        activePlayerUserId: "user-2",
+        activePlayerDisplayName: "Other",
         fileVersions: [
           {
-            id: 'remote-2',
-            originalName: 'remote.se1',
-            uploadedAt: '2026-05-03T09:55:00.000Z',
-            uploadedById: 'user-2',
-            uploadedByDisplayName: 'Other',
+            id: "remote-2",
+            originalName: "remote.se1",
+            uploadedAt: "2026-05-03T09:55:00.000Z",
+            uploadedById: "user-2",
+            uploadedByDisplayName: "Other",
           },
         ],
       })),
@@ -106,24 +106,24 @@ describe('runSyncOnce', () => {
     const nextState = await runSyncOnce(state, adapters);
 
     expect(adapters.downloadFile).toHaveBeenCalledWith(
-      'desktop-token',
+      "desktop-token",
       1,
-      'remote-2',
+      "remote-2",
     );
-    expect(nextState.campaigns['game-1']).toMatchObject({
-      lastDownloadedFileVersionId: 'remote-2',
-      status: 'Downloaded remote.se1',
+    expect(nextState.campaigns["game-1"]).toMatchObject({
+      lastDownloadedFileVersionId: "remote-2",
+      status: "Downloaded remote.se1",
     });
   });
 
-  it('renames tracked campaign directories when API number or name changes', async () => {
+  it("renames tracked campaign directories when API number or name changes", async () => {
     const state: SyncState = {
       ...createBaseState(),
       campaigns: {
-        'game-1': {
+        "game-1": {
           gameNumber: 1,
-          name: 'Old Ashes',
-          directoryName: 'G0001 - Old Ashes',
+          name: "Old Ashes",
+          directoryName: "G0001 - Old Ashes",
         },
       },
     };
@@ -134,46 +134,46 @@ describe('runSyncOnce', () => {
     const nextState = await runSyncOnce(state, adapters);
 
     expect(adapters.renameDir).toHaveBeenCalledWith(
-      'C:/ShadowEmpire/Saves/G0001 - Old Ashes',
-      'C:/ShadowEmpire/Saves/1 - Ashes',
+      "C:/ShadowEmpire/Saves/G0001 - Old Ashes",
+      "C:/ShadowEmpire/Saves/1 - Ashes",
     );
     expect(adapters.ensureDir).toHaveBeenCalledWith(
-      'C:/ShadowEmpire/Saves/1 - Ashes',
+      "C:/ShadowEmpire/Saves/1 - Ashes",
     );
-    expect(nextState.campaigns['game-1']).toMatchObject({
-      directoryName: '1 - Ashes',
+    expect(nextState.campaigns["game-1"]).toMatchObject({
+      directoryName: "1 - Ashes",
     });
   });
 
-  it('keeps unauthenticated state visible without calling the API', async () => {
+  it("keeps unauthenticated state visible without calling the API", async () => {
     const state = { ...createBaseState(), token: null };
     const adapters = createAdapters();
 
     const nextState = await runSyncOnce(state, adapters);
 
     expect(adapters.listGames).not.toHaveBeenCalled();
-    expect(nextState.lastStatus).toBe('Sign in required');
+    expect(nextState.lastStatus).toBe("Sign in required");
   });
 
-  it('records API failures for dashboard feedback', async () => {
+  it("records API failures for dashboard feedback", async () => {
     const adapters = createAdapters({
       listGames: vi.fn(async () => {
-        throw new Error('API unavailable');
+        throw new Error("API unavailable");
       }),
     });
 
     const nextState = await runSyncOnce(createBaseState(), adapters);
 
-    expect(nextState.lastError).toBe('API unavailable');
+    expect(nextState.lastError).toBe("API unavailable");
   });
 
-  it('does not sync when paused', async () => {
+  it("does not sync when paused", async () => {
     const state = { ...createBaseState(), paused: true };
     const adapters = createAdapters();
 
     const nextState = await runSyncOnce(state, adapters);
 
     expect(adapters.listGames).not.toHaveBeenCalled();
-    expect(nextState.lastStatus).toBe('Sync paused');
+    expect(nextState.lastStatus).toBe("Sync paused");
   });
 });
