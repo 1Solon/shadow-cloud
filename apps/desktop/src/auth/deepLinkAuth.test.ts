@@ -17,6 +17,24 @@ describe("desktop auth handoff", () => {
     expect(openWebHandoff).not.toHaveBeenCalled();
   });
 
+  it("opens the web handoff when the protocol is already registered", async () => {
+    const openWebHandoff = vi.fn();
+    const signIn = createDesktopSignIn({
+      isRegistered: async () => true,
+      openWebHandoff,
+      register: async () => {
+        throw new Error("runtime registration failed");
+      },
+      webBaseUrl: "http://localhost:3200",
+    });
+
+    await signIn();
+
+    expect(openWebHandoff).toHaveBeenCalledWith(
+      "http://localhost:3200/api/auth/desktop?handoff=1",
+    );
+  });
+
   it("does not open the web handoff when registration cannot be verified", async () => {
     const openWebHandoff = vi.fn();
     const signIn = createDesktopSignIn({

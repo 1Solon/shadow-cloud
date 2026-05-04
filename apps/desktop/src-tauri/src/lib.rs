@@ -7,6 +7,8 @@ use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager, State, WindowEvent,
 };
+#[cfg(target_os = "linux")]
+use tauri_plugin_deep_link::DeepLinkExt;
 
 #[derive(Default)]
 struct TrayCloseState {
@@ -58,6 +60,9 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(tray_close_state)
         .setup(|app| {
+            #[cfg(target_os = "linux")]
+            app.deep_link().register_all()?;
+
             let menu = MenuBuilder::new(app)
                 .text("show", "Show Shadow Cloud")
                 .text("quit", "Quit")

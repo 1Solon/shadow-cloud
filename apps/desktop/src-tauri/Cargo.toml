@@ -1,6 +1,6 @@
 [package]
 name = "shadow-cloud-desktop"
-version = "0.1.3"
+version = "0.1.4"
 description = "Shadow-Cloud desktop sync client"
 authors = ["Shadow-Cloud"]
 edition = "2021"

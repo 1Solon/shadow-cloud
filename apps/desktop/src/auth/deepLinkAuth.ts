@@ -42,13 +42,28 @@ export async function startDesktopSignIn(nextWebBaseUrl = webBaseUrl) {
   })();
 }
 
+async function ensureDesktopProtocolRegistered({
+  isRegistered,
+  register,
+}: Pick<DesktopSignInDependencies, "isRegistered" | "register">) {
+  try {
+    await register(protocol);
+  } catch (error) {
+    if (await isRegistered(protocol)) {
+      return;
+    }
+
+    throw error;
+  }
+
+  if (!(await isRegistered(protocol))) {
+    throw new Error("Desktop protocol registration did not complete.");
+  }
+}
+
 export function createDesktopSignIn(dependencies: DesktopSignInDependencies) {
   return async () => {
-    await dependencies.register(protocol);
-
-    if (!(await dependencies.isRegistered(protocol))) {
-      throw new Error("Desktop protocol registration did not complete.");
-    }
+    await ensureDesktopProtocolRegistered(dependencies);
 
     await dependencies.openWebHandoff(
       `${dependencies.webBaseUrl}/api/auth/desktop?handoff=1`,
@@ -57,7 +72,7 @@ export function createDesktopSignIn(dependencies: DesktopSignInDependencies) {
 }
 
 export async function listenForDesktopAuth(onToken: (token: string) => void) {
-  await register(protocol);
+  await ensureDesktopProtocolRegistered({ isRegistered, register });
 
   const consumeUrls = (urls: string[] | null) => {
     for (const url of urls ?? []) {
