@@ -197,9 +197,15 @@ export async function runSyncOnce(
         const uploadedFingerprints = new Set(
           previousCampaignState.uploadedFingerprints ?? [],
         );
+        const latestRemoteFile = detail.fileVersions[0];
+        const modifiedAfter =
+          latestRemoteFile && latestRemoteFile.uploadedById !== currentUserId
+            ? new Date(latestRemoteFile.uploadedAt).getTime()
+            : undefined;
         const pendingSave = await chooseNewestPendingSave(
           await adapters.listLocalSaves(campaignDirectoryPath),
           uploadedFingerprints,
+          modifiedAfter,
         );
 
         if (!pendingSave) {

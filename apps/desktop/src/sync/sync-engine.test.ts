@@ -80,6 +80,46 @@ describe("runSyncOnce", () => {
     });
   });
 
+  it("does not upload stale local saves when a newer remote turn file exists", async () => {
+    const state = createBaseState();
+    const adapters = createAdapters({
+      getGameDetail: vi.fn(async () => ({
+        id: "game-1",
+        gameNumber: 1,
+        slug: "ashes",
+        name: "Ashes",
+        roundNumber: 4,
+        activePlayerUserId: "user-1",
+        activePlayerDisplayName: "Solon",
+        fileVersions: [
+          {
+            id: "remote-2",
+            originalName: "remote.se1",
+            uploadedAt: "2026-05-03T09:55:00.000Z",
+            uploadedById: "user-2",
+            uploadedByDisplayName: "Other",
+          },
+        ],
+      })),
+      listLocalSaves: vi.fn(async () => [
+        {
+          name: "stale-local.se1",
+          path: "C:/ShadowEmpire/Saves/1 - Ashes/stale-local.se1",
+          modifiedAt: new Date("2026-05-03T09:50:00.000Z").getTime(),
+          size: 3,
+          bytes: new Uint8Array([1, 2, 3]),
+        },
+      ]),
+    });
+
+    const nextState = await runSyncOnce(state, adapters);
+
+    expect(adapters.uploadSave).not.toHaveBeenCalled();
+    expect(nextState.campaigns["game-1"]).toMatchObject({
+      status: "No pending .se1 saves",
+    });
+  });
+
   it("downloads the newest remote save from another user when it is not the user turn", async () => {
     const state = createBaseState();
     const adapters = createAdapters({

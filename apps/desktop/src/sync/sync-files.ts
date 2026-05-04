@@ -57,6 +57,7 @@ export async function createFileFingerprint(file: LocalSaveFile) {
 export async function chooseNewestPendingSave(
   files: LocalSaveFile[],
   uploadedFingerprints: Set<string>,
+  modifiedAfter?: number,
 ) {
   const newestFirst = [...files].sort((left, right) => {
     if (right.modifiedAt !== left.modifiedAt) {
@@ -67,6 +68,10 @@ export async function chooseNewestPendingSave(
   });
 
   for (const file of newestFirst) {
+    if (modifiedAfter != null && file.modifiedAt <= modifiedAfter) {
+      continue;
+    }
+
     const fingerprint = await createFileFingerprint(file);
 
     if (!uploadedFingerprints.has(fingerprint)) {

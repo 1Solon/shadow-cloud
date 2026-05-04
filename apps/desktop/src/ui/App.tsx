@@ -34,6 +34,7 @@ import {
 } from "@/tauri/fileAdapters";
 import { setMinimizeToTrayOnClose } from "@/tauri/windowBehavior";
 import { sortCampaignEntries } from "./campaignOrdering";
+import { desktopVersion } from "./appVersion";
 import { DesktopHelpModal } from "./DesktopHelpModal";
 import { SettingsPage } from "./SettingsPage";
 
@@ -65,8 +66,6 @@ function getNextSyncTime(state: SyncState | null, lastSyncAt: Date | null) {
     new Date(lastSyncAt.getTime() + state.syncIntervalSeconds * 1_000),
   );
 }
-
-const desktopVersion = import.meta.env.npm_package_version ?? "unknown";
 
 export function App() {
   const [state, setState] = useState<SyncState | null>(null);
