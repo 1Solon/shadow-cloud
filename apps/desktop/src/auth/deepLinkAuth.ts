@@ -8,6 +8,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { webBaseUrl } from "@/api/shadowCloudApi";
 
 const protocol = "shadow-cloud";
+const protocolRegistrationTimeoutMs = 1_500;
 
 type DesktopSignInDependencies = {
   isRegistered: (protocol: string) => Promise<boolean>;
@@ -46,6 +47,10 @@ async function ensureDesktopProtocolRegistered({
   isRegistered,
   register,
 }: Pick<DesktopSignInDependencies, "isRegistered" | "register">) {
+  if (await isRegistered(protocol)) {
+    return;
+  }
+
   try {
     await register(protocol);
   } catch (error) {
@@ -61,9 +66,41 @@ async function ensureDesktopProtocolRegistered({
   }
 }
 
+function createProtocolRegistrationTimeout() {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  return {
+    cancel() {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    },
+    promise: new Promise<"timeout">((resolve) => {
+      timeoutId = setTimeout(
+        () => resolve("timeout"),
+        protocolRegistrationTimeoutMs,
+      );
+    }),
+  };
+}
+
+async function waitForDesktopProtocolRegistration(
+  dependencies: Pick<DesktopSignInDependencies, "isRegistered" | "register">,
+) {
+  const registration = ensureDesktopProtocolRegistered(dependencies);
+  const timeout = createProtocolRegistrationTimeout();
+
+  try {
+    await Promise.race([registration, timeout.promise]);
+  } finally {
+    timeout.cancel();
+    void registration.catch(() => undefined);
+  }
+}
+
 export function createDesktopSignIn(dependencies: DesktopSignInDependencies) {
   return async () => {
-    await ensureDesktopProtocolRegistered(dependencies);
+    await waitForDesktopProtocolRegistration(dependencies);
 
     await dependencies.openWebHandoff(
       `${dependencies.webBaseUrl}/api/auth/desktop?handoff=1`,
@@ -72,7 +109,9 @@ export function createDesktopSignIn(dependencies: DesktopSignInDependencies) {
 }
 
 export async function listenForDesktopAuth(onToken: (token: string) => void) {
-  await ensureDesktopProtocolRegistered({ isRegistered, register });
+  void waitForDesktopProtocolRegistration({ isRegistered, register }).catch(
+    () => undefined,
+  );
 
   const consumeUrls = (urls: string[] | null) => {
     for (const url of urls ?? []) {
