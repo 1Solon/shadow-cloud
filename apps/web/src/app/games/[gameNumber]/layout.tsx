@@ -9,6 +9,7 @@ import { ShadowOverrideButton } from "@/components/shadow-override-button";
 import { formatTerminalClock } from "@/lib/terminal-clock";
 import { getShadowOverrideEnabled } from "@/lib/shadow-override";
 import { getGameDetail } from "@/lib/shadow-cloud-api";
+import { componentVersionStatus } from "@/lib/component-versions";
 
 type GameLayoutProps = {
   children: React.ReactNode;
@@ -97,7 +98,7 @@ export default async function GameLayout({
         <div
           className={`mt-auto pt-4 border-t flex justify-between text-xs text-orange-300/70 shrink-0 ${shellStatusClassName}`}
         >
-          <div>STATUS: TERMINAL ACTIVE</div>
+          <div>{componentVersionStatus}</div>
           <div>WORLD: {`#${game.gameNumber}`} MONITORED</div>
           <div>ENCRYPTION: QUANTUM-256</div>
         </div>

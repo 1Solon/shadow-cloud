@@ -8,6 +8,7 @@ import { ShadowOverrideButton } from "@/components/shadow-override-button";
 import { listGames } from "@/lib/shadow-cloud-api";
 import { getShadowOverrideEnabled } from "@/lib/shadow-override";
 import { formatTerminalClock } from "@/lib/terminal-clock";
+import { componentVersionStatus } from "@/lib/component-versions";
 import {
   Card,
   CardDescription,
@@ -163,7 +164,7 @@ export default async function Home() {
         <div
           className={`mt-6 pt-4 border-t flex justify-between text-xs ${shellStatusClassName}`}
         >
-          <div>STATUS: TERMINAL ACTIVE</div>
+          <div>{componentVersionStatus}</div>
           <div>CAMPAIGNS: {games.length} MONITORED</div>
           <div>ENCRYPTION: QUANTUM-256</div>
         </div>
