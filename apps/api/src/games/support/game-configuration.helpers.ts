@@ -100,7 +100,7 @@ export function buildCanonicalThreadName({
   zoneCount,
   armyCount,
 }: CanonicalThreadNameInput) {
-  const prefix = `🟠 ${gameNumber} : `;
+  const prefix = `🔸${gameNumber} : `;
   const modeLabel = mapGameModeLabel(gameMode);
   const zoneLabel = mapZoneCountLabel(zoneCount);
   const armyLabel = mapArmyCountLabel(armyCount);
