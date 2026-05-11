@@ -1,6 +1,7 @@
 services:
   api:
-    image: ghcr.io/1solon/shadow-cloud/api:0.8.2
+    image: ghcr.io/1solon/shadow-cloud/api:latest
+    pull_policy: always
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -31,7 +32,8 @@ services:
       start_period: 20s
 
   web:
-    image: ghcr.io/1solon/shadow-cloud/web:0.8.2
+    image: ghcr.io/1solon/shadow-cloud/web:latest
+    pull_policy: always
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -59,7 +61,8 @@ services:
       start_period: 15s
 
   bot:
-    image: ghcr.io/1solon/shadow-cloud/bot:0.7.1
+    image: ghcr.io/1solon/shadow-cloud/bot:latest
+    pull_policy: always
     restart: unless-stopped
     environment:
       NODE_ENV: production
