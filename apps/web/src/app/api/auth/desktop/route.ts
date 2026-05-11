@@ -119,7 +119,9 @@ function createDesktopSuccessResponse() {
 </html>`);
 }
 
-function createDesktopApprovalErrorResponse(status = 400) {
+function createDesktopApprovalErrorResponse(status = 400, detail?: string) {
+  const escapedDetail = detail ? escapeHtml(detail) : null;
+
   return createHtmlResponse(
     `<!doctype html>
 <html lang="en">
@@ -130,6 +132,7 @@ function createDesktopApprovalErrorResponse(status = 400) {
   <body style="background:#000;color:#fb923c;font-family:monospace;padding:2rem">
     <h1>Could not approve Shadow-Cloud Desktop</h1>
     <p>Could not approve this desktop sign-in. Return to Shadow-Cloud Desktop and retry.</p>
+    ${escapedDetail ? `<p>Diagnostic: ${escapedDetail}</p>` : ""}
   </body>
 </html>`,
     { status },
@@ -142,6 +145,20 @@ function getDesktopCallbackUrl(handoffId: string) {
 
 function getCleanString(value: string | null | undefined) {
   return value && value.trim().length > 0 ? value.trim() : null;
+}
+
+function getApprovalFailureDetail(result: Exclude<DesktopApprovalResult, {
+  ok: true;
+}>) {
+  if (typeof result.status === "number") {
+    return `API approval failed: HTTP ${result.status}`;
+  }
+
+  if (result.error) {
+    return `Approval request failed: ${result.error}`;
+  }
+
+  return "Approval request failed.";
 }
 
 function isSameOriginPost(request: Request, requestUrl: URL) {
@@ -244,7 +261,10 @@ export async function POST(request: Request) {
       ...approved,
     });
 
-    return createDesktopApprovalErrorResponse(502);
+    return createDesktopApprovalErrorResponse(
+      502,
+      getApprovalFailureDetail(approved),
+    );
   }
 
   return createDesktopSuccessResponse();

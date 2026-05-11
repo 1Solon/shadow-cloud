@@ -151,6 +151,9 @@ describe("/api/auth/desktop", () => {
     );
 
     expect(response.status).toBe(502);
+    await expect(response.text()).resolves.toContain(
+      "API approval failed: HTTP 401",
+    );
     expect(consoleError).toHaveBeenCalledWith(
       "Desktop handoff approval failed.",
       expect.objectContaining({
