@@ -187,10 +187,7 @@ function getDownloadedStatus(fileName: string) {
   return `Downloaded load turn ${turnNumber}`;
 }
 
-async function persistProgress(
-  nextState: SyncState,
-  adapters: SyncAdapters,
-) {
+async function persistProgress(nextState: SyncState, adapters: SyncAdapters) {
   await adapters.onStateUpdate?.(nextState);
 }
 
@@ -419,10 +416,7 @@ async function syncCampaign(input: {
       return campaignState;
     }
 
-    if (
-      latestRemoteFile &&
-      !latestRemoteFile.contentHash
-    ) {
+    if (latestRemoteFile && !latestRemoteFile.contentHash) {
       campaignState.status = "Needs your decision";
       campaignState.needsDecision = {
         reason: "unverified-remote-history-before-local-upload",

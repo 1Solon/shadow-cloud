@@ -105,7 +105,8 @@ function createDesktopSuccessResponse() {
 }
 
 function createDesktopApprovalErrorResponse(status = 400) {
-  return createHtmlResponse(`<!doctype html>
+  return createHtmlResponse(
+    `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -115,7 +116,9 @@ function createDesktopApprovalErrorResponse(status = 400) {
     <h1>Could not approve Shadow-Cloud Desktop</h1>
     <p>Could not approve this desktop sign-in. Return to Shadow-Cloud Desktop and retry.</p>
   </body>
-</html>`, { status });
+</html>`,
+    { status },
+  );
 }
 
 function getDesktopCallbackUrl(handoffId: string) {

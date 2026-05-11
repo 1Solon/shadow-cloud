@@ -64,8 +64,7 @@ export function SettingsPage({
   );
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [isResetConfirmationOpen, setIsResetConfirmationOpen] =
-    useState(false);
+  const [isResetConfirmationOpen, setIsResetConfirmationOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [renderedConfirmationLines, setRenderedConfirmationLines] = useState<
     string[]

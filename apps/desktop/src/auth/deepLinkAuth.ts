@@ -1,8 +1,5 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
-import {
-  defaultApiBaseUrl,
-  defaultWebBaseUrl,
-} from "@/api/shadowCloudApi";
+import { defaultApiBaseUrl, defaultWebBaseUrl } from "@/api/shadowCloudApi";
 
 const fallbackPollIntervalMs = 1_500;
 
@@ -62,9 +59,9 @@ function getApiErrorMessage(payload: unknown, fallbackMessage: string) {
   const { error, message } = payload as ApiErrorPayload;
 
   if (Array.isArray(message)) {
-    const messages = message.filter((entry): entry is string => (
-      typeof entry === "string"
-    ));
+    const messages = message.filter(
+      (entry): entry is string => typeof entry === "string",
+    );
 
     return messages.length > 0 ? messages.join(", ") : fallbackMessage;
   }
@@ -84,7 +81,7 @@ async function readJsonResponse<T>(
   response: Response,
   fallbackMessage: string,
 ) {
-  const payload = await response.json().catch(() => null) as unknown;
+  const payload = (await response.json().catch(() => null)) as unknown;
 
   if (!response.ok) {
     throw new Error(getApiErrorMessage(payload, fallbackMessage));
@@ -163,9 +160,9 @@ export function createDesktopSignIn(dependencies: DesktopSignInDependencies) {
         break;
       }
 
-      await (
-        dependencies.waitForPollInterval ?? waitForPollInterval
-      )(handoff.pollIntervalMs ?? fallbackPollIntervalMs);
+      await (dependencies.waitForPollInterval ?? waitForPollInterval)(
+        handoff.pollIntervalMs ?? fallbackPollIntervalMs,
+      );
     }
 
     throw new Error("Desktop sign-in expired.");

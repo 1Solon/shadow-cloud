@@ -53,7 +53,7 @@ describe("/api/auth/desktop", () => {
     expect(body).toContain('method="POST"');
     expect(body).toContain('action="/api/auth/signin/discord"');
     expect(body).toContain('name="callbackUrl"');
-    expect(body).toContain('/api/auth/desktop?handoff=abc123');
+    expect(body).toContain("/api/auth/desktop?handoff=abc123");
     expect(body).not.toContain("/api/auth/signin/discord?callbackUrl=");
   });
 
@@ -76,7 +76,7 @@ describe("/api/auth/desktop", () => {
 
     expect(body).toContain("Approve Shadow-Cloud Desktop");
     expect(body).toContain('method="POST"');
-    expect(body).toContain('/api/auth/desktop?handoff=abc123');
+    expect(body).toContain("/api/auth/desktop?handoff=abc123");
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 

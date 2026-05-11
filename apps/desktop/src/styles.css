@@ -619,8 +619,8 @@ select option:checked {
   box-shadow:
     0 22px 70px rgba(0, 0, 0, 0.72),
     0 0 42px rgba(251, 146, 60, 0.22);
-  animation: settings-confirmation-powerup 260ms
-    cubic-bezier(0.2, 0.8, 0.22, 1) forwards;
+  animation: settings-confirmation-powerup 260ms cubic-bezier(0.2, 0.8, 0.22, 1)
+    forwards;
   transform-origin: bottom right;
 }
 
