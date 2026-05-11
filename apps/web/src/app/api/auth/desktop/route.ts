@@ -1,4 +1,6 @@
-import { createDesktopApiAccessToken, getServerAuthSession } from "@/auth";
+import { createInternalApiToken, getServerAuthSession } from "@/auth";
+
+const apiBaseUrl = process.env.SHADOW_CLOUD_API_URL ?? "http://localhost:3001";
 
 function escapeHtml(value: string) {
   return value
@@ -8,9 +10,18 @@ function escapeHtml(value: string) {
     .replaceAll(">", "&gt;");
 }
 
+function createHtmlResponse(body: string, init: ResponseInit = {}) {
+  return new Response(body, {
+    ...init,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      ...(init.headers ?? {}),
+    },
+  });
+}
+
 function createManualDesktopAuthResponse() {
-  return new Response(
-    `<!doctype html>
+  return createHtmlResponse(`<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -19,22 +30,15 @@ function createManualDesktopAuthResponse() {
   <body style="background:#000;color:#fb923c;font-family:monospace;padding:2rem">
     <h1>Shadow-Cloud Desktop Auth</h1>
     <p>This endpoint is opened by the desktop app during sign-in.</p>
-    <p>Open Shadow-Cloud Desktop and use the Sign in button so the app can register the <code>shadow-cloud://</code> protocol first.</p>
+    <p>Open Shadow-Cloud Desktop and use the Sign in button to begin a desktop handoff.</p>
   </body>
-</html>`,
-    {
-      headers: {
-        "content-type": "text/html; charset=utf-8",
-      },
-    },
-  );
+</html>`);
 }
 
 function createDesktopDiscordSignInResponse(callbackUrl: string) {
   const escapedCallbackUrl = escapeHtml(callbackUrl);
 
-  return new Response(
-    `<!doctype html>
+  return createHtmlResponse(`<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -63,41 +67,139 @@ function createDesktopDiscordSignInResponse(callbackUrl: string) {
       });
     </script>
   </body>
-</html>`,
+</html>`);
+}
+
+function createDesktopApprovalResponse(handoffId: string) {
+  const escapedHandoffId = escapeHtml(handoffId);
+  const escapedAction = `/api/auth/desktop?handoff=${escapedHandoffId}`;
+
+  return createHtmlResponse(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Approve Shadow-Cloud Desktop</title>
+  </head>
+  <body style="background:#000;color:#fb923c;font-family:monospace;padding:2rem">
+    <h1>Approve Shadow-Cloud Desktop</h1>
+    <p>Shadow-Cloud Desktop is waiting for this browser sign-in.</p>
+    <form method="POST" action="${escapedAction}">
+      <button type="submit">Approve desktop sign-in</button>
+    </form>
+  </body>
+</html>`);
+}
+
+function createDesktopSuccessResponse() {
+  return createHtmlResponse(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shadow-Cloud Desktop Approved</title>
+  </head>
+  <body style="background:#000;color:#fb923c;font-family:monospace;padding:2rem">
+    <h1>Shadow-Cloud Desktop Approved</h1>
+    <p>Return to desktop.</p>
+  </body>
+</html>`);
+}
+
+function createDesktopApprovalErrorResponse(status = 400) {
+  return createHtmlResponse(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Shadow-Cloud Desktop Auth Failed</title>
+  </head>
+  <body style="background:#000;color:#fb923c;font-family:monospace;padding:2rem">
+    <h1>Could not approve Shadow-Cloud Desktop</h1>
+    <p>Could not approve this desktop sign-in. Return to Shadow-Cloud Desktop and retry.</p>
+  </body>
+</html>`, { status });
+}
+
+function getDesktopCallbackUrl(handoffId: string) {
+  return `/api/auth/desktop?handoff=${encodeURIComponent(handoffId)}`;
+}
+
+function getCleanString(value: string | null | undefined) {
+  return value && value.trim().length > 0 ? value.trim() : null;
+}
+
+function isSameOriginPost(request: Request, requestUrl: URL) {
+  return request.headers.get("origin") === requestUrl.origin;
+}
+
+async function approveDesktopHandoff(
+  handoffId: string,
+  session: Awaited<ReturnType<typeof getServerAuthSession>>,
+) {
+  const user = session?.user;
+
+  if (!user?.id) {
+    return false;
+  }
+
+  const internalToken = await createInternalApiToken();
+  const response = await fetch(
+    `${apiBaseUrl.replace(/\/+$/g, "")}/v1/auth/desktop-handoffs/${encodeURIComponent(handoffId)}/approve`,
     {
+      method: "POST",
       headers: {
-        "content-type": "text/html; charset=utf-8",
+        authorization: `Bearer ${internalToken}`,
+        "content-type": "application/json",
       },
+      body: JSON.stringify({
+        userId: user.id,
+        email: getCleanString(user.email),
+        displayName: getCleanString(user.name),
+        avatarUrl: getCleanString(user.image),
+      }),
+      cache: "no-store",
     },
   );
+
+  return response.ok;
 }
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
-  const isDesktopHandoff = requestUrl.searchParams.get("handoff") === "1";
-  const session = await getServerAuthSession();
+  const handoffId = getCleanString(requestUrl.searchParams.get("handoff"));
 
-  if (!session?.user?.id) {
-    return createDesktopDiscordSignInResponse(
-      isDesktopHandoff ? "/api/auth/desktop?handoff=1" : "/api/auth/desktop",
-    );
-  }
-
-  if (!isDesktopHandoff) {
+  if (!handoffId) {
     return createManualDesktopAuthResponse();
   }
 
-  const token = await createDesktopApiAccessToken(session).catch(() => null);
+  const session = await getServerAuthSession();
 
-  if (!token) {
-    return Response.json(
-      { error: "Desktop API authentication is unavailable." },
-      { status: 500 },
-    );
+  if (!session?.user?.id) {
+    return createDesktopDiscordSignInResponse(getDesktopCallbackUrl(handoffId));
   }
 
-  const redirectUrl = new URL("shadow-cloud://auth");
-  redirectUrl.searchParams.set("token", token);
+  return createDesktopApprovalResponse(handoffId);
+}
 
-  return Response.redirect(redirectUrl);
+export async function POST(request: Request) {
+  const requestUrl = new URL(request.url);
+  const handoffId = getCleanString(requestUrl.searchParams.get("handoff"));
+
+  if (!handoffId || !isSameOriginPost(request, requestUrl)) {
+    return createDesktopApprovalErrorResponse(handoffId ? 403 : 400);
+  }
+
+  const session = await getServerAuthSession();
+
+  if (!session?.user?.id) {
+    return createDesktopDiscordSignInResponse(getDesktopCallbackUrl(handoffId));
+  }
+
+  const approved = await approveDesktopHandoff(handoffId, session).catch(
+    () => false,
+  );
+
+  if (!approved) {
+    return createDesktopApprovalErrorResponse(502);
+  }
+
+  return createDesktopSuccessResponse();
 }

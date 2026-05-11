@@ -97,6 +97,22 @@ model AuthIdentity {
   @@unique([provider, providerId])
 }
 
+model DesktopAuthHandoff {
+  id                      String    @id
+  pollSecretHash          String
+  approvedUserId          String?
+  approvedUserEmail       String?
+  approvedUserDisplayName String?
+  approvedUserAvatarUrl   String?
+  expiresAt               DateTime
+  approvedAt              DateTime?
+  consumedAt              DateTime?
+  createdAt               DateTime  @default(now())
+
+  @@index([expiresAt])
+  @@index([consumedAt])
+}
+
 model Game {
   id                    String                @id @default(cuid())
   gameNumber            Int                   @unique

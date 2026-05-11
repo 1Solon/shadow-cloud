@@ -14,7 +14,7 @@ const discordClientSecret =
 const apiBaseUrl = process.env.SHADOW_CLOUD_API_URL ?? "http://localhost:3001";
 const encoder = new TextEncoder();
 
-async function createInternalApiToken() {
+export async function createInternalApiToken() {
   if (!nextAuthSecret) {
     throw new Error("NEXTAUTH_SECRET is not configured.");
   }

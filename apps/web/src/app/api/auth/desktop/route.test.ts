@@ -1,25 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/auth", () => ({
+  createInternalApiToken: vi.fn(),
   getServerAuthSession: vi.fn(),
-  createDesktopApiAccessToken: vi.fn(),
 }));
 
-import { createDesktopApiAccessToken, getServerAuthSession } from "@/auth";
-import { GET } from "./route";
+import { createInternalApiToken, getServerAuthSession } from "@/auth";
+import { GET, POST } from "./route";
 
+const mockedCreateInternalApiToken = vi.mocked(createInternalApiToken);
 const mockedGetServerAuthSession = vi.mocked(getServerAuthSession);
-const mockedCreateDesktopApiAccessToken = vi.mocked(
-  createDesktopApiAccessToken,
-);
 
-describe("GET /api/auth/desktop", () => {
+describe("/api/auth/desktop", () => {
   beforeEach(() => {
+    vi.stubEnv("SHADOW_CLOUD_API_URL", "http://localhost:3001");
+    mockedCreateInternalApiToken.mockReset();
     mockedGetServerAuthSession.mockReset();
-    mockedCreateDesktopApiAccessToken.mockReset();
+    globalThis.fetch = vi.fn() as typeof fetch;
   });
 
-  it("shows instructions when opened directly in a browser", async () => {
+  it("shows instructions when opened without a handoff id", async () => {
     mockedGetServerAuthSession.mockResolvedValue({
       user: {
         id: "user-1",
@@ -35,32 +35,14 @@ describe("GET /api/auth/desktop", () => {
     await expect(response.text()).resolves.toContain(
       "Open Shadow-Cloud Desktop",
     );
-    expect(mockedCreateDesktopApiAccessToken).not.toHaveBeenCalled();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it("redirects to the desktop protocol for app-initiated handoff", async () => {
-    mockedGetServerAuthSession.mockResolvedValue({
-      user: {
-        id: "user-1",
-      },
-    } as Awaited<ReturnType<typeof getServerAuthSession>>);
-    mockedCreateDesktopApiAccessToken.mockResolvedValue("desktop-token");
-
-    const response = await GET(
-      new Request("http://localhost:3200/api/auth/desktop?handoff=1"),
-    );
-
-    expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe(
-      "shadow-cloud://auth?token=desktop-token",
-    );
-  });
-
-  it("starts Discord sign-in with a POST handoff when no session exists", async () => {
+  it("starts Discord sign-in with a callback that preserves the handoff id", async () => {
     mockedGetServerAuthSession.mockResolvedValue(null);
 
     const response = await GET(
-      new Request("http://localhost:3200/api/auth/desktop?handoff=1"),
+      new Request("http://localhost:3200/api/auth/desktop?handoff=abc123"),
     );
 
     expect(response.status).toBe(200);
@@ -71,7 +53,95 @@ describe("GET /api/auth/desktop", () => {
     expect(body).toContain('method="POST"');
     expect(body).toContain('action="/api/auth/signin/discord"');
     expect(body).toContain('name="callbackUrl"');
-    expect(body).toContain('/api/auth/desktop?handoff=1');
+    expect(body).toContain('/api/auth/desktop?handoff=abc123');
     expect(body).not.toContain("/api/auth/signin/discord?callbackUrl=");
+  });
+
+  it("renders an approval form for an authenticated handoff without approving it", async () => {
+    mockedGetServerAuthSession.mockResolvedValue({
+      user: {
+        id: "user-1",
+        email: "solon@example.com",
+        name: "Solon",
+        image: "https://cdn.discordapp.com/avatar.png",
+      },
+    } as Awaited<ReturnType<typeof getServerAuthSession>>);
+
+    const response = await GET(
+      new Request("http://localhost:3200/api/auth/desktop?handoff=abc123"),
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.text();
+
+    expect(body).toContain("Approve Shadow-Cloud Desktop");
+    expect(body).toContain('method="POST"');
+    expect(body).toContain('/api/auth/desktop?handoff=abc123');
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("approves an authenticated same-origin POST through the API", async () => {
+    mockedGetServerAuthSession.mockResolvedValue({
+      user: {
+        id: "user-1",
+        email: "solon@example.com",
+        name: "Solon",
+        image: "https://cdn.discordapp.com/avatar.png",
+      },
+    } as Awaited<ReturnType<typeof getServerAuthSession>>);
+    mockedCreateInternalApiToken.mockResolvedValue("internal-token");
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      Response.json({ status: "approved" }),
+    );
+
+    const response = await POST(
+      new Request("http://localhost:3200/api/auth/desktop?handoff=abc123", {
+        method: "POST",
+        headers: {
+          origin: "http://localhost:3200",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toContain("Return to desktop");
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "http://localhost:3001/v1/auth/desktop-handoffs/abc123/approve",
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer internal-token",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: "user-1",
+          email: "solon@example.com",
+          displayName: "Solon",
+          avatarUrl: "https://cdn.discordapp.com/avatar.png",
+        }),
+        cache: "no-store",
+      },
+    );
+  });
+
+  it("rejects cross-origin approval posts", async () => {
+    mockedGetServerAuthSession.mockResolvedValue({
+      user: {
+        id: "user-1",
+      },
+    } as Awaited<ReturnType<typeof getServerAuthSession>>);
+
+    const response = await POST(
+      new Request("http://localhost:3200/api/auth/desktop?handoff=abc123", {
+        method: "POST",
+        headers: {
+          origin: "https://evil.example",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.text()).resolves.toContain("Could not approve");
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });

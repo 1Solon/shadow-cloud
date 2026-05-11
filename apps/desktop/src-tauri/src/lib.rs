@@ -5,10 +5,8 @@ use std::sync::{
 use tauri::{
     menu::MenuBuilder,
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Emitter, Manager, State, WindowEvent,
+    Manager, State, WindowEvent,
 };
-#[cfg(target_os = "linux")]
-use tauri_plugin_deep_link::DeepLinkExt;
 
 #[derive(Default)]
 struct TrayCloseState {
@@ -60,9 +58,6 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(tray_close_state)
         .setup(|app| {
-            #[cfg(target_os = "linux")]
-            app.deep_link().register_all()?;
-
             let menu = MenuBuilder::new(app)
                 .text("show", "Show Shadow Cloud")
                 .text("quit", "Quit")
@@ -125,20 +120,8 @@ pub fn run() {
                 app.exit(0);
             }
         })
-        .plugin(tauri_plugin_deep_link::init())
-        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
-            if let Some(url) = argv
-                .iter()
-                .find(|argument| argument.starts_with("shadow-cloud://"))
-            {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.unminimize();
-                    let _ = window.set_focus();
-                }
-
-                let _ = app.emit("deep-link://new-url", vec![url.to_string()]);
-            }
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            show_main_window(app);
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())

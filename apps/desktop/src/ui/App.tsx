@@ -5,7 +5,7 @@ import {
   decodeDesktopTokenAvatarUrl,
   decodeDesktopTokenDisplayName,
 } from "@/auth/desktopToken";
-import { listenForDesktopAuth, startDesktopSignIn } from "@/auth/deepLinkAuth";
+import { startDesktopSignIn } from "@/auth/deepLinkAuth";
 import { getErrorMessage } from "@/errors/error-message";
 import { buildWebGameUrl } from "@/navigation/webGameLinks";
 import {
@@ -180,42 +180,6 @@ export function App() {
       });
   }, [state]);
 
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-
-    void listenForDesktopAuth(async (token) => {
-      const nextState = {
-        ...(stateRef.current ?? {
-          saveRoot: null,
-          token: null,
-          syncIntervalSeconds: 120,
-          paused: false,
-          campaigns: {},
-        }),
-        token,
-        lastStatus: "Signed in through Discord",
-        lastError: undefined,
-      };
-      stateRef.current = nextState;
-      setState(nextState);
-      await saveSyncState(nextState);
-    })
-      .then((nextUnlisten) => {
-        unlisten = nextUnlisten;
-      })
-      .catch((error) => {
-        void updateState((current) => ({
-          ...current,
-          lastStatus: "Desktop auth listener failed",
-          lastError: getErrorMessage(error, "Desktop auth listener failed."),
-        }));
-      });
-
-    return () => {
-      unlisten?.();
-    };
-  }, []);
-
   const syncNow = useCallback(async () => {
     await runnerRef.current.tick();
   }, []);
@@ -358,11 +322,21 @@ export function App() {
 
   async function signIn() {
     try {
-      await startDesktopSignIn(remoteSettingsRef.current.webBaseUrl);
+      const token = await startDesktopSignIn({
+        apiBaseUrl: remoteSettingsRef.current.apiBaseUrl,
+        webBaseUrl: remoteSettingsRef.current.webBaseUrl,
+      });
+
+      await updateState((current) => ({
+        ...current,
+        token,
+        lastStatus: "Signed in through Discord",
+        lastError: undefined,
+      }));
     } catch (error) {
       await updateState((current) => ({
         ...current,
-        lastStatus: "Desktop protocol registration failed",
+        lastStatus: "Desktop sign-in failed",
         lastError: getErrorMessage(error, "Desktop sign-in failed."),
       }));
     }
