@@ -28,6 +28,16 @@ type ResignedPlayerAuditPayload = {
   playerDisplayName?: string;
 };
 
+type SeatOrderAuditEntry = {
+  seatEntryId?: string;
+  displayName?: string | null;
+};
+
+type TurnReassignedAuditPayload = {
+  previousOrder?: SeatOrderAuditEntry[];
+  nextOrder?: SeatOrderAuditEntry[];
+};
+
 @Injectable()
 export class GamesQueryService {
   constructor(private readonly fileStorage: FileStorageService) {}
@@ -151,7 +161,12 @@ export class GamesQueryService {
         },
         auditEvents: {
           where: {
-            eventType: AuditEventType.PLAYER_RESIGNED,
+            eventType: {
+              in: [
+                AuditEventType.PLAYER_RESIGNED,
+                AuditEventType.TURN_REASSIGNED,
+              ],
+            },
           },
           orderBy: {
             createdAt: 'desc',
@@ -170,27 +185,55 @@ export class GamesQueryService {
     const resignedDisplayNameByEntryId = new Map<string, string>();
 
     for (const auditEvent of game.auditEvents) {
-      let payload: ResignedPlayerAuditPayload;
+      let payload: ResignedPlayerAuditPayload & TurnReassignedAuditPayload;
 
       try {
-        payload = JSON.parse(auditEvent.payload) as ResignedPlayerAuditPayload;
+        payload = JSON.parse(auditEvent.payload) as ResignedPlayerAuditPayload &
+          TurnReassignedAuditPayload;
       } catch {
         continue;
       }
 
       if (
-        typeof payload.playerEntryId !== 'string' ||
-        typeof payload.playerDisplayName !== 'string' ||
-        payload.playerDisplayName.length === 0 ||
-        resignedDisplayNameByEntryId.has(payload.playerEntryId)
+        typeof payload.playerEntryId === 'string' &&
+        typeof payload.playerDisplayName === 'string' &&
+        payload.playerDisplayName.length > 0 &&
+        !resignedDisplayNameByEntryId.has(payload.playerEntryId)
       ) {
-        continue;
+        resignedDisplayNameByEntryId.set(
+          payload.playerEntryId,
+          payload.playerDisplayName,
+        );
       }
 
-      resignedDisplayNameByEntryId.set(
-        payload.playerEntryId,
-        payload.playerDisplayName,
+      const previousOrder = Array.isArray(payload.previousOrder)
+        ? payload.previousOrder
+        : [];
+      const nextOrderByEntryId = new Map(
+        (Array.isArray(payload.nextOrder) ? payload.nextOrder : [])
+          .filter((seat) => typeof seat.seatEntryId === 'string')
+          .map((seat) => [seat.seatEntryId!, seat]),
       );
+
+      for (const previousSeat of previousOrder) {
+        if (
+          typeof previousSeat.seatEntryId !== 'string' ||
+          typeof previousSeat.displayName !== 'string' ||
+          previousSeat.displayName.length === 0 ||
+          resignedDisplayNameByEntryId.has(previousSeat.seatEntryId)
+        ) {
+          continue;
+        }
+
+        const nextSeat = nextOrderByEntryId.get(previousSeat.seatEntryId);
+
+        if (nextSeat?.displayName == null) {
+          resignedDisplayNameByEntryId.set(
+            previousSeat.seatEntryId,
+            previousSeat.displayName,
+          );
+        }
+      }
     }
 
     return {
