@@ -3,6 +3,7 @@ import type { CampaignSyncState } from "./sync-engine";
 const windowsReservedNamePattern = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
 const unsafeFileNameCharactersPattern = /[<>:"/\\|?*\u0000-\u001f]/g;
 const pathSeparatorPattern = /[\\/]/;
+const saveFileTurnPattern = /(?:^|-)T(\d+)(?:-|\.|$)/i;
 
 export type DirectoryEntry = {
   name: string;
@@ -39,6 +40,16 @@ export function isShadowEmpireSave(entry: DirectoryEntry) {
   return entry.isFile && entry.name.toLowerCase().endsWith(".se1");
 }
 
+export function parseSaveFileTurnNumber(fileName: string) {
+  const match = fileName.match(saveFileTurnPattern);
+
+  if (!match) {
+    return null;
+  }
+
+  return Number.parseInt(match[1], 10);
+}
+
 export async function createFileFingerprint(file: LocalSaveFile) {
   const digest = await globalThis.crypto.subtle.digest(
     "SHA-256",
@@ -51,7 +62,7 @@ export async function createFileFingerprint(file: LocalSaveFile) {
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
 
-  return `${file.size}:${hash}`;
+  return `sha256:${hash}`;
 }
 
 export async function chooseNewestPendingSave(

@@ -36,6 +36,7 @@ import { syncGameSeatCount } from './support/seat-count.helpers';
 import type {
   GameDetailResponse,
   GameMetadataResponse,
+  UploadSaveSafetyMetadata,
   UploadedSaveFile,
 } from './support/game-payload.types';
 export type { UploadedSaveFile } from './support/game-payload.types';
@@ -309,8 +310,9 @@ export class GamesService {
     gameId: string,
     userId: string | undefined,
     file: UploadedSaveFile,
+    metadata?: UploadSaveSafetyMetadata,
   ) {
-    return this.gamesTurn.uploadSave(gameId, userId, file);
+    return this.gamesTurn.uploadSave(gameId, userId, file, metadata);
   }
 
   async downloadSave(gameId: string, fileVersionId: string) {

@@ -60,16 +60,6 @@ export class FileStorageService {
     };
   }
 
-  createDownloadFileName(input: {
-    gameNumber: number;
-    turn: number;
-    seat: number;
-    playerName: string;
-    originalName: string;
-  }) {
-    return buildSaveFileName(input);
-  }
-
   async openDownload(storagePath: string): Promise<{
     size: number;
     lastModified: Date;

@@ -371,19 +371,6 @@ export class GamesQueryService {
     const downloadFile = await this.fileStorage.openDownload(
       fileVersion.storagePath,
     );
-    const activePlayerEntry = game.turnState
-      ? resolveActivePlayerEntry(game.players, game.turnState)
-      : null;
-    const downloadName =
-      game.turnState && activePlayerEntry?.user?.displayName
-        ? this.fileStorage.createDownloadFileName({
-            gameNumber: game.gameNumber,
-            turn: game.turnState.roundNumber,
-            seat: activePlayerEntry.turnOrder,
-            playerName: activePlayerEntry.user.displayName,
-            originalName: fileVersion.originalName,
-          })
-        : fileVersion.originalName;
 
     await prisma.auditEvent.create({
       data: {
@@ -398,7 +385,7 @@ export class GamesQueryService {
     });
 
     return {
-      originalName: downloadName,
+      originalName: fileVersion.originalName,
       size: downloadFile.size,
       lastModified: downloadFile.lastModified,
       stream: downloadFile.stream,

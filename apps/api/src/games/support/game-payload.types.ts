@@ -37,6 +37,8 @@ export type GameDetailResponse = {
     uploadedAt: string;
     uploadedById: string;
     uploadedByDisplayName: string;
+    contentHash: string | null;
+    idempotencyKey: string | null;
   }>;
 };
 
@@ -60,4 +62,13 @@ export type UploadedSaveFile = {
   buffer: Buffer;
   originalname: string;
   size: number;
+};
+
+export type UploadSaveSafetyMetadata = {
+  contentHash?: string;
+  idempotencyKey?: string;
+  expectedActivePlayerEntryId?: string | null;
+  expectedActivePlayerUserId?: string | null;
+  expectedRoundNumber?: number | null;
+  expectedLatestFileVersionId?: string | null;
 };

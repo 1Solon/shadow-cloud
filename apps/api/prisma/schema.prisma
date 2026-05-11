@@ -152,17 +152,22 @@ model TurnState {
 }
 
 model FileVersion {
-  id            String   @id @default(cuid())
-  gameId        String
-  uploadedById  String
-  storagePath   String
-  originalName  String
-  versionNumber Int
-  uploadedAt    DateTime @default(now())
-  game          Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  uploadedBy    User     @relation("UploadedBy", fields: [uploadedById], references: [id])
+  id                 String   @id @default(cuid())
+  gameId             String
+  uploadedById       String
+  storagePath        String
+  originalName       String
+  versionNumber      Int
+  contentHash        String?
+  idempotencyKey     String?
+  clientOriginalName String?
+  clientFileSize     Int?
+  uploadedAt         DateTime @default(now())
+  game               Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  uploadedBy         User     @relation("UploadedBy", fields: [uploadedById], references: [id])
 
   @@unique([gameId, versionNumber])
+  @@unique([gameId, uploadedById, idempotencyKey])
 }
 
 model RegistrationRequest {

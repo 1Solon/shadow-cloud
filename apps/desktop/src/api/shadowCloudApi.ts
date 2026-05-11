@@ -124,14 +124,45 @@ export function createShadowCloudApiClient(
       );
     },
 
-    async uploadSave(token: string, gameNumber: number, file: LocalSaveFile) {
+    async uploadSave(
+      token: string,
+      gameNumber: number,
+      upload: {
+        file: LocalSaveFile;
+        contentHash: string;
+        idempotencyKey: string;
+        expectedActivePlayerEntryId: string | null;
+        expectedActivePlayerUserId: string | null;
+        expectedRoundNumber: number;
+        expectedLatestFileVersionId: string | null;
+      },
+    ) {
       const formData = new FormData();
       formData.set(
         "file",
-        new File([toArrayBuffer(file.bytes)], file.name, {
+        new File([toArrayBuffer(upload.file.bytes)], upload.file.name, {
           type: "application/octet-stream",
-          lastModified: file.modifiedAt,
+          lastModified: upload.file.modifiedAt,
         }),
+      );
+      formData.set("contentHash", upload.contentHash);
+      formData.set("idempotencyKey", upload.idempotencyKey);
+      if (upload.expectedActivePlayerEntryId) {
+        formData.set(
+          "expectedActivePlayerEntryId",
+          upload.expectedActivePlayerEntryId,
+        );
+      }
+      if (upload.expectedActivePlayerUserId) {
+        formData.set(
+          "expectedActivePlayerUserId",
+          upload.expectedActivePlayerUserId,
+        );
+      }
+      formData.set("expectedRoundNumber", String(upload.expectedRoundNumber));
+      formData.set(
+        "expectedLatestFileVersionId",
+        upload.expectedLatestFileVersionId ?? "__none__",
       );
 
       return fetchJson<UploadResponse>(

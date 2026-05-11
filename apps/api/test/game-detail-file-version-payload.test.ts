@@ -8,6 +8,8 @@ describe('buildGameDetailFileVersionPayload', () => {
       originalName: 'G0001_turn_7.se1',
       uploadedAt: new Date('2026-05-03T10:20:30.000Z'),
       uploadedById: 'user-1',
+      contentHash: 'sha256:abc123',
+      idempotencyKey: 'game-1:upload:sha256:abc123',
       uploadedBy: {
         displayName: 'Solon',
       },
@@ -19,6 +21,8 @@ describe('buildGameDetailFileVersionPayload', () => {
       uploadedAt: '2026-05-03T10:20:30.000Z',
       uploadedById: 'user-1',
       uploadedByDisplayName: 'Solon',
+      contentHash: 'sha256:abc123',
+      idempotencyKey: 'game-1:upload:sha256:abc123',
     });
   });
 });

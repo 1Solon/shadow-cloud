@@ -6,6 +6,7 @@ import {
   getConflictSafeFileName,
   getTrackedCampaignDirectoryNames,
   isShadowEmpireSave,
+  parseSaveFileTurnNumber,
 } from "./sync-files";
 
 describe("sync file helpers", () => {
@@ -67,5 +68,11 @@ describe("sync file helpers", () => {
         "game-5": {},
       }),
     ).toEqual(["1 - Ashes", "2 - Cinders"]);
+  });
+
+  it("extracts the load turn from Shadow Cloud save filenames", () => {
+    expect(parseSaveFileTurnNumber("1-T10-S1-Solon.se1")).toBe(10);
+    expect(parseSaveFileTurnNumber("22-T4-S3-Player.se1")).toBe(4);
+    expect(parseSaveFileTurnNumber("manual-save.se1")).toBeNull();
   });
 });

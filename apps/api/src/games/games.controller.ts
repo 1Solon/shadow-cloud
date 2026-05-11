@@ -68,12 +68,30 @@ export class GamesController {
     @Param('gameId') gameId: string,
     @Req() request: AuthenticatedRequest,
     @UploadedFile() file?: UploadedSaveFile,
+    @Body() body?: Record<string, string | undefined>,
   ) {
     if (!file?.buffer?.length || !file.originalname) {
       throw new BadRequestException('A save file upload is required.');
     }
 
-    return this.gamesService.uploadSave(gameId, request.user?.sub, file);
+    const expectedRoundNumber =
+      body?.expectedRoundNumber == null || body.expectedRoundNumber === ''
+        ? undefined
+        : Number(body.expectedRoundNumber);
+
+    return this.gamesService.uploadSave(gameId, request.user?.sub, file, {
+      contentHash: body?.contentHash,
+      idempotencyKey: body?.idempotencyKey,
+      expectedActivePlayerEntryId: body?.expectedActivePlayerEntryId,
+      expectedActivePlayerUserId: body?.expectedActivePlayerUserId,
+      expectedRoundNumber: Number.isFinite(expectedRoundNumber)
+        ? expectedRoundNumber
+        : undefined,
+      expectedLatestFileVersionId:
+        body?.expectedLatestFileVersionId === '__none__'
+          ? null
+          : body?.expectedLatestFileVersionId,
+    });
   }
 
   @Post(':gameId/seat-order')

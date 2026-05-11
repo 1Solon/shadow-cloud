@@ -21,7 +21,10 @@ import {
   upsertDiscordUser,
 } from '../support/discord-user.helpers';
 import { buildGameIdentifierWhere } from '../support/game-lookup.helpers';
-import type { UploadedSaveFile } from '../support/game-payload.types';
+import type {
+  UploadedSaveFile,
+  UploadSaveSafetyMetadata,
+} from '../support/game-payload.types';
 import { resolveUploadSaveNaming } from '../support/upload-save-naming';
 import { resolveActivePlayerEntry } from '../support/turn-state.utils';
 
@@ -55,6 +58,7 @@ export class GamesTurnService {
     gameId: string,
     userId: string | undefined,
     file: UploadedSaveFile,
+    metadata: UploadSaveSafetyMetadata = {},
   ) {
     if (!userId) {
       throw new UnauthorizedException(
@@ -92,6 +96,28 @@ export class GamesTurnService {
       throw new NotFoundException(`Game ${gameId} was not found.`);
     }
 
+    if (metadata.idempotencyKey) {
+      const existingUpload = await prisma.fileVersion.findFirst({
+        where: {
+          gameId: game.id,
+          uploadedById: userId,
+          idempotencyKey: metadata.idempotencyKey,
+        },
+      });
+
+      if (existingUpload) {
+        return {
+          fileVersionId: existingUpload.id,
+          versionNumber: existingUpload.versionNumber,
+          originalName: existingUpload.originalName,
+          roundNumber: game.turnState?.roundNumber ?? 1,
+          roundAdvanced: false,
+          activePlayer: null,
+          idempotentReplay: true,
+        };
+      }
+    }
+
     const isOrganizer = game.organizerId === userId;
     const membership = game.players.find((player) => player.userId === userId);
 
@@ -120,6 +146,17 @@ export class GamesTurnService {
       throw new ForbiddenException(
         'Only the active player can upload the current save.',
       );
+    }
+
+    if (
+      (metadata.expectedActivePlayerEntryId != null &&
+        metadata.expectedActivePlayerEntryId !== activePlayerEntry.id) ||
+      (metadata.expectedActivePlayerUserId != null &&
+        metadata.expectedActivePlayerUserId !== activePlayerEntry.userId) ||
+      (metadata.expectedRoundNumber != null &&
+        metadata.expectedRoundNumber !== game.turnState.roundNumber)
+    ) {
+      throw new ConflictException('The turn changed before this upload.');
     }
 
     const orderedPlayers: PlayerSummary[] = game.players
@@ -162,6 +199,15 @@ export class GamesTurnService {
           },
         });
 
+        if (
+          metadata.expectedLatestFileVersionId !== undefined &&
+          (latestVersion?.id ?? null) !== metadata.expectedLatestFileVersionId
+        ) {
+          throw new ConflictException(
+            'A newer save was uploaded before this upload.',
+          );
+        }
+
         const versionNumber = (latestVersion?.versionNumber ?? 0) + 1;
         const storedFile = await this.fileStorage.storeFile({
           gameId: game.id,
@@ -181,6 +227,10 @@ export class GamesTurnService {
             storagePath: storedFile.storagePath,
             originalName: storedFile.fileName,
             versionNumber,
+            contentHash: metadata.contentHash,
+            idempotencyKey: metadata.idempotencyKey,
+            clientOriginalName: file.originalname,
+            clientFileSize: file.size,
           },
         });
 

@@ -68,6 +68,7 @@ async function writeFileAtomically(
 
 type TauriSyncAdaptersOptions = {
   apiBaseUrl?: string;
+  onStateUpdate?: SyncAdapters["onStateUpdate"];
 };
 
 export function createTauriSyncAdapters(
@@ -93,6 +94,7 @@ export function createTauriSyncAdapters(
     downloadFile: apiClient.downloadFile,
     listExistingFileNames,
     writeFileAtomically,
+    onStateUpdate: options.onStateUpdate,
   };
 }
 

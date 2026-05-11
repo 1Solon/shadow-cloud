@@ -94,6 +94,11 @@ export function App() {
 
       const adapters = createTauriSyncAdapters({
         apiBaseUrl: remoteSettingsRef.current.apiBaseUrl,
+        onStateUpdate: async (nextState) => {
+          stateRef.current = nextState;
+          setState(nextState);
+          await saveSyncState(nextState);
+        },
       });
       const nextState = await runSyncOnce(stateRef.current, adapters);
       stateRef.current = nextState;
@@ -584,8 +589,12 @@ export function App() {
                         </strong>
                       </div>
                       <div>
-                        <span>TURN</span>
-                        <strong>{campaign.roundNumber ?? "-"}</strong>
+                        <span>LOAD</span>
+                        <strong>
+                          {campaign.loadTurnNumber ??
+                            campaign.latestRemoteFileName ??
+                            "-"}
+                        </strong>
                       </div>
                       <div>
                         <span>LAST</span>

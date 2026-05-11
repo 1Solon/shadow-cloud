@@ -2,7 +2,9 @@ import { getErrorMessage } from "@/errors/error-message";
 import {
   buildCampaignDirectoryName,
   chooseNewestPendingSave,
+  createFileFingerprint,
   getConflictSafeFileName,
+  parseSaveFileTurnNumber,
   type LocalSaveFile,
 } from "./sync-files";
 
@@ -23,6 +25,7 @@ export type GameDetail = {
   slug: string;
   name: string;
   roundNumber: number;
+  activePlayerEntryId: string | null;
   activePlayerUserId: string | null;
   activePlayerDisplayName: string;
   fileVersions: Array<{
@@ -31,6 +34,8 @@ export type GameDetail = {
     uploadedAt: string;
     uploadedById: string;
     uploadedByDisplayName: string;
+    contentHash?: string | null;
+    idempotencyKey?: string | null;
   }>;
 };
 
@@ -38,6 +43,8 @@ export type CampaignSyncState = {
   gameNumber?: number;
   name?: string;
   roundNumber?: number;
+  loadTurnNumber?: number | null;
+  latestRemoteFileName?: string;
   activePlayerUserId?: string | null;
   activePlayerDisplayName?: string;
   directoryName?: string;
@@ -47,6 +54,26 @@ export type CampaignSyncState = {
   uploadedFingerprints?: string[];
   lastUploadedFileVersionId?: string;
   lastDownloadedFileVersionId?: string;
+  needsDecision?: {
+    reason:
+      | "remote-advanced-before-local-upload"
+      | "unverified-remote-history-before-local-upload"
+      | "campaign-sync-failed";
+    localFileName?: string;
+    remoteFileVersionId?: string;
+    message?: string;
+  };
+  ledger?: Array<{
+    id: string;
+    direction: "upload" | "download";
+    status: "pending" | "completed" | "failed" | "needs-decision";
+    contentHash?: string;
+    fileName?: string;
+    fileVersionId?: string;
+    retryCount: number;
+    lastError?: string;
+    updatedAt: string;
+  }>;
 };
 
 export type SyncState = {
@@ -70,8 +97,20 @@ export type SyncAdapters = {
   uploadSave: (
     token: string,
     gameNumber: number,
-    file: LocalSaveFile,
-  ) => Promise<{ fileVersionId: string; originalName: string }>;
+    upload: {
+      file: LocalSaveFile;
+      contentHash: string;
+      idempotencyKey: string;
+      expectedActivePlayerEntryId: string | null;
+      expectedActivePlayerUserId: string | null;
+      expectedRoundNumber: number;
+      expectedLatestFileVersionId: string | null;
+    },
+  ) => Promise<{
+    fileVersionId: string;
+    originalName: string;
+    idempotentReplay?: boolean;
+  }>;
   downloadFile: (
     token: string,
     gameNumber: number,
@@ -83,6 +122,7 @@ export type SyncAdapters = {
     fileName: string,
     bytes: Uint8Array,
   ) => Promise<string>;
+  onStateUpdate?: (state: SyncState) => Promise<void>;
 };
 
 function joinPath(left: string, right: string) {
@@ -111,6 +151,359 @@ async function ensureCanonicalCampaignDirectory(
   await adapters.ensureDir(campaignDirectoryPath);
 
   return campaignDirectoryPath;
+}
+
+function createLedgerId(input: {
+  gameId: string;
+  direction: "upload" | "download";
+  contentHash?: string;
+  fileVersionId?: string;
+}) {
+  return [
+    input.gameId,
+    input.direction,
+    input.contentHash ?? input.fileVersionId ?? "unknown",
+  ].join(":");
+}
+
+function addLedgerEntry(
+  campaignState: CampaignSyncState,
+  entry: NonNullable<CampaignSyncState["ledger"]>[number],
+) {
+  const existing = campaignState.ledger ?? [];
+  campaignState.ledger = [
+    ...existing.filter((candidate) => candidate.id !== entry.id),
+    entry,
+  ];
+}
+
+function getDownloadedStatus(fileName: string) {
+  const turnNumber = parseSaveFileTurnNumber(fileName);
+
+  if (turnNumber == null) {
+    return `Downloaded ${fileName}`;
+  }
+
+  return `Downloaded load turn ${turnNumber}`;
+}
+
+async function persistProgress(
+  nextState: SyncState,
+  adapters: SyncAdapters,
+) {
+  await adapters.onStateUpdate?.(nextState);
+}
+
+async function downloadRemoteSave(input: {
+  token: string;
+  gameId: string;
+  gameNumber: number;
+  campaignDirectoryPath: string;
+  campaignState: CampaignSyncState;
+  remoteFile: GameDetail["fileVersions"][number];
+  timestamp: string;
+  adapters: SyncAdapters;
+}) {
+  const {
+    token,
+    gameId,
+    gameNumber,
+    campaignDirectoryPath,
+    campaignState,
+    remoteFile,
+    timestamp,
+    adapters,
+  } = input;
+  const download = await adapters.downloadFile(
+    token,
+    gameNumber,
+    remoteFile.id,
+  );
+  const remoteFileName = remoteFile.originalName;
+  const fileName = getConflictSafeFileName(
+    remoteFileName,
+    new Set(await adapters.listExistingFileNames(campaignDirectoryPath)),
+  );
+
+  await adapters.writeFileAtomically(
+    campaignDirectoryPath,
+    fileName,
+    download.bytes,
+  );
+  const contentHash = await createFileFingerprint({
+    name: fileName,
+    path: joinPath(campaignDirectoryPath, fileName),
+    modifiedAt: Date.parse(timestamp),
+    size: download.bytes.byteLength,
+    bytes: download.bytes,
+  });
+  const uploadedFingerprints = new Set(
+    campaignState.uploadedFingerprints ?? [],
+  );
+
+  uploadedFingerprints.add(contentHash);
+  campaignState.uploadedFingerprints = [...uploadedFingerprints];
+  campaignState.lastDownloadedFileVersionId = remoteFile.id;
+  campaignState.status = getDownloadedStatus(remoteFileName);
+  addLedgerEntry(campaignState, {
+    id: createLedgerId({
+      gameId,
+      direction: "download",
+      fileVersionId: remoteFile.id,
+    }),
+    direction: "download",
+    status: "completed",
+    contentHash,
+    fileName,
+    fileVersionId: remoteFile.id,
+    retryCount: 0,
+    updatedAt: timestamp,
+  });
+}
+
+async function syncCampaign(input: {
+  state: SyncState;
+  game: GameListItem;
+  currentUserId: string;
+  timestamp: string;
+  adapters: SyncAdapters;
+}) {
+  const { state, game, currentUserId, timestamp, adapters } = input;
+  const previousCampaignState = getCampaignState(state, game.id);
+  const detail = await adapters.getGameDetail(state.token!, game.gameNumber);
+  const latestRemoteFile = detail.fileVersions[0];
+  const directoryName = buildCampaignDirectoryName(
+    detail.gameNumber,
+    detail.name,
+  );
+  let campaignDirectoryPath = joinPath(state.saveRoot!, directoryName);
+  const campaignState: CampaignSyncState = {
+    ...previousCampaignState,
+    gameNumber: detail.gameNumber,
+    name: detail.name,
+    roundNumber: detail.roundNumber,
+    loadTurnNumber: latestRemoteFile
+      ? parseSaveFileTurnNumber(latestRemoteFile.originalName)
+      : null,
+    latestRemoteFileName: latestRemoteFile?.originalName,
+    activePlayerUserId: detail.activePlayerUserId,
+    activePlayerDisplayName: detail.activePlayerDisplayName,
+    directoryName,
+    error: undefined,
+    needsDecision: undefined,
+    lastSyncedAt: timestamp,
+  };
+
+  try {
+    campaignDirectoryPath = await ensureCanonicalCampaignDirectory(
+      state.saveRoot!,
+      previousCampaignState.directoryName,
+      directoryName,
+      adapters,
+    );
+  } catch (error) {
+    campaignState.error = getErrorMessage(error, "Could not rename campaign");
+    await adapters.ensureDir(campaignDirectoryPath);
+  }
+
+  if (detail.activePlayerUserId === currentUserId) {
+    const uploadedFingerprints = new Set(
+      previousCampaignState.uploadedFingerprints ?? [],
+    );
+    const modifiedAfter =
+      latestRemoteFile && latestRemoteFile.uploadedById !== currentUserId
+        ? new Date(latestRemoteFile.uploadedAt).getTime()
+        : undefined;
+    const localSaves = await adapters.listLocalSaves(campaignDirectoryPath);
+    const pendingSave = await chooseNewestPendingSave(
+      localSaves,
+      uploadedFingerprints,
+      modifiedAfter,
+    );
+
+    if (!pendingSave) {
+      const localSaveNames = new Set(localSaves.map((file) => file.name));
+
+      if (
+        localSaves.length === 0 &&
+        latestRemoteFile &&
+        previousCampaignState.lastDownloadedFileVersionId !==
+          latestRemoteFile.id
+      ) {
+        await downloadRemoteSave({
+          token: state.token!,
+          gameId: game.id,
+          gameNumber: detail.gameNumber,
+          campaignDirectoryPath,
+          campaignState,
+          remoteFile: latestRemoteFile,
+          timestamp,
+          adapters,
+        });
+        return campaignState;
+      }
+
+      if (
+        latestRemoteFile &&
+        previousCampaignState.lastDownloadedFileVersionId ===
+          latestRemoteFile.id &&
+        !localSaveNames.has(latestRemoteFile.originalName)
+      ) {
+        await downloadRemoteSave({
+          token: state.token!,
+          gameId: game.id,
+          gameNumber: detail.gameNumber,
+          campaignDirectoryPath,
+          campaignState,
+          remoteFile: latestRemoteFile,
+          timestamp,
+          adapters,
+        });
+        return campaignState;
+      }
+
+      campaignState.status = "No pending .se1 saves";
+      return campaignState;
+    }
+
+    if (
+      latestRemoteFile &&
+      latestRemoteFile.uploadedById !== currentUserId &&
+      previousCampaignState.lastDownloadedFileVersionId !== latestRemoteFile.id
+    ) {
+      campaignState.status = "Needs your decision";
+      campaignState.needsDecision = {
+        reason: "remote-advanced-before-local-upload",
+        localFileName: pendingSave.file.name,
+        remoteFileVersionId: latestRemoteFile.id,
+      };
+      addLedgerEntry(campaignState, {
+        id: createLedgerId({
+          gameId: game.id,
+          direction: "upload",
+          contentHash: pendingSave.fingerprint,
+        }),
+        direction: "upload",
+        status: "needs-decision",
+        contentHash: pendingSave.fingerprint,
+        fileName: pendingSave.file.name,
+        fileVersionId: latestRemoteFile.id,
+        retryCount: 0,
+        updatedAt: timestamp,
+      });
+      return campaignState;
+    }
+
+    if (
+      latestRemoteFile?.contentHash &&
+      latestRemoteFile.contentHash === pendingSave.fingerprint
+    ) {
+      uploadedFingerprints.add(pendingSave.fingerprint);
+      campaignState.uploadedFingerprints = [...uploadedFingerprints];
+      campaignState.lastDownloadedFileVersionId = latestRemoteFile.id;
+      campaignState.status = "Local save already matches latest remote";
+      addLedgerEntry(campaignState, {
+        id: createLedgerId({
+          gameId: game.id,
+          direction: "download",
+          fileVersionId: latestRemoteFile.id,
+        }),
+        direction: "download",
+        status: "completed",
+        contentHash: pendingSave.fingerprint,
+        fileName: pendingSave.file.name,
+        fileVersionId: latestRemoteFile.id,
+        retryCount: 0,
+        updatedAt: timestamp,
+      });
+      return campaignState;
+    }
+
+    if (
+      latestRemoteFile &&
+      !latestRemoteFile.contentHash
+    ) {
+      campaignState.status = "Needs your decision";
+      campaignState.needsDecision = {
+        reason: "unverified-remote-history-before-local-upload",
+        localFileName: pendingSave.file.name,
+        remoteFileVersionId: latestRemoteFile.id,
+      };
+      addLedgerEntry(campaignState, {
+        id: createLedgerId({
+          gameId: game.id,
+          direction: "upload",
+          contentHash: pendingSave.fingerprint,
+        }),
+        direction: "upload",
+        status: "needs-decision",
+        contentHash: pendingSave.fingerprint,
+        fileName: pendingSave.file.name,
+        fileVersionId: latestRemoteFile.id,
+        retryCount: 0,
+        updatedAt: timestamp,
+      });
+      return campaignState;
+    }
+
+    const idempotencyKey = createLedgerId({
+      gameId: game.id,
+      direction: "upload",
+      contentHash: pendingSave.fingerprint,
+    });
+    const upload = await adapters.uploadSave(state.token!, detail.gameNumber, {
+      file: pendingSave.file,
+      contentHash: pendingSave.fingerprint,
+      idempotencyKey,
+      expectedActivePlayerEntryId: detail.activePlayerEntryId,
+      expectedActivePlayerUserId: detail.activePlayerUserId,
+      expectedRoundNumber: detail.roundNumber,
+      expectedLatestFileVersionId: latestRemoteFile?.id ?? null,
+    });
+    uploadedFingerprints.add(pendingSave.fingerprint);
+    campaignState.uploadedFingerprints = [...uploadedFingerprints];
+    campaignState.lastUploadedFileVersionId = upload.fileVersionId;
+    campaignState.status = `Uploaded ${pendingSave.file.name}`;
+    addLedgerEntry(campaignState, {
+      id: idempotencyKey,
+      direction: "upload",
+      status: "completed",
+      contentHash: pendingSave.fingerprint,
+      fileName: pendingSave.file.name,
+      fileVersionId: upload.fileVersionId,
+      retryCount: 0,
+      updatedAt: timestamp,
+    });
+    return campaignState;
+  }
+
+  const localSaves = await adapters.listLocalSaves(campaignDirectoryPath);
+  const remoteFile =
+    localSaves.length === 0
+      ? detail.fileVersions[0]
+      : detail.fileVersions.find(
+          (fileVersion) => fileVersion.uploadedById !== currentUserId,
+        );
+
+  if (
+    !remoteFile ||
+    remoteFile.id === previousCampaignState.lastDownloadedFileVersionId
+  ) {
+    campaignState.status = "No remote save to download";
+    return campaignState;
+  }
+
+  await downloadRemoteSave({
+    token: state.token!,
+    gameId: game.id,
+    gameNumber: detail.gameNumber,
+    campaignDirectoryPath,
+    campaignState,
+    remoteFile,
+    timestamp,
+    adapters,
+  });
+  return campaignState;
 }
 
 export async function runSyncOnce(
@@ -166,99 +559,57 @@ export async function runSyncOnce(
       game.participantUserIds.includes(currentUserId),
     );
     const nextCampaigns: Record<string, CampaignSyncState> = {};
+    let completedCount = 0;
+    let attentionCount = 0;
 
     for (const game of participatingGames) {
-      const previousCampaignState = getCampaignState(state, game.id);
-      const detail = await adapters.getGameDetail(state.token, game.gameNumber);
-      const directoryName = buildCampaignDirectoryName(
-        detail.gameNumber,
-        detail.name,
-      );
-      const campaignDirectoryPath = await ensureCanonicalCampaignDirectory(
-        state.saveRoot,
-        previousCampaignState.directoryName,
-        directoryName,
-        adapters,
-      );
+      try {
+        const campaignState = await syncCampaign({
+          state,
+          game,
+          currentUserId,
+          timestamp,
+          adapters,
+        });
+        nextCampaigns[game.id] = campaignState;
 
-      const campaignState: CampaignSyncState = {
-        ...previousCampaignState,
-        gameNumber: detail.gameNumber,
-        name: detail.name,
-        roundNumber: detail.roundNumber,
-        activePlayerUserId: detail.activePlayerUserId,
-        activePlayerDisplayName: detail.activePlayerDisplayName,
-        directoryName,
-        error: undefined,
-        lastSyncedAt: timestamp,
-      };
-
-      if (detail.activePlayerUserId === currentUserId) {
-        const uploadedFingerprints = new Set(
-          previousCampaignState.uploadedFingerprints ?? [],
-        );
-        const latestRemoteFile = detail.fileVersions[0];
-        const modifiedAfter =
-          latestRemoteFile && latestRemoteFile.uploadedById !== currentUserId
-            ? new Date(latestRemoteFile.uploadedAt).getTime()
-            : undefined;
-        const pendingSave = await chooseNewestPendingSave(
-          await adapters.listLocalSaves(campaignDirectoryPath),
-          uploadedFingerprints,
-          modifiedAfter,
-        );
-
-        if (!pendingSave) {
-          campaignState.status = "No pending .se1 saves";
+        if (campaignState.error || campaignState.needsDecision) {
+          attentionCount += 1;
         } else {
-          const upload = await adapters.uploadSave(
-            state.token,
-            detail.gameNumber,
-            pendingSave.file,
-          );
-          uploadedFingerprints.add(pendingSave.fingerprint);
-          campaignState.uploadedFingerprints = [...uploadedFingerprints];
-          campaignState.lastUploadedFileVersionId = upload.fileVersionId;
-          campaignState.status = `Uploaded ${pendingSave.file.name}`;
+          completedCount += 1;
         }
-      } else {
-        const remoteFile = detail.fileVersions.find(
-          (fileVersion) => fileVersion.uploadedById !== currentUserId,
-        );
-
-        if (
-          !remoteFile ||
-          remoteFile.id === previousCampaignState.lastDownloadedFileVersionId
-        ) {
-          campaignState.status = "No remote save to download";
-        } else {
-          const download = await adapters.downloadFile(
-            state.token,
-            detail.gameNumber,
-            remoteFile.id,
-          );
-          const fileName = getConflictSafeFileName(
-            download.fileName,
-            new Set(
-              await adapters.listExistingFileNames(campaignDirectoryPath),
-            ),
-          );
-
-          await adapters.writeFileAtomically(
-            campaignDirectoryPath,
-            fileName,
-            download.bytes,
-          );
-          campaignState.lastDownloadedFileVersionId = remoteFile.id;
-          campaignState.status = `Downloaded ${fileName}`;
-        }
+      } catch (error) {
+        attentionCount += 1;
+        nextCampaigns[game.id] = {
+          ...getCampaignState(state, game.id),
+          gameNumber: game.gameNumber,
+          name: game.name,
+          roundNumber: game.roundNumber,
+          activePlayerUserId: game.activePlayerUserId,
+          activePlayerDisplayName: game.activePlayerDisplayName,
+          status: "Sync failed",
+          error: getErrorMessage(error, "Sync failed"),
+          needsDecision: {
+            reason: "campaign-sync-failed",
+            message: getErrorMessage(error, "Sync failed"),
+          },
+          lastSyncedAt: timestamp,
+        };
       }
 
-      nextCampaigns[game.id] = campaignState;
+      nextState.campaigns = nextCampaigns;
+      await persistProgress(nextState, adapters);
     }
 
     nextState.campaigns = nextCampaigns;
-    nextState.lastStatus = `Synced ${participatingGames.length} campaign(s)`;
+    nextState.lastStatus =
+      attentionCount === 0
+        ? `Synced ${completedCount} campaign(s)`
+        : `Synced ${completedCount} campaign(s), ${attentionCount} need attention`;
+    nextState.lastError =
+      attentionCount === 0
+        ? undefined
+        : `${attentionCount} campaign${attentionCount === 1 ? "" : "s"} needs attention`;
     return nextState;
   } catch (error) {
     return {
