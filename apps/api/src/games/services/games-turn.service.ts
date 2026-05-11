@@ -460,20 +460,6 @@ export class GamesTurnService {
       throw new BadRequestException('Removed seats cannot also be cleared.');
     }
 
-    if (
-      game.players.some(
-        (player) =>
-          (uniqueClearedSeatIds.has(player.id) ||
-            uniqueRemovedSeatIds.has(player.id)) &&
-          (player.role === GameRole.ORGANIZER ||
-            player.userId === game.organizerId),
-      )
-    ) {
-      throw new BadRequestException(
-        'The organizer seat cannot be cleared or removed.',
-      );
-    }
-
     const currentOrder = game.players.map((player) => ({
       seatEntryId: player.id,
       turnOrder: player.turnOrder,
@@ -491,6 +477,9 @@ export class GamesTurnService {
         turnOrder: index + 1,
         userId: uniqueClearedSeatIds.has(seatEntryId) ? null : seat.userId,
         user: uniqueClearedSeatIds.has(seatEntryId) ? null : seat.user,
+        role: uniqueClearedSeatIds.has(seatEntryId)
+          ? GameRole.PLAYER
+          : seat.role,
       };
     });
     const remainingOccupiedSeats = reorderedSeats.filter(
@@ -584,6 +573,7 @@ export class GamesTurnService {
           data: {
             turnOrder: seat.turnOrder,
             userId: seat.userId,
+            role: seat.role,
           },
         });
       }

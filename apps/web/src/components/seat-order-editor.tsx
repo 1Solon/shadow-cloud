@@ -267,7 +267,6 @@ function SortableSeatRow({
               disabled={
                 isPending ||
                 player.userId == null ||
-                player.isOrganizer ||
                 !canClearPlayer
               }
               type="button"
@@ -278,18 +277,12 @@ function SortableSeatRow({
             >
               Clear seat
             </Button>
-            {player.isOrganizer ? (
-              <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-56 -translate-x-1/2 rounded-md border border-orange-400/30 bg-black px-3 py-2 text-[10px] normal-case tracking-normal text-orange-200 shadow-lg group-hover:block group-focus-within:block">
-                Transfer the Overlord to another occupied seat before removing
-                this seat.
-              </span>
-            ) : null}
           </span>
           <span className="group relative inline-flex" data-no-drag="true">
             <Button
               data-no-drag="true"
               className="w-28 shrink-0"
-              disabled={isPending || player.isOrganizer || !canRemoveSeat}
+              disabled={isPending || !canRemoveSeat}
               type="button"
               variant="outline"
               onClick={() => {
@@ -298,12 +291,6 @@ function SortableSeatRow({
             >
               Remove seat
             </Button>
-            {player.isOrganizer ? (
-              <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-56 -translate-x-1/2 rounded-md border border-orange-400/30 bg-black px-3 py-2 text-[10px] normal-case tracking-normal text-orange-200 shadow-lg group-hover:block group-focus-within:block">
-                Transfer the Overlord to another occupied seat before removing
-                this seat.
-              </span>
-            ) : null}
           </span>
         </div>
       ) : null}
@@ -423,7 +410,7 @@ export function SeatOrderEditor({
       (player) => player.id === seatEntryId,
     );
 
-    if (!selectedPlayer?.userId || selectedPlayer.isOrganizer) {
+    if (!selectedPlayer?.userId) {
       return;
     }
 
@@ -465,7 +452,7 @@ export function SeatOrderEditor({
       (player) => player.id === seatEntryId,
     );
 
-    if (!selectedPlayer || selectedPlayer.isOrganizer) {
+    if (!selectedPlayer) {
       return;
     }
 
@@ -503,7 +490,7 @@ export function SeatOrderEditor({
 
     const selectedPlayer = draftPlayers[index];
 
-    if (!selectedPlayer?.userId || selectedPlayer.isOrganizer) {
+    if (!selectedPlayer?.userId) {
       return;
     }
 
@@ -529,7 +516,7 @@ export function SeatOrderEditor({
 
     const selectedPlayer = draftPlayers[index];
 
-    if (!selectedPlayer || selectedPlayer.isOrganizer) {
+    if (!selectedPlayer) {
       return;
     }
 
