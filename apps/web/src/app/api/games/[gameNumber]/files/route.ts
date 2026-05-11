@@ -2,6 +2,11 @@ import { createApiAccessToken, getServerAuthSession } from "@/auth";
 
 const apiBaseUrl = process.env.SHADOW_CLOUD_API_URL ?? "http://localhost:3001";
 
+type UploadSaveResponsePayload = {
+  fileVersionId?: string;
+  originalName?: string;
+};
+
 export async function POST(
   request: Request,
   context: { params: Promise<{ gameNumber: string }> },
@@ -72,9 +77,15 @@ export async function POST(
     );
   }
 
+  const uploadPayload = (await response
+    .json()
+    .catch(() => null)) as UploadSaveResponsePayload | null;
+
   return Response.json(
     {
       ok: true,
+      fileVersionId: uploadPayload?.fileVersionId,
+      originalName: uploadPayload?.originalName,
       redirectTo: `/games/${encodeURIComponent(gameNumber)}?upload=success`,
     },
     { status: 200 },

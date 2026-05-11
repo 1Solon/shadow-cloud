@@ -28,11 +28,15 @@ describe("POST /api/games/[gameNumber]/files", () => {
     } as Awaited<ReturnType<typeof getServerAuthSession>>);
     mockedCreateApiAccessToken.mockResolvedValue("test-token");
 
-    const fetchSpy = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(
-        new Response(JSON.stringify({ ok: true }), { status: 200 }),
-      );
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          fileVersionId: "file-version-22",
+          originalName: "22-T8-S2-Player2.se1",
+        }),
+        { status: 200 },
+      ),
+    );
 
     const formData = new FormData();
     formData.set(
@@ -59,6 +63,8 @@ describe("POST /api/games/[gameNumber]/files", () => {
     expect(response.headers.get("location")).toBeNull();
     await expect(response.json()).resolves.toEqual({
       ok: true,
+      fileVersionId: "file-version-22",
+      originalName: "22-T8-S2-Player2.se1",
       redirectTo: "/games/22?upload=success",
     });
 

@@ -72,10 +72,13 @@ export function UploadSaveForm({ gameNumber }: UploadSaveFormProps) {
           } | null;
 
           if (payload?.redirectTo) {
+            clearFile();
             router.replace(payload.redirectTo, { scroll: false });
+            router.refresh();
             return;
           }
 
+          clearFile();
           router.refresh();
         });
       }}
