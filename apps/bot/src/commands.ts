@@ -138,6 +138,26 @@ const linkCommand = new SlashCommandBuilder()
     "Post the Shadow Cloud game link for the current forum thread.",
   );
 
+const pinCommand = new SlashCommandBuilder()
+  .setName("pin")
+  .setDescription("Pin a message in this game thread (overlord only).")
+  .addStringOption((option) =>
+    option
+      .setName("message")
+      .setDescription("Message ID or link from this forum thread.")
+      .setRequired(true),
+  );
+
+const unpinCommand = new SlashCommandBuilder()
+  .setName("unpin")
+  .setDescription("Unpin a message in this game thread (overlord only).")
+  .addStringOption((option) =>
+    option
+      .setName("message")
+      .setDescription("Message ID or link from this forum thread.")
+      .setRequired(true),
+  );
+
 export const supportedCommandNames = [
   "init",
   "register",
@@ -145,6 +165,8 @@ export const supportedCommandNames = [
   "replace",
   "skip",
   "link",
+  "pin",
+  "unpin",
 ] as const;
 
 export type SupportedCommandName = (typeof supportedCommandNames)[number];
@@ -164,4 +186,6 @@ export const slashCommands = [
   replaceCommand,
   skipCommand,
   linkCommand,
+  pinCommand,
+  unpinCommand,
 ] as const;

@@ -19,4 +19,17 @@ describe('commands', () => {
       supportedCommandNames,
     );
   });
+
+  it('includes host-only pinning commands after link', () => {
+    expect(supportedCommandNames).toEqual([
+      'init',
+      'register',
+      'resign',
+      'replace',
+      'skip',
+      'link',
+      'pin',
+      'unpin',
+    ]);
+  });
 });

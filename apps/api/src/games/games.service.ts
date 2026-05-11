@@ -12,6 +12,7 @@ import { GamesQueryService } from './services/games-query.service';
 import { GamesRegistrationService } from './services/games-registration.service';
 import { GamesTurnService } from './services/games-turn.service';
 import { FileStorageService } from './file-storage.service';
+import type { AuthorizeHostCommandDto } from './dto/authorize-host-command.dto';
 import type { CreateDiscordGameDto } from './dto/create-discord-game.dto';
 import type { LinkDiscordThreadDto } from './dto/link-discord-thread.dto';
 import type { RegisterDiscordPlayerDto } from './dto/register-discord-player.dto';
@@ -437,5 +438,44 @@ export class GamesService {
 
   async linkGameFromDiscordThread(input: LinkDiscordThreadDto) {
     return this.gamesQuery.getGameLinkByDiscordThread(input);
+  }
+
+  async authorizeHostCommand(input: AuthorizeHostCommandDto) {
+    const game = await prisma.game.findUnique({
+      where: { discordThreadId: input.discordThreadId },
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        organizerId: true,
+      },
+    });
+
+    if (!game) {
+      throw new NotFoundException(
+        `Thread ${input.discordThreadId} is not linked to a game.`,
+      );
+    }
+
+    const callerIdentity = await prisma.authIdentity.findUnique({
+      where: {
+        provider_providerId: {
+          provider: 'discord',
+          providerId: input.callerDiscordId,
+        },
+      },
+    });
+
+    if (!callerIdentity || callerIdentity.userId !== game.organizerId) {
+      throw new ForbiddenException(
+        `Only the game organizer can use /${input.commandName}.`,
+      );
+    }
+
+    return {
+      gameId: game.id,
+      slug: game.slug,
+      name: game.name,
+    };
   }
 }

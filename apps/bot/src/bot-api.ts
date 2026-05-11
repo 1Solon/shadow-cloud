@@ -7,6 +7,7 @@ export type BotApiConfig = {
 };
 
 export type ApprovalAction = "approve" | "reject";
+export type HostCommandName = "pin" | "unpin";
 
 export type CommandResponsePayload = {
   message?: string | string[];
@@ -233,6 +234,28 @@ export async function sendCommandRequest(
     default:
       throw new Error(`Unsupported command: ${interaction.commandName}`);
   }
+}
+
+export async function sendHostCommandAuthorizationRequest(
+  commandName: HostCommandName,
+  interaction: ChatInputCommandInteraction,
+  channel: AnyThreadChannel,
+  config: BotApiConfig,
+): Promise<ParsedBotResponse<CommandResponsePayload>> {
+  const response = await postJson(
+    `${config.apiBaseUrl}/v1/games/authorize-host-command`,
+    config.botApiToken,
+    {
+      discordThreadId: channel.id,
+      callerDiscordId: interaction.user.id,
+      commandName,
+    },
+  );
+
+  return {
+    response,
+    payload: await parseJson<CommandResponsePayload>(response),
+  };
 }
 
 export async function sendRegistrationApprovalRequest(

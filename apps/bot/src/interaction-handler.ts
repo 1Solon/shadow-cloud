@@ -14,6 +14,7 @@ import {
   type ApprovalAction,
   type BotApiConfig,
   type CommandResponsePayload,
+  sendHostCommandAuthorizationRequest,
   sendCommandRequest,
   sendRegistrationApprovalRequest,
 } from "./bot-api.js";
@@ -28,6 +29,7 @@ import {
   buildApprovalNotificationMessage,
   buildApprovalResultMessage,
 } from "./notifications.js";
+import { parseThreadMessageTarget } from "./message-target.js";
 
 const APPROVE_PREFIX = "sc_approve_";
 const REJECT_PREFIX = "sc_reject_";
@@ -221,7 +223,11 @@ function buildCommandErrorReply(
               ? "The API rejected the skip request."
               : commandName === "link"
                 ? "The API rejected the link request."
-                : "The API rejected the registration request."));
+                : commandName === "pin"
+                  ? "The API rejected the pin request."
+                  : commandName === "unpin"
+                    ? "The API rejected the unpin request."
+                    : "The API rejected the registration request."));
 
   return buildStandardEditReply({
     title:
@@ -235,9 +241,99 @@ function buildCommandErrorReply(
               ? "Skip failed"
               : commandName === "link"
                 ? "Link failed"
-                : "Registration failed",
+                : commandName === "pin"
+                  ? "Pin failed"
+                  : commandName === "unpin"
+                    ? "Unpin failed"
+                    : "Registration failed",
     facts: [errorMessage],
   });
+}
+
+function isPinningCommand(
+  commandName: SupportedCommandName,
+): commandName is "pin" | "unpin" {
+  return commandName === "pin" || commandName === "unpin";
+}
+
+function buildInvalidMessageTargetReply() {
+  return buildStandardEditReply({
+    title: "Invalid message",
+    facts: [
+      "Use a Discord message ID or message link from this forum thread.",
+    ],
+  });
+}
+
+async function handlePinningCommand(
+  interaction: ChatInputCommandInteraction,
+  channel: AnyThreadChannel,
+  config: BotApiConfig,
+  commandName: "pin" | "unpin",
+) {
+  const target = parseThreadMessageTarget(
+    interaction.options.getString("message", true),
+    {
+      guildId: interaction.guildId,
+      channelId: channel.id,
+    },
+  );
+
+  if (!target.ok) {
+    await interaction.editReply(buildInvalidMessageTargetReply());
+    return;
+  }
+
+  const { payload, response } = await sendHostCommandAuthorizationRequest(
+    commandName,
+    interaction,
+    channel,
+    config,
+  );
+
+  if (!response.ok) {
+    await interaction.editReply(buildCommandErrorReply(commandName, payload));
+    return;
+  }
+
+  try {
+    const message = await channel.messages.fetch(target.messageId);
+
+    if (commandName === "pin") {
+      await message.pin();
+      await interaction.editReply(
+        buildStandardEditReply({
+          title: "Message pinned",
+          facts: [`Pinned message ${target.messageId}.`],
+        }),
+      );
+      return;
+    }
+
+    await message.unpin();
+    await interaction.editReply(
+      buildStandardEditReply({
+        title: "Message unpinned",
+        facts: [`Unpinned message ${target.messageId}.`],
+      }),
+    );
+  } catch (error) {
+    console.warn(`Failed to ${commandName} Discord message.`, {
+      channelId: channel.id,
+      guildId: interaction.guildId,
+      messageId: target.messageId,
+      error,
+    });
+    await interaction.editReply(
+      buildStandardEditReply({
+        title:
+          commandName === "pin" ? "Pin failed" : "Unpin failed",
+        facts: [
+          "The bot could not access or modify that message. Check that the message exists in this thread and the bot has permission to manage pinned messages.",
+        ],
+      }),
+    );
+  }
 }
 
 async function handleSuccessfulCommand(
@@ -494,6 +590,11 @@ export function createInteractionHandler(client: Client, config: BotApiConfig) {
     );
 
     try {
+      if (isPinningCommand(commandName)) {
+        await handlePinningCommand(interaction, channel, config, commandName);
+        return;
+      }
+
       const { fallbackName, payload, response } = await sendCommandRequest(
         interaction,
         channel,
