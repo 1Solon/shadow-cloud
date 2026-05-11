@@ -34,6 +34,7 @@ FROM node:24.15.0-bookworm-slim@sha256:03eae3ef7e88a9de535496fb488d67e02b9d96a06
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+ENV SHADOW_CLOUD_API_URL=http://api:3001
 
 WORKDIR /app
 

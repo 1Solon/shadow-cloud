@@ -1,6 +1,21 @@
 import { createInternalApiToken, getServerAuthSession } from "@/auth";
 
-const apiBaseUrl = process.env.SHADOW_CLOUD_API_URL ?? "http://localhost:3001";
+type DesktopApprovalResult =
+  | {
+      ok: true;
+    }
+  | {
+      ok: false;
+      apiBaseUrl: string;
+      body?: string;
+      error?: string;
+      status?: number;
+      statusText?: string;
+    };
+
+function getApiBaseUrl() {
+  return process.env.SHADOW_CLOUD_API_URL ?? "http://localhost:3001";
+}
 
 function escapeHtml(value: string) {
   return value
@@ -136,16 +151,21 @@ function isSameOriginPost(request: Request, requestUrl: URL) {
 async function approveDesktopHandoff(
   handoffId: string,
   session: Awaited<ReturnType<typeof getServerAuthSession>>,
-) {
+): Promise<DesktopApprovalResult> {
   const user = session?.user;
+  const resolvedApiBaseUrl = getApiBaseUrl().replace(/\/+$/g, "");
 
   if (!user?.id) {
-    return false;
+    return {
+      ok: false,
+      apiBaseUrl: resolvedApiBaseUrl,
+      error: "Authenticated session is missing a user id.",
+    };
   }
 
   const internalToken = await createInternalApiToken();
   const response = await fetch(
-    `${apiBaseUrl.replace(/\/+$/g, "")}/v1/auth/desktop-handoffs/${encodeURIComponent(handoffId)}/approve`,
+    `${resolvedApiBaseUrl}/v1/auth/desktop-handoffs/${encodeURIComponent(handoffId)}/approve`,
     {
       method: "POST",
       headers: {
@@ -162,7 +182,17 @@ async function approveDesktopHandoff(
     },
   );
 
-  return response.ok;
+  if (response.ok) {
+    return { ok: true };
+  }
+
+  return {
+    ok: false,
+    apiBaseUrl: resolvedApiBaseUrl,
+    status: response.status,
+    statusText: response.statusText,
+    body: (await response.text().catch(() => "")).slice(0, 2_000),
+  };
 }
 
 export async function GET(request: Request) {
@@ -196,11 +226,24 @@ export async function POST(request: Request) {
     return createDesktopDiscordSignInResponse(getDesktopCallbackUrl(handoffId));
   }
 
-  const approved = await approveDesktopHandoff(handoffId, session).catch(
-    () => false,
-  );
+  let approved: DesktopApprovalResult;
 
-  if (!approved) {
+  try {
+    approved = await approveDesktopHandoff(handoffId, session);
+  } catch (error) {
+    approved = {
+      ok: false,
+      apiBaseUrl: getApiBaseUrl().replace(/\/+$/g, ""),
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  if (!approved.ok) {
+    console.error("Desktop handoff approval failed.", {
+      handoffId,
+      ...approved,
+    });
+
     return createDesktopApprovalErrorResponse(502);
   }
 

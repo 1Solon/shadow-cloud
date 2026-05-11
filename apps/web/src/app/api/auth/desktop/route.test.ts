@@ -124,6 +124,47 @@ describe("/api/auth/desktop", () => {
     );
   });
 
+  it("logs API approval failures with status and response body", async () => {
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    mockedGetServerAuthSession.mockResolvedValue({
+      user: {
+        id: "user-1",
+      },
+    } as Awaited<ReturnType<typeof getServerAuthSession>>);
+    mockedCreateInternalApiToken.mockResolvedValue("internal-token");
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      Response.json(
+        { message: "Invalid internal bearer token." },
+        { status: 401 },
+      ),
+    );
+
+    const response = await POST(
+      new Request("http://localhost:3200/api/auth/desktop?handoff=abc123", {
+        method: "POST",
+        headers: {
+          origin: "http://localhost:3200",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(502);
+    expect(consoleError).toHaveBeenCalledWith(
+      "Desktop handoff approval failed.",
+      expect.objectContaining({
+        handoffId: "abc123",
+        status: 401,
+        statusText: "",
+        body: '{"message":"Invalid internal bearer token."}',
+        apiBaseUrl: "http://localhost:3001",
+      }),
+    );
+
+    consoleError.mockRestore();
+  });
+
   it("rejects cross-origin approval posts", async () => {
     mockedGetServerAuthSession.mockResolvedValue({
       user: {
