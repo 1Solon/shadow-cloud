@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import type { Client } from "discord.js";
+import type { Client, Message } from "discord.js";
 import {
   buildGameInitNotificationMessage,
   buildSaveNotificationMessage,
@@ -75,6 +75,21 @@ async function renameThreadForNotification(
   } catch (error) {
     console.warn(
       `Skipping thread rename for ${gameName} (${thread.id}) because Discord did not complete the update in time.`,
+      error,
+    );
+  }
+}
+
+async function pinGameInitializedMessage(
+  message: Pick<Message, "pin">,
+  gameName: string,
+  threadId: string,
+) {
+  try {
+    await message.pin();
+  } catch (error) {
+    console.warn(
+      `Skipping pin for game-initialized notification ${gameName} (${threadId}) because Discord rejected the update.`,
       error,
     );
   }
@@ -164,7 +179,7 @@ export function startNotificationServer(
         return;
       }
 
-      await thread.send(
+      const message = await thread.send(
         isSaveUploadedRequest
           ? buildSaveNotificationMessage(
               payload as UploadNotificationPayload,
@@ -175,6 +190,10 @@ export function startNotificationServer(
               webBaseUrl,
             ),
       );
+
+      if (isGameInitializedRequest) {
+        await pinGameInitializedMessage(message, payload.game.name, thread.id);
+      }
 
       response.writeHead(204).end();
     } catch (error) {
