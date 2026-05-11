@@ -10,6 +10,7 @@ FROM base AS deps
 WORKDIR /workspace
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 
 RUN pnpm install --filter @shadow-cloud/web... --frozen-lockfile
