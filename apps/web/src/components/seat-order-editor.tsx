@@ -264,11 +264,7 @@ function SortableSeatRow({
             <Button
               data-no-drag="true"
               className="w-28 shrink-0"
-              disabled={
-                isPending ||
-                player.userId == null ||
-                !canClearPlayer
-              }
+              disabled={isPending || player.userId == null || !canClearPlayer}
               type="button"
               variant="outline"
               onClick={() => {

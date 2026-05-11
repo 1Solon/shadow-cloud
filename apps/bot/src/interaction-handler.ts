@@ -259,9 +259,7 @@ function isPinningCommand(
 function buildInvalidMessageTargetReply() {
   return buildStandardEditReply({
     title: "Invalid message",
-    facts: [
-      "Use a Discord message ID or message link from this forum thread.",
-    ],
+    facts: ["Use a Discord message ID or message link from this forum thread."],
   });
 }
 
@@ -326,8 +324,7 @@ async function handlePinningCommand(
     });
     await interaction.editReply(
       buildStandardEditReply({
-        title:
-          commandName === "pin" ? "Pin failed" : "Unpin failed",
+        title: commandName === "pin" ? "Pin failed" : "Unpin failed",
         facts: [
           "The bot could not access or modify that message. Check that the message exists in this thread and the bot has permission to manage pinned messages.",
         ],

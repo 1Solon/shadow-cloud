@@ -159,9 +159,14 @@ function getCleanString(value: string | null | undefined) {
   return value && value.trim().length > 0 ? value.trim() : null;
 }
 
-function getApprovalFailureDetail(result: Exclude<DesktopApprovalResult, {
-  ok: true;
-}>) {
+function getApprovalFailureDetail(
+  result: Exclude<
+    DesktopApprovalResult,
+    {
+      ok: true;
+    }
+  >,
+) {
   if (typeof result.status === "number") {
     return `API approval failed: HTTP ${result.status}`;
   }
