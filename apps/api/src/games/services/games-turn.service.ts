@@ -185,6 +185,10 @@ export class GamesTurnService {
       orderedPlayers,
       activePlayerEntry.id,
     );
+    const roundAdvanced =
+      uploadSaveNaming.nextActivePlayer.id === firstPlayer.id;
+    const storedFileRoundNumber =
+      game.turnState.roundNumber + (roundAdvanced ? 1 : 0);
 
     let storedPath: string | null = null;
 
@@ -212,7 +216,7 @@ export class GamesTurnService {
         const storedFile = await this.fileStorage.storeFile({
           gameId: game.id,
           gameNumber: game.gameNumber,
-          turn: game.turnState!.roundNumber,
+          turn: storedFileRoundNumber,
           seat: uploadSaveNaming.seat,
           playerName: uploadSaveNaming.playerName,
           originalName: file.originalname,
@@ -247,8 +251,6 @@ export class GamesTurnService {
             }),
           },
         });
-        const roundAdvanced =
-          uploadSaveNaming.nextActivePlayer.id === firstPlayer.id;
         const updatedTurnState = await transaction.turnState.update({
           where: {
             gameId: game.id,

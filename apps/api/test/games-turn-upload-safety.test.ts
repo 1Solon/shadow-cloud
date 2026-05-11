@@ -27,7 +27,7 @@ const { GamesTurnService } = await import(
   '../src/games/services/games-turn.service'
 );
 
-function createGame() {
+function createGame(override = {}) {
   const players = [
     {
       id: 'entry-1',
@@ -53,7 +53,7 @@ function createGame() {
     },
   ];
 
-  return {
+  const game = {
     id: 'game-1',
     gameNumber: 1,
     slug: 'ashes',
@@ -69,6 +69,11 @@ function createGame() {
       activePlayerEntryId: 'entry-1',
       roundNumber: 4,
     },
+  };
+
+  return {
+    ...game,
+    ...override,
   };
 }
 
@@ -161,5 +166,56 @@ describe('GamesTurnService upload safety', () => {
       ),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(fileStorage.storeFile).not.toHaveBeenCalled();
+  });
+
+  it('stores a wraparound upload with the incremented round for seat one', async () => {
+    const game = createGame({
+      turnState: {
+        activePlayerId: 'user-2',
+        activePlayerEntryId: 'entry-2',
+        roundNumber: 4,
+      },
+    });
+    prismaMock.game.findFirst.mockResolvedValue(game);
+    prismaMock.fileVersion.findFirst.mockResolvedValue(null);
+    const transaction = {
+      fileVersion: {
+        findFirst: vi.fn(async () => null),
+        create: vi.fn(async () => ({
+          id: 'file-version-8',
+          originalName: '1-T5-S1-Solon.se1',
+          uploadedAt: new Date('2026-05-03T10:00:00.000Z'),
+        })),
+      },
+      auditEvent: {
+        create: vi.fn(async () => ({})),
+      },
+      turnState: {
+        update: vi.fn(async () => ({
+          roundNumber: 5,
+        })),
+      },
+    };
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback(transaction),
+    );
+    const { service, fileStorage } = createService();
+
+    await service.uploadSave(
+      '1',
+      'user-2',
+      {
+        originalname: 'turn.se1',
+        buffer: Buffer.from([1, 2, 3]),
+      } as never,
+    );
+
+    expect(fileStorage.storeFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        turn: 5,
+        seat: 1,
+        playerName: 'Solon',
+      }),
+    );
   });
 });
