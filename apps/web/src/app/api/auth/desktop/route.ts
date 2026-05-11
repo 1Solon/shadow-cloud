@@ -17,6 +17,18 @@ function getApiBaseUrl() {
   return process.env.SHADOW_CLOUD_API_URL ?? "http://localhost:3001";
 }
 
+function getOrigin(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
 function escapeHtml(value: string) {
   return value
     .replaceAll("&", "&amp;")
@@ -162,7 +174,21 @@ function getApprovalFailureDetail(result: Exclude<DesktopApprovalResult, {
 }
 
 function isSameOriginPost(request: Request, requestUrl: URL) {
-  return request.headers.get("origin") === requestUrl.origin;
+  const origin = request.headers.get("origin");
+
+  if (!origin) {
+    return false;
+  }
+
+  const allowedOrigins = new Set(
+    [
+      requestUrl.origin,
+      getOrigin(process.env.AUTH_URL),
+      getOrigin(process.env.NEXTAUTH_URL),
+    ].filter((value): value is string => Boolean(value)),
+  );
+
+  return allowedOrigins.has(origin);
 }
 
 async function approveDesktopHandoff(

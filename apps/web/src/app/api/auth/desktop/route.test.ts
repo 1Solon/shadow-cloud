@@ -124,6 +124,32 @@ describe("/api/auth/desktop", () => {
     );
   });
 
+  it("accepts approval posts from the configured public auth origin behind a proxy", async () => {
+    vi.stubEnv("AUTH_URL", "https://shadow-cloud.solonsstuff.com");
+    mockedGetServerAuthSession.mockResolvedValue({
+      user: {
+        id: "user-1",
+      },
+    } as Awaited<ReturnType<typeof getServerAuthSession>>);
+    mockedCreateInternalApiToken.mockResolvedValue("internal-token");
+    vi.mocked(globalThis.fetch).mockResolvedValue(
+      Response.json({ status: "approved" }),
+    );
+
+    const response = await POST(
+      new Request("http://web:3000/api/auth/desktop?handoff=abc123", {
+        method: "POST",
+        headers: {
+          origin: "https://shadow-cloud.solonsstuff.com",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toContain("Return to desktop");
+    expect(globalThis.fetch).toHaveBeenCalled();
+  });
+
   it("logs API approval failures with status and response body", async () => {
     const consoleError = vi
       .spyOn(console, "error")
