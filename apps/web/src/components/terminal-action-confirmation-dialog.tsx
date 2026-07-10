@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 const ACTION_TEXT_ENTER_DELAY_MS = 140;
@@ -15,6 +15,8 @@ export type TerminalActionConfirmationSpec = {
 type TerminalActionConfirmationDialogProps = {
   confirmation: TerminalActionConfirmationSpec | null;
   isPending: boolean;
+  confirmDisabled?: boolean;
+  children?: ReactNode;
   onCancel: () => void;
   onConfirm: () => void;
 };
@@ -22,6 +24,8 @@ type TerminalActionConfirmationDialogProps = {
 export function TerminalActionConfirmationDialog({
   confirmation,
   isPending,
+  confirmDisabled = false,
+  children,
   onCancel,
   onConfirm,
 }: TerminalActionConfirmationDialogProps) {
@@ -103,7 +107,12 @@ export function TerminalActionConfirmationDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6">
-      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-orange-400/30 bg-[#0a0711] shadow-2xl shadow-orange-950/40">
+      <div
+        aria-label={confirmation.title}
+        aria-modal="true"
+        className="relative w-full max-w-md overflow-hidden rounded-2xl border border-orange-400/30 bg-[#0a0711] shadow-2xl shadow-orange-950/40"
+        role="dialog"
+      >
         <div className="flex items-center justify-between border-b border-orange-400/20 bg-orange-400/10 px-4 py-3 font-mono text-[11px] uppercase tracking-[0.28em] text-orange-200">
           <span>{confirmation.title}</span>
           <button
@@ -129,6 +138,7 @@ export function TerminalActionConfirmationDialog({
               </div>
             ))}
           </div>
+          {children}
           <div className="flex justify-end gap-2 pt-2">
             <Button
               disabled={isPending}
@@ -138,7 +148,11 @@ export function TerminalActionConfirmationDialog({
             >
               Cancel
             </Button>
-            <Button disabled={isPending} type="button" onClick={onConfirm}>
+            <Button
+              disabled={isPending || confirmDisabled}
+              type="button"
+              onClick={onConfirm}
+            >
               {confirmation.confirmLabel ?? "Confirm"}
             </Button>
           </div>
