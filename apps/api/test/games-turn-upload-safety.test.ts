@@ -205,7 +205,11 @@ describe('GamesTurnService upload safety', () => {
       auditEvent: {
         create: vi.fn(async () => ({})),
       },
+      gamePlayer: {
+        findMany: vi.fn(async () => game.players),
+      },
       turnState: {
+        findUnique: vi.fn(async () => game.turnState),
         update: vi.fn(async () => ({
           roundNumber: 5,
         })),
@@ -267,7 +271,11 @@ describe('GamesTurnService upload safety', () => {
       auditEvent: {
         create: vi.fn(async () => ({})),
       },
+      gamePlayer: {
+        findMany: vi.fn(async () => createGame().players),
+      },
       turnState: {
+        findUnique: vi.fn(async () => createGame().turnState),
         update: vi.fn(async () => ({ roundNumber: 4 })),
       },
     };
@@ -290,5 +298,60 @@ describe('GamesTurnService upload safety', () => {
 
     expect(fileStorage.removeFile).toHaveBeenCalledWith('/saves/game-1/turn.se1');
     expect(transaction.auditEvent.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes the stored file and rejects a replaced next seat before advancing the turn', async () => {
+    prismaMock.fileVersion.findFirst.mockResolvedValue(null);
+    const game = createGame();
+    const transaction = {
+      fileVersion: {
+        findFirst: vi.fn(async () => null),
+        create: vi.fn(async () => ({
+          id: 'file-version-8',
+          originalName: '1-T4-S2-Other.se1',
+          uploadedAt: new Date('2026-05-03T10:00:00.000Z'),
+        })),
+      },
+      auditEvent: {
+        create: vi.fn(async () => ({})),
+      },
+      gamePlayer: {
+        findMany: vi.fn(async () => [
+          game.players[0],
+          {
+            ...game.players[1],
+            userId: 'user-3',
+            user: {
+              id: 'user-3',
+              displayName: 'Replacement',
+              identities: [],
+            },
+          },
+        ]),
+      },
+      turnState: {
+        findUnique: vi.fn(async () => game.turnState),
+        update: vi.fn(async () => ({ roundNumber: 4 })),
+      },
+    };
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback(transaction),
+    );
+    const { service, fileStorage, turnRecords } = createService();
+
+    await expect(
+      service.uploadSave(
+        '1',
+        'user-1',
+        {
+          originalname: 'turn.se1',
+          buffer: Buffer.from([1, 2, 3]),
+        } as never,
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(transaction.turnState.update).not.toHaveBeenCalled();
+    expect(turnRecords.transitionTurn).not.toHaveBeenCalled();
+    expect(fileStorage.removeFile).toHaveBeenCalledWith('/saves/game-1/turn.se1');
   });
 });

@@ -351,4 +351,27 @@ describe('GamesTurnService administrative turn transitions', () => {
 
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
+
+  it('rejects an emptied next skip seat before advancing the turn', async () => {
+    const game = createGame();
+    const transaction = createTransaction();
+    transaction.gamePlayer.findMany.mockResolvedValue([
+      game.players[0],
+      { ...game.players[1], userId: null, user: null } as never,
+    ]);
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback(transaction),
+    );
+    const { service, turnRecords } = createService();
+
+    await expect(
+      service.skipPlayerTurn({
+        discordThreadId: 'thread-1',
+        callerDiscordId: 'discord-2',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(transaction.turnState.update).not.toHaveBeenCalled();
+    expect(turnRecords.transitionTurn).not.toHaveBeenCalled();
+  });
 });

@@ -115,6 +115,36 @@ export class GamesTurnService {
     return { turnState, players, activeSeat };
   }
 
+  private revalidateNextPlayer<
+    T extends {
+      id: string;
+      userId: string | null;
+      turnOrder: number;
+      user: { displayName: string } | null;
+    },
+  >(
+    players: T[],
+    expected: {
+      id: string;
+      userId: string;
+      turnOrder: number;
+      playerDisplayName: string;
+    },
+  ) {
+    const nextPlayer = players.find((player) => player.id === expected.id);
+
+    if (
+      !nextPlayer ||
+      nextPlayer.userId !== expected.userId ||
+      nextPlayer.turnOrder !== expected.turnOrder ||
+      nextPlayer.user?.displayName !== expected.playerDisplayName
+    ) {
+      throw new ConflictException('The next player changed before advancing.');
+    }
+
+    return nextPlayer;
+  }
+
   async uploadSave(
     gameId: string,
     userId: string | undefined,
@@ -312,13 +342,33 @@ export class GamesTurnService {
             }),
           },
         });
+        const revalidated = await this.revalidateTurnSnapshot(transaction, {
+          gameId: game.id,
+          expectedTurnState: game.turnState,
+          expectedActiveSeat: activePlayerEntry,
+        });
+        const revalidatedNextPlayer = this.revalidateNextPlayer(
+          revalidated.players,
+          {
+            id: uploadSaveNaming.nextActivePlayer.id,
+            userId: uploadSaveNaming.nextActivePlayer.userId!,
+            turnOrder: uploadSaveNaming.nextActivePlayer.turnOrder,
+            playerDisplayName: uploadSaveNaming.nextActivePlayer.displayName!,
+          },
+        );
+        const nextActivePlayer = {
+          ...uploadSaveNaming.nextActivePlayer,
+          userId: revalidatedNextPlayer.userId,
+          displayName: revalidatedNextPlayer.user!.displayName,
+          turnOrder: revalidatedNextPlayer.turnOrder,
+        };
         const updatedTurnState = await transaction.turnState.update({
           where: {
             gameId: game.id,
           },
           data: {
-            activePlayerId: uploadSaveNaming.nextActivePlayer.userId!,
-            activePlayerEntryId: uploadSaveNaming.nextActivePlayer.id,
+            activePlayerId: nextActivePlayer.userId!,
+            activePlayerEntryId: nextActivePlayer.id,
             roundNumber: {
               increment: roundAdvanced ? 1 : 0,
             },
@@ -334,10 +384,10 @@ export class GamesTurnService {
             roundNumber: game.turnState!.roundNumber,
           },
           next: {
-            gamePlayerId: uploadSaveNaming.nextActivePlayer.id,
-            userId: uploadSaveNaming.nextActivePlayer.userId,
-            seatNumber: uploadSaveNaming.nextActivePlayer.turnOrder,
-            playerDisplayName: uploadSaveNaming.nextActivePlayer.displayName!,
+            gamePlayerId: nextActivePlayer.id,
+            userId: nextActivePlayer.userId,
+            seatNumber: nextActivePlayer.turnOrder,
+            playerDisplayName: nextActivePlayer.displayName,
             roundNumber: updatedTurnState.roundNumber,
           },
           completionReason: TurnCompletionReason.SAVE_UPLOADED,
@@ -365,7 +415,7 @@ export class GamesTurnService {
         return {
           fileVersion,
           versionNumber,
-          nextActivePlayer: uploadSaveNaming.nextActivePlayer,
+          nextActivePlayer,
           roundNumber: updatedTurnState.roundNumber,
           roundAdvanced,
         };
@@ -395,7 +445,7 @@ export class GamesTurnService {
           roundAdvanced: result.roundAdvanced,
           activePlayer: {
             id: result.nextActivePlayer.userId!,
-            displayName: result.nextActivePlayer.displayName!,
+            displayName: result.nextActivePlayer.displayName,
             discordId: getDiscordIdentity(
               game.players.find(
                 (player) => player.id === result.nextActivePlayer.id,
@@ -1244,29 +1294,43 @@ export class GamesTurnService {
       ) ?? remaining[0];
 
     await prisma.$transaction(async (transaction) => {
+      const revalidated = await this.revalidateTurnSnapshot(transaction, {
+        gameId: game.id,
+        expectedTurnState: game.turnState,
+        expectedActiveSeat: targetEntry,
+      });
+      const revalidatedNextPlayer = this.revalidateNextPlayer(
+        revalidated.players,
+        {
+          id: nextActivePlayer.id,
+          userId: nextActivePlayer.userId!,
+          turnOrder: nextActivePlayer.turnOrder,
+          playerDisplayName: nextActivePlayer.user!.displayName,
+        },
+      );
       const transitionedAt = new Date();
 
       await transaction.turnState.update({
         where: { gameId: game.id },
         data: {
-          activePlayerId: nextActivePlayer.userId!,
-          activePlayerEntryId: nextActivePlayer.id,
+          activePlayerId: revalidatedNextPlayer.userId!,
+          activePlayerEntryId: revalidatedNextPlayer.id,
         },
       });
 
       await this.turnRecords.transitionTurn(transaction, {
         gameId: game.id,
         expectedCurrent: {
-          gamePlayerId: targetEntry.id,
-          userId: targetEntry.userId!,
-          roundNumber: game.turnState!.roundNumber,
+          gamePlayerId: revalidated.activeSeat!.id,
+          userId: revalidated.activeSeat!.userId!,
+          roundNumber: revalidated.turnState!.roundNumber,
         },
         next: {
-          gamePlayerId: nextActivePlayer.id,
-          userId: nextActivePlayer.userId,
-          seatNumber: nextActivePlayer.turnOrder,
-          playerDisplayName: nextActivePlayer.user!.displayName,
-          roundNumber: game.turnState!.roundNumber,
+          gamePlayerId: revalidatedNextPlayer.id,
+          userId: revalidatedNextPlayer.userId,
+          seatNumber: revalidatedNextPlayer.turnOrder,
+          playerDisplayName: revalidatedNextPlayer.user!.displayName,
+          roundNumber: revalidated.turnState!.roundNumber,
         },
         completionReason: TurnCompletionReason.SKIPPED,
         transitionedAt,
@@ -1281,8 +1345,9 @@ export class GamesTurnService {
           payload: JSON.stringify({
             skippedPlayerDisplayName: targetEntry.user?.displayName ?? null,
             skippedPlayerTurnOrder: targetEntry.turnOrder,
-            nextPlayerDisplayName: nextActivePlayer.user?.displayName ?? null,
-            nextPlayerTurnOrder: nextActivePlayer.turnOrder,
+            nextPlayerDisplayName:
+              revalidatedNextPlayer.user?.displayName ?? null,
+            nextPlayerTurnOrder: revalidatedNextPlayer.turnOrder,
           }),
         },
       });
