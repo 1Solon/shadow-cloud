@@ -143,6 +143,13 @@ describe('GamesService turn policy metadata', () => {
       where: { id: 'turn-1' },
       data: { nextReminderAt: null },
     });
+    const auditEvents = transaction.auditEvent.create.mock.calls as unknown as [
+      { data: { payload: string } },
+    ][];
+    const auditPayload = JSON.parse(auditEvents[0]![0].data.payload) as {
+      nextMetadata: { turnRemindersEnabled: boolean };
+    };
+    expect(auditPayload.nextMetadata.turnRemindersEnabled).toBe(false);
   });
 
   it('recalculates a reminded open turn from its latest reminder', async () => {

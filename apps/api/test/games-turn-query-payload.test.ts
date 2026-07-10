@@ -62,6 +62,7 @@ function createGame() {
     },
     fileVersions: [],
     auditEvents: [],
+    turnRecords: [createTurnRecord()],
   };
 }
 
@@ -88,11 +89,8 @@ describe('GamesQueryService turn timing payloads', () => {
     vi.clearAllMocks();
   });
 
-  it('returns list policy fields and the open turn start time', async () => {
+  it('returns list policy fields and the open turn start time without detail history', async () => {
     prismaMock.game.findMany.mockResolvedValue([createGame()]);
-    prismaMock.turnRecord.findMany
-      .mockResolvedValueOnce([createTurnRecord()])
-      .mockResolvedValueOnce([]);
 
     const [game] = await new GamesQueryService({} as never).listGames();
 
@@ -102,12 +100,21 @@ describe('GamesQueryService turn timing payloads', () => {
       turnReminderRepeatHours: 6,
       turnRemindersEnabled: true,
       currentTurnStartedAt: '2026-07-10T00:00:00.000Z',
-      openTurn: expect.objectContaining({
-        id: 'turn-1',
-        startedAt: '2026-07-10T00:00:00.000Z',
-      }),
-      recentCompletedTurns: [],
     });
+    expect(game).not.toHaveProperty('openTurn');
+    expect(game).not.toHaveProperty('recentCompletedTurns');
+    expect(prismaMock.turnRecord.findMany).not.toHaveBeenCalled();
+    expect(prismaMock.game.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({
+          turnRecords: {
+            where: { endedAt: null },
+            orderBy: { startedAt: 'desc' },
+            take: 1,
+          },
+        }),
+      }),
+    );
   });
 
   it('returns detail timing fields and 25 newest completed turn snapshots', async () => {
@@ -119,8 +126,11 @@ describe('GamesQueryService turn timing payloads', () => {
           id: 'turn-previous',
           gamePlayerId: null,
           userId: null,
+          seatNumber: null,
           endedAt,
           completionReason: 'SAVE_UPLOADED',
+          lastReminderAt: null,
+          nextReminderAt: null,
         }),
       ]);
 
@@ -130,13 +140,22 @@ describe('GamesQueryService turn timing payloads', () => {
 
     expect(game).toMatchObject({
       currentTurnStartedAt: '2026-07-10T00:00:00.000Z',
-      openTurn: expect.objectContaining({ id: 'turn-1', endedAt: null }),
+      openTurn: expect.objectContaining({
+        id: 'turn-1',
+        endedAt: null,
+        seatNumber: 1,
+        lastReminderAt: null,
+        nextReminderAt: '2026-07-11T12:00:00.000Z',
+      }),
       recentCompletedTurns: [
         expect.objectContaining({
           id: 'turn-previous',
           gamePlayerId: null,
           userId: null,
+          seatNumber: null,
           endedAt: '2026-07-11T00:00:00.000Z',
+          lastReminderAt: null,
+          nextReminderAt: null,
         }),
       ],
     });
@@ -145,5 +164,8 @@ describe('GamesQueryService turn timing payloads', () => {
       orderBy: { endedAt: 'desc' },
       take: 25,
     });
+    expect(game.recentCompletedTurns[0].seatNumber).toBeNull();
+    expect(game.recentCompletedTurns[0].lastReminderAt).toBeNull();
+    expect(game.recentCompletedTurns[0].nextReminderAt).toBeNull();
   });
 });

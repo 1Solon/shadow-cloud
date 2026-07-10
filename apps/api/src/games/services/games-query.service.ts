@@ -112,66 +112,55 @@ export class GamesQueryService {
             },
           },
         },
+        turnRecords: {
+          where: { endedAt: null },
+          orderBy: { startedAt: 'desc' },
+          take: 1,
+        },
       },
       orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
     });
 
-    return Promise.all(
-      games.map(async (game) => {
-        const activePlayerEntry = game.turnState
-          ? resolveActivePlayerEntry(game.players, game.turnState)
-          : null;
+    return games.map((game) => {
+      const activePlayerEntry = game.turnState
+        ? resolveActivePlayerEntry(game.players, game.turnState)
+        : null;
 
-        const [openTurns, recentCompletedTurns] = await Promise.all([
-          prisma.turnRecord.findMany({
-            where: { gameId: game.id, endedAt: null },
-          }),
-          prisma.turnRecord.findMany({
-            where: { gameId: game.id, endedAt: { not: null } },
-            orderBy: { endedAt: 'desc' },
-            take: 25,
-          }),
-        ]);
-        const openTurn = openTurns[0] ? mapTurnRecord(openTurns[0]) : null;
-
-        return {
-          id: game.id,
-          slug: game.slug,
+      return {
+        id: game.id,
+        slug: game.slug,
+        gameNumber: game.gameNumber,
+        name: game.name,
+        threadName: buildCanonicalThreadName({
           gameNumber: game.gameNumber,
           name: game.name,
-          threadName: buildCanonicalThreadName({
-            gameNumber: game.gameNumber,
-            name: game.name,
-            playerCount: game.playerCount,
-            gameMode: game.gameMode,
-            techLevel: game.techLevel,
-            zoneCount: game.zoneCount,
-            armyCount: game.armyCount,
-          }),
-          discordThreadId: game.discordThreadId,
-          organizerDisplayName: game.organizer.displayName,
-          updatedAt: game.updatedAt.toISOString(),
-          roundNumber: game.turnState?.roundNumber ?? 1,
-          activePlayerUserId: activePlayerEntry?.userId ?? null,
-          activePlayerDisplayName:
-            activePlayerEntry?.user?.displayName ?? 'Unassigned',
-          playerCount: game.playerCount ?? game.players.length,
-          filledSeatCount: game.players.filter(
-            (player) => player.userId != null,
-          ).length,
-          participantUserIds: game.players
-            .map((player) => player.userId)
-            .filter((userId): userId is string => userId != null),
-          turnTargetHours: game.turnTargetHours,
-          turnReminderGraceHours: game.turnReminderGraceHours,
-          turnReminderRepeatHours: game.turnReminderRepeatHours,
-          turnRemindersEnabled: game.turnRemindersEnabled,
-          currentTurnStartedAt: openTurn?.startedAt ?? null,
-          openTurn,
-          recentCompletedTurns: recentCompletedTurns.map(mapTurnRecord),
-        };
-      }),
-    );
+          playerCount: game.playerCount,
+          gameMode: game.gameMode,
+          techLevel: game.techLevel,
+          zoneCount: game.zoneCount,
+          armyCount: game.armyCount,
+        }),
+        discordThreadId: game.discordThreadId,
+        organizerDisplayName: game.organizer.displayName,
+        updatedAt: game.updatedAt.toISOString(),
+        roundNumber: game.turnState?.roundNumber ?? 1,
+        activePlayerUserId: activePlayerEntry?.userId ?? null,
+        activePlayerDisplayName:
+          activePlayerEntry?.user?.displayName ?? 'Unassigned',
+        playerCount: game.playerCount ?? game.players.length,
+        filledSeatCount: game.players.filter((player) => player.userId != null)
+          .length,
+        participantUserIds: game.players
+          .map((player) => player.userId)
+          .filter((userId): userId is string => userId != null),
+        turnTargetHours: game.turnTargetHours,
+        turnReminderGraceHours: game.turnReminderGraceHours,
+        turnReminderRepeatHours: game.turnReminderRepeatHours,
+        turnRemindersEnabled: game.turnRemindersEnabled,
+        currentTurnStartedAt:
+          game.turnRecords[0]?.startedAt.toISOString() ?? null,
+      };
+    });
   }
 
   async getGameDetail(gameId: string): Promise<GameDetailResponse> {
