@@ -244,8 +244,11 @@ describe('GamesTurnService upload safety', () => {
         next: expect.objectContaining({
           gamePlayerId: 'entry-1',
           userId: 'user-1',
+          seatNumber: 1,
+          playerDisplayName: 'Solon',
           roundNumber: 5,
         }),
+        transitionedAt: expect.any(Date),
       }),
     );
   });

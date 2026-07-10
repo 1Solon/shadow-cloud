@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
@@ -95,8 +95,11 @@ function createService() {
 }
 
 function createTransaction() {
+  const game = createGame();
+
   return {
     gamePlayer: {
+      findMany: vi.fn(async () => game.players),
       update: vi.fn(async () => ({})),
       deleteMany: vi.fn(async () => ({ count: 0 })),
     },
@@ -104,6 +107,7 @@ function createTransaction() {
       update: vi.fn(async () => ({})),
     },
     turnState: {
+      findUnique: vi.fn(async () => game.turnState),
       update: vi.fn(async () => ({})),
     },
     auditEvent: {
@@ -299,6 +303,7 @@ describe('GamesTurnService seat order organizer clearing', () => {
     expect(turnRecords.transitionTurn).toHaveBeenCalledWith(
       transaction,
       expect.objectContaining({
+        gameId: 'game-1',
         completionReason: 'REASSIGNED',
         expectedCurrent: {
           gamePlayerId: 'entry-1',
@@ -308,9 +313,60 @@ describe('GamesTurnService seat order organizer clearing', () => {
         next: expect.objectContaining({
           gamePlayerId: 'entry-2',
           userId: 'user-2',
+          seatNumber: 2,
+          playerDisplayName: 'Other',
           roundNumber: 4,
         }),
+        transitionedAt: expect.any(Date),
       }),
     );
+  });
+
+  it('rejects stale turn state before changing the roster', async () => {
+    const transaction = createTransaction();
+    transaction.turnState.findUnique.mockResolvedValue({
+      activePlayerId: 'user-2',
+      activePlayerEntryId: 'entry-2',
+      roundNumber: 4,
+    });
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback(transaction),
+    );
+
+    await expect(
+      createService().service.reorderSeatOrder('1', 'user-1', {
+        seatEntryIds: ['entry-1', 'entry-2'],
+        activePlayerEntryId: 'entry-2',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(transaction.gamePlayer.update).not.toHaveBeenCalled();
+    expect(transaction.turnState.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unresolved active seat before changing the roster', async () => {
+    const unresolvedTurnState = {
+      activePlayerId: 'missing-user',
+      activePlayerEntryId: 'missing-entry',
+      roundNumber: 4,
+    };
+    prismaMock.game.findFirst.mockResolvedValue(
+      createGame({ turnState: unresolvedTurnState }),
+    );
+    const transaction = createTransaction();
+    transaction.turnState.findUnique.mockResolvedValue(unresolvedTurnState);
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback(transaction),
+    );
+
+    await expect(
+      createService().service.reorderSeatOrder('1', 'user-1', {
+        seatEntryIds: ['entry-1', 'entry-2'],
+        activePlayerEntryId: 'entry-2',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(transaction.gamePlayer.update).not.toHaveBeenCalled();
+    expect(transaction.turnState.update).not.toHaveBeenCalled();
   });
 });

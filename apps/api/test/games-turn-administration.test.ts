@@ -1,3 +1,4 @@
+import { ConflictException } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
@@ -93,9 +94,12 @@ function createGame(override = {}) {
 }
 
 function createTransaction() {
+  const game = createGame();
+
   return {
     gamePlayer: {
       create: vi.fn(),
+      findMany: vi.fn(async () => game.players),
       update: vi.fn(async ({ where, data }) => ({
         id: where.id,
         user: data.userId
@@ -107,6 +111,7 @@ function createTransaction() {
       update: vi.fn(async () => ({})),
     },
     turnState: {
+      findUnique: vi.fn(async () => game.turnState),
       update: vi.fn(async () => ({})),
     },
     auditEvent: {
@@ -183,10 +188,47 @@ describe('GamesTurnService administrative turn transitions', () => {
       });
     }
 
+    const expectedNext =
+      reason === 'REPLACED'
+        ? {
+            gamePlayerId: 'entry-1',
+            userId: 'user-3',
+            seatNumber: 1,
+            playerDisplayName: 'Replacement',
+            roundNumber: 4,
+          }
+        : {
+            gamePlayerId: 'entry-2',
+            userId: 'user-2',
+            seatNumber: 2,
+            playerDisplayName: 'Overlord',
+            roundNumber: 4,
+          };
+
     expect(turnRecords.transitionTurn).toHaveBeenCalledWith(
       transaction,
-      expect.objectContaining({ completionReason: reason }),
+      expect.objectContaining({
+        gameId: 'game-1',
+        completionReason: reason,
+        expectedCurrent: {
+          gamePlayerId: 'entry-1',
+          userId: 'user-1',
+          roundNumber: 4,
+        },
+        next: expectedNext,
+        transitionedAt: expect.any(Date),
+      }),
     );
+
+    if (reason === 'REPLACED') {
+      expect(transaction.turnState.update).toHaveBeenCalledWith({
+        where: { gameId: 'game-1' },
+        data: {
+          activePlayerId: 'user-3',
+          activePlayerEntryId: 'entry-1',
+        },
+      });
+    }
   });
 
   it('does not reset timing when an inactive occupied seat is replaced', async () => {
@@ -238,5 +280,75 @@ describe('GamesTurnService administrative turn transitions', () => {
     });
 
     expect(turnRecords.transitionTurn).not.toHaveBeenCalled();
+  });
+
+  it('rejects replacing a seat when the active turn changed', async () => {
+    const transaction = createTransaction();
+    transaction.turnState.findUnique.mockResolvedValue({
+      activePlayerId: 'user-2',
+      activePlayerEntryId: 'entry-2',
+      roundNumber: 4,
+    });
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback(transaction),
+    );
+    prismaMock.authIdentity.findUnique
+      .mockResolvedValueOnce({ userId: 'user-2' })
+      .mockResolvedValueOnce(null);
+
+    await expect(
+      createService().service.replacePlayerInSeat({
+        discordThreadId: 'thread-1',
+        callerDiscordId: 'discord-2',
+        seatNumber: 2,
+        newPlayerDiscordId: 'discord-3',
+        newPlayerDisplayName: 'Replacement',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(transaction.gamePlayer.update).not.toHaveBeenCalled();
+    expect(transaction.turnState.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects resigning when the active turn changed', async () => {
+    const transaction = createTransaction();
+    transaction.turnState.findUnique.mockResolvedValue({
+      activePlayerId: 'user-2',
+      activePlayerEntryId: 'entry-2',
+      roundNumber: 4,
+    });
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback(transaction),
+    );
+    prismaMock.authIdentity.findUnique.mockResolvedValue({ userId: 'user-1' });
+
+    await expect(
+      createService().service.resignPlayerFromDiscord({
+        discordThreadId: 'thread-1',
+        playerDiscordId: 'discord-1',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(transaction.gamePlayer.update).not.toHaveBeenCalled();
+    expect(transaction.turnState.update).not.toHaveBeenCalled();
+  });
+
+  it('retains the duplicate-user rejection before opening a transaction', async () => {
+    prismaMock.authIdentity.findUnique
+      .mockResolvedValueOnce({ userId: 'user-2' })
+      .mockResolvedValueOnce({ userId: 'user-1' });
+    prismaMock.gamePlayer.findFirst.mockResolvedValue({ id: 'entry-1' });
+
+    await expect(
+      createService().service.replacePlayerInSeat({
+        discordThreadId: 'thread-1',
+        callerDiscordId: 'discord-2',
+        seatNumber: 2,
+        newPlayerDiscordId: 'discord-1',
+        newPlayerDisplayName: 'Alpha',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 });

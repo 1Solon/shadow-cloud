@@ -12,6 +12,7 @@ import {
   GameRole,
   prisma,
   TurnCompletionReason,
+  type Prisma,
 } from '../../database';
 import type { PlayerSummary } from '../games.types';
 import { BotNotificationsService } from '../bot-notifications.service';
@@ -59,6 +60,59 @@ export class GamesTurnService {
     if (!hasShadowOverride) {
       throw new ForbiddenException(input.deniedMessage);
     }
+  }
+
+  private async revalidateTurnSnapshot(
+    transaction: Prisma.TransactionClient,
+    input: {
+      gameId: string;
+      expectedTurnState: {
+        activePlayerId: string;
+        activePlayerEntryId: string | null;
+        roundNumber: number;
+      } | null;
+      expectedActiveSeat: { id: string; userId: string | null } | null;
+    },
+  ) {
+    const turnState = await transaction.turnState.findUnique({
+      where: { gameId: input.gameId },
+    });
+    const players = await transaction.gamePlayer.findMany({
+      where: { gameId: input.gameId },
+      include: { user: true },
+      orderBy: { turnOrder: 'asc' },
+    });
+
+    if (
+      (input.expectedTurnState == null && turnState != null) ||
+      (input.expectedTurnState != null &&
+        (turnState == null ||
+          turnState.activePlayerId !== input.expectedTurnState.activePlayerId ||
+          turnState.activePlayerEntryId !==
+            input.expectedTurnState.activePlayerEntryId ||
+          turnState.roundNumber !== input.expectedTurnState.roundNumber))
+    ) {
+      throw new ConflictException(
+        'The active turn changed before updating it.',
+      );
+    }
+
+    if (!turnState) {
+      return { turnState, players, activeSeat: null };
+    }
+
+    const activeSeat = resolveActivePlayerEntry(players, turnState);
+
+    if (
+      !activeSeat ||
+      !input.expectedActiveSeat ||
+      activeSeat.id !== input.expectedActiveSeat.id ||
+      activeSeat.userId !== input.expectedActiveSeat.userId
+    ) {
+      throw new ConflictException('The active turn could not be resolved.');
+    }
+
+    return { turnState, players, activeSeat };
   }
 
   async uploadSave(
@@ -568,6 +622,12 @@ export class GamesTurnService {
           : remainingOccupiedSeats[0];
 
     await prisma.$transaction(async (transaction) => {
+      const revalidated = await this.revalidateTurnSnapshot(transaction, {
+        gameId: game.id,
+        expectedTurnState: game.turnState,
+        expectedActiveSeat: currentActiveSeat,
+      });
+
       for (const [index, seat] of reorderedSeats.entries()) {
         await transaction.gamePlayer.update({
           where: { id: seat.id },
@@ -607,31 +667,33 @@ export class GamesTurnService {
         });
       }
 
-      if (game.turnState && nextActiveSeat) {
+      const activeSeat = revalidated.activeSeat;
+
+      if (revalidated.turnState && activeSeat && nextActiveSeat) {
         const transitionedAt = new Date();
 
-        await transaction.turnState.update({
-          where: { gameId: game.id },
-          data: {
-            activePlayerId: nextActiveSeat.userId!,
-            activePlayerEntryId: nextActiveSeat.id,
-          },
-        });
+        if (activeSeat.id !== nextActiveSeat.id) {
+          await transaction.turnState.update({
+            where: { gameId: game.id },
+            data: {
+              activePlayerId: nextActiveSeat.userId!,
+              activePlayerEntryId: nextActiveSeat.id,
+            },
+          });
 
-        if (currentActiveSeat?.id !== nextActiveSeat.id) {
           await this.turnRecords.transitionTurn(transaction, {
             gameId: game.id,
             expectedCurrent: {
-              gamePlayerId: currentActiveSeat!.id,
-              userId: currentActiveSeat!.userId!,
-              roundNumber: game.turnState.roundNumber,
+              gamePlayerId: activeSeat.id,
+              userId: activeSeat.userId!,
+              roundNumber: revalidated.turnState.roundNumber,
             },
             next: {
               gamePlayerId: nextActiveSeat.id,
               userId: nextActiveSeat.userId,
               seatNumber: nextActiveSeat.turnOrder,
               playerDisplayName: nextActiveSeat.user!.displayName,
-              roundNumber: game.turnState.roundNumber,
+              roundNumber: revalidated.turnState.roundNumber,
             },
             completionReason: TurnCompletionReason.REASSIGNED,
             transitionedAt,
@@ -737,20 +799,37 @@ export class GamesTurnService {
       }
     }
 
-    const wasActiveSeat =
-      seat != null &&
-      (game.turnState?.activePlayerEntryId === seat.id ||
-        (game.turnState?.activePlayerId != null &&
-          game.turnState.activePlayerId === seat.userId));
+    let wasActiveSeat = false;
 
     const updatedSeat = await prisma.$transaction(async (transaction) => {
+      const revalidated = await this.revalidateTurnSnapshot(transaction, {
+        gameId: game.id,
+        expectedTurnState: game.turnState,
+        expectedActiveSeat: game.turnState
+          ? resolveActivePlayerEntry(game.players, game.turnState)
+          : null,
+      });
+      const currentSeat =
+        revalidated.players.find(
+          (player) => player.turnOrder === input.seatNumber,
+        ) ?? null;
+
+      if (
+        currentSeat?.id !== seat?.id ||
+        currentSeat?.userId !== seat?.userId
+      ) {
+        throw new ConflictException(
+          'The selected seat changed before replacement.',
+        );
+      }
+
       const newPlayer = await upsertDiscordUser(transaction, {
         discordId: input.newPlayerDiscordId,
         displayName: input.newPlayerDisplayName,
       });
 
       const seatRecord =
-        seat ??
+        currentSeat ??
         (await transaction.gamePlayer.create({
           data: {
             gameId: game.id,
@@ -760,7 +839,9 @@ export class GamesTurnService {
           },
         }));
 
-      if (wasActiveSeat && game.turnState && seatRecord.userId) {
+      wasActiveSeat = revalidated.activeSeat?.id === seatRecord.id;
+
+      if (wasActiveSeat && revalidated.turnState && seatRecord.userId) {
         const transitionedAt = new Date();
 
         await this.turnRecords.transitionTurn(transaction, {
@@ -768,14 +849,14 @@ export class GamesTurnService {
           expectedCurrent: {
             gamePlayerId: seatRecord.id,
             userId: seatRecord.userId,
-            roundNumber: game.turnState.roundNumber,
+            roundNumber: revalidated.turnState.roundNumber,
           },
           next: {
             gamePlayerId: seatRecord.id,
             userId: newPlayer.id,
             seatNumber: seatRecord.turnOrder,
             playerDisplayName: newPlayer.displayName,
-            roundNumber: game.turnState.roundNumber,
+            roundNumber: revalidated.turnState.roundNumber,
           },
           completionReason: TurnCompletionReason.REPLACED,
           transitionedAt,
@@ -789,7 +870,7 @@ export class GamesTurnService {
         include: { user: true },
       });
 
-      if (wasActiveSeat && game.turnState) {
+      if (wasActiveSeat && revalidated.turnState) {
         await transaction.turnState.update({
           where: { gameId: game.id },
           data: {
@@ -973,42 +1054,55 @@ export class GamesTurnService {
       throw new NotFoundException('Player is not registered in this game.');
     }
 
-    const orderedPlayers = game.players;
-    const activePlayers = orderedPlayers.filter(
-      (player) => player.userId != null,
-    );
-
-    if (activePlayers.length <= 1) {
-      throw new BadRequestException(
-        'Cannot resign when you are the only active player in the game.',
-      );
-    }
-
     const wasOrganizer =
       resigningEntry.role === GameRole.ORGANIZER ||
       game.organizerId === resigningEntry.userId;
 
-    const activeEntry = game.turnState
-      ? resolveActivePlayerEntry(game.players, game.turnState)
-      : null;
-    const isActivePlayer = activeEntry?.id === resigningEntry.id;
-
-    let nextActivePlayer: (typeof orderedPlayers)[number] | null = null;
-
-    if (isActivePlayer && game.turnState) {
-      const remainingActivePlayers = orderedPlayers.filter(
-        (player) => player.userId != null && player.id !== resigningEntry.id,
-      );
-      const resigningIndex = orderedPlayers.findIndex(
+    await prisma.$transaction(async (transaction) => {
+      const revalidated = await this.revalidateTurnSnapshot(transaction, {
+        gameId: game.id,
+        expectedTurnState: game.turnState,
+        expectedActiveSeat: game.turnState
+          ? resolveActivePlayerEntry(game.players, game.turnState)
+          : null,
+      });
+      const currentResigningEntry = revalidated.players.find(
         (player) => player.id === resigningEntry.id,
       );
-      nextActivePlayer =
-        remainingActivePlayers[
-          resigningIndex % remainingActivePlayers.length
-        ] ?? remainingActivePlayers[0];
-    }
 
-    await prisma.$transaction(async (transaction) => {
+      if (
+        !currentResigningEntry ||
+        currentResigningEntry.userId !== resigningEntry.userId
+      ) {
+        throw new ConflictException(
+          'The resigning player changed before removal.',
+        );
+      }
+
+      const activePlayers = revalidated.players.filter(
+        (player) => player.userId != null,
+      );
+
+      if (activePlayers.length <= 1) {
+        throw new BadRequestException(
+          'Cannot resign when you are the only active player in the game.',
+        );
+      }
+
+      const isActivePlayer =
+        revalidated.activeSeat?.id === currentResigningEntry.id;
+      const remainingActivePlayers = activePlayers.filter(
+        (player) => player.id !== currentResigningEntry.id,
+      );
+      const resigningIndex = revalidated.players.findIndex(
+        (player) => player.id === currentResigningEntry.id,
+      );
+      const nextActivePlayer = isActivePlayer
+        ? (remainingActivePlayers[
+            resigningIndex % remainingActivePlayers.length
+          ] ?? remainingActivePlayers[0])
+        : null;
+
       if (wasOrganizer && resigningEntry.role === GameRole.ORGANIZER) {
         await transaction.gamePlayer.update({
           where: { id: resigningEntry.id },
@@ -1016,7 +1110,7 @@ export class GamesTurnService {
         });
       }
 
-      if (isActivePlayer && nextActivePlayer && game.turnState) {
+      if (isActivePlayer && nextActivePlayer && revalidated.turnState) {
         const transitionedAt = new Date();
 
         await transaction.turnState.update({
@@ -1032,14 +1126,14 @@ export class GamesTurnService {
           expectedCurrent: {
             gamePlayerId: resigningEntry.id,
             userId: resigningEntry.userId!,
-            roundNumber: game.turnState.roundNumber,
+            roundNumber: revalidated.turnState.roundNumber,
           },
           next: {
             gamePlayerId: nextActivePlayer.id,
             userId: nextActivePlayer.userId,
             seatNumber: nextActivePlayer.turnOrder,
             playerDisplayName: nextActivePlayer.user!.displayName,
-            roundNumber: game.turnState.roundNumber,
+            roundNumber: revalidated.turnState.roundNumber,
           },
           completionReason: TurnCompletionReason.RESIGNED,
           transitionedAt,
