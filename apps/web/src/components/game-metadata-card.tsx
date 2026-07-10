@@ -29,6 +29,10 @@ type GameMetadataCardProps = {
   techLevel: number | null;
   zoneCount: string | null;
   armyCount: string | null;
+  turnTargetHours: number;
+  turnReminderGraceHours: number;
+  turnReminderRepeatHours: number;
+  turnRemindersEnabled: boolean;
   players: Array<{
     id: string;
     userId: string | null;
@@ -38,11 +42,28 @@ type GameMetadataCardProps = {
   }>;
 };
 
+type MetadataPayload = {
+  gameNumber?: number;
+  name?: string;
+  roundNumber?: number;
+  playerCount?: number;
+  hasAiPlayers?: boolean;
+  dlcMode?: string;
+  gameMode?: string;
+  techLevel?: number;
+  zoneCount?: string;
+  armyCount?: string;
+  turnTargetHours?: number;
+  turnReminderGraceHours?: number;
+  turnReminderRepeatHours?: number;
+  turnRemindersEnabled?: boolean;
+};
+
 type PendingHostTransfer = {
   seatEntryId: string;
   seatNumber: number;
   displayName: string;
-  metadataPayload: ReturnType<typeof buildMetadataPayload>;
+  metadataPayload: MetadataPayload;
   gameNumber: number;
 };
 
@@ -85,6 +106,10 @@ type MetadataDraft = {
   techLevel: string;
   zoneCount: string;
   armyCount: string;
+  turnTargetHours: string;
+  turnReminderGraceHours: string;
+  turnReminderRepeatHours: string;
+  turnRemindersEnabled: boolean;
 };
 
 function createDraft({
@@ -98,6 +123,10 @@ function createDraft({
   techLevel,
   zoneCount,
   armyCount,
+  turnTargetHours,
+  turnReminderGraceHours,
+  turnReminderRepeatHours,
+  turnRemindersEnabled,
 }: Omit<
   GameMetadataCardProps,
   "canEdit" | "organizerDisplayName" | "activePlayerDisplayName"
@@ -113,7 +142,28 @@ function createDraft({
     techLevel: techLevel == null ? "" : String(techLevel),
     zoneCount: zoneCount ?? "",
     armyCount: armyCount ?? "",
+    turnTargetHours: String(turnTargetHours),
+    turnReminderGraceHours: String(turnReminderGraceHours),
+    turnReminderRepeatHours: String(turnReminderRepeatHours),
+    turnRemindersEnabled,
   };
+}
+
+export function parsePositiveSafeWholeHours(value: string, label: string) {
+  if (!/^\d+$/.test(value)) {
+    return {
+      ok: false as const,
+      message: `${label} must be a positive whole number of hours.`,
+    };
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    return {
+      ok: false as const,
+      message: `${label} must be a positive safe whole number of hours.`,
+    };
+  }
+  return { ok: true as const, value: parsed };
 }
 
 function getOptionLabel(
@@ -135,18 +185,7 @@ function buildMetadataPayload(
   draft: MetadataDraft,
   initialDraft: MetadataDraft,
 ) {
-  const payload: {
-    gameNumber?: number;
-    name?: string;
-    roundNumber?: number;
-    playerCount?: number;
-    hasAiPlayers?: boolean;
-    dlcMode?: string;
-    gameMode?: string;
-    techLevel?: number;
-    zoneCount?: string;
-    armyCount?: string;
-  } = {};
+  const payload: MetadataPayload = {};
 
   if (draft.gameNumber !== initialDraft.gameNumber && draft.gameNumber !== "") {
     payload.gameNumber = Number(draft.gameNumber);
@@ -200,7 +239,46 @@ function buildMetadataPayload(
     payload.armyCount = draft.armyCount;
   }
 
-  return payload;
+  const durationFields = [
+    {
+      draftValue: draft.turnTargetHours,
+      initialValue: initialDraft.turnTargetHours,
+      label: "Target turn",
+      key: "turnTargetHours" as const,
+    },
+    {
+      draftValue: draft.turnReminderGraceHours,
+      initialValue: initialDraft.turnReminderGraceHours,
+      label: "Reminder grace",
+      key: "turnReminderGraceHours" as const,
+    },
+    {
+      draftValue: draft.turnReminderRepeatHours,
+      initialValue: initialDraft.turnReminderRepeatHours,
+      label: "Reminder repeat",
+      key: "turnReminderRepeatHours" as const,
+    },
+  ];
+
+  for (const field of durationFields) {
+    if (field.draftValue === field.initialValue) {
+      continue;
+    }
+
+    const result = parsePositiveSafeWholeHours(field.draftValue, field.label);
+
+    if (!result.ok) {
+      return result;
+    }
+
+    payload[field.key] = result.value;
+  }
+
+  if (draft.turnRemindersEnabled !== initialDraft.turnRemindersEnabled) {
+    payload.turnRemindersEnabled = draft.turnRemindersEnabled;
+  }
+
+  return { ok: true as const, payload };
 }
 
 function DetailTile({
@@ -317,9 +395,7 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
   const [isTransferPending, startTransferTransition] = useTransition();
   const isMutating = isPending || isTransferPending;
 
-  async function applyMetadataUpdate(
-    payload: ReturnType<typeof buildMetadataPayload>,
-  ) {
+  async function applyMetadataUpdate(payload: MetadataPayload) {
     if (Object.keys(payload).length === 0) {
       return props.gameNumber;
     }
@@ -361,7 +437,14 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
 
   function saveMetadata() {
     const initialDraft = createDraft(props);
-    const payload = buildMetadataPayload(draft, initialDraft);
+    const payloadResult = buildMetadataPayload(draft, initialDraft);
+
+    if (!payloadResult.ok) {
+      setErrorMessage(payloadResult.message);
+      return;
+    }
+
+    const payload = payloadResult.payload;
     const selectedOrganizer = organizerOptions.find(
       (player) => player.id === organizerEntryId,
     );
@@ -509,6 +592,19 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
       label: "Army count",
       value: getOptionLabel(props.armyCount, armyCountOptions),
     },
+    { label: "Target turn", value: `${props.turnTargetHours} hours` },
+    {
+      label: "Reminder grace",
+      value: `${props.turnReminderGraceHours} hours`,
+    },
+    {
+      label: "Reminder repeat",
+      value: `${props.turnReminderRepeatHours} hours`,
+    },
+    {
+      label: "Turn reminders",
+      value: props.turnRemindersEnabled ? "Enabled" : "Disabled",
+    },
   ];
 
   return (
@@ -576,7 +672,10 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         {errorMessage ? (
-          <div className="rounded-lg border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm font-mono text-red-300">
+          <div
+            className="rounded-lg border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm font-mono text-red-300"
+            role="alert"
+          >
             {errorMessage}
           </div>
         ) : null}
@@ -777,6 +876,75 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
                 ))}
               </select>
             </EditField>
+            <fieldset className="rounded-lg border border-orange-400/20 bg-orange-400/5 px-4 py-4 sm:col-span-2 xl:col-span-3">
+              <legend className="px-1 text-xs uppercase tracking-[0.24em] text-orange-300/70">
+                Turn timing policy
+              </legend>
+              <div className="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <EditField label="Target turn hours">
+                  <input
+                    className={controlClassName}
+                    max={Number.MAX_SAFE_INTEGER}
+                    min={1}
+                    step={1}
+                    type="number"
+                    value={draft.turnTargetHours}
+                    onChange={(event) => {
+                      setDraft((currentDraft) => ({
+                        ...currentDraft,
+                        turnTargetHours: event.target.value,
+                      }));
+                    }}
+                  />
+                </EditField>
+                <EditField label="Reminder grace hours">
+                  <input
+                    className={controlClassName}
+                    max={Number.MAX_SAFE_INTEGER}
+                    min={1}
+                    step={1}
+                    type="number"
+                    value={draft.turnReminderGraceHours}
+                    onChange={(event) => {
+                      setDraft((currentDraft) => ({
+                        ...currentDraft,
+                        turnReminderGraceHours: event.target.value,
+                      }));
+                    }}
+                  />
+                </EditField>
+                <EditField label="Reminder repeat hours">
+                  <input
+                    className={controlClassName}
+                    max={Number.MAX_SAFE_INTEGER}
+                    min={1}
+                    step={1}
+                    type="number"
+                    value={draft.turnReminderRepeatHours}
+                    onChange={(event) => {
+                      setDraft((currentDraft) => ({
+                        ...currentDraft,
+                        turnReminderRepeatHours: event.target.value,
+                      }));
+                    }}
+                  />
+                </EditField>
+                <label className="flex items-center gap-3 rounded-lg border border-orange-400/20 bg-orange-400/5 px-4 py-4 text-sm font-mono text-orange-200">
+                  <input
+                    checked={draft.turnRemindersEnabled}
+                    className="size-4 accent-orange-400"
+                    type="checkbox"
+                    onChange={(event) => {
+                      setDraft((currentDraft) => ({
+                        ...currentDraft,
+                        turnRemindersEnabled: event.target.checked,
+                      }));
+                    }}
+                  />
+                  Enabled
+                </label>
+              </div>
+            </fieldset>
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

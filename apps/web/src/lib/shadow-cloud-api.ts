@@ -22,6 +22,11 @@ export type GameListItem = {
   playerCount: number;
   filledSeatCount: number;
   participantUserIds: string[];
+  turnTargetHours: number;
+  turnReminderGraceHours: number;
+  turnReminderRepeatHours: number;
+  turnRemindersEnabled: boolean;
+  currentTurnStartedAt: string | null;
 };
 
 export type GameDetailFileVersion = {
@@ -55,6 +60,11 @@ export type GameDetail = {
   activePlayerEntryId: string | null;
   activePlayerUserId: string | null;
   activePlayerDisplayName: string;
+  turnTargetHours: number;
+  turnReminderGraceHours: number;
+  turnReminderRepeatHours: number;
+  turnRemindersEnabled: boolean;
+  currentTurnStartedAt: string | null;
   players: Array<{
     id: string;
     userId: string | null;

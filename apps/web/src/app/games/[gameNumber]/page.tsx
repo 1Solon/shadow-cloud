@@ -124,6 +124,10 @@ export default async function GameDetailPage({
           playerCount={game.playerCount}
           roundNumber={game.roundNumber}
           techLevel={game.techLevel}
+          turnReminderGraceHours={game.turnReminderGraceHours}
+          turnReminderRepeatHours={game.turnReminderRepeatHours}
+          turnRemindersEnabled={game.turnRemindersEnabled}
+          turnTargetHours={game.turnTargetHours}
           zoneCount={game.zoneCount}
         />
       </section>

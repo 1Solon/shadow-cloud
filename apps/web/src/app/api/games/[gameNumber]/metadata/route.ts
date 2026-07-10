@@ -2,6 +2,10 @@ import { createApiAccessToken, getServerAuthSession } from "@/auth";
 
 const apiBaseUrl = process.env.SHADOW_CLOUD_API_URL ?? "http://localhost:3001";
 
+function isPositiveSafeWholeHours(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
+
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ gameNumber: string }> },
@@ -37,9 +41,13 @@ export async function PATCH(
     zoneCount?: unknown;
     armyCount?: unknown;
     notes?: unknown;
+    turnTargetHours?: unknown;
+    turnReminderGraceHours?: unknown;
+    turnReminderRepeatHours?: unknown;
+    turnRemindersEnabled?: unknown;
   } | null;
 
-  if (!payload || typeof payload !== "object") {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return Response.json(
       { error: "Game metadata payload is invalid." },
       { status: 400 },
@@ -151,6 +159,30 @@ export async function PATCH(
     );
   }
 
+  if (
+    (payload.turnTargetHours !== undefined &&
+      !isPositiveSafeWholeHours(payload.turnTargetHours)) ||
+    (payload.turnReminderGraceHours !== undefined &&
+      !isPositiveSafeWholeHours(payload.turnReminderGraceHours)) ||
+    (payload.turnReminderRepeatHours !== undefined &&
+      !isPositiveSafeWholeHours(payload.turnReminderRepeatHours))
+  ) {
+    return Response.json(
+      { error: "Turn timing policy metadata is invalid." },
+      { status: 400 },
+    );
+  }
+
+  if (
+    payload.turnRemindersEnabled !== undefined &&
+    typeof payload.turnRemindersEnabled !== "boolean"
+  ) {
+    return Response.json(
+      { error: "Turn reminder status metadata is invalid." },
+      { status: 400 },
+    );
+  }
+
   const response = await fetch(
     `${apiBaseUrl}/v1/games/${encodeURIComponent(gameNumber)}/metadata`,
     {
@@ -187,6 +219,18 @@ export async function PATCH(
           ? { armyCount: payload.armyCount }
           : {}),
         ...("notes" in payload ? { notes: payload.notes ?? null } : {}),
+        ...(payload.turnTargetHours !== undefined
+          ? { turnTargetHours: payload.turnTargetHours }
+          : {}),
+        ...(payload.turnReminderGraceHours !== undefined
+          ? { turnReminderGraceHours: payload.turnReminderGraceHours }
+          : {}),
+        ...(payload.turnReminderRepeatHours !== undefined
+          ? { turnReminderRepeatHours: payload.turnReminderRepeatHours }
+          : {}),
+        ...(payload.turnRemindersEnabled !== undefined
+          ? { turnRemindersEnabled: payload.turnRemindersEnabled }
+          : {}),
       }),
       cache: "no-store",
     },
