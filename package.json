@@ -2,7 +2,7 @@
   "name": "shadow-cloud",
   "version": "0.7.0",
   "private": true,
-  "packageManager": "pnpm@10.33.2",
+  "packageManager": "pnpm@10.34.4",
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev",
@@ -13,7 +13,7 @@
     "pr": "turbo run format lint typecheck test build --continue=always"
   },
   "devDependencies": {
-    "turbo": "2.9.6",
+    "turbo": "2.10.4",
     "typescript": "6.0.3"
   }
 }
