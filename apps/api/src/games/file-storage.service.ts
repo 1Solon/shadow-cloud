@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { mkdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { basename, extname, join, resolve } from 'node:path';
@@ -60,6 +61,29 @@ export class FileStorageService {
     };
   }
 
+  async stageReplacement(input: {
+    gameId: string;
+    canonicalName: string;
+    content: Buffer;
+  }) {
+    const gameDirectory = join(
+      this.rootDirectory,
+      sanitizeSegment(input.gameId),
+    );
+    const canonicalName = sanitizeSegment(input.canonicalName);
+    const extension = extname(canonicalName);
+    const baseName = canonicalName.slice(0, -extension.length) || 'save-file';
+    const storagePath = join(
+      gameDirectory,
+      `${baseName}-replacement-${randomUUID()}${extension}`,
+    );
+
+    await mkdir(gameDirectory, { recursive: true });
+    await writeFile(storagePath, input.content, { flag: 'wx' });
+
+    return { storagePath };
+  }
+
   async openDownload(storagePath: string): Promise<{
     size: number;
     lastModified: Date;
@@ -92,5 +116,9 @@ export class FileStorageService {
 
   async removeFile(storagePath: string) {
     await unlink(storagePath).catch(() => undefined);
+  }
+
+  async removeFileOrThrow(storagePath: string) {
+    await unlink(storagePath);
   }
 }
