@@ -24,9 +24,8 @@ vi.mock('../src/database', () => ({
   prisma: prismaMock,
 }));
 
-const { GamesQueryService } = await import(
-  '../src/games/services/games-query.service'
-);
+const { GamesQueryService } =
+  await import('../src/games/services/games-query.service');
 
 function createGame() {
   return {
@@ -72,8 +71,8 @@ describe('GamesQueryService download filenames', () => {
     prismaMock.fileVersion.findFirst.mockResolvedValue({
       id: 'file-version-10',
       gameId: 'game-1',
-      storagePath: '/saves/game-1/1-T10-S1-Solon.se1',
-      originalName: '1-T10-S1-Solon.se1',
+      storagePath: '/saves/game-1/42-T4-S2-Other-replacement-id.se1',
+      originalName: '42-T4-S2-Other.se1',
       versionNumber: 10,
     });
     prismaMock.auditEvent.create.mockResolvedValue({});
@@ -92,7 +91,10 @@ describe('GamesQueryService download filenames', () => {
 
     const download = await service.downloadSave('1', 'file-version-10');
 
-    expect(download.originalName).toBe('1-T10-S1-Solon.se1');
+    expect(download.originalName).toBe('42-T4-S2-Other.se1');
+    expect(fileStorage.openDownload).toHaveBeenCalledWith(
+      '/saves/game-1/42-T4-S2-Other-replacement-id.se1',
+    );
     expect(fileStorage.createDownloadFileName).not.toHaveBeenCalled();
   });
 });

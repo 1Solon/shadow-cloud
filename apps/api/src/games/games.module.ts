@@ -4,6 +4,7 @@ import { BotNotificationsService } from './bot-notifications.service';
 import { FileStorageService } from './file-storage.service';
 import { GamesController } from './games.controller';
 import { GamesService } from './games.service';
+import { GamesFileService } from './services/games-file.service';
 import { GamesQueryService } from './services/games-query.service';
 import { GamesRegistrationService } from './services/games-registration.service';
 import { GamesTurnService } from './services/games-turn.service';
@@ -13,6 +14,7 @@ import { GamesTurnService } from './services/games-turn.service';
   controllers: [GamesController],
   providers: [
     GamesService,
+    GamesFileService,
     GamesQueryService,
     GamesRegistrationService,
     GamesTurnService,

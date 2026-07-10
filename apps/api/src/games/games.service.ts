@@ -9,6 +9,7 @@ import {
 import { AuthService } from '../auth/auth.service';
 import { prisma, type Prisma } from '../database';
 import { GamesQueryService } from './services/games-query.service';
+import { GamesFileService } from './services/games-file.service';
 import { GamesRegistrationService } from './services/games-registration.service';
 import { GamesTurnService } from './services/games-turn.service';
 import { FileStorageService } from './file-storage.service';
@@ -37,6 +38,7 @@ import { syncGameSeatCount } from './support/seat-count.helpers';
 import type {
   GameDetailResponse,
   GameMetadataResponse,
+  ReplaceSaveMetadata,
   UploadSaveSafetyMetadata,
   UploadedSaveFile,
 } from './support/game-payload.types';
@@ -50,6 +52,7 @@ export class GamesService {
     private readonly gamesRegistration: GamesRegistrationService,
     private readonly gamesTurn: GamesTurnService,
     private readonly fileStorage: FileStorageService,
+    private readonly gamesFile: GamesFileService,
   ) {}
 
   private async assertGameManagementAccess(input: {
@@ -314,6 +317,22 @@ export class GamesService {
     metadata?: UploadSaveSafetyMetadata,
   ) {
     return this.gamesTurn.uploadSave(gameId, userId, file, metadata);
+  }
+
+  replaceSave(
+    gameId: string,
+    fileVersionId: string,
+    userId: string | undefined,
+    file: UploadedSaveFile,
+    metadata?: ReplaceSaveMetadata,
+  ) {
+    return this.gamesFile.replaceSave(
+      gameId,
+      fileVersionId,
+      userId,
+      file,
+      metadata,
+    );
   }
 
   async downloadSave(gameId: string, fileVersionId: string) {
