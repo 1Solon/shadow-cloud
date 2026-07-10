@@ -377,7 +377,9 @@ async function syncCampaign(input: {
 
     if (
       latestRemoteFile &&
-      latestRemoteFile.uploadedById !== currentUserId &&
+      (latestRemoteFile.uploadedById !== currentUserId ||
+        latestRemoteFile.id ===
+          previousCampaignState.lastDownloadedFileVersionId) &&
       !isSameRemoteRevision(previousCampaignState, latestRemoteFile)
     ) {
       campaignState.status = "Needs your decision";
@@ -490,7 +492,11 @@ async function syncCampaign(input: {
     localSaves.length === 0
       ? detail.fileVersions[0]
       : detail.fileVersions.find(
-          (fileVersion) => fileVersion.uploadedById !== currentUserId,
+          (fileVersion) =>
+            fileVersion.uploadedById !== currentUserId ||
+            (fileVersion.id ===
+              previousCampaignState.lastDownloadedFileVersionId &&
+              !isSameRemoteRevision(previousCampaignState, fileVersion)),
         );
 
   if (!remoteFile || isSameRemoteRevision(previousCampaignState, remoteFile)) {
