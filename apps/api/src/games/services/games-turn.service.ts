@@ -124,6 +124,7 @@ export class GamesTurnService {
     },
   >(
     players: T[],
+    activeSeat: { id: string },
     expected: {
       id: string;
       userId: string;
@@ -131,7 +132,21 @@ export class GamesTurnService {
       playerDisplayName: string;
     },
   ) {
-    const nextPlayer = players.find((player) => player.id === expected.id);
+    const occupiedPlayers = [...players]
+      .filter((player) => player.userId != null)
+      .sort((left, right) => left.turnOrder - right.turnOrder);
+    const activePlayerIndex = occupiedPlayers.findIndex(
+      (player) => player.id === activeSeat.id,
+    );
+
+    if (activePlayerIndex === -1) {
+      throw new ConflictException(
+        'The active player changed before advancing.',
+      );
+    }
+
+    const nextPlayer =
+      occupiedPlayers[(activePlayerIndex + 1) % occupiedPlayers.length];
 
     if (
       !nextPlayer ||
@@ -142,7 +157,10 @@ export class GamesTurnService {
       throw new ConflictException('The next player changed before advancing.');
     }
 
-    return nextPlayer;
+    return {
+      nextPlayer,
+      roundAdvanced: activePlayerIndex === occupiedPlayers.length - 1,
+    };
   }
 
   async uploadSave(
@@ -347,15 +365,27 @@ export class GamesTurnService {
           expectedTurnState: game.turnState,
           expectedActiveSeat: activePlayerEntry,
         });
-        const revalidatedNextPlayer = this.revalidateNextPlayer(
-          revalidated.players,
-          {
-            id: uploadSaveNaming.nextActivePlayer.id,
-            userId: uploadSaveNaming.nextActivePlayer.userId!,
-            turnOrder: uploadSaveNaming.nextActivePlayer.turnOrder,
-            playerDisplayName: uploadSaveNaming.nextActivePlayer.displayName!,
-          },
-        );
+        const activeSeat = revalidated.activeSeat;
+
+        if (!activeSeat) {
+          throw new ConflictException('The active turn could not be resolved.');
+        }
+
+        const {
+          nextPlayer: revalidatedNextPlayer,
+          roundAdvanced: revalidatedRoundAdvanced,
+        } = this.revalidateNextPlayer(revalidated.players, activeSeat, {
+          id: uploadSaveNaming.nextActivePlayer.id,
+          userId: uploadSaveNaming.nextActivePlayer.userId!,
+          turnOrder: uploadSaveNaming.nextActivePlayer.turnOrder,
+          playerDisplayName: uploadSaveNaming.nextActivePlayer.displayName!,
+        });
+
+        if (revalidatedRoundAdvanced !== roundAdvanced) {
+          throw new ConflictException(
+            'The turn order changed before this upload.',
+          );
+        }
         const nextActivePlayer = {
           ...uploadSaveNaming.nextActivePlayer,
           userId: revalidatedNextPlayer.userId,
@@ -370,7 +400,7 @@ export class GamesTurnService {
             activePlayerId: nextActivePlayer.userId!,
             activePlayerEntryId: nextActivePlayer.id,
             roundNumber: {
-              increment: roundAdvanced ? 1 : 0,
+              increment: revalidatedRoundAdvanced ? 1 : 0,
             },
           },
         });
@@ -406,7 +436,7 @@ export class GamesTurnService {
               nextActivePlayerEntryId: uploadSaveNaming.nextActivePlayer.id,
               nextActivePlayerUserId: uploadSaveNaming.nextActivePlayer.userId,
               roundNumber: updatedTurnState.roundNumber,
-              roundAdvanced,
+              roundAdvanced: revalidatedRoundAdvanced,
               fileVersionId: fileVersion.id,
             }),
           },
@@ -417,7 +447,7 @@ export class GamesTurnService {
           versionNumber,
           nextActivePlayer,
           roundNumber: updatedTurnState.roundNumber,
-          roundAdvanced,
+          roundAdvanced: revalidatedRoundAdvanced,
         };
       });
 
@@ -1299,8 +1329,15 @@ export class GamesTurnService {
         expectedTurnState: game.turnState,
         expectedActiveSeat: targetEntry,
       });
-      const revalidatedNextPlayer = this.revalidateNextPlayer(
+      const activeSeat = revalidated.activeSeat;
+
+      if (!activeSeat) {
+        throw new ConflictException('The active turn could not be resolved.');
+      }
+
+      const { nextPlayer: revalidatedNextPlayer } = this.revalidateNextPlayer(
         revalidated.players,
+        activeSeat,
         {
           id: nextActivePlayer.id,
           userId: nextActivePlayer.userId!,
@@ -1321,16 +1358,16 @@ export class GamesTurnService {
       await this.turnRecords.transitionTurn(transaction, {
         gameId: game.id,
         expectedCurrent: {
-          gamePlayerId: revalidated.activeSeat!.id,
-          userId: revalidated.activeSeat!.userId!,
-          roundNumber: revalidated.turnState!.roundNumber,
+          gamePlayerId: activeSeat.id,
+          userId: activeSeat.userId!,
+          roundNumber: revalidated.turnState.roundNumber,
         },
         next: {
           gamePlayerId: revalidatedNextPlayer.id,
           userId: revalidatedNextPlayer.userId,
           seatNumber: revalidatedNextPlayer.turnOrder,
           playerDisplayName: revalidatedNextPlayer.user!.displayName,
-          roundNumber: revalidated.turnState!.roundNumber,
+          roundNumber: revalidated.turnState.roundNumber,
         },
         completionReason: TurnCompletionReason.SKIPPED,
         transitionedAt,

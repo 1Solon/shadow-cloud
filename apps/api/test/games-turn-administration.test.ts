@@ -93,6 +93,21 @@ function createGame(override = {}) {
   };
 }
 
+function gamePlayer(
+  id: string,
+  userId: string,
+  displayName: string,
+  turnOrder: number,
+) {
+  return {
+    id,
+    userId,
+    user: { id: userId, displayName, identities: [] },
+    role: 'PLAYER',
+    turnOrder,
+  };
+}
+
 function createTransaction() {
   const game = createGame();
 
@@ -358,6 +373,37 @@ describe('GamesTurnService administrative turn transitions', () => {
     transaction.gamePlayer.findMany.mockResolvedValue([
       game.players[0],
       { ...game.players[1], userId: null, user: null } as never,
+    ]);
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback(transaction),
+    );
+    const { service, turnRecords } = createService();
+
+    await expect(
+      service.skipPlayerTurn({
+        discordThreadId: 'thread-1',
+        callerDiscordId: 'discord-2',
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(transaction.turnState.update).not.toHaveBeenCalled();
+    expect(turnRecords.transitionTurn).not.toHaveBeenCalled();
+  });
+
+  it('rejects a reordered successor before advancing the skipped turn', async () => {
+    const players = [
+      gamePlayer('entry-1', 'user-1', 'Alpha', 1),
+      gamePlayer('entry-2', 'user-2', 'Overlord', 2),
+      gamePlayer('entry-3', 'user-3', 'Third', 3),
+    ];
+    const game = createGame({ players });
+    prismaMock.game.findUnique.mockResolvedValue(game);
+    const transaction = createTransaction();
+    transaction.turnState.findUnique.mockResolvedValue(game.turnState);
+    transaction.gamePlayer.findMany.mockResolvedValue([
+      gamePlayer('entry-3', 'user-3', 'Third', 1),
+      gamePlayer('entry-2', 'user-2', 'Overlord', 2),
+      gamePlayer('entry-1', 'user-1', 'Alpha', 3),
     ]);
     prismaMock.$transaction.mockImplementation(async (callback) =>
       callback(transaction),
