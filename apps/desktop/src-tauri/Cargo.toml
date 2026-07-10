@@ -10,17 +10,17 @@ name = "shadow_cloud_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2.5.5", features = [] }
+tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
-tauri = { version = "2.11.0", features = ["tray-icon"] }
+tauri = { version = "2.11.5", features = ["tray-icon"] }
 tauri-plugin-dialog = "2.7.1"
 tauri-plugin-fs = "2.5.1"
 tauri-plugin-opener = "2.5.4"
 tauri-plugin-single-instance = "2.4.2"
 tauri-plugin-store = "2.4.3"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
-tauri-plugin-updater = "2"
+tauri-plugin-updater = "2.10.1"
