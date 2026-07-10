@@ -8,6 +8,7 @@ import { GamesFileService } from './services/games-file.service';
 import { GamesQueryService } from './services/games-query.service';
 import { GamesRegistrationService } from './services/games-registration.service';
 import { TurnRecordsService } from './services/turn-records.service';
+import { TurnRemindersService } from './services/turn-reminders.service';
 import { GamesTurnService } from './services/games-turn.service';
 
 @Module({
@@ -19,6 +20,7 @@ import { GamesTurnService } from './services/games-turn.service';
     GamesQueryService,
     GamesRegistrationService,
     TurnRecordsService,
+    TurnRemindersService,
     GamesTurnService,
     FileStorageService,
     BotNotificationsService,

@@ -1,5 +1,9 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import { type Prisma, TurnCompletionReason } from '../../database';
+import {
+  type Prisma,
+  type TurnRecord,
+  TurnCompletionReason,
+} from '../../database';
 import {
   calculateFirstReminderAt,
   calculateNextReminderAt,
@@ -53,7 +57,7 @@ export class TurnRecordsService {
   async createInitialTurn(
     transaction: Prisma.TransactionClient,
     input: CreateInitialTurnInput,
-  ) {
+  ): Promise<TurnRecord> {
     return transaction.turnRecord.create({
       data: {
         gameId: input.gameId,
@@ -68,7 +72,7 @@ export class TurnRecordsService {
   async transitionTurn(
     transaction: Prisma.TransactionClient,
     input: TransitionTurnInput,
-  ) {
+  ): Promise<TurnRecord> {
     const current = await this.findMatchingOpenRecord(
       transaction,
       input.gameId,
@@ -110,7 +114,7 @@ export class TurnRecordsService {
   async recalculateOpenReminder(
     transaction: Prisma.TransactionClient,
     input: RecalculateOpenReminderInput,
-  ) {
+  ): Promise<TurnRecord> {
     const openRecord = await this.findOnlyOpenRecord(transaction, input.gameId);
     const nextReminderAt =
       openRecord.reminderCount > 0
@@ -129,7 +133,7 @@ export class TurnRecordsService {
   async synchronizeOpenRound(
     transaction: Prisma.TransactionClient,
     input: SynchronizeOpenRoundInput,
-  ) {
+  ): Promise<TurnRecord> {
     const openRecord = await this.findMatchingOpenRecord(
       transaction,
       input.gameId,

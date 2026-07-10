@@ -9,6 +9,7 @@ const prismaMock = vi.hoisted(() => ({
 vi.mock('../src/database', () => ({
   NotificationDeliveryEvent: {
     SAVE_REPLACED: 'SAVE_REPLACED',
+    TURN_NUDGE: 'TURN_NUDGE',
   },
   NotificationDeliveryStatus: {},
   prisma: prismaMock,
@@ -81,5 +82,16 @@ describe('BotNotificationsService enqueueSaveReplaced', () => {
     });
 
     expect(transaction.notificationDelivery.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('BotNotificationsService turn nudge routing', () => {
+  it('routes TURN_NUDGE deliveries to the turn nudge endpoint', () => {
+    const service = new BotNotificationsService();
+
+    expect((service as any).getEventName('TURN_NUDGE')).toBe('turn-nudge');
+    expect((service as any).getEndpointForEvent('TURN_NUDGE')).toBe(
+      'http://127.0.0.1:3011/notify/turn-nudge',
+    );
   });
 });

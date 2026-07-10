@@ -96,8 +96,35 @@ export type ThreadRenameNotificationPayload = {
   };
 };
 
+export type TurnNudgeNotificationPayload = {
+  game: {
+    id: string;
+    gameNumber: number;
+    slug: string;
+    name: string;
+    discordThreadId: string;
+  };
+  turnRecord: {
+    id: string;
+    roundNumber: number;
+    startedAt: string;
+    elapsedHours: number;
+    targetHours: number;
+    activePlayer: {
+      id: string;
+      displayName: string;
+      discordId: string;
+      turnOrder: number;
+    };
+  };
+};
+
 type NotificationEventName =
-  'save-uploaded' | 'save-replaced' | 'game-initialized' | 'thread-rename';
+  | 'save-uploaded'
+  | 'save-replaced'
+  | 'game-initialized'
+  | 'thread-rename'
+  | 'turn-nudge';
 
 type NotificationContext = {
   eventName: NotificationEventName;
@@ -120,6 +147,7 @@ export class BotNotificationsService implements OnModuleInit, OnModuleDestroy {
   private readonly saveReplacedEndpoint = `${this.notificationBaseUrl}/notify/save-replaced`;
   private readonly gameInitializedEndpoint = `${this.notificationBaseUrl}/notify/game-initialized`;
   private readonly threadRenameEndpoint = `${this.notificationBaseUrl}/notify/thread-rename`;
+  private readonly turnNudgeEndpoint = `${this.notificationBaseUrl}/notify/turn-nudge`;
   private readonly secret = process.env.SHADOW_CLOUD_BOT_NOTIFY_SECRET;
   private readonly queuePollIntervalMs = 5_000;
   private readonly maxAttempts = 8;
@@ -453,6 +481,8 @@ export class BotNotificationsService implements OnModuleInit, OnModuleDestroy {
         return 'game-initialized';
       case NotificationDeliveryEvent.THREAD_RENAMED:
         return 'thread-rename';
+      case NotificationDeliveryEvent.TURN_NUDGE:
+        return 'turn-nudge';
     }
   }
 
@@ -466,6 +496,8 @@ export class BotNotificationsService implements OnModuleInit, OnModuleDestroy {
         return this.gameInitializedEndpoint;
       case NotificationDeliveryEvent.THREAD_RENAMED:
         return this.threadRenameEndpoint;
+      case NotificationDeliveryEvent.TURN_NUDGE:
+        return this.turnNudgeEndpoint;
     }
   }
 
