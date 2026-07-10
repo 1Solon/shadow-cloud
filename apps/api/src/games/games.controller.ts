@@ -7,10 +7,12 @@ import {
   Param,
   Patch,
   Post,
+  Put,
   Req,
   Res,
   StreamableFile,
   UploadedFile,
+  UseFilters,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
@@ -30,6 +32,8 @@ import { TransferHostDto } from './dto/transfer-host.dto';
 import { UpdateGameMetadataDto } from './dto/update-game-metadata.dto';
 import { ApproveRegistrationRequestDto } from './dto/approve-registration-request.dto';
 import { GamesService, type UploadedSaveFile } from './games.service';
+import { SaveFileUploadExceptionFilter } from './support/save-file-upload-exception.filter';
+import { getMaxSaveFileSizeBytes } from './support/save-file-validation';
 
 @Controller('games')
 export class GamesController {
@@ -158,6 +162,37 @@ export class GamesController {
     response.setHeader('last-modified', download.lastModified.toUTCString());
 
     return new StreamableFile(download.stream);
+  }
+
+  @Put(':gameId/files/:fileVersionId')
+  @UseGuards(AppAuthGuard)
+  @UseFilters(SaveFileUploadExceptionFilter)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: getMaxSaveFileSizeBytes() },
+    }),
+  )
+  replaceSave(
+    @Param('gameId') gameId: string,
+    @Param('fileVersionId') fileVersionId: string,
+    @Req() request: AuthenticatedRequest,
+    @UploadedFile() file?: UploadedSaveFile,
+    @Body() body?: Record<string, string | undefined>,
+  ) {
+    if (!file?.buffer?.length || !file.originalname) {
+      throw new BadRequestException('A replacement save file is required.');
+    }
+
+    return this.gamesService.replaceSave(
+      gameId,
+      fileVersionId,
+      request.user?.sub,
+      file,
+      {
+        contentHash: body?.contentHash,
+        shadowOverrideEnabled: request.user?.shadowOverrideEnabled === true,
+      },
+    );
   }
 
   @Post('init')
