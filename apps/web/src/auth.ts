@@ -134,6 +134,7 @@ export function getServerAuthSession() {
 
 export async function createApiAccessToken(
   session: Awaited<ReturnType<typeof getServerAuthSession>>,
+  options: { shadowOverrideEnabled?: boolean } = {},
 ) {
   if (!session?.user?.id) {
     return null;
@@ -146,6 +147,9 @@ export async function createApiAccessToken(
   return new SignJWT({
     email: session.user.email ?? undefined,
     name: session.user.name ?? undefined,
+    shadowOverrideEnabled:
+      session.user.isShadowOverride === true &&
+      options.shadowOverrideEnabled === true,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
