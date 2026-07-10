@@ -235,6 +235,41 @@ describe('TurnRecordsService', () => {
     expect(transaction.turnRecord.updateMany).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['seat ID', { gamePlayerId: 'seat-other' }],
+    ['round number', { roundNumber: 5 }],
+  ])(
+    'rejects a transition when the open record %s does not match the active turn',
+    async (_mismatch, recordOverride) => {
+      const transaction = createTransaction();
+      transaction.turnRecord.findMany.mockResolvedValue([
+        createOpenRecord(recordOverride),
+      ]);
+
+      await expect(
+        new TurnRecordsService().transitionTurn(transaction as never, {
+          gameId: 'game-1',
+          expectedCurrent: {
+            gamePlayerId: 'seat-1',
+            userId: 'user-1',
+            roundNumber: 4,
+          },
+          next: {
+            gamePlayerId: 'seat-2',
+            userId: 'user-2',
+            seatNumber: 2,
+            playerDisplayName: 'Beta',
+            roundNumber: 4,
+          },
+          completionReason: TurnCompletionReason.SKIPPED,
+          transitionedAt,
+          policy,
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(transaction.turnRecord.updateMany).not.toHaveBeenCalled();
+    },
+  );
+
   it('rejects a transition when more than one open record matches the active turn', async () => {
     const transaction = createTransaction();
     transaction.turnRecord.findMany.mockResolvedValue([
@@ -370,7 +405,7 @@ describe('GamesRegistrationService turn record initialization', () => {
     });
   });
 
-  it('creates the initial timing record in the game creation transaction', async () => {
+  it('passes custom timing policy overrides into a new game and its initial turn', async () => {
     const transaction = {
       game: {
         create: vi.fn(async () => ({
@@ -427,13 +462,16 @@ describe('GamesRegistrationService turn record initialization', () => {
       discordGuildId: 'guild-1',
       discordChannelId: 'channel-1',
       discordThreadId: 'thread-1',
+      turnTargetHours: 48,
+      turnReminderGraceHours: 6,
+      turnReminderRepeatHours: 12,
     });
 
     expect(transaction.game.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
-        turnTargetHours: 24,
-        turnReminderGraceHours: 12,
-        turnReminderRepeatHours: 24,
+        turnTargetHours: 48,
+        turnReminderGraceHours: 6,
+        turnReminderRepeatHours: 12,
         turnRemindersEnabled: true,
       }),
     });
@@ -448,9 +486,9 @@ describe('GamesRegistrationService turn record initialization', () => {
       roundNumber: 1,
       startedAt: new Date('2026-07-10T09:00:00.000Z'),
       policy: {
-        turnTargetHours: 24,
-        turnReminderGraceHours: 12,
-        turnReminderRepeatHours: 24,
+        turnTargetHours: 48,
+        turnReminderGraceHours: 6,
+        turnReminderRepeatHours: 12,
         turnRemindersEnabled: true,
       },
     });

@@ -87,6 +87,22 @@ describe('soft turn timing migration', () => {
           3,
           startedAt,
         );
+      database
+        .prepare(
+          `INSERT INTO "NotificationDelivery" (
+             "id", "event", "status", "gameId", "gameSlug", "payload", "nextAttemptAt", "updatedAt"
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          'delivery-existing',
+          'SAVE_REPLACED',
+          'PENDING',
+          'game-active',
+          'active-game',
+          '{"saveId":"save-1"}',
+          startedAt,
+          startedAt,
+        );
 
       database.exec(
         await readFile(
@@ -112,14 +128,14 @@ describe('soft turn timing migration', () => {
            FROM "TurnRecord" WHERE "gameId" = ?`,
         )
         .get('game-active') as {
-        gamePlayerId: string;
-        userId: string;
-        seatNumber: number;
-        playerDisplayName: string;
-        roundNumber: number;
-        startedAt: string;
-        nextReminderAt: string;
-      };
+          gamePlayerId: string;
+          userId: string;
+          seatNumber: number;
+          playerDisplayName: string;
+          roundNumber: number;
+          startedAt: string;
+          nextReminderAt: string;
+        };
 
       expect(game).toEqual({
         turnTargetHours: 24,
@@ -136,6 +152,50 @@ describe('soft turn timing migration', () => {
       });
       expect(turnRecord.startedAt).toBe(startedAt);
       expect(turnRecord.nextReminderAt).toBe('2026-07-11 12:00:00');
+      expect(
+        database
+          .prepare(
+            `SELECT "event", "status", "gameId", "gameSlug", "payload"
+             FROM "NotificationDelivery" WHERE "id" = ?`,
+          )
+          .get('delivery-existing'),
+      ).toEqual({
+        event: 'SAVE_REPLACED',
+        status: 'PENDING',
+        gameId: 'game-active',
+        gameSlug: 'active-game',
+        payload: '{"saveId":"save-1"}',
+      });
+      database
+        .prepare(
+          `INSERT INTO "TurnRecord" (
+             "id", "gameId", "roundNumber", "playerDisplayName", "startedAt", "endedAt", "updatedAt"
+           ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          'turn-completed',
+          'game-active',
+          2,
+          'Completed Player',
+          startedAt,
+          startedAt,
+          startedAt,
+        );
+      database
+        .prepare(
+          `UPDATE "NotificationDelivery" SET "turnRecordId" = ? WHERE "id" = ?`,
+        )
+        .run('turn-completed', 'delivery-existing');
+      database
+        .prepare(`DELETE FROM "TurnRecord" WHERE "id" = ?`)
+        .run('turn-completed');
+      expect(
+        database
+          .prepare(
+            `SELECT "turnRecordId" FROM "NotificationDelivery" WHERE "id" = ?`,
+          )
+          .get('delivery-existing'),
+      ).toEqual({ turnRecordId: null });
       expect(
         database.prepare('SELECT COUNT(*) AS count FROM "TurnRecord"').get(),
       ).toEqual({ count: 1 });

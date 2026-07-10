@@ -38,6 +38,21 @@ describe('turn timing', () => {
     ).toBeNull();
   });
 
+  it('does not schedule a repeat while reminders are disabled', () => {
+    expect(
+      calculateNextReminderAt(new Date(), {
+        ...enabled,
+        turnRemindersEnabled: false,
+      }),
+    ).toBeNull();
+  });
+
+  it('rejects an invalid input date', () => {
+    expect(() => addWholeHours(new Date('invalid'), 1)).toThrow(
+      'Turn timing duration produces an invalid date.',
+    );
+  });
+
   it('rejects an unrepresentable result', () => {
     expect(() => addWholeHours(new Date(), Number.MAX_SAFE_INTEGER)).toThrow(
       'Turn timing duration produces an invalid date.',
