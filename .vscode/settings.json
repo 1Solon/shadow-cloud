@@ -1,6 +1,0 @@
-{
-  "css.lint.unknownAtRules": "ignore",
-  "prisma.enableDiagnostics": false,
-  "prisma.schemaPath": "apps/api/prisma/schema.prisma",
-  "prisma.scriptRunner": "pnpm"
-}

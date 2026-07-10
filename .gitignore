@@ -17,3 +17,4 @@ storage
 !apps/desktop/src/storage/**
 saves
 dev.db
+docs/superpowers
