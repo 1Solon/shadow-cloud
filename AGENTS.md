@@ -2,7 +2,7 @@
 
 ## Workspace
 
-- Use Node.js 22+ and the pinned `pnpm@10.34.4`. The workspace is driven by Turbo; package filters are `@shadow-cloud/api`, `@shadow-cloud/web`, `@shadow-cloud/bot`, and `@shadow-cloud/desktop`.
+- Use Node.js 22+ and the pinned `pnpm@11.11.0`. The workspace is driven by Turbo; package filters are `@shadow-cloud/api`, `@shadow-cloud/web`, `@shadow-cloud/bot`, and `@shadow-cloud/desktop`.
 - `apps/api` is the NestJS API (`src/main.ts`) with the global `/v1` prefix. Its Prisma schema, migrations, and SQLite development database live under `apps/api/prisma`, with Prisma configuration at `apps/api/prisma.config.mjs`; there is no current `packages/database` package.
 - `apps/web` is a Next.js App Router app rooted at `src/app`. `next.config.ts` proxies browser requests from `/v1/*` to `SHADOW_CLOUD_API_URL`; configure that variable as the API origin without a trailing `/v1`.
 - `apps/bot` is a NodeNext ESM Discord bot. Keep `.js` extensions on relative imports in its TypeScript sources.

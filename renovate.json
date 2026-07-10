@@ -6,10 +6,20 @@
     ":maintainLockFilesWeekly"
   ],
   "labels": ["dependencies"],
-  "rangeStrategy": "bump",
+  "minimumReleaseAge": "1 day",
+  "rangeStrategy": "pin",
   "prConcurrentLimit": 5,
   "prHourlyLimit": 5,
   "packageRules": [
+    {
+      "matchPackageNames": ["typescript"],
+      "allowedVersions": "<6.1.0"
+    },
+    {
+      "matchFileNames": ["apps/web/package.json"],
+      "matchPackageNames": ["eslint"],
+      "allowedVersions": "<10"
+    },
     {
       "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
       "groupName": "non-major dependencies"

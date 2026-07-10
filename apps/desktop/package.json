@@ -12,24 +12,24 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.11.1",
-    "@tauri-apps/plugin-dialog": "^2.7.1",
-    "@tauri-apps/plugin-fs": "^2.5.1",
-    "@tauri-apps/plugin-opener": "^2.5.4",
-    "@tauri-apps/plugin-store": "^2.4.3",
-    "@tauri-apps/plugin-updater": "~2.10.1",
+    "@tauri-apps/api": "2.11.1",
+    "@tauri-apps/plugin-dialog": "2.7.1",
+    "@tauri-apps/plugin-fs": "2.5.1",
+    "@tauri-apps/plugin-opener": "2.5.4",
+    "@tauri-apps/plugin-store": "2.4.3",
+    "@tauri-apps/plugin-updater": "2.10.1",
     "react": "19.2.7",
     "react-dom": "19.2.7"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.11.4",
-    "@types/node": "25.9.4",
+    "@types/node": "26.1.1",
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
-    "@vitejs/plugin-react": "5.2.0",
+    "@vitejs/plugin-react": "6.0.3",
     "prettier": "3.9.4",
     "typescript": "6.0.3",
-    "vite": "7.3.6",
-    "vitest": "3.2.7"
+    "vite": "8.1.4",
+    "vitest": "4.1.10"
   }
 }
