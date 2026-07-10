@@ -171,6 +171,20 @@ describe('GamesTurnService seat order organizer clearing', () => {
     });
   });
 
+  it('explains that occupied seats must be cleared before removal', async () => {
+    await expect(
+      createService().reorderSeatOrder('1', 'user-1', {
+        seatEntryIds: ['entry-2'],
+        clearedSeatEntryIds: ['entry-1'],
+        removedSeatEntryIds: ['entry-1'],
+        activePlayerEntryId: 'entry-2',
+      }),
+    ).rejects.toThrow(
+      'Occupied seats must be cleared and saved before they can be removed.',
+    );
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
   it('still rejects clearing the only occupied seat', async () => {
     prismaMock.game.findFirst.mockResolvedValue(
       createGame({

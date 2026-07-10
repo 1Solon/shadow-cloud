@@ -457,7 +457,9 @@ export class GamesTurnService {
     }
 
     if (clearedSeatIds.some((seatId) => uniqueRemovedSeatIds.has(seatId))) {
-      throw new BadRequestException('Removed seats cannot also be cleared.');
+      throw new BadRequestException(
+        'Occupied seats must be cleared and saved before they can be removed.',
+      );
     }
 
     const currentOrder = game.players.map((player) => ({
