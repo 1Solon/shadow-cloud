@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildSaveReplacedNotificationMessage } from "../src/notifications.js";
+import {
+  buildSaveReplacedNotificationMessage,
+  buildTurnNudgeNotificationMessage,
+} from "../src/notifications.js";
 
 const saveReplacedPayload = {
   game: {
@@ -18,6 +21,29 @@ const saveReplacedPayload = {
       id: "user-1",
       displayName: "Solon",
       discordId: "discord-1",
+    },
+  },
+};
+
+const turnNudgePayload = {
+  game: {
+    id: "game-1",
+    gameNumber: 42,
+    slug: "the-game",
+    name: "The Game",
+    discordThreadId: "thread-1",
+  },
+  turnRecord: {
+    id: "turn-1",
+    roundNumber: 3,
+    startedAt: "2026-07-10T12:00:00.000Z",
+    elapsedHours: 25,
+    targetHours: 24,
+    activePlayer: {
+      id: "user-2",
+      displayName: "Next Player",
+      discordId: "discord-2",
+      turnOrder: 2,
     },
   },
 };
@@ -41,5 +67,51 @@ describe("buildSaveReplacedNotificationMessage", () => {
     expect(message).not.toContain("current turn");
     expect(message).not.toContain("completed turn");
     expect(message).not.toContain("It is");
+  });
+});
+
+describe("buildTurnNudgeNotificationMessage", () => {
+  it("builds an allowlisted soft reminder with campaign and turn context", () => {
+    const message = buildTurnNudgeNotificationMessage(
+      turnNudgePayload,
+      "https://shadow.example",
+    );
+    const rendered = JSON.stringify(message);
+
+    expect(message.allowedMentions).toEqual({ users: ["discord-2"] });
+    expect(rendered).toContain("Turn reminder for <@discord-2>");
+    expect(rendered).toContain(
+      "**World** [The Game](https://shadow.example/games/42)",
+    );
+    expect(rendered).toContain("**Round** 3 | **Seat** 2");
+    expect(rendered).toContain("**25 hours**");
+    expect(rendered).toContain("**24 hours**");
+    expect(rendered).toContain("reminder only");
+    expect(rendered).toContain("will not automatically skip the turn");
+  });
+
+  it("uses the display name and singular hour wording without a Discord mention", () => {
+    const message = buildTurnNudgeNotificationMessage(
+      {
+        ...turnNudgePayload,
+        turnRecord: {
+          ...turnNudgePayload.turnRecord,
+          elapsedHours: 1,
+          targetHours: 1,
+          activePlayer: {
+            ...turnNudgePayload.turnRecord.activePlayer,
+            discordId: null,
+          },
+        },
+      },
+      "https://shadow.example",
+    );
+    const rendered = JSON.stringify(message);
+
+    expect(message.allowedMentions).toBeUndefined();
+    expect(rendered).toContain("Turn reminder for Next Player");
+    expect(rendered).toContain("**1 hour**");
+    expect(rendered).not.toContain("**1 hours**");
+    expect(rendered).not.toContain("<@discord-2>");
   });
 });

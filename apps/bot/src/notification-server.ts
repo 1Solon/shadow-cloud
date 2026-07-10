@@ -4,9 +4,11 @@ import {
   buildGameInitNotificationMessage,
   buildSaveReplacedNotificationMessage,
   buildSaveNotificationMessage,
+  buildTurnNudgeNotificationMessage,
   type GameInitializedNotificationPayload,
   type SaveReplacedNotificationPayload,
   type ThreadRenameNotificationPayload,
+  type TurnNudgeNotificationPayload,
   type UploadNotificationPayload,
 } from "./notifications.js";
 import {
@@ -117,6 +119,7 @@ export function startNotificationServer(
     const isSaveReplacedRequest = request.url === "/notify/save-replaced";
     const isGameInitializedRequest = request.url === "/notify/game-initialized";
     const isThreadRenameRequest = request.url === "/notify/thread-rename";
+    const isTurnNudgeRequest = request.url === "/notify/turn-nudge";
 
     if (request.method === "GET" && request.url === "/health") {
       response.writeHead(200).end("ok");
@@ -128,7 +131,8 @@ export function startNotificationServer(
       (!isSaveUploadedRequest &&
         !isSaveReplacedRequest &&
         !isGameInitializedRequest &&
-        !isThreadRenameRequest)
+        !isThreadRenameRequest &&
+        !isTurnNudgeRequest)
     ) {
       response.writeHead(404).end("Not found");
       return;
@@ -152,7 +156,8 @@ export function startNotificationServer(
         | UploadNotificationPayload
         | SaveReplacedNotificationPayload
         | GameInitializedNotificationPayload
-        | ThreadRenameNotificationPayload;
+        | ThreadRenameNotificationPayload
+        | TurnNudgeNotificationPayload;
 
       if (!payload.game.discordThreadId) {
         response.writeHead(202).end("No thread configured");
@@ -184,22 +189,31 @@ export function startNotificationServer(
         return;
       }
 
-      const message = await thread.send(
-        isSaveUploadedRequest
-          ? buildSaveNotificationMessage(
-              payload as UploadNotificationPayload,
-              webBaseUrl,
-            )
-          : isSaveReplacedRequest
-            ? buildSaveReplacedNotificationMessage(
-                payload as SaveReplacedNotificationPayload,
-                webBaseUrl,
-              )
-            : buildGameInitNotificationMessage(
-                payload as GameInitializedNotificationPayload,
-                webBaseUrl,
-              ),
-      );
+      let notificationMessage;
+
+      if (isSaveUploadedRequest) {
+        notificationMessage = buildSaveNotificationMessage(
+          payload as UploadNotificationPayload,
+          webBaseUrl,
+        );
+      } else if (isSaveReplacedRequest) {
+        notificationMessage = buildSaveReplacedNotificationMessage(
+          payload as SaveReplacedNotificationPayload,
+          webBaseUrl,
+        );
+      } else if (isTurnNudgeRequest) {
+        notificationMessage = buildTurnNudgeNotificationMessage(
+          payload as TurnNudgeNotificationPayload,
+          webBaseUrl,
+        );
+      } else {
+        notificationMessage = buildGameInitNotificationMessage(
+          payload as GameInitializedNotificationPayload,
+          webBaseUrl,
+        );
+      }
+
+      const message = await thread.send(notificationMessage);
 
       if (isGameInitializedRequest) {
         await pinGameInitializedMessage(message, payload.game.name, thread.id);

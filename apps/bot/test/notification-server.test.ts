@@ -36,14 +36,20 @@ vi.mock("../src/thread-name.js", () => ({
   renameThreadIfNeeded: threadNameMock.renameThreadIfNeeded,
 }));
 
-function buildRequest(url: string, payload: unknown) {
-  const body = Buffer.from(JSON.stringify(payload));
+function buildRequest(
+  url: string,
+  payload: unknown,
+  notificationSecret = "secret",
+) {
+  const body = Buffer.from(
+    typeof payload === "string" ? payload : JSON.stringify(payload),
+  );
 
   return Object.assign(new EventEmitter(), {
     method: "POST",
     url,
     headers: {
-      "x-shadow-cloud-notify-secret": "secret",
+      "x-shadow-cloud-notify-secret": notificationSecret,
     },
     async *[Symbol.asyncIterator]() {
       yield body;
@@ -148,6 +154,29 @@ const saveReplacedPayload = {
       id: "user-1",
       displayName: "Solon",
       discordId: "discord-1",
+    },
+  },
+};
+
+const turnNudgePayload = {
+  game: {
+    id: "game-1",
+    gameNumber: 42,
+    slug: "the-game",
+    name: "The Game",
+    discordThreadId: "thread-1",
+  },
+  turnRecord: {
+    id: "turn-1",
+    roundNumber: 3,
+    startedAt: "2026-07-10T12:00:00.000Z",
+    elapsedHours: 25,
+    targetHours: 24,
+    activePlayer: {
+      id: "user-2",
+      displayName: "Next Player",
+      discordId: "discord-2",
+      turnOrder: 2,
     },
   },
 };
@@ -268,5 +297,87 @@ describe("startNotificationServer", () => {
     expect(threadNameMock.renameThreadIfNeeded).not.toHaveBeenCalled();
     expect(threadNameMock.ensureShadowCloudTag).not.toHaveBeenCalled();
     expect(response.statusCode).toBe(204);
+  });
+
+  it("delivers authenticated turn nudges without renaming, tagging, or pinning", async () => {
+    const pin = vi.fn(async () => undefined);
+    const thread = {
+      id: "thread-1",
+      isThread: () => true,
+      joinable: false,
+      send: vi.fn(async () => ({ pin })),
+    };
+    const client = buildClient(thread);
+
+    startNotificationServer(client as never, {
+      notificationPort: 3011,
+      notificationSecret: "secret",
+      webBaseUrl: "https://shadow.example",
+    });
+
+    const response = buildResponse();
+    await httpMock.getHandler()?.(
+      buildRequest("/notify/turn-nudge", turnNudgePayload),
+      response,
+    );
+
+    expect(thread.send).toHaveBeenCalledOnce();
+    expect(pin).not.toHaveBeenCalled();
+    expect(threadNameMock.renameThreadIfNeeded).not.toHaveBeenCalled();
+    expect(threadNameMock.ensureShadowCloudTag).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(204);
+  });
+
+  it("rejects turn nudges with an invalid notification secret", async () => {
+    startNotificationServer(buildClient(null) as never, {
+      notificationPort: 3011,
+      notificationSecret: "secret",
+      webBaseUrl: "https://shadow.example",
+    });
+
+    const response = buildResponse();
+    await httpMock.getHandler()?.(
+      buildRequest("/notify/turn-nudge", turnNudgePayload, "wrong-secret"),
+      response,
+    );
+
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("accepts turn nudges without a configured thread", async () => {
+    const client = buildClient(null);
+    startNotificationServer(client as never, {
+      notificationPort: 3011,
+      notificationSecret: "secret",
+      webBaseUrl: "https://shadow.example",
+    });
+
+    const response = buildResponse();
+    await httpMock.getHandler()?.(
+      buildRequest("/notify/turn-nudge", {
+        ...turnNudgePayload,
+        game: { ...turnNudgePayload.game, discordThreadId: null },
+      }),
+      response,
+    );
+
+    expect(client.channels.fetch).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(202);
+  });
+
+  it("returns an error for malformed turn-nudge JSON", async () => {
+    startNotificationServer(buildClient(null) as never, {
+      notificationPort: 3011,
+      notificationSecret: "secret",
+      webBaseUrl: "https://shadow.example",
+    });
+
+    const response = buildResponse();
+    await httpMock.getHandler()?.(
+      buildRequest("/notify/turn-nudge", "{invalid JSON"),
+      response,
+    );
+
+    expect(response.statusCode).toBe(500);
   });
 });

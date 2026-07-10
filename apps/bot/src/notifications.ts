@@ -96,6 +96,29 @@ export type ThreadRenameNotificationPayload = {
   };
 };
 
+export type TurnNudgeNotificationPayload = {
+  game: {
+    id: string;
+    gameNumber: number;
+    slug: string;
+    name: string;
+    discordThreadId: string | null;
+  };
+  turnRecord: {
+    id: string;
+    roundNumber: number;
+    startedAt: string;
+    elapsedHours: number;
+    targetHours: number;
+    activePlayer: {
+      id: string;
+      displayName: string;
+      discordId: string | null;
+      turnOrder: number;
+    };
+  };
+};
+
 type StandardNotificationOptions = {
   title?: string;
   facts: string[];
@@ -357,6 +380,34 @@ export function buildSaveReplacedNotificationMessage(
     mentionedUserIds: payload.replacement.replacedBy.discordId
       ? [payload.replacement.replacedBy.discordId]
       : [],
+  });
+}
+
+export function buildTurnNudgeNotificationMessage(
+  payload: TurnNudgeNotificationPayload,
+  webBaseUrl: string,
+): MessageCreateOptions {
+  const player = formatDiscordActor(
+    payload.turnRecord.activePlayer.displayName,
+    payload.turnRecord.activePlayer.discordId,
+  );
+  const hours = (value: number) => `${value} hour${value === 1 ? "" : "s"}`;
+  const gameUrl = new URL(
+    `/games/${encodeURIComponent(String(payload.game.gameNumber))}`,
+    webBaseUrl,
+  ).toString();
+
+  return buildStandardNotification({
+    title: `Turn reminder for ${player}`,
+    facts: [
+      `**World** [${payload.game.name}](${gameUrl})`,
+      `**Round** ${payload.turnRecord.roundNumber} | **Seat** ${payload.turnRecord.activePlayer.turnOrder}`,
+      `This turn has been active for **${hours(payload.turnRecord.elapsedHours)}**, against a target of **${hours(payload.turnRecord.targetHours)}**.`,
+    ],
+    actionLines: [
+      "This is a reminder only; Shadow Cloud will not automatically skip the turn.",
+    ],
+    mentionedUserIds: [payload.turnRecord.activePlayer.discordId ?? ""],
   });
 }
 

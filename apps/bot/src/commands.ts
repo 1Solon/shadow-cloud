@@ -99,6 +99,30 @@ const initCommand = new SlashCommandBuilder()
       .setDescription("Army count preset.")
       .setRequired(false)
       .addChoices(...armyCountChoices),
+  )
+  .addIntegerOption((option) =>
+    option
+      .setName("turn_target_hours")
+      .setDescription("Target duration for each turn in hours.")
+      .setRequired(false)
+      .setMinValue(1)
+      .setMaxValue(Number.MAX_SAFE_INTEGER),
+  )
+  .addIntegerOption((option) =>
+    option
+      .setName("turn_reminder_grace_hours")
+      .setDescription("Hours after the target before the first reminder.")
+      .setRequired(false)
+      .setMinValue(1)
+      .setMaxValue(Number.MAX_SAFE_INTEGER),
+  )
+  .addIntegerOption((option) =>
+    option
+      .setName("turn_reminder_repeat_hours")
+      .setDescription("Hours between subsequent turn reminders.")
+      .setRequired(false)
+      .setMinValue(1)
+      .setMaxValue(Number.MAX_SAFE_INTEGER),
   );
 
 const registerCommand = new SlashCommandBuilder()
@@ -113,7 +137,7 @@ const resignCommand = new SlashCommandBuilder()
 
 const replaceCommand = new SlashCommandBuilder()
   .setName("replace")
-  .setDescription("Fill an empty seat with a new player (overlord only).")
+  .setDescription("Replace or fill a campaign seat (overlord only).")
   .addIntegerOption((option) =>
     option
       .setName("seat")

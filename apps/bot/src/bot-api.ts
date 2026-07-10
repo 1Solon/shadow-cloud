@@ -155,6 +155,12 @@ export async function sendCommandRequest(
         interaction.options.getString("zone_count") ?? undefined;
       const armyCount =
         interaction.options.getString("army_count") ?? undefined;
+      const turnTargetHours =
+        interaction.options.getInteger("turn_target_hours") ?? undefined;
+      const turnReminderGraceHours =
+        interaction.options.getInteger("turn_reminder_grace_hours") ?? undefined;
+      const turnReminderRepeatHours =
+        interaction.options.getInteger("turn_reminder_repeat_hours") ?? undefined;
       const response = await postJson(
         `${config.apiBaseUrl}/v1/games/init`,
         config.botApiToken,
@@ -168,6 +174,9 @@ export async function sendCommandRequest(
           ...(techLevel != null ? { techLevel } : {}),
           ...(zoneCount != null ? { zoneCount } : {}),
           ...(armyCount != null ? { armyCount } : {}),
+          ...(turnTargetHours != null ? { turnTargetHours } : {}),
+          ...(turnReminderGraceHours != null ? { turnReminderGraceHours } : {}),
+          ...(turnReminderRepeatHours != null ? { turnReminderRepeatHours } : {}),
           organizerDiscordId: interaction.user.id,
           organizerDisplayName:
             interaction.user.globalName ?? interaction.user.username,
