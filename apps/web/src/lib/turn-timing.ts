@@ -6,20 +6,34 @@ import type {
 const minuteMs = 60 * 1000;
 const hourMs = 60 * minuteMs;
 const dayMs = 24 * hourMs;
+const turnTimestampFormatter = new Intl.DateTimeFormat("en-US", {
+  dateStyle: "medium",
+  timeStyle: "short",
+  timeZone: "UTC",
+});
 
 export function getTurnDurationMs(
   record: Pick<GameTurnRecord, "startedAt" | "endedAt">,
   now: Date,
-): number {
+): number | null {
+  const startedAt = new Date(record.startedAt);
   const completedAt = record.endedAt ? new Date(record.endedAt) : now;
 
-  return Math.max(
-    0,
-    completedAt.getTime() - new Date(record.startedAt).getTime(),
-  );
+  if (
+    Number.isNaN(startedAt.getTime()) ||
+    Number.isNaN(completedAt.getTime())
+  ) {
+    return null;
+  }
+
+  return Math.max(0, completedAt.getTime() - startedAt.getTime());
 }
 
-export function formatTurnDuration(milliseconds: number): string {
+export function formatTurnDuration(milliseconds: number | null): string {
+  if (milliseconds == null || !Number.isFinite(milliseconds)) {
+    return "Unknown";
+  }
+
   const duration = Math.max(0, milliseconds);
 
   if (duration < minuteMs) {
@@ -38,10 +52,13 @@ export function formatTurnDuration(milliseconds: number): string {
 }
 
 export function formatTurnTimestamp(timestamp: string): string {
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(timestamp));
+  const date = new Date(timestamp);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Unknown";
+  }
+
+  return `${turnTimestampFormatter.format(date)} UTC`;
 }
 
 export function formatCompletionReason(

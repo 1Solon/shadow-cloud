@@ -86,6 +86,10 @@ export function TurnTimingHistoryCard({
   const hasTurns = openTurn !== null || completedTurns.length > 0;
 
   useEffect(() => {
+    if (!openTurn) {
+      return;
+    }
+
     const interval = window.setInterval(() => {
       setNow(new Date());
     }, refreshIntervalMs);
@@ -93,7 +97,7 @@ export function TurnTimingHistoryCard({
     return () => {
       window.clearInterval(interval);
     };
-  }, [refreshIntervalMs]);
+  }, [openTurn, refreshIntervalMs]);
 
   return (
     <Card className="overflow-hidden">

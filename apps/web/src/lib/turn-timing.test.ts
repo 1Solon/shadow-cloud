@@ -54,6 +54,15 @@ describe("getTurnDurationMs", () => {
       ),
     ).toBe(0);
   });
+
+  it("returns null for malformed timestamps", () => {
+    expect(
+      getTurnDurationMs(
+        createTurnRecord({ startedAt: "not-a-timestamp" }),
+        new Date("2026-07-10T10:00:00.000Z"),
+      ),
+    ).toBeNull();
+  });
 });
 
 describe("formatTurnDuration", () => {
@@ -65,16 +74,23 @@ describe("formatTurnDuration", () => {
   ])("formats %i milliseconds as %s", (milliseconds, expected) => {
     expect(formatTurnDuration(milliseconds)).toBe(expected);
   });
+
+  it("returns Unknown for invalid durations", () => {
+    expect(formatTurnDuration(null)).toBe("Unknown");
+    expect(formatTurnDuration(Number.NaN)).toBe("Unknown");
+    expect(formatTurnDuration(Number.POSITIVE_INFINITY)).toBe("Unknown");
+  });
 });
 
 describe("formatTurnTimestamp", () => {
-  it("uses the real-world US medium date and short time", () => {
+  it("uses the real-world US medium date and short UTC time", () => {
     expect(formatTurnTimestamp("2026-07-10T10:30:00.000Z")).toBe(
-      new Intl.DateTimeFormat("en-US", {
-        dateStyle: "medium",
-        timeStyle: "short",
-      }).format(new Date("2026-07-10T10:30:00.000Z")),
+      "Jul 10, 2026, 10:30 AM UTC",
     );
+  });
+
+  it("returns Unknown for malformed timestamps", () => {
+    expect(formatTurnTimestamp("not-a-timestamp")).toBe("Unknown");
   });
 });
 

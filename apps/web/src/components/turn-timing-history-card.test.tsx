@@ -78,6 +78,59 @@ describe("TurnTimingHistoryCard", () => {
     expect(within(rows[2]).getByText("30m")).toBeVisible();
   });
 
+  it("does not create an interval without an open turn", () => {
+    vi.useFakeTimers();
+    const setIntervalSpy = vi.spyOn(window, "setInterval");
+    const { rerender } = renderCard({
+      recentCompletedTurns: [
+        createTurnRecord({
+          endedAt: "2026-07-10T10:30:00.000Z",
+          completionReason: "SAVE_UPLOADED",
+        }),
+      ],
+    });
+
+    expect(setIntervalSpy).not.toHaveBeenCalled();
+
+    rerender(
+      <TurnTimingHistoryCard
+        initialNow="2026-07-10T10:01:00.000Z"
+        openTurn={null}
+        recentCompletedTurns={[]}
+      />,
+    );
+
+    expect(setIntervalSpy).not.toHaveBeenCalled();
+  });
+
+  it("cleans up the interval when an open turn disappears", () => {
+    vi.useFakeTimers();
+    const clearIntervalSpy = vi.spyOn(window, "clearInterval");
+    const { rerender } = renderCard({
+      openTurn: createTurnRecord(),
+    });
+
+    rerender(
+      <TurnTimingHistoryCard
+        initialNow="2026-07-10T10:01:00.000Z"
+        openTurn={null}
+        recentCompletedTurns={[]}
+      />,
+    );
+
+    expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("cleans up the interval when an open card unmounts", () => {
+    vi.useFakeTimers();
+    const clearIntervalSpy = vi.spyOn(window, "clearInterval");
+    const { unmount } = renderCard({ openTurn: createTurnRecord() });
+
+    unmount();
+
+    expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("renders completion labels and nullable turn snapshots", () => {
     renderCard({
       recentCompletedTurns: [
@@ -186,5 +239,14 @@ describe("TurnTimingHistoryCard", () => {
     expect(
       table.querySelector('time[datetime="2026-07-10T10:30:00.000Z"]'),
     ).toBeInTheDocument();
+    expect(within(table).getAllByText(/ UTC$/)).toHaveLength(3);
+  });
+
+  it("renders Unknown for malformed turn timestamps and durations", () => {
+    renderCard({
+      openTurn: createTurnRecord({ startedAt: "not-a-timestamp" }),
+    });
+
+    expect(screen.getAllByText("Unknown")).toHaveLength(2);
   });
 });
