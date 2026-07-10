@@ -1,30 +1,40 @@
-import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { NotificationDeliveryEvent, prisma, type Prisma } from '../../database';
 import type { TurnNudgeNotificationPayload } from '../bot-notifications.service';
 import { getDiscordIdentity } from '../support/discord-user.helpers';
 import { calculateNextReminderAt } from '../support/turn-timing';
 
 const HOUR_MS = 60 * 60 * 1000;
+const DUE_REMINDER_BATCH_SIZE = 100;
 
 @Injectable()
 export class TurnRemindersService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(TurnRemindersService.name);
   private readonly pollIntervalMs = 60_000;
   private pollInterval: NodeJS.Timeout | null = null;
+  private activePoll: Promise<void> | null = null;
   private isProcessing = false;
 
   onModuleInit() {
     this.pollInterval = setInterval(() => {
-      void this.processDueTurnReminders();
+      void this.startPoll();
     }, this.pollIntervalMs);
 
-    void this.processDueTurnReminders();
+    void this.startPoll();
   }
 
-  onModuleDestroy() {
+  async onModuleDestroy() {
     if (this.pollInterval) {
       clearInterval(this.pollInterval);
       this.pollInterval = null;
     }
+
+    await this.activePoll;
   }
 
   async processDueTurnReminders(now = new Date()): Promise<void> {
@@ -41,10 +51,19 @@ export class TurnRemindersService implements OnModuleInit, OnModuleDestroy {
           nextReminderAt: { lte: now },
         },
         select: { id: true },
+        orderBy: [{ nextReminderAt: 'asc' }, { id: 'asc' }],
+        take: DUE_REMINDER_BATCH_SIZE,
       });
 
       for (const candidate of candidates) {
-        await this.processTurnReminderCandidate(candidate.id, now);
+        try {
+          await this.processTurnReminderCandidate(candidate.id, now);
+        } catch (error) {
+          this.logError(
+            `Turn reminder candidate ${candidate.id} failed.`,
+            error,
+          );
+        }
       }
     } finally {
       this.isProcessing = false;
@@ -149,6 +168,32 @@ export class TurnRemindersService implements OnModuleInit, OnModuleDestroy {
         },
       });
     });
+  }
+
+  private startPoll() {
+    if (this.activePoll) {
+      return this.activePoll;
+    }
+
+    const activePoll = this.processDueTurnReminders()
+      .catch((error: unknown) => {
+        this.logError('Turn reminder scheduler poll failed.', error);
+      })
+      .finally(() => {
+        if (this.activePoll === activePoll) {
+          this.activePoll = null;
+        }
+      });
+
+    this.activePoll = activePoll;
+    return activePoll;
+  }
+
+  private logError(message: string, error: unknown) {
+    this.logger.error(
+      message,
+      error instanceof Error ? error.stack : String(error),
+    );
   }
 
   private isCurrentActiveTurn(

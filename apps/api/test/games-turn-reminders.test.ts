@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Logger } from '@nestjs/common';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
   turnRecord: {
@@ -78,6 +79,10 @@ function createTransaction(candidate = createCandidate()) {
 describe('TurnRemindersService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('claims one exact due interval and enqueues a complete nudge payload', async () => {
@@ -224,7 +229,7 @@ describe('TurnRemindersService', () => {
     expect(transaction.notificationDelivery.create).not.toHaveBeenCalled();
   });
 
-  it('finds every due open turn for a poll', async () => {
+  it('selects an ordered batch of due open turns for a poll', async () => {
     prismaMock.turnRecord.findMany.mockResolvedValue([
       { id: 'turn-1' },
       { id: 'turn-2' },
@@ -242,8 +247,108 @@ describe('TurnRemindersService', () => {
         nextReminderAt: { lte: now },
       },
       select: { id: true },
+      orderBy: [{ nextReminderAt: 'asc' }, { id: 'asc' }],
+      take: 100,
     });
     expect(processCandidate).toHaveBeenCalledWith('turn-1', now);
     expect(processCandidate).toHaveBeenCalledWith('turn-2', now);
+  });
+
+  it('logs lifecycle poll failures without leaving an unhandled rejection', async () => {
+    vi.useFakeTimers();
+    const failure = new Error('database unavailable');
+    const service = new TurnRemindersService();
+    vi.spyOn(service, 'processDueTurnReminders').mockRejectedValue(failure);
+    const logError = vi
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+
+    service.onModuleInit();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(logError).toHaveBeenCalledWith(
+      'Turn reminder scheduler poll failed.',
+      failure.stack,
+    );
+    await (service.onModuleDestroy() as unknown as Promise<void>);
+  });
+
+  it('logs a candidate failure and continues the same due batch', async () => {
+    prismaMock.turnRecord.findMany.mockResolvedValue([
+      { id: 'turn-1' },
+      { id: 'turn-2' },
+    ]);
+    const failure = new Error('candidate transaction failed');
+    const service = new TurnRemindersService();
+    const processCandidate = vi
+      .spyOn(service, 'processTurnReminderCandidate')
+      .mockRejectedValueOnce(failure)
+      .mockResolvedValueOnce(undefined);
+    const logError = vi
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+
+    await service.processDueTurnReminders(now);
+
+    expect(processCandidate).toHaveBeenNthCalledWith(1, 'turn-1', now);
+    expect(processCandidate).toHaveBeenNthCalledWith(2, 'turn-2', now);
+    expect(logError).toHaveBeenCalledWith(
+      'Turn reminder candidate turn-1 failed.',
+      failure.stack,
+    );
+  });
+
+  it('does not overlap lifecycle polls and resets after the active poll settles', async () => {
+    vi.useFakeTimers();
+    let resolveFirstPoll!: () => void;
+    const firstPoll = new Promise<void>((resolve) => {
+      resolveFirstPoll = resolve;
+    });
+    const service = new TurnRemindersService();
+    const processDue = vi
+      .spyOn(service, 'processDueTurnReminders')
+      .mockImplementationOnce(() => firstPoll)
+      .mockResolvedValue(undefined);
+
+    service.onModuleInit();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(processDue).toHaveBeenCalledTimes(1);
+
+    resolveFirstPoll();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(processDue).toHaveBeenCalledTimes(2);
+    await (service.onModuleDestroy() as unknown as Promise<void>);
+  });
+
+  it('clears its interval and waits for the active lifecycle poll on shutdown', async () => {
+    vi.useFakeTimers();
+    let resolvePoll!: () => void;
+    const activePoll = new Promise<void>((resolve) => {
+      resolvePoll = resolve;
+    });
+    const service = new TurnRemindersService();
+    vi.spyOn(service, 'processDueTurnReminders').mockImplementation(
+      () => activePoll,
+    );
+
+    service.onModuleInit();
+    await vi.advanceTimersByTimeAsync(0);
+    const shutdown = service.onModuleDestroy() as unknown as Promise<void>;
+    let shutdownComplete = false;
+    void shutdown.then(() => {
+      shutdownComplete = true;
+    });
+
+    expect(vi.getTimerCount()).toBe(0);
+    expect(shutdownComplete).toBe(false);
+
+    resolvePoll();
+    await shutdown;
+
+    expect(shutdownComplete).toBe(true);
   });
 });
