@@ -137,6 +137,7 @@ export default async function GameDetailPage({
       <section>
         <TurnTimingHistoryCard
           initialNow={initialNow}
+          key={game.openTurn?.id ?? "no-open-turn"}
           openTurn={game.openTurn}
           recentCompletedTurns={game.recentCompletedTurns}
         />

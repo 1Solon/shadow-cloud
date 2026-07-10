@@ -78,6 +78,28 @@ describe("TurnTimingHistoryCard", () => {
     expect(within(rows[2]).getByText("30m")).toBeVisible();
   });
 
+  it("initializes a newly keyed open turn from refreshed server time", () => {
+    const { rerender } = render(
+      <TurnTimingHistoryCard
+        key="no-open-turn"
+        initialNow="2026-07-10T10:01:00.000Z"
+        openTurn={null}
+        recentCompletedTurns={[]}
+      />,
+    );
+
+    rerender(
+      <TurnTimingHistoryCard
+        key="turn-2"
+        initialNow="2026-07-10T12:00:00.000Z"
+        openTurn={createTurnRecord({ id: "turn-2" })}
+        recentCompletedTurns={[]}
+      />,
+    );
+
+    expect(screen.getByText("2h")).toBeVisible();
+  });
+
   it("does not create an interval without an open turn", () => {
     vi.useFakeTimers();
     const setIntervalSpy = vi.spyOn(window, "setInterval");
@@ -248,5 +270,8 @@ describe("TurnTimingHistoryCard", () => {
     });
 
     expect(screen.getAllByText("Unknown")).toHaveLength(2);
+    expect(
+      document.querySelector('time[datetime="not-a-timestamp"]'),
+    ).not.toBeInTheDocument();
   });
 });

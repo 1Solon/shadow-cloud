@@ -26,6 +26,16 @@ type TurnTimingHistoryCardProps = {
   refreshIntervalMs?: number;
 };
 
+function TurnTimestamp({ timestamp }: { timestamp: string }) {
+  const formattedTimestamp = formatTurnTimestamp(timestamp);
+
+  if (formattedTimestamp === "Unknown") {
+    return "Unknown";
+  }
+
+  return <time dateTime={timestamp}>{formattedTimestamp}</time>;
+}
+
 function TurnTimingHistoryRow({
   record,
   isOpen,
@@ -49,15 +59,11 @@ function TurnTimingHistoryRow({
       </td>
       <td className="px-4 py-3">{record.playerDisplayName}</td>
       <td className="px-4 py-3">
-        <time dateTime={record.startedAt}>
-          {formatTurnTimestamp(record.startedAt)}
-        </time>
+        <TurnTimestamp timestamp={record.startedAt} />
       </td>
       <td className="px-4 py-3">
         {record.endedAt ? (
-          <time dateTime={record.endedAt}>
-            {formatTurnTimestamp(record.endedAt)}
-          </time>
+          <TurnTimestamp timestamp={record.endedAt} />
         ) : (
           "In progress"
         )}
