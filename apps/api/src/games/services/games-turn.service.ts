@@ -150,6 +150,7 @@ export class GamesTurnService {
 
     if (
       !nextPlayer ||
+      nextPlayer.id !== expected.id ||
       nextPlayer.userId !== expected.userId ||
       nextPlayer.turnOrder !== expected.turnOrder ||
       nextPlayer.user?.displayName !== expected.playerDisplayName
@@ -387,17 +388,20 @@ export class GamesTurnService {
           );
         }
         const nextActivePlayer = {
-          ...uploadSaveNaming.nextActivePlayer,
-          userId: revalidatedNextPlayer.userId,
+          id: revalidatedNextPlayer.id,
+          userId: revalidatedNextPlayer.userId!,
           displayName: revalidatedNextPlayer.user!.displayName,
           turnOrder: revalidatedNextPlayer.turnOrder,
+          isOrganizer:
+            revalidatedNextPlayer.role === GameRole.ORGANIZER ||
+            game.organizerId === revalidatedNextPlayer.userId,
         };
         const updatedTurnState = await transaction.turnState.update({
           where: {
             gameId: game.id,
           },
           data: {
-            activePlayerId: nextActivePlayer.userId!,
+            activePlayerId: nextActivePlayer.userId,
             activePlayerEntryId: nextActivePlayer.id,
             roundNumber: {
               increment: revalidatedRoundAdvanced ? 1 : 0,
@@ -433,8 +437,8 @@ export class GamesTurnService {
             payload: JSON.stringify({
               previousActivePlayerEntryId: activePlayerEntry.id,
               previousActivePlayerUserId: activePlayerEntry.userId,
-              nextActivePlayerEntryId: uploadSaveNaming.nextActivePlayer.id,
-              nextActivePlayerUserId: uploadSaveNaming.nextActivePlayer.userId,
+              nextActivePlayerEntryId: nextActivePlayer.id,
+              nextActivePlayerUserId: nextActivePlayer.userId,
               roundNumber: updatedTurnState.roundNumber,
               roundAdvanced: revalidatedRoundAdvanced,
               fileVersionId: fileVersion.id,
@@ -474,7 +478,7 @@ export class GamesTurnService {
           roundNumber: result.roundNumber,
           roundAdvanced: result.roundAdvanced,
           activePlayer: {
-            id: result.nextActivePlayer.userId!,
+            id: result.nextActivePlayer.userId,
             displayName: result.nextActivePlayer.displayName,
             discordId: getDiscordIdentity(
               game.players.find(
