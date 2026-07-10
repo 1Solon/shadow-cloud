@@ -11,6 +11,23 @@ type ReplacementSaveResponsePayload = {
   replacedByDisplayName?: string;
 };
 
+function isMultipartFormData(
+  contentType: string | null,
+): contentType is string {
+  if (!contentType) {
+    return false;
+  }
+
+  const [mediaType, ...parameters] = contentType.split(";");
+
+  return (
+    mediaType.trim().toLowerCase() === "multipart/form-data" &&
+    parameters.some((parameter) =>
+      /^boundary\s*=\s*(?:"[^"]+"|[^;\s]+)$/i.test(parameter.trim()),
+    )
+  );
+}
+
 export async function GET(
   _request: Request,
   context: { params: Promise<{ gameNumber: string; fileVersionId: string }> },
@@ -86,18 +103,14 @@ export async function PUT(
     );
   }
 
-  const source = await request.formData();
-  const file = source.get("file");
+  const contentType = request.headers.get("content-type");
 
-  if (!(file instanceof File) || file.size === 0) {
+  if (!request.body || !isMultipartFormData(contentType)) {
     return Response.json(
-      { error: "Choose a replacement save file." },
+      { error: "A multipart replacement upload is required." },
       { status: 400 },
     );
   }
-
-  const body = new FormData();
-  body.set("file", file, file.name);
 
   const response = await fetch(
     `${apiBaseUrl}/v1/games/${encodeURIComponent(gameNumber)}/files/${encodeURIComponent(fileVersionId)}`,
@@ -105,10 +118,12 @@ export async function PUT(
       method: "PUT",
       headers: {
         authorization: `Bearer ${token}`,
+        "content-type": contentType,
       },
-      body,
+      body: request.body,
       cache: "no-store",
-    },
+      duplex: "half",
+    } as RequestInit & { duplex: "half" },
   ).catch(() => null);
 
   if (!response) {

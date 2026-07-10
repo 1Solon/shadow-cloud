@@ -52,4 +52,13 @@ describe('assertReplacementSaveFile', () => {
       'The replacement save exceeds 25 MB.',
     );
   });
+
+  it.each(['not-a-number', 'Infinity', '1.5', '0', '-1'])(
+    'uses the default maximum size limit for an invalid value of %s',
+    (value) => {
+      process.env.SHADOW_CLOUD_MAX_SAVE_SIZE_BYTES = value;
+
+      expect(getMaxSaveFileSizeBytes()).toBe(25 * 1024 * 1024);
+    },
+  );
 });

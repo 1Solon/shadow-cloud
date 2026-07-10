@@ -86,21 +86,65 @@ describe("/api/games/[gameNumber]/files/[fileVersionId]", () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it("requires a non-empty replacement file", async () => {
+  it("rejects a missing replacement request body locally", async () => {
     mockedGetServerAuthSession.mockResolvedValue(authenticatedSession());
     mockedGetShadowOverrideEnabled.mockResolvedValue(true);
     mockedCreateApiAccessToken.mockResolvedValue("test-token");
 
-    const response = await PUT(replacementRequest(), routeContext);
+    const response = await PUT(
+      new Request(
+        "http://shadow-cloud-web:3000/api/games/22/files/file-version-1",
+        {
+          method: "PUT",
+          headers: { "content-type": "multipart/form-data; boundary=save" },
+        },
+      ),
+      routeContext,
+    );
 
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toEqual({
-      error: "Choose a replacement save file.",
+      error: "A multipart replacement upload is required.",
     });
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it("forwards an authenticated replacement multipart request and returns replacement fields", async () => {
+  it.each([
+    ["missing", undefined],
+    ["invalid", "multipart/form-data"],
+  ])(
+    "rejects a %s multipart Content-Type locally",
+    async (_kind, contentType) => {
+      mockedGetServerAuthSession.mockResolvedValue(authenticatedSession());
+      mockedGetShadowOverrideEnabled.mockResolvedValue(true);
+      mockedCreateApiAccessToken.mockResolvedValue("test-token");
+
+      const response = await PUT(
+        new Request(
+          "http://shadow-cloud-web:3000/api/games/22/files/file-version-1",
+          {
+            method: "PUT",
+            headers: contentType ? { "content-type": contentType } : undefined,
+            body: new ReadableStream({
+              start(controller) {
+                controller.close();
+              },
+            }),
+            duplex: "half",
+          } as RequestInit & { duplex: "half" },
+        ),
+        routeContext,
+      );
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({
+        error: "A multipart replacement upload is required.",
+      });
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    },
+  );
+
+  it("forwards the original multipart stream without parsing it and returns replacement fields", async () => {
     const file = new File(["replacement save"], "turn-22.se1", {
       type: "application/octet-stream",
     });
@@ -117,7 +161,9 @@ describe("/api/games/[gameNumber]/files/[fileVersionId]", () => {
       }),
     );
 
-    const response = await PUT(replacementRequest(file), routeContext);
+    const request = replacementRequest(file);
+    const formData = vi.spyOn(request, "formData");
+    const response = await PUT(request, routeContext);
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
@@ -136,17 +182,22 @@ describe("/api/games/[gameNumber]/files/[fileVersionId]", () => {
       "http://localhost:3001/v1/games/22%2Fplus%3F/files/file%20version%2F1%3F",
       expect.objectContaining({
         method: "PUT",
-        headers: { authorization: "Bearer test-token" },
+        headers: {
+          authorization: "Bearer test-token",
+          "content-type": request.headers.get("content-type"),
+        },
         cache: "no-store",
+        duplex: "half",
       }),
     );
 
     const requestInit = vi.mocked(globalThis.fetch).mock.calls[0]?.[1];
-    expect(requestInit?.body).toBeInstanceOf(FormData);
-    expect((requestInit?.body as FormData).get("file")).toBeInstanceOf(File);
+    expect(request.body).toBeInstanceOf(ReadableStream);
+    expect(requestInit?.body).toBe(request.body);
+    expect(formData).not.toHaveBeenCalled();
   });
 
-  it.each([400, 403, 404, 409])(
+  it.each([400, 401, 403, 404, 409])(
     "preserves a backend replacement failure status of %i",
     async (status) => {
       mockedGetServerAuthSession.mockResolvedValue(authenticatedSession());

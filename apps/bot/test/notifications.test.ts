@@ -32,8 +32,12 @@ describe("buildSaveReplacedNotificationMessage", () => {
     );
 
     expect(message).toContain("Save corrected");
+    expect(message).toContain("The Game");
     expect(message).toContain("42-T4-S2-Other.se1");
     expect(message).toContain("<@discord-1>");
+    expect(message).toContain("<t:1783693800:F>");
+    expect(message).not.toContain("active player");
+    expect(message).not.toContain("next player");
     expect(message).not.toContain("current turn");
     expect(message).not.toContain("completed turn");
     expect(message).not.toContain("It is");

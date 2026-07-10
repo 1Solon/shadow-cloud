@@ -3,9 +3,13 @@ import { extname } from 'node:path';
 import type { UploadedSaveFile } from './game-payload.types';
 
 export function getMaxSaveFileSizeBytes() {
-  return Number(
-    process.env.SHADOW_CLOUD_MAX_SAVE_SIZE_BYTES ?? 25 * 1024 * 1024,
-  );
+  const configuredSize = Number(process.env.SHADOW_CLOUD_MAX_SAVE_SIZE_BYTES);
+
+  return Number.isFinite(configuredSize) &&
+    Number.isInteger(configuredSize) &&
+    configuredSize > 0
+    ? configuredSize
+    : 25 * 1024 * 1024;
 }
 
 export function assertReplacementSaveFile(file: UploadedSaveFile) {
