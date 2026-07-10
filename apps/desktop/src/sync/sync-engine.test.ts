@@ -531,6 +531,151 @@ describe("runSyncOnce", () => {
     });
   });
 
+  it("redownloads a corrected remote save once when it is not the user turn", async () => {
+    const state: SyncState = {
+      ...createBaseState(),
+      campaigns: {
+        "game-1": {
+          lastDownloadedFileVersionId: "version-7",
+          lastDownloadedFileReplacedAt: null,
+        },
+      },
+    };
+    const adapters = createAdapters({
+      getGameDetail: vi.fn(async () => ({
+        id: "game-1",
+        gameNumber: 1,
+        slug: "ashes",
+        name: "Ashes",
+        roundNumber: 4,
+        activePlayerEntryId: "entry-2",
+        activePlayerUserId: "user-2",
+        activePlayerDisplayName: "Other",
+        fileVersions: [
+          {
+            id: "version-7",
+            originalName: "42-T4-S2-Other.se1",
+            uploadedAt: "2026-07-10T14:00:00.000Z",
+            uploadedById: "owner-1",
+            uploadedByDisplayName: "Other",
+            contentHash: null,
+            idempotencyKey: null,
+            replacedAt: "2026-07-10T14:30:00.000Z",
+            replacedByDisplayName: "Other",
+          },
+        ],
+      })),
+    });
+
+    const downloadedState = await runSyncOnce(state, adapters);
+    const nextState = await runSyncOnce(downloadedState, adapters);
+
+    expect(adapters.downloadFile).toHaveBeenCalledTimes(1);
+    expect(nextState.campaigns["game-1"]).toMatchObject({
+      lastDownloadedFileVersionId: "version-7",
+      lastDownloadedFileReplacedAt: "2026-07-10T14:30:00.000Z",
+    });
+  });
+
+  it("downloads a corrected remote save when the active player has no local saves", async () => {
+    const state: SyncState = {
+      ...createBaseState(),
+      campaigns: {
+        "game-1": {
+          lastDownloadedFileVersionId: "version-7",
+          lastDownloadedFileReplacedAt: null,
+        },
+      },
+    };
+    const adapters = createAdapters({
+      getGameDetail: vi.fn(async () => ({
+        id: "game-1",
+        gameNumber: 1,
+        slug: "ashes",
+        name: "Ashes",
+        roundNumber: 4,
+        activePlayerEntryId: "entry-1",
+        activePlayerUserId: "user-1",
+        activePlayerDisplayName: "Solon",
+        fileVersions: [
+          {
+            id: "version-7",
+            originalName: "42-T4-S2-Other.se1",
+            uploadedAt: "2026-07-10T14:00:00.000Z",
+            uploadedById: "owner-1",
+            uploadedByDisplayName: "Other",
+            replacedAt: "2026-07-10T14:30:00.000Z",
+          },
+        ],
+      })),
+      listLocalSaves: vi.fn(async () => []),
+    });
+
+    const nextState = await runSyncOnce(state, adapters);
+
+    expect(adapters.downloadFile).toHaveBeenCalledTimes(1);
+    expect(nextState.campaigns["game-1"]).toMatchObject({
+      lastDownloadedFileVersionId: "version-7",
+      lastDownloadedFileReplacedAt: "2026-07-10T14:30:00.000Z",
+    });
+  });
+
+  it("requires a decision before uploading a local save when the remote revision changed", async () => {
+    const state: SyncState = {
+      ...createBaseState(),
+      campaigns: {
+        "game-1": {
+          lastDownloadedFileVersionId: "version-7",
+          lastDownloadedFileReplacedAt: null,
+        },
+      },
+    };
+    const adapters = createAdapters({
+      getGameDetail: vi.fn(async () => ({
+        id: "game-1",
+        gameNumber: 1,
+        slug: "ashes",
+        name: "Ashes",
+        roundNumber: 4,
+        activePlayerEntryId: "entry-1",
+        activePlayerUserId: "user-1",
+        activePlayerDisplayName: "Solon",
+        fileVersions: [
+          {
+            id: "version-7",
+            originalName: "42-T4-S2-Other.se1",
+            uploadedAt: "2026-07-10T14:00:00.000Z",
+            uploadedById: "owner-1",
+            uploadedByDisplayName: "Other",
+            contentHash: "sha256:remote-content",
+            replacedAt: "2026-07-10T14:30:00.000Z",
+          },
+        ],
+      })),
+      listLocalSaves: vi.fn(async () => [
+        {
+          name: "turn.se1",
+          path: "C:/ShadowEmpire/Saves/1 - Ashes/turn.se1",
+          modifiedAt: new Date("2026-07-10T14:45:00.000Z").getTime(),
+          size: 3,
+          bytes: new Uint8Array([1, 2, 3]),
+        },
+      ]),
+    });
+
+    const nextState = await runSyncOnce(state, adapters);
+
+    expect(adapters.uploadSave).not.toHaveBeenCalled();
+    expect(nextState.campaigns["game-1"]).toMatchObject({
+      needsDecision: {
+        reason: "remote-advanced-before-local-upload",
+        localFileName: "turn.se1",
+        remoteFileVersionId: "version-7",
+      },
+      status: "Needs your decision",
+    });
+  });
+
   it("downloads the latest remote save uploaded by the current user when it is not the user turn and the local folder has no saves", async () => {
     const state = createBaseState();
     const adapters = createAdapters({

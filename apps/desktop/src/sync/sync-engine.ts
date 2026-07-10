@@ -36,6 +36,7 @@ export type GameDetail = {
     uploadedByDisplayName: string;
     contentHash?: string | null;
     idempotencyKey?: string | null;
+    replacedAt?: string | null;
   }>;
 };
 
@@ -54,6 +55,7 @@ export type CampaignSyncState = {
   uploadedFingerprints?: string[];
   lastUploadedFileVersionId?: string;
   lastDownloadedFileVersionId?: string;
+  lastDownloadedFileReplacedAt?: string | null;
   needsDecision?: {
     reason:
       | "remote-advanced-before-local-upload"
@@ -187,6 +189,17 @@ function getDownloadedStatus(fileName: string) {
   return `Downloaded load turn ${turnNumber}`;
 }
 
+function isSameRemoteRevision(
+  campaignState: CampaignSyncState,
+  remoteFile: GameDetail["fileVersions"][number],
+) {
+  return (
+    campaignState.lastDownloadedFileVersionId === remoteFile.id &&
+    (campaignState.lastDownloadedFileReplacedAt ?? null) ===
+      (remoteFile.replacedAt ?? null)
+  );
+}
+
 async function persistProgress(nextState: SyncState, adapters: SyncAdapters) {
   await adapters.onStateUpdate?.(nextState);
 }
@@ -241,6 +254,7 @@ async function downloadRemoteSave(input: {
   uploadedFingerprints.add(contentHash);
   campaignState.uploadedFingerprints = [...uploadedFingerprints];
   campaignState.lastDownloadedFileVersionId = remoteFile.id;
+  campaignState.lastDownloadedFileReplacedAt = remoteFile.replacedAt ?? null;
   campaignState.status = getDownloadedStatus(remoteFileName);
   addLedgerEntry(campaignState, {
     id: createLedgerId({
@@ -324,8 +338,7 @@ async function syncCampaign(input: {
       if (
         localSaves.length === 0 &&
         latestRemoteFile &&
-        previousCampaignState.lastDownloadedFileVersionId !==
-          latestRemoteFile.id
+        !isSameRemoteRevision(previousCampaignState, latestRemoteFile)
       ) {
         await downloadRemoteSave({
           token: state.token!,
@@ -342,8 +355,7 @@ async function syncCampaign(input: {
 
       if (
         latestRemoteFile &&
-        previousCampaignState.lastDownloadedFileVersionId ===
-          latestRemoteFile.id &&
+        isSameRemoteRevision(previousCampaignState, latestRemoteFile) &&
         !localSaveNames.has(latestRemoteFile.originalName)
       ) {
         await downloadRemoteSave({
@@ -366,7 +378,7 @@ async function syncCampaign(input: {
     if (
       latestRemoteFile &&
       latestRemoteFile.uploadedById !== currentUserId &&
-      previousCampaignState.lastDownloadedFileVersionId !== latestRemoteFile.id
+      !isSameRemoteRevision(previousCampaignState, latestRemoteFile)
     ) {
       campaignState.status = "Needs your decision";
       campaignState.needsDecision = {
@@ -398,6 +410,8 @@ async function syncCampaign(input: {
       uploadedFingerprints.add(pendingSave.fingerprint);
       campaignState.uploadedFingerprints = [...uploadedFingerprints];
       campaignState.lastDownloadedFileVersionId = latestRemoteFile.id;
+      campaignState.lastDownloadedFileReplacedAt =
+        latestRemoteFile.replacedAt ?? null;
       campaignState.status = "Local save already matches latest remote";
       addLedgerEntry(campaignState, {
         id: createLedgerId({
@@ -479,10 +493,7 @@ async function syncCampaign(input: {
           (fileVersion) => fileVersion.uploadedById !== currentUserId,
         );
 
-  if (
-    !remoteFile ||
-    remoteFile.id === previousCampaignState.lastDownloadedFileVersionId
-  ) {
+  if (!remoteFile || isSameRemoteRevision(previousCampaignState, remoteFile)) {
     campaignState.status = "No remote save to download";
     return campaignState;
   }
