@@ -12,6 +12,7 @@ import { GamesQueryService } from './services/games-query.service';
 import { GamesFileService } from './services/games-file.service';
 import { GamesRegistrationService } from './services/games-registration.service';
 import { GamesTurnService } from './services/games-turn.service';
+import { TurnRecordsService } from './services/turn-records.service';
 import { FileStorageService } from './file-storage.service';
 import type { AuthorizeHostCommandDto } from './dto/authorize-host-command.dto';
 import type { CreateDiscordGameDto } from './dto/create-discord-game.dto';
@@ -53,6 +54,7 @@ export class GamesService {
     private readonly gamesTurn: GamesTurnService,
     private readonly fileStorage: FileStorageService,
     private readonly gamesFile: GamesFileService,
+    private readonly turnRecords: TurnRecordsService = new TurnRecordsService(),
   ) {}
 
   private async assertGameManagementAccess(input: {
@@ -130,6 +132,10 @@ export class GamesService {
       zoneCount: game.zoneCount,
       armyCount: game.armyCount,
       notes: (game as { notes?: string | null }).notes ?? null,
+      turnTargetHours: game.turnTargetHours,
+      turnReminderGraceHours: game.turnReminderGraceHours,
+      turnReminderRepeatHours: game.turnReminderRepeatHours,
+      turnRemindersEnabled: game.turnRemindersEnabled,
     };
     const nextName =
       input.name === undefined
@@ -170,6 +176,15 @@ export class GamesService {
         input.notes === undefined
           ? previousMetadata.notes
           : normalizeNotesInput(input.notes),
+      turnTargetHours:
+        input.turnTargetHours ?? previousMetadata.turnTargetHours,
+      turnReminderGraceHours:
+        input.turnReminderGraceHours ?? previousMetadata.turnReminderGraceHours,
+      turnReminderRepeatHours:
+        input.turnReminderRepeatHours ??
+        previousMetadata.turnReminderRepeatHours,
+      turnRemindersEnabled:
+        input.turnRemindersEnabled ?? previousMetadata.turnRemindersEnabled,
     };
 
     const nextThreadName = buildCanonicalThreadName({
@@ -192,6 +207,15 @@ export class GamesService {
       );
     }
 
+    const policyChanged =
+      nextMetadata.turnTargetHours !== previousMetadata.turnTargetHours ||
+      nextMetadata.turnReminderGraceHours !==
+        previousMetadata.turnReminderGraceHours ||
+      nextMetadata.turnReminderRepeatHours !==
+        previousMetadata.turnReminderRepeatHours ||
+      nextMetadata.turnRemindersEnabled !==
+        previousMetadata.turnRemindersEnabled;
+
     await prisma.$transaction(async (transaction) => {
       if (
         input.gameNumber != null &&
@@ -209,12 +233,24 @@ export class GamesService {
         }
       }
 
-      if (input.roundNumber != null) {
+      if (
+        input.roundNumber != null &&
+        nextMetadata.roundNumber !== previousMetadata.roundNumber
+      ) {
         await transaction.turnState.update({
           where: { gameId: game.id },
           data: {
             roundNumber: nextMetadata.roundNumber,
           },
+        });
+
+        await this.turnRecords.synchronizeOpenRound(transaction, {
+          gameId: game.id,
+          expectedCurrent: {
+            gamePlayerId: game.turnState?.activePlayerEntryId ?? null,
+            userId: game.turnState!.activePlayerId,
+          },
+          roundNumber: nextMetadata.roundNumber,
         });
       }
 
@@ -269,10 +305,40 @@ export class GamesService {
         gameUpdateData.notes = nextMetadata.notes;
       }
 
+      if (input.turnTargetHours !== undefined) {
+        gameUpdateData.turnTargetHours = nextMetadata.turnTargetHours;
+      }
+
+      if (input.turnReminderGraceHours !== undefined) {
+        gameUpdateData.turnReminderGraceHours =
+          nextMetadata.turnReminderGraceHours;
+      }
+
+      if (input.turnReminderRepeatHours !== undefined) {
+        gameUpdateData.turnReminderRepeatHours =
+          nextMetadata.turnReminderRepeatHours;
+      }
+
+      if (input.turnRemindersEnabled !== undefined) {
+        gameUpdateData.turnRemindersEnabled = nextMetadata.turnRemindersEnabled;
+      }
+
       if (Object.keys(gameUpdateData).length > 0) {
         await transaction.game.update({
           where: { id: game.id },
           data: gameUpdateData,
+        });
+      }
+
+      if (policyChanged) {
+        await this.turnRecords.recalculateOpenReminder(transaction, {
+          gameId: game.id,
+          policy: {
+            turnTargetHours: nextMetadata.turnTargetHours,
+            turnReminderGraceHours: nextMetadata.turnReminderGraceHours,
+            turnReminderRepeatHours: nextMetadata.turnReminderRepeatHours,
+            turnRemindersEnabled: nextMetadata.turnRemindersEnabled,
+          },
         });
       }
 

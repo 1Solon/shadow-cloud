@@ -4,6 +4,9 @@ const prismaMock = vi.hoisted(() => ({
   game: {
     findFirst: vi.fn(),
   },
+  turnRecord: {
+    findMany: vi.fn(async () => []),
+  },
 }));
 
 vi.mock('../src/database', () => ({
@@ -14,6 +17,15 @@ vi.mock('../src/database', () => ({
   GameRole: {
     ORGANIZER: 'ORGANIZER',
     PLAYER: 'PLAYER',
+  },
+  ArmyCountPreset: {
+    ONE_PER_ZONE: 'ONE_PER_ZONE',
+  },
+  GameMode: {
+    FFA: 'FFA',
+  },
+  ZoneCountPreset: {
+    TWO_ZONE_START: 'TWO_ZONE_START',
   },
   prisma: prismaMock,
 }));

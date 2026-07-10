@@ -9,6 +9,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+import { IsPositiveSafeInteger } from './validation/is-positive-safe-integer.decorator';
 
 export enum CreateDiscordGameDlcMode {
   NONE = 'NONE',
@@ -82,6 +83,18 @@ export class CreateDiscordGameDto {
   @IsString()
   @MaxLength(100)
   slug?: string;
+
+  @IsOptional()
+  @IsPositiveSafeInteger()
+  turnTargetHours?: number;
+
+  @IsOptional()
+  @IsPositiveSafeInteger()
+  turnReminderGraceHours?: number;
+
+  @IsOptional()
+  @IsPositiveSafeInteger()
+  turnReminderRepeatHours?: number;
 
   @IsString()
   @MinLength(1)

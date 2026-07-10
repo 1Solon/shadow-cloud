@@ -3,9 +3,33 @@ import type {
   GameDlcMode,
   GameMode,
   ZoneCountPreset,
+  TurnCompletionReason,
 } from '../../database';
 
-export type GameDetailResponse = {
+export type TurnRecordResponse = {
+  id: string;
+  roundNumber: number;
+  gamePlayerId: string | null;
+  userId: string | null;
+  seatNumber: number | null;
+  playerDisplayName: string;
+  startedAt: string;
+  endedAt: string | null;
+  completionReason: TurnCompletionReason | null;
+  reminderCount: number;
+  lastReminderAt: string | null;
+  nextReminderAt: string | null;
+};
+
+export type TurnTimingPolicyResponse = {
+  turnTargetHours: number;
+  turnReminderGraceHours: number;
+  turnReminderRepeatHours: number;
+  turnRemindersEnabled: boolean;
+  currentTurnStartedAt: string | null;
+};
+
+export type GameDetailResponse = TurnTimingPolicyResponse & {
   id: string;
   gameNumber: number;
   slug: string;
@@ -42,6 +66,8 @@ export type GameDetailResponse = {
     replacedAt: string | null;
     replacedByDisplayName: string | null;
   }>;
+  openTurn: TurnRecordResponse | null;
+  recentCompletedTurns: TurnRecordResponse[];
 };
 
 export type GameMetadataResponse = {
@@ -58,6 +84,10 @@ export type GameMetadataResponse = {
   zoneCount: ZoneCountPreset | null;
   armyCount: ArmyCountPreset | null;
   notes: string | null;
+  turnTargetHours: number;
+  turnReminderGraceHours: number;
+  turnReminderRepeatHours: number;
+  turnRemindersEnabled: boolean;
 };
 
 export type UploadedSaveFile = {

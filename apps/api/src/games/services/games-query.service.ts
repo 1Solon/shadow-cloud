@@ -15,7 +15,10 @@ import { FileStorageService } from '../file-storage.service';
 import { buildCanonicalThreadName } from '../support/game-configuration.helpers';
 import { buildGameDetailFileVersionPayload } from '../support/game-detail-file-version-payload';
 import { buildGameIdentifierWhere } from '../support/game-lookup.helpers';
-import type { GameDetailResponse } from '../support/game-payload.types';
+import type {
+  GameDetailResponse,
+  TurnRecordResponse,
+} from '../support/game-payload.types';
 import { resolveActivePlayerEntry } from '../support/turn-state.utils';
 import type {
   FileVersionSummary,
@@ -37,6 +40,29 @@ type TurnReassignedAuditPayload = {
   previousOrder?: SeatOrderAuditEntry[];
   nextOrder?: SeatOrderAuditEntry[];
 };
+
+function mapTurnRecord(record: {
+  id: string;
+  roundNumber: number;
+  gamePlayerId: string | null;
+  userId: string | null;
+  seatNumber: number | null;
+  playerDisplayName: string;
+  startedAt: Date;
+  endedAt: Date | null;
+  completionReason: TurnRecordResponse['completionReason'];
+  reminderCount: number;
+  lastReminderAt: Date | null;
+  nextReminderAt: Date | null;
+}): TurnRecordResponse {
+  return {
+    ...record,
+    startedAt: record.startedAt.toISOString(),
+    endedAt: record.endedAt?.toISOString() ?? null,
+    lastReminderAt: record.lastReminderAt?.toISOString() ?? null,
+    nextReminderAt: record.nextReminderAt?.toISOString() ?? null,
+  };
+}
 
 @Injectable()
 export class GamesQueryService {
@@ -90,40 +116,62 @@ export class GamesQueryService {
       orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
     });
 
-    return games.map((game) => {
-      const activePlayerEntry = game.turnState
-        ? resolveActivePlayerEntry(game.players, game.turnState)
-        : null;
+    return Promise.all(
+      games.map(async (game) => {
+        const activePlayerEntry = game.turnState
+          ? resolveActivePlayerEntry(game.players, game.turnState)
+          : null;
 
-      return {
-        id: game.id,
-        slug: game.slug,
-        gameNumber: game.gameNumber,
-        name: game.name,
-        threadName: buildCanonicalThreadName({
+        const [openTurns, recentCompletedTurns] = await Promise.all([
+          prisma.turnRecord.findMany({
+            where: { gameId: game.id, endedAt: null },
+          }),
+          prisma.turnRecord.findMany({
+            where: { gameId: game.id, endedAt: { not: null } },
+            orderBy: { endedAt: 'desc' },
+            take: 25,
+          }),
+        ]);
+        const openTurn = openTurns[0] ? mapTurnRecord(openTurns[0]) : null;
+
+        return {
+          id: game.id,
+          slug: game.slug,
           gameNumber: game.gameNumber,
           name: game.name,
-          playerCount: game.playerCount,
-          gameMode: game.gameMode,
-          techLevel: game.techLevel,
-          zoneCount: game.zoneCount,
-          armyCount: game.armyCount,
-        }),
-        discordThreadId: game.discordThreadId,
-        organizerDisplayName: game.organizer.displayName,
-        updatedAt: game.updatedAt.toISOString(),
-        roundNumber: game.turnState?.roundNumber ?? 1,
-        activePlayerUserId: activePlayerEntry?.userId ?? null,
-        activePlayerDisplayName:
-          activePlayerEntry?.user?.displayName ?? 'Unassigned',
-        playerCount: game.playerCount ?? game.players.length,
-        filledSeatCount: game.players.filter((player) => player.userId != null)
-          .length,
-        participantUserIds: game.players
-          .map((player) => player.userId)
-          .filter((userId): userId is string => userId != null),
-      };
-    });
+          threadName: buildCanonicalThreadName({
+            gameNumber: game.gameNumber,
+            name: game.name,
+            playerCount: game.playerCount,
+            gameMode: game.gameMode,
+            techLevel: game.techLevel,
+            zoneCount: game.zoneCount,
+            armyCount: game.armyCount,
+          }),
+          discordThreadId: game.discordThreadId,
+          organizerDisplayName: game.organizer.displayName,
+          updatedAt: game.updatedAt.toISOString(),
+          roundNumber: game.turnState?.roundNumber ?? 1,
+          activePlayerUserId: activePlayerEntry?.userId ?? null,
+          activePlayerDisplayName:
+            activePlayerEntry?.user?.displayName ?? 'Unassigned',
+          playerCount: game.playerCount ?? game.players.length,
+          filledSeatCount: game.players.filter(
+            (player) => player.userId != null,
+          ).length,
+          participantUserIds: game.players
+            .map((player) => player.userId)
+            .filter((userId): userId is string => userId != null),
+          turnTargetHours: game.turnTargetHours,
+          turnReminderGraceHours: game.turnReminderGraceHours,
+          turnReminderRepeatHours: game.turnReminderRepeatHours,
+          turnRemindersEnabled: game.turnRemindersEnabled,
+          currentTurnStartedAt: openTurn?.startedAt ?? null,
+          openTurn,
+          recentCompletedTurns: recentCompletedTurns.map(mapTurnRecord),
+        };
+      }),
+    );
   }
 
   async getGameDetail(gameId: string): Promise<GameDetailResponse> {
@@ -179,6 +227,18 @@ export class GamesQueryService {
     if (!game) {
       throw new NotFoundException(`Game ${gameId} was not found.`);
     }
+
+    const [openTurns, recentCompletedTurns] = await Promise.all([
+      prisma.turnRecord.findMany({
+        where: { gameId: game.id, endedAt: null },
+      }),
+      prisma.turnRecord.findMany({
+        where: { gameId: game.id, endedAt: { not: null } },
+        orderBy: { endedAt: 'desc' },
+        take: 25,
+      }),
+    ]);
+    const openTurn = openTurns[0] ? mapTurnRecord(openTurns[0]) : null;
 
     const activePlayerEntry = game.turnState
       ? resolveActivePlayerEntry(game.players, game.turnState)
@@ -270,6 +330,13 @@ export class GamesQueryService {
           player.userId === game.organizerId,
       })),
       fileVersions: game.fileVersions.map(buildGameDetailFileVersionPayload),
+      turnTargetHours: game.turnTargetHours,
+      turnReminderGraceHours: game.turnReminderGraceHours,
+      turnReminderRepeatHours: game.turnReminderRepeatHours,
+      turnRemindersEnabled: game.turnRemindersEnabled,
+      currentTurnStartedAt: openTurn?.startedAt ?? null,
+      openTurn,
+      recentCompletedTurns: recentCompletedTurns.map(mapTurnRecord),
     };
   }
 

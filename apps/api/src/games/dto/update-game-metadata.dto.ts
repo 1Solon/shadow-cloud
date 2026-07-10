@@ -14,6 +14,7 @@ import {
   CreateDiscordGameMode,
   CreateDiscordGameZoneCount,
 } from './create-discord-game.dto';
+import { IsPositiveSafeInteger } from './validation/is-positive-safe-integer.decorator';
 
 export class UpdateGameMetadataDto {
   @IsOptional()
@@ -67,4 +68,20 @@ export class UpdateGameMetadataDto {
   @IsString()
   @MaxLength(4000)
   notes?: string | null;
+
+  @IsOptional()
+  @IsPositiveSafeInteger()
+  turnTargetHours?: number;
+
+  @IsOptional()
+  @IsPositiveSafeInteger()
+  turnReminderGraceHours?: number;
+
+  @IsOptional()
+  @IsPositiveSafeInteger()
+  turnReminderRepeatHours?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  turnRemindersEnabled?: boolean;
 }
