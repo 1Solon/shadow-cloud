@@ -2,8 +2,10 @@ import { createServer } from "node:http";
 import type { Client, Message } from "discord.js";
 import {
   buildGameInitNotificationMessage,
+  buildSaveReplacedNotificationMessage,
   buildSaveNotificationMessage,
   type GameInitializedNotificationPayload,
+  type SaveReplacedNotificationPayload,
   type ThreadRenameNotificationPayload,
   type UploadNotificationPayload,
 } from "./notifications.js";
@@ -112,6 +114,7 @@ export function startNotificationServer(
 
   const server = createServer(async (request, response) => {
     const isSaveUploadedRequest = request.url === "/notify/save-uploaded";
+    const isSaveReplacedRequest = request.url === "/notify/save-replaced";
     const isGameInitializedRequest = request.url === "/notify/game-initialized";
     const isThreadRenameRequest = request.url === "/notify/thread-rename";
 
@@ -123,6 +126,7 @@ export function startNotificationServer(
     if (
       request.method !== "POST" ||
       (!isSaveUploadedRequest &&
+        !isSaveReplacedRequest &&
         !isGameInitializedRequest &&
         !isThreadRenameRequest)
     ) {
@@ -146,6 +150,7 @@ export function startNotificationServer(
     try {
       const payload = JSON.parse(Buffer.concat(chunks).toString("utf8")) as
         | UploadNotificationPayload
+        | SaveReplacedNotificationPayload
         | GameInitializedNotificationPayload
         | ThreadRenameNotificationPayload;
 
@@ -185,10 +190,15 @@ export function startNotificationServer(
               payload as UploadNotificationPayload,
               webBaseUrl,
             )
-          : buildGameInitNotificationMessage(
-              payload as GameInitializedNotificationPayload,
-              webBaseUrl,
-            ),
+          : isSaveReplacedRequest
+            ? buildSaveReplacedNotificationMessage(
+                payload as SaveReplacedNotificationPayload,
+                webBaseUrl,
+              )
+            : buildGameInitNotificationMessage(
+                payload as GameInitializedNotificationPayload,
+                webBaseUrl,
+              ),
       );
 
       if (isGameInitializedRequest) {

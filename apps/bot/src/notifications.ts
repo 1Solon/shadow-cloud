@@ -48,6 +48,21 @@ export type UploadNotificationPayload = {
   }>;
 };
 
+export type SaveReplacedNotificationPayload = {
+  game: UploadNotificationPayload["game"];
+  replacement: {
+    versionId: string;
+    versionNumber: number;
+    originalName: string;
+    replacedAt: string;
+    replacedBy: {
+      id: string;
+      displayName: string;
+      discordId: string | null;
+    };
+  };
+};
+
 export type GameInitializedNotificationPayload = {
   game: {
     id: string;
@@ -314,6 +329,33 @@ export function buildSaveNotificationMessage(
     actionLines: uploadedAtLabel ? [`-# ${uploadedAtLabel}`] : [],
     mentionedUserIds: payload.turn.activePlayer.discordId
       ? [payload.turn.activePlayer.discordId]
+      : [],
+  });
+}
+
+export function buildSaveReplacedNotificationMessage(
+  payload: SaveReplacedNotificationPayload,
+  webBaseUrl: string,
+): MessageCreateOptions {
+  const correctedBy = formatDiscordActor(
+    payload.replacement.replacedBy.displayName,
+    payload.replacement.replacedBy.discordId,
+  );
+  const replacedAt = formatUploadedAt(payload.replacement.replacedAt);
+  const downloadUrl = new URL(
+    `/api/games/${encodeURIComponent(String(payload.game.gameNumber))}/files/${encodeURIComponent(payload.replacement.versionId)}`,
+    webBaseUrl,
+  ).toString();
+
+  return buildStandardNotification({
+    title: `Save corrected: ${payload.game.name}`,
+    facts: [
+      `**Save** [${payload.replacement.originalName}](${downloadUrl})`,
+      `**Corrected by** ${correctedBy}`,
+    ],
+    actionLines: replacedAt ? [`-# ${replacedAt}`] : [],
+    mentionedUserIds: payload.replacement.replacedBy.discordId
+      ? [payload.replacement.replacedBy.discordId]
       : [],
   });
 }

@@ -9,6 +9,7 @@ import {
   NotificationDeliveryStatus,
   prisma,
 } from '../database';
+import type { Prisma } from '../database';
 
 export type UploadNotificationPayload = {
   game: {
@@ -45,6 +46,21 @@ export type UploadNotificationPayload = {
     discordId: string | null;
     turnOrder: number;
   }>;
+};
+
+export type SaveReplacedNotificationPayload = {
+  game: UploadNotificationPayload['game'];
+  replacement: {
+    versionId: string;
+    versionNumber: number;
+    originalName: string;
+    replacedAt: string;
+    replacedBy: {
+      id: string;
+      displayName: string;
+      discordId: string | null;
+    };
+  };
 };
 
 export type GameInitializedNotificationPayload = {
@@ -150,6 +166,31 @@ export class BotNotificationsService implements OnModuleInit, OnModuleDestroy {
       gameId: payload.game.id,
       gameSlug: payload.game.slug,
     });
+  }
+
+  async enqueueSaveReplaced(
+    transaction: Prisma.TransactionClient,
+    payload: SaveReplacedNotificationPayload,
+  ) {
+    if (!payload.game.discordThreadId) {
+      this.logger.warn(
+        `Skipping save-replaced notification for game ${payload.game.slug} (${payload.game.id}): discordThreadId is missing.`,
+      );
+      return;
+    }
+
+    const delivery = await transaction.notificationDelivery.create({
+      data: {
+        event: NotificationDeliveryEvent.SAVE_REPLACED,
+        gameId: payload.game.id,
+        gameSlug: payload.game.slug,
+        payload: JSON.stringify(payload),
+      },
+    });
+
+    this.logger.log(
+      `Queued bot notification save-replaced for game ${payload.game.slug} (${payload.game.id}) as delivery ${delivery.id}.`,
+    );
   }
 
   async notifyGameInitialized(payload: GameInitializedNotificationPayload) {

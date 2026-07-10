@@ -4,8 +4,8 @@ import { startNotificationServer } from "../src/notification-server";
 
 const httpMock = vi.hoisted(() => {
   let handler:
-    | ((request: unknown, response: unknown) => void | Promise<void>)
-    | null = null;
+    ((request: unknown, response: unknown) => void | Promise<void>) | null =
+    null;
   const server = {
     listen: vi.fn((_port: number, callback?: () => void) => callback?.()),
     on: vi.fn(),
@@ -131,6 +131,27 @@ const saveUploadedPayload = {
   players: [],
 };
 
+const saveReplacedPayload = {
+  game: {
+    id: "game-1",
+    gameNumber: 42,
+    slug: "the-game",
+    name: "The Game",
+    discordThreadId: "thread-1",
+  },
+  replacement: {
+    versionId: "version-1",
+    versionNumber: 7,
+    originalName: "42-T4-S2-Other.se1",
+    replacedAt: "2026-07-10T14:30:00.000Z",
+    replacedBy: {
+      id: "user-1",
+      displayName: "Solon",
+      discordId: "discord-1",
+    },
+  },
+};
+
 describe("startNotificationServer", () => {
   it("pins the game-initialized notification message", async () => {
     const pin = vi.fn(async () => undefined);
@@ -217,6 +238,35 @@ describe("startNotificationServer", () => {
 
     expect(thread.send).toHaveBeenCalledOnce();
     expect(pin).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(204);
+  });
+
+  it("delivers save-replaced notifications without renaming, tagging, or pinning", async () => {
+    const pin = vi.fn(async () => undefined);
+    const thread = {
+      id: "thread-1",
+      isThread: () => true,
+      joinable: false,
+      send: vi.fn(async () => ({ pin })),
+    };
+    const client = buildClient(thread);
+
+    startNotificationServer(client as never, {
+      notificationPort: 3011,
+      notificationSecret: "secret",
+      webBaseUrl: "https://shadow.example",
+    });
+
+    const response = buildResponse();
+    await httpMock.getHandler()?.(
+      buildRequest("/notify/save-replaced", saveReplacedPayload),
+      response,
+    );
+
+    expect(thread.send).toHaveBeenCalledOnce();
+    expect(pin).not.toHaveBeenCalled();
+    expect(threadNameMock.renameThreadIfNeeded).not.toHaveBeenCalled();
+    expect(threadNameMock.ensureShadowCloudTag).not.toHaveBeenCalled();
     expect(response.statusCode).toBe(204);
   });
 });
