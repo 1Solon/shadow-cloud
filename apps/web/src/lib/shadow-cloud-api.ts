@@ -24,6 +24,18 @@ export type GameListItem = {
   participantUserIds: string[];
 };
 
+export type GameDetailFileVersion = {
+  id: string;
+  originalName: string;
+  uploadedAt: string;
+  uploadedById: string;
+  uploadedByDisplayName: string;
+  contentHash: string | null;
+  idempotencyKey: string | null;
+  replacedAt: string | null;
+  replacedByDisplayName: string | null;
+};
+
 export type GameDetail = {
   id: string;
   gameNumber: number;
@@ -50,13 +62,7 @@ export type GameDetail = {
     turnOrder: number;
     isOrganizer: boolean;
   }>;
-  fileVersions: Array<{
-    id: string;
-    originalName: string;
-    uploadedAt: string;
-    uploadedById: string;
-    uploadedByDisplayName: string;
-  }>;
+  fileVersions: GameDetailFileVersion[];
 };
 
 class ApiResponseError extends Error {
