@@ -102,7 +102,7 @@ export type TurnNudgeNotificationPayload = {
     gameNumber: number;
     slug: string;
     name: string;
-    discordThreadId: string | null;
+    discordThreadId: string;
   };
   turnRecord: {
     id: string;
@@ -113,7 +113,7 @@ export type TurnNudgeNotificationPayload = {
     activePlayer: {
       id: string;
       displayName: string;
-      discordId: string | null;
+      discordId: string;
       turnOrder: number;
     };
   };
@@ -407,7 +407,7 @@ export function buildTurnNudgeNotificationMessage(
     actionLines: [
       "This is a reminder only; Shadow Cloud will not automatically skip the turn.",
     ],
-    mentionedUserIds: [payload.turnRecord.activePlayer.discordId ?? ""],
+    mentionedUserIds: [payload.turnRecord.activePlayer.discordId],
   });
 }
 

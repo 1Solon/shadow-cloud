@@ -3,6 +3,23 @@ import {
   buildSaveReplacedNotificationMessage,
   buildTurnNudgeNotificationMessage,
 } from "../src/notifications.js";
+import type { TurnNudgeNotificationPayload } from "../src/notifications.js";
+
+type IsExactly<Left, Right> = (<Value>() => Value extends Left ? 1 : 2) extends <
+  Value,
+>() => Value extends Right ? 1 : 2
+  ? true
+  : false;
+type Assert<Condition extends true> = Condition;
+type TurnNudgeThreadIdIsRequired = Assert<
+  IsExactly<TurnNudgeNotificationPayload["game"]["discordThreadId"], string>
+>;
+type TurnNudgeActivePlayerIdIsRequired = Assert<
+  IsExactly<
+    TurnNudgeNotificationPayload["turnRecord"]["activePlayer"]["discordId"],
+    string
+  >
+>;
 
 const saveReplacedPayload = {
   game: {
@@ -90,7 +107,7 @@ describe("buildTurnNudgeNotificationMessage", () => {
     expect(rendered).toContain("will not automatically skip the turn");
   });
 
-  it("uses the display name and singular hour wording without a Discord mention", () => {
+  it("uses only the required active-player mention for singular-hour nudges", () => {
     const message = buildTurnNudgeNotificationMessage(
       {
         ...turnNudgePayload,
@@ -100,7 +117,7 @@ describe("buildTurnNudgeNotificationMessage", () => {
           targetHours: 1,
           activePlayer: {
             ...turnNudgePayload.turnRecord.activePlayer,
-            discordId: null,
+            displayName: "@everyone @here",
           },
         },
       },
@@ -108,10 +125,11 @@ describe("buildTurnNudgeNotificationMessage", () => {
     );
     const rendered = JSON.stringify(message);
 
-    expect(message.allowedMentions).toBeUndefined();
-    expect(rendered).toContain("Turn reminder for Next Player");
+    expect(message.allowedMentions).toEqual({ users: ["discord-2"] });
+    expect(rendered).toContain("Turn reminder for <@discord-2>");
     expect(rendered).toContain("**1 hour**");
     expect(rendered).not.toContain("**1 hours**");
-    expect(rendered).not.toContain("<@discord-2>");
+    expect(rendered).not.toContain("@everyone");
+    expect(rendered).not.toContain("@here");
   });
 });

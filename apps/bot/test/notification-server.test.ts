@@ -344,7 +344,7 @@ describe("startNotificationServer", () => {
     expect(response.statusCode).toBe(401);
   });
 
-  it("accepts turn nudges without a configured thread", async () => {
+  it("accepts save-uploaded notifications without a configured thread", async () => {
     const client = buildClient(null);
     startNotificationServer(client as never, {
       notificationPort: 3011,
@@ -354,9 +354,9 @@ describe("startNotificationServer", () => {
 
     const response = buildResponse();
     await httpMock.getHandler()?.(
-      buildRequest("/notify/turn-nudge", {
-        ...turnNudgePayload,
-        game: { ...turnNudgePayload.game, discordThreadId: null },
+      buildRequest("/notify/save-uploaded", {
+        ...saveUploadedPayload,
+        game: { ...saveUploadedPayload.game, discordThreadId: null },
       }),
       response,
     );
