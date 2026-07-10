@@ -27,16 +27,28 @@ import {
   upsertDiscordUser,
 } from '../support/discord-user.helpers';
 import { syncGameSeatCount } from '../support/seat-count.helpers';
+import { TurnRecordsService } from './turn-records.service';
+
+type CreateDiscordGameTimingInput = {
+  turnTargetHours?: number;
+  turnReminderGraceHours?: number;
+  turnReminderRepeatHours?: number;
+};
 
 @Injectable()
 export class GamesRegistrationService {
-  constructor(private readonly botNotifications: BotNotificationsService) {}
+  constructor(
+    private readonly botNotifications: BotNotificationsService,
+    private readonly turnRecords: TurnRecordsService,
+  ) {}
 
   async notifyThreadRename(payload: ThreadRenameNotificationPayload['game']) {
     await this.botNotifications.notifyThreadRenamed({ game: payload });
   }
 
-  async createGameFromDiscordInit(input: CreateDiscordGameDto) {
+  async createGameFromDiscordInit(
+    input: CreateDiscordGameDto & CreateDiscordGameTimingInput,
+  ) {
     const existingThread = await prisma.game.findUnique({
       where: {
         discordThreadId: input.discordThreadId,
@@ -66,6 +78,14 @@ export class GamesRegistrationService {
       resolvedSlug = `${baseSlug}-${suffix}`;
       suffix += 1;
     }
+
+    const startedAt = new Date();
+    const policy = {
+      turnTargetHours: input.turnTargetHours ?? 24,
+      turnReminderGraceHours: input.turnReminderGraceHours ?? 12,
+      turnReminderRepeatHours: input.turnReminderRepeatHours ?? 24,
+      turnRemindersEnabled: true,
+    };
 
     const game = await prisma.$transaction(async (transaction) => {
       if (input.gameNumber != null) {
@@ -99,6 +119,10 @@ export class GamesRegistrationService {
           discordChannelId: input.discordChannelId,
           discordThreadId: input.discordThreadId,
           organizerId: organizer.id,
+          turnTargetHours: policy.turnTargetHours,
+          turnReminderGraceHours: policy.turnReminderGraceHours,
+          turnReminderRepeatHours: policy.turnReminderRepeatHours,
+          turnRemindersEnabled: policy.turnRemindersEnabled,
         },
       });
 
@@ -118,6 +142,19 @@ export class GamesRegistrationService {
           activePlayerEntryId: organizerEntry.id,
           roundNumber: 1,
         },
+      });
+
+      await this.turnRecords.createInitialTurn(transaction, {
+        gameId: createdGame.id,
+        participant: {
+          gamePlayerId: organizerEntry.id,
+          userId: organizer.id,
+          seatNumber: organizerEntry.turnOrder,
+          playerDisplayName: organizer.displayName,
+        },
+        roundNumber: 1,
+        startedAt,
+        policy,
       });
 
       if (input.playerCount != null) {
