@@ -6,6 +6,7 @@ import { GameNotesCard } from "@/components/game-notes-card";
 import { SaveUploadCard } from "@/components/save-upload-card";
 import { SeatOrderEditor } from "@/components/seat-order-editor";
 import { TerminalConfirmationModal } from "@/components/terminal-confirmation-modal";
+import { TurnTimingHistoryCard } from "@/components/turn-timing-history-card";
 import { WorldStateHistoryCard } from "@/components/world-state-history-card";
 import { getShadowOverrideEnabled } from "@/lib/shadow-override";
 import { getGameDetail } from "@/lib/shadow-cloud-api";
@@ -51,6 +52,7 @@ export default async function GameDetailPage({
   const uploadMessage = query.message
     ? decodeURIComponent(query.message)
     : null;
+  const initialNow = new Date().toISOString();
 
   return (
     <div className="flex flex-col gap-8">
@@ -129,6 +131,14 @@ export default async function GameDetailPage({
           turnRemindersEnabled={game.turnRemindersEnabled}
           turnTargetHours={game.turnTargetHours}
           zoneCount={game.zoneCount}
+        />
+      </section>
+
+      <section>
+        <TurnTimingHistoryCard
+          initialNow={initialNow}
+          openTurn={game.openTurn}
+          recentCompletedTurns={game.recentCompletedTurns}
         />
       </section>
 

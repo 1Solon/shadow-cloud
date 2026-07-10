@@ -41,6 +41,24 @@ export type GameDetailFileVersion = {
   replacedByDisplayName: string | null;
 };
 
+export type TurnCompletionReason =
+  "SAVE_UPLOADED" | "SKIPPED" | "RESIGNED" | "REPLACED" | "REASSIGNED";
+
+export type GameTurnRecord = {
+  id: string;
+  roundNumber: number;
+  gamePlayerId: string | null;
+  userId: string | null;
+  seatNumber: number | null;
+  playerDisplayName: string;
+  startedAt: string;
+  endedAt: string | null;
+  completionReason: TurnCompletionReason | null;
+  reminderCount: number;
+  lastReminderAt: string | null;
+  nextReminderAt: string | null;
+};
+
 export type GameDetail = {
   id: string;
   gameNumber: number;
@@ -73,6 +91,8 @@ export type GameDetail = {
     isOrganizer: boolean;
   }>;
   fileVersions: GameDetailFileVersion[];
+  openTurn: GameTurnRecord | null;
+  recentCompletedTurns: GameTurnRecord[];
 };
 
 class ApiResponseError extends Error {
