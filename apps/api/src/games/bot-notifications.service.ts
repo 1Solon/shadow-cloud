@@ -81,9 +81,7 @@ export type ThreadRenameNotificationPayload = {
 };
 
 type NotificationEventName =
-  | 'save-uploaded'
-  | 'game-initialized'
-  | 'thread-rename';
+  'save-uploaded' | 'game-initialized' | 'thread-rename';
 
 type NotificationContext = {
   eventName: NotificationEventName;
