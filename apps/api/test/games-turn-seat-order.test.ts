@@ -16,12 +16,22 @@ vi.mock('../src/database', () => ({
     ORGANIZER: 'ORGANIZER',
     PLAYER: 'PLAYER',
   },
+  TurnCompletionReason: {
+    REASSIGNED: 'REASSIGNED',
+  },
   prisma: prismaMock,
 }));
 
 const { GamesTurnService } = await import(
   '../src/games/services/games-turn.service'
 );
+
+type GamesTurnServiceConstructor = new (
+  authService: never,
+  fileStorage: never,
+  botNotifications: never,
+  turnRecords: never,
+) => InstanceType<typeof GamesTurnService>;
 
 function createGame(override = {}) {
   const game = {
@@ -67,13 +77,21 @@ function createGame(override = {}) {
 }
 
 function createService() {
-  return new GamesTurnService(
+  const turnRecords = {
+    transitionTurn: vi.fn(async () => ({})),
+  };
+
+  return {
+    service: new (GamesTurnService as unknown as GamesTurnServiceConstructor)(
     {
       isUserShadowOverride: vi.fn(async () => false),
     } as never,
     {} as never,
     {} as never,
-  );
+    turnRecords as never,
+    ),
+    turnRecords,
+  };
 }
 
 function createTransaction() {
@@ -106,7 +124,7 @@ describe('GamesTurnService seat order organizer clearing', () => {
       callback(transaction),
     );
 
-    await createService().reorderSeatOrder('1', 'user-1', {
+    await createService().service.reorderSeatOrder('1', 'user-1', {
       seatEntryIds: ['entry-1', 'entry-2'],
       clearedSeatEntryIds: ['entry-1'],
       activePlayerEntryId: 'entry-2',
@@ -142,7 +160,7 @@ describe('GamesTurnService seat order organizer clearing', () => {
       callback(transaction),
     );
 
-    await createService().reorderSeatOrder('1', 'user-1', {
+    await createService().service.reorderSeatOrder('1', 'user-1', {
       seatEntryIds: ['entry-2'],
       removedSeatEntryIds: ['entry-1'],
       activePlayerEntryId: 'entry-2',
@@ -173,7 +191,7 @@ describe('GamesTurnService seat order organizer clearing', () => {
 
   it('explains that occupied seats must be cleared before removal', async () => {
     await expect(
-      createService().reorderSeatOrder('1', 'user-1', {
+      createService().service.reorderSeatOrder('1', 'user-1', {
         seatEntryIds: ['entry-2'],
         clearedSeatEntryIds: ['entry-1'],
         removedSeatEntryIds: ['entry-1'],
@@ -210,7 +228,7 @@ describe('GamesTurnService seat order organizer clearing', () => {
     );
 
     await expect(
-      createService().reorderSeatOrder('1', 'user-1', {
+      createService().service.reorderSeatOrder('1', 'user-1', {
         seatEntryIds: ['entry-1'],
         clearedSeatEntryIds: ['entry-1'],
       }),
@@ -243,11 +261,56 @@ describe('GamesTurnService seat order organizer clearing', () => {
     );
 
     await expect(
-      createService().reorderSeatOrder('1', 'user-1', {
+      createService().service.reorderSeatOrder('1', 'user-1', {
         seatEntryIds: [],
         removedSeatEntryIds: ['entry-1'],
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('does not reset timing when the active seat stays selected', async () => {
+    const transaction = createTransaction();
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback(transaction),
+    );
+    const { service, turnRecords } = createService();
+
+    await service.reorderSeatOrder('1', 'user-1', {
+      seatEntryIds: ['entry-2', 'entry-1'],
+      activePlayerEntryId: 'entry-1',
+    });
+
+    expect(turnRecords.transitionTurn).not.toHaveBeenCalled();
+  });
+
+  it('transitions timing when the organizer selects another active seat', async () => {
+    const transaction = createTransaction();
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback(transaction),
+    );
+    const { service, turnRecords } = createService();
+
+    await service.reorderSeatOrder('1', 'user-1', {
+      seatEntryIds: ['entry-1', 'entry-2'],
+      activePlayerEntryId: 'entry-2',
+    });
+
+    expect(turnRecords.transitionTurn).toHaveBeenCalledWith(
+      transaction,
+      expect.objectContaining({
+        completionReason: 'REASSIGNED',
+        expectedCurrent: {
+          gamePlayerId: 'entry-1',
+          userId: 'user-1',
+          roundNumber: 4,
+        },
+        next: expect.objectContaining({
+          gamePlayerId: 'entry-2',
+          userId: 'user-2',
+          roundNumber: 4,
+        }),
+      }),
+    );
   });
 });

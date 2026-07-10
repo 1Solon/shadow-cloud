@@ -20,12 +20,22 @@ vi.mock('../src/database', () => ({
     ORGANIZER: 'ORGANIZER',
     PLAYER: 'PLAYER',
   },
+  TurnCompletionReason: {
+    SAVE_UPLOADED: 'SAVE_UPLOADED',
+  },
   prisma: prismaMock,
 }));
 
 const { GamesTurnService } = await import(
   '../src/games/services/games-turn.service'
 );
+
+type GamesTurnServiceConstructor = new (
+  authService: never,
+  fileStorage: never,
+  botNotifications: never,
+  turnRecords: never,
+) => InstanceType<typeof GamesTurnService>;
 
 function createGame(override = {}) {
   const players = [
@@ -88,15 +98,20 @@ function createService() {
   const botNotifications = {
     notifySaveUploaded: vi.fn(async () => undefined),
   };
+  const turnRecords = {
+    transitionTurn: vi.fn(async () => ({})),
+  };
 
   return {
-    service: new GamesTurnService(
+    service: new (GamesTurnService as unknown as GamesTurnServiceConstructor)(
       {} as never,
       fileStorage as never,
       botNotifications as never,
+      turnRecords as never,
     ),
     fileStorage,
     botNotifications,
+    turnRecords,
   };
 }
 
@@ -199,7 +214,7 @@ describe('GamesTurnService upload safety', () => {
     prismaMock.$transaction.mockImplementation(async (callback) =>
       callback(transaction),
     );
-    const { service, fileStorage } = createService();
+    const { service, fileStorage, turnRecords } = createService();
 
     await service.uploadSave(
       '1',
@@ -217,5 +232,60 @@ describe('GamesTurnService upload safety', () => {
         playerName: 'Solon',
       }),
     );
+    expect(turnRecords.transitionTurn).toHaveBeenCalledWith(
+      transaction,
+      expect.objectContaining({
+        completionReason: 'SAVE_UPLOADED',
+        expectedCurrent: {
+          gamePlayerId: 'entry-2',
+          userId: 'user-2',
+          roundNumber: 4,
+        },
+        next: expect.objectContaining({
+          gamePlayerId: 'entry-1',
+          userId: 'user-1',
+          roundNumber: 5,
+        }),
+      }),
+    );
+  });
+
+  it('removes the stored file when timing transition aborts the upload transaction', async () => {
+    prismaMock.fileVersion.findFirst.mockResolvedValue(null);
+    const transaction = {
+      fileVersion: {
+        findFirst: vi.fn(async () => null),
+        create: vi.fn(async () => ({
+          id: 'file-version-8',
+          originalName: '1-T4-S2-Other.se1',
+          uploadedAt: new Date('2026-05-03T10:00:00.000Z'),
+        })),
+      },
+      auditEvent: {
+        create: vi.fn(async () => ({})),
+      },
+      turnState: {
+        update: vi.fn(async () => ({ roundNumber: 4 })),
+      },
+    };
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback(transaction),
+    );
+    const { service, fileStorage, turnRecords } = createService();
+    turnRecords.transitionTurn.mockRejectedValueOnce(new Error('turn conflict'));
+
+    await expect(
+      service.uploadSave(
+        '1',
+        'user-1',
+        {
+          originalname: 'turn.se1',
+          buffer: Buffer.from([1, 2, 3]),
+        } as never,
+      ),
+    ).rejects.toThrow('turn conflict');
+
+    expect(fileStorage.removeFile).toHaveBeenCalledWith('/saves/game-1/turn.se1');
+    expect(transaction.auditEvent.create).toHaveBeenCalledTimes(1);
   });
 });

@@ -7,7 +7,12 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { AuthService } from '../../auth/auth.service';
-import { AuditEventType, GameRole, prisma } from '../../database';
+import {
+  AuditEventType,
+  GameRole,
+  prisma,
+  TurnCompletionReason,
+} from '../../database';
 import type { PlayerSummary } from '../games.types';
 import { BotNotificationsService } from '../bot-notifications.service';
 import { FileStorageService } from '../file-storage.service';
@@ -27,6 +32,7 @@ import type {
 } from '../support/game-payload.types';
 import { resolveUploadSaveNaming } from '../support/upload-save-naming';
 import { resolveActivePlayerEntry } from '../support/turn-state.utils';
+import { TurnRecordsService } from './turn-records.service';
 
 @Injectable()
 export class GamesTurnService {
@@ -34,6 +40,7 @@ export class GamesTurnService {
     private readonly authService: AuthService,
     private readonly fileStorage: FileStorageService,
     private readonly botNotifications: BotNotificationsService,
+    private readonly turnRecords: TurnRecordsService,
   ) {}
 
   private async assertGameManagementAccess(input: {
@@ -262,6 +269,26 @@ export class GamesTurnService {
               increment: roundAdvanced ? 1 : 0,
             },
           },
+        });
+        const transitionedAt = new Date();
+
+        await this.turnRecords.transitionTurn(transaction, {
+          gameId: game.id,
+          expectedCurrent: {
+            gamePlayerId: activePlayerEntry.id,
+            userId: activePlayerEntry.userId!,
+            roundNumber: game.turnState!.roundNumber,
+          },
+          next: {
+            gamePlayerId: uploadSaveNaming.nextActivePlayer.id,
+            userId: uploadSaveNaming.nextActivePlayer.userId,
+            seatNumber: uploadSaveNaming.nextActivePlayer.turnOrder,
+            playerDisplayName: uploadSaveNaming.nextActivePlayer.displayName!,
+            roundNumber: updatedTurnState.roundNumber,
+          },
+          completionReason: TurnCompletionReason.SAVE_UPLOADED,
+          transitionedAt,
+          policy: game,
         });
 
         await transaction.auditEvent.create({
@@ -581,6 +608,8 @@ export class GamesTurnService {
       }
 
       if (game.turnState && nextActiveSeat) {
+        const transitionedAt = new Date();
+
         await transaction.turnState.update({
           where: { gameId: game.id },
           data: {
@@ -588,6 +617,27 @@ export class GamesTurnService {
             activePlayerEntryId: nextActiveSeat.id,
           },
         });
+
+        if (currentActiveSeat?.id !== nextActiveSeat.id) {
+          await this.turnRecords.transitionTurn(transaction, {
+            gameId: game.id,
+            expectedCurrent: {
+              gamePlayerId: currentActiveSeat!.id,
+              userId: currentActiveSeat!.userId!,
+              roundNumber: game.turnState.roundNumber,
+            },
+            next: {
+              gamePlayerId: nextActiveSeat.id,
+              userId: nextActiveSeat.userId,
+              seatNumber: nextActiveSeat.turnOrder,
+              playerDisplayName: nextActiveSeat.user!.displayName,
+              roundNumber: game.turnState.roundNumber,
+            },
+            completionReason: TurnCompletionReason.REASSIGNED,
+            transitionedAt,
+            policy: game,
+          });
+        }
       }
 
       await transaction.auditEvent.create({
@@ -666,12 +716,6 @@ export class GamesTurnService {
       );
     }
 
-    if (seat?.userId != null) {
-      throw new ConflictException(
-        `Seat ${input.seatNumber} is already occupied.`,
-      );
-    }
-
     const existingIdentity = await prisma.authIdentity.findUnique({
       where: {
         provider_providerId: {
@@ -715,6 +759,29 @@ export class GamesTurnService {
             role: GameRole.PLAYER,
           },
         }));
+
+      if (wasActiveSeat && game.turnState && seatRecord.userId) {
+        const transitionedAt = new Date();
+
+        await this.turnRecords.transitionTurn(transaction, {
+          gameId: game.id,
+          expectedCurrent: {
+            gamePlayerId: seatRecord.id,
+            userId: seatRecord.userId,
+            roundNumber: game.turnState.roundNumber,
+          },
+          next: {
+            gamePlayerId: seatRecord.id,
+            userId: newPlayer.id,
+            seatNumber: seatRecord.turnOrder,
+            playerDisplayName: newPlayer.displayName,
+            roundNumber: game.turnState.roundNumber,
+          },
+          completionReason: TurnCompletionReason.REPLACED,
+          transitionedAt,
+          policy: game,
+        });
+      }
 
       const filled = await transaction.gamePlayer.update({
         where: { id: seatRecord.id },
@@ -950,12 +1017,33 @@ export class GamesTurnService {
       }
 
       if (isActivePlayer && nextActivePlayer && game.turnState) {
+        const transitionedAt = new Date();
+
         await transaction.turnState.update({
           where: { gameId: game.id },
           data: {
             activePlayerId: nextActivePlayer.userId!,
             activePlayerEntryId: nextActivePlayer.id,
           },
+        });
+
+        await this.turnRecords.transitionTurn(transaction, {
+          gameId: game.id,
+          expectedCurrent: {
+            gamePlayerId: resigningEntry.id,
+            userId: resigningEntry.userId!,
+            roundNumber: game.turnState.roundNumber,
+          },
+          next: {
+            gamePlayerId: nextActivePlayer.id,
+            userId: nextActivePlayer.userId,
+            seatNumber: nextActivePlayer.turnOrder,
+            playerDisplayName: nextActivePlayer.user!.displayName,
+            roundNumber: game.turnState.roundNumber,
+          },
+          completionReason: TurnCompletionReason.RESIGNED,
+          transitionedAt,
+          policy: game,
         });
       }
 
@@ -1062,12 +1150,33 @@ export class GamesTurnService {
       ) ?? remaining[0];
 
     await prisma.$transaction(async (transaction) => {
+      const transitionedAt = new Date();
+
       await transaction.turnState.update({
         where: { gameId: game.id },
         data: {
           activePlayerId: nextActivePlayer.userId!,
           activePlayerEntryId: nextActivePlayer.id,
         },
+      });
+
+      await this.turnRecords.transitionTurn(transaction, {
+        gameId: game.id,
+        expectedCurrent: {
+          gamePlayerId: targetEntry.id,
+          userId: targetEntry.userId!,
+          roundNumber: game.turnState!.roundNumber,
+        },
+        next: {
+          gamePlayerId: nextActivePlayer.id,
+          userId: nextActivePlayer.userId,
+          seatNumber: nextActivePlayer.turnOrder,
+          playerDisplayName: nextActivePlayer.user!.displayName,
+          roundNumber: game.turnState!.roundNumber,
+        },
+        completionReason: TurnCompletionReason.SKIPPED,
+        transitionedAt,
+        policy: game,
       });
 
       await transaction.auditEvent.create({
