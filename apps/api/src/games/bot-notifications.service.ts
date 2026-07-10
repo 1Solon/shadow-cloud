@@ -81,7 +81,7 @@ export type ThreadRenameNotificationPayload = {
 };
 
 type NotificationEventName =
-  'save-uploaded' | 'game-initialized' | 'thread-rename';
+  'save-uploaded' | 'save-replaced' | 'game-initialized' | 'thread-rename';
 
 type NotificationContext = {
   eventName: NotificationEventName;
@@ -101,6 +101,7 @@ export class BotNotificationsService implements OnModuleInit, OnModuleDestroy {
     process.env.SHADOW_CLOUD_BOT_NOTIFY_BASE_URL?.replace(/\/$/, '') ??
     'http://127.0.0.1:3011';
   private readonly saveUploadedEndpoint = `${this.notificationBaseUrl}/notify/save-uploaded`;
+  private readonly saveReplacedEndpoint = `${this.notificationBaseUrl}/notify/save-replaced`;
   private readonly gameInitializedEndpoint = `${this.notificationBaseUrl}/notify/game-initialized`;
   private readonly threadRenameEndpoint = `${this.notificationBaseUrl}/notify/thread-rename`;
   private readonly secret = process.env.SHADOW_CLOUD_BOT_NOTIFY_SECRET;
@@ -405,6 +406,8 @@ export class BotNotificationsService implements OnModuleInit, OnModuleDestroy {
     switch (event) {
       case NotificationDeliveryEvent.SAVE_UPLOADED:
         return 'save-uploaded';
+      case NotificationDeliveryEvent.SAVE_REPLACED:
+        return 'save-replaced';
       case NotificationDeliveryEvent.GAME_INITIALIZED:
         return 'game-initialized';
       case NotificationDeliveryEvent.THREAD_RENAMED:
@@ -416,6 +419,8 @@ export class BotNotificationsService implements OnModuleInit, OnModuleDestroy {
     switch (event) {
       case NotificationDeliveryEvent.SAVE_UPLOADED:
         return this.saveUploadedEndpoint;
+      case NotificationDeliveryEvent.SAVE_REPLACED:
+        return this.saveReplacedEndpoint;
       case NotificationDeliveryEvent.GAME_INITIALIZED:
         return this.gameInitializedEndpoint;
       case NotificationDeliveryEvent.THREAD_RENAMED:
