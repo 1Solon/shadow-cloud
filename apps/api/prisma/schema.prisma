@@ -39,6 +39,7 @@ enum NotificationDeliveryEvent {
   SAVE_REPLACED
   GAME_INITIALIZED
   THREAD_RENAMED
+  TURN_NUDGE
 }
 
 enum NotificationDeliveryStatus {
@@ -46,6 +47,15 @@ enum NotificationDeliveryStatus {
   PROCESSING
   DELIVERED
   FAILED
+  CANCELLED
+}
+
+enum TurnCompletionReason {
+  SAVE_UPLOADED
+  SKIPPED
+  RESIGNED
+  REPLACED
+  REASSIGNED
 }
 
 enum GameDlcMode {
@@ -75,18 +85,19 @@ enum ArmyCountPreset {
 }
 
 model User {
-  id              String         @id @default(cuid())
-  email           String         @unique
-  displayName     String
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  identities      AuthIdentity[]
-  organizedGames  Game[]
-  memberships     GamePlayer[]
-  activeTurns     TurnState[]
-  uploads         FileVersion[]  @relation("UploadedBy")
-  replacements    FileVersion[]  @relation("ReplacedBy")
-  auditEvents     AuditEvent[]   @relation("ActorEvents")
+  id             String         @id @default(cuid())
+  email          String         @unique
+  displayName    String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  identities     AuthIdentity[]
+  organizedGames Game[]
+  memberships    GamePlayer[]
+  activeTurns    TurnState[]
+  uploads        FileVersion[]  @relation("UploadedBy")
+  replacements   FileVersion[]  @relation("ReplacedBy")
+  auditEvents    AuditEvent[]   @relation("ActorEvents")
+  turnRecords    TurnRecord[]
 }
 
 model AuthIdentity {
@@ -117,43 +128,49 @@ model DesktopAuthHandoff {
 }
 
 model Game {
-  id                    String                @id @default(cuid())
-  gameNumber            Int                   @unique
-  name                  String
-  slug                  String                @unique
-  playerCount           Int?
-  hasAiPlayers          Boolean?
-  dlcMode               GameDlcMode?
-  gameMode              GameMode?
-  techLevel             Int?
-  zoneCount             ZoneCountPreset?
-  armyCount             ArmyCountPreset?
-  notes                 String?
-  discordGuildId        String?
-  discordChannelId      String?
-  discordThreadId       String?               @unique
-  retentionLimit        Int                   @default(5)
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
-  organizerId           String
-  organizer             User                  @relation(fields: [organizerId], references: [id])
-  players               GamePlayer[]
-  turnState             TurnState?
-  fileVersions          FileVersion[]
-  auditEvents           AuditEvent[]
-  registrationRequests  RegistrationRequest[]
+  id                      String                @id @default(cuid())
+  gameNumber              Int                   @unique
+  name                    String
+  slug                    String                @unique
+  playerCount             Int?
+  hasAiPlayers            Boolean?
+  dlcMode                 GameDlcMode?
+  gameMode                GameMode?
+  techLevel               Int?
+  zoneCount               ZoneCountPreset?
+  armyCount               ArmyCountPreset?
+  notes                   String?
+  discordGuildId          String?
+  discordChannelId        String?
+  discordThreadId         String?               @unique
+  retentionLimit          Int                   @default(5)
+  turnTargetHours         Int                   @default(24)
+  turnReminderGraceHours  Int                   @default(12)
+  turnReminderRepeatHours Int                   @default(24)
+  turnRemindersEnabled    Boolean               @default(true)
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+  organizerId             String
+  organizer               User                  @relation(fields: [organizerId], references: [id])
+  players                 GamePlayer[]
+  turnState               TurnState?
+  fileVersions            FileVersion[]
+  auditEvents             AuditEvent[]
+  registrationRequests    RegistrationRequest[]
+  turnRecords             TurnRecord[]
 }
 
 model GamePlayer {
-  id          String      @id @default(cuid())
+  id          String       @id @default(cuid())
   gameId      String
   userId      String?
   turnOrder   Int
-  role        GameRole    @default(PLAYER)
-  createdAt   DateTime    @default(now())
-  game        Game        @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  user        User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
-  activeTurns TurnState[] @relation("ActivePlayerEntry")
+  role        GameRole     @default(PLAYER)
+  createdAt   DateTime     @default(now())
+  game        Game         @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  activeTurns TurnState[]  @relation("ActivePlayerEntry")
+  turnRecords TurnRecord[]
 
   @@unique([gameId, turnOrder])
 }
@@ -170,8 +187,33 @@ model TurnState {
   activePlayerEntry   GamePlayer? @relation("ActivePlayerEntry", fields: [activePlayerEntryId], references: [id])
 }
 
+model TurnRecord {
+  id                     String                 @id @default(cuid())
+  gameId                 String
+  roundNumber            Int
+  gamePlayerId           String?
+  userId                 String?
+  seatNumber             Int?
+  playerDisplayName      String
+  startedAt              DateTime
+  endedAt                DateTime?
+  completionReason       TurnCompletionReason?
+  reminderCount          Int                    @default(0)
+  lastReminderAt         DateTime?
+  nextReminderAt         DateTime?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  game                   Game                   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  gamePlayer             GamePlayer?            @relation(fields: [gamePlayerId], references: [id], onDelete: SetNull)
+  user                   User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  notificationDeliveries NotificationDelivery[]
+
+  @@index([gameId, endedAt, startedAt])
+  @@index([endedAt, nextReminderAt])
+}
+
 model FileVersion {
-  id                 String   @id @default(cuid())
+  id                 String    @id @default(cuid())
   gameId             String
   uploadedById       String
   storagePath        String
@@ -181,12 +223,12 @@ model FileVersion {
   idempotencyKey     String?
   clientOriginalName String?
   clientFileSize     Int?
-  uploadedAt         DateTime @default(now())
+  uploadedAt         DateTime  @default(now())
   replacedAt         DateTime?
   replacedById       String?
-  game               Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  uploadedBy         User     @relation("UploadedBy", fields: [uploadedById], references: [id])
-  replacedBy         User?    @relation("ReplacedBy", fields: [replacedById], references: [id], onDelete: SetNull)
+  game               Game      @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  uploadedBy         User      @relation("UploadedBy", fields: [uploadedById], references: [id])
+  replacedBy         User?     @relation("ReplacedBy", fields: [replacedById], references: [id], onDelete: SetNull)
 
   @@unique([gameId, versionNumber])
   @@unique([gameId, uploadedById, idempotencyKey])
@@ -217,19 +259,22 @@ model AuditEvent {
 }
 
 model NotificationDelivery {
-  id                String                     @id @default(cuid())
-  event             NotificationDeliveryEvent
-  status            NotificationDeliveryStatus @default(PENDING)
-  gameId            String
-  gameSlug          String
-  payload           String
-  attempts          Int                        @default(0)
-  nextAttemptAt     DateTime                   @default(now())
+  id                  String                     @id @default(cuid())
+  event               NotificationDeliveryEvent
+  status              NotificationDeliveryStatus @default(PENDING)
+  gameId              String
+  gameSlug            String
+  turnRecordId        String?
+  payload             String
+  attempts            Int                        @default(0)
+  nextAttemptAt       DateTime                   @default(now())
   processingStartedAt DateTime?
-  deliveredAt       DateTime?
-  lastError         String?
-  createdAt         DateTime                   @default(now())
-  updatedAt         DateTime                   @updatedAt
+  deliveredAt         DateTime?
+  lastError           String?
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+  turnRecord          TurnRecord?                @relation(fields: [turnRecordId], references: [id], onDelete: SetNull)
 
   @@index([status, nextAttemptAt, createdAt])
+  @@index([turnRecordId])
 }
