@@ -10,8 +10,12 @@ describe('buildGameDetailFileVersionPayload', () => {
       uploadedById: 'user-1',
       contentHash: 'sha256:abc123',
       idempotencyKey: 'game-1:upload:sha256:abc123',
+      replacedAt: new Date('2026-07-10T14:30:00.000Z'),
       uploadedBy: {
         displayName: 'Solon',
+      },
+      replacedBy: {
+        displayName: 'Vertëks',
       },
     });
 
@@ -23,6 +27,27 @@ describe('buildGameDetailFileVersionPayload', () => {
       uploadedByDisplayName: 'Solon',
       contentHash: 'sha256:abc123',
       idempotencyKey: 'game-1:upload:sha256:abc123',
+      replacedAt: '2026-07-10T14:30:00.000Z',
+      replacedByDisplayName: 'Vertëks',
+    });
+  });
+
+  it('includes null replacement metadata when a file has not been replaced', () => {
+    expect(
+      buildGameDetailFileVersionPayload({
+        id: 'file-version-2',
+        originalName: '1-T4-S2-Other.se1',
+        uploadedAt: new Date('2026-07-10T14:00:00.000Z'),
+        uploadedById: 'user-2',
+        contentHash: null,
+        idempotencyKey: null,
+        uploadedBy: { displayName: 'Other' },
+        replacedAt: null,
+        replacedBy: null,
+      }),
+    ).toMatchObject({
+      replacedAt: null,
+      replacedByDisplayName: null,
     });
   });
 });

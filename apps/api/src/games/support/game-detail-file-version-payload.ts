@@ -5,9 +5,13 @@ export type GameDetailFileVersionRecord = {
   uploadedById: string;
   contentHash: string | null;
   idempotencyKey: string | null;
+  replacedAt: Date | null;
   uploadedBy: {
     displayName: string;
   };
+  replacedBy: {
+    displayName: string;
+  } | null;
 };
 
 export function buildGameDetailFileVersionPayload(
@@ -21,5 +25,7 @@ export function buildGameDetailFileVersionPayload(
     uploadedByDisplayName: fileVersion.uploadedBy.displayName,
     contentHash: fileVersion.contentHash,
     idempotencyKey: fileVersion.idempotencyKey,
+    replacedAt: fileVersion.replacedAt?.toISOString() ?? null,
+    replacedByDisplayName: fileVersion.replacedBy?.displayName ?? null,
   };
 }

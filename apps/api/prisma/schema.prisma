@@ -24,6 +24,7 @@ enum AuditEventType {
   TURN_ADVANCED
   TURN_REASSIGNED
   FILE_UPLOADED
+  FILE_REPLACED
   FILE_DOWNLOADED
 }
 
@@ -35,6 +36,7 @@ enum RegistrationRequestStatus {
 
 enum NotificationDeliveryEvent {
   SAVE_UPLOADED
+  SAVE_REPLACED
   GAME_INITIALIZED
   THREAD_RENAMED
 }
@@ -83,6 +85,7 @@ model User {
   memberships     GamePlayer[]
   activeTurns     TurnState[]
   uploads         FileVersion[]  @relation("UploadedBy")
+  replacements    FileVersion[]  @relation("ReplacedBy")
   auditEvents     AuditEvent[]   @relation("ActorEvents")
 }
 
@@ -179,8 +182,11 @@ model FileVersion {
   clientOriginalName String?
   clientFileSize     Int?
   uploadedAt         DateTime @default(now())
+  replacedAt         DateTime?
+  replacedById       String?
   game               Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
   uploadedBy         User     @relation("UploadedBy", fields: [uploadedById], references: [id])
+  replacedBy         User?    @relation("ReplacedBy", fields: [replacedById], references: [id], onDelete: SetNull)
 
   @@unique([gameId, versionNumber])
   @@unique([gameId, uploadedById, idempotencyKey])

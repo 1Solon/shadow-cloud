@@ -153,6 +153,7 @@ export class GamesQueryService {
         fileVersions: {
           include: {
             uploadedBy: true,
+            replacedBy: true,
           },
           orderBy: {
             versionNumber: 'desc',
