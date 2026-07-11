@@ -130,9 +130,11 @@ describe("UploadSaveForm", () => {
   });
 
   it("shows adjacent validation when submitted without a file", () => {
-    const { container } = render(<UploadSaveForm gameNumber={42} />);
+    const { container } = render(
+      <UploadSaveForm gameNumber={42} presentation="compact" />,
+    );
     const dropZone = screen.getByRole("button", {
-      name: "Drop save files here",
+      name: "Drop save file here",
     });
 
     fireEvent.submit(container.querySelector("form")!);
@@ -145,7 +147,7 @@ describe("UploadSaveForm", () => {
     fetchMock.mockResolvedValue(
       mockResponse(true, { redirectTo: "/games/42/turn/9" }),
     );
-    render(<UploadSaveForm gameNumber={42} />);
+    render(<UploadSaveForm gameNumber={42} presentation="compact" />);
     const file = new File(["save-data"], "turn.se1");
 
     await user.upload(screen.getByLabelText("Save file"), file);
@@ -178,7 +180,7 @@ describe("UploadSaveForm", () => {
           resolveRequest = resolve;
         }),
     );
-    render(<UploadSaveForm gameNumber={42} />);
+    render(<UploadSaveForm gameNumber={42} presentation="compact" />);
 
     await user.upload(
       screen.getByLabelText("Save file"),
@@ -213,7 +215,7 @@ describe("UploadSaveForm", () => {
     async (_kind, response, message) => {
       const user = userEvent.setup();
       fetchMock.mockImplementation(response);
-      render(<UploadSaveForm gameNumber={42} />);
+      render(<UploadSaveForm gameNumber={42} presentation="compact" />);
       const file = new File(["save"], "turn.se1");
 
       await user.upload(screen.getByLabelText("Save file"), file);
