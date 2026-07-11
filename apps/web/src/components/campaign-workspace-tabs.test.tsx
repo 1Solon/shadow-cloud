@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { CampaignWorkspaceTabs } from "@/components/campaign-workspace-tabs";
 
 function StatefulCampaign() {
-  return <input aria-label="Notes draft" defaultValue="preserved draft" />;
+  return <input aria-label="Notes draft" defaultValue="" />;
 }
 
 function controlledPanel(tab: HTMLElement) {
@@ -65,6 +65,7 @@ describe("CampaignWorkspaceTabs", () => {
 
     await user.click(campaignTab);
 
+    expect(campaignTab).toHaveFocus();
     expect(campaignTab).toHaveAttribute("aria-selected", "true");
     expect(campaignTab).toHaveAttribute("tabindex", "0");
     expect(activityTab).toHaveAttribute("aria-selected", "false");
@@ -72,7 +73,6 @@ describe("CampaignWorkspaceTabs", () => {
     expect(controlledPanel(activityTab)).not.toBeVisible();
     expect(screen.getByRole("tabpanel", { name: "Campaign" })).toBeVisible();
 
-    await user.clear(screen.getByLabelText("Notes draft"));
     await user.type(screen.getByLabelText("Notes draft"), "preserved draft");
     await user.click(activityTab);
     await user.click(campaignTab);
@@ -187,23 +187,65 @@ describe("CampaignWorkspaceTabs", () => {
     );
   });
 
-  it("provides horizontal overflow containment and min-width escape hatches", () => {
+  it("applies the workspace overflow, tab state, and panel styles", () => {
     const { container } = renderWorkspace();
     const root = container.firstElementChild!;
     const tablist = screen.getByRole("tablist", {
       name: "Campaign workspace",
     });
     const navigationWrapper = tablist.parentElement!;
+    const activityTab = screen.getByRole("tab", { name: "Activity" });
+    const campaignTab = screen.getByRole("tab", { name: "Campaign" });
     const panels = screen.getAllByRole("tabpanel", { hidden: true });
 
     expect(root).toHaveClass("min-w-0");
     expect(navigationWrapper).toHaveClass(
       "overflow-x-auto",
       "overflow-y-hidden",
+      "border-b",
+      "border-orange-400/30",
     );
-    expect(tablist).toHaveClass("min-w-max");
+    expect(tablist).toHaveClass("flex", "min-w-max", "px-1", "pt-1");
+    for (const tab of [activityTab, campaignTab]) {
+      expect(tab).toHaveClass(
+        "h-11",
+        "shrink-0",
+        "whitespace-nowrap",
+        "border-b-2",
+        "px-4",
+        "font-mono",
+        "text-sm",
+        "font-semibold",
+        "uppercase",
+        "tracking-[0.16em]",
+        "transition-colors",
+        "focus-visible:outline-none",
+        "focus-visible:ring-2",
+        "focus-visible:ring-ring",
+        "focus-visible:ring-inset",
+      );
+    }
+    expect(activityTab).toHaveClass(
+      "border-orange-400",
+      "bg-orange-400",
+      "text-black",
+    );
+    expect(campaignTab).toHaveClass(
+      "border-transparent",
+      "text-orange-300",
+      "hover:border-orange-400/60",
+      "hover:bg-orange-400/10",
+      "hover:text-orange-200",
+    );
     for (const panel of panels) {
-      expect(panel).toHaveClass("min-w-0");
+      expect(panel).toHaveClass(
+        "min-w-0",
+        "pt-6",
+        "focus-visible:outline-none",
+        "focus-visible:ring-2",
+        "focus-visible:ring-ring",
+        "focus-visible:ring-inset",
+      );
     }
   });
 });
