@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   closestCenter,
   DndContext,
@@ -51,6 +51,8 @@ type SeatOrderEditorProps = {
   players: SeatOrderPlayer[];
   activePlayerEntryId: string | null;
   canEdit: boolean;
+  presentation?: "card" | "configuration";
+  onDirtyChange?: (isDirty: boolean) => void;
 };
 
 type PendingSeatAction = {
@@ -107,6 +109,23 @@ function movePlayerToSeat(
   return normalizeSeatOrder(arrayMove(players, fromIndex, toIndex));
 }
 
+function seatDraftsMatch(
+  draftPlayers: SeatOrderPlayer[],
+  draftActivePlayerEntryId: string | null,
+  players: SeatOrderPlayer[],
+  activePlayerEntryId: string | null,
+) {
+  return (
+    draftActivePlayerEntryId === activePlayerEntryId &&
+    draftPlayers.length === players.length &&
+    draftPlayers.every(
+      (draftPlayer, index) =>
+        draftPlayer.id === players[index]?.id &&
+        draftPlayer.userId === players[index]?.userId,
+    )
+  );
+}
+
 function getNextOccupiedSeatEntryId(
   players: SeatOrderPlayer[],
   activePlayerEntryId: string | null,
@@ -151,6 +170,9 @@ type SortableSeatRowProps = {
   activePlayerEntryId: string | null;
   isEditing: boolean;
   isPending: boolean;
+  isSelectedForManagement: boolean;
+  presentation: "card" | "configuration";
+  onSelectForManagement: (seatEntryId: string) => void;
   onMakeActive: (index: number) => void;
   onClearPlayer: (index: number) => void;
   onRemoveSeat: (index: number) => void;
@@ -164,6 +186,9 @@ function SortableSeatRow({
   activePlayerEntryId,
   isEditing,
   isPending,
+  isSelectedForManagement,
+  presentation,
+  onSelectForManagement,
   onMakeActive,
   onClearPlayer,
   onRemoveSeat,
@@ -176,6 +201,9 @@ function SortableSeatRow({
       : "[Open]"
     : player.displayName;
   const showActiveRowHighlight = isActive && !isEditing;
+  const isConfiguration = presentation === "configuration";
+  const showSeatActions =
+    isEditing && (!isConfiguration || isSelectedForManagement);
   const {
     attributes,
     listeners,
@@ -199,6 +227,7 @@ function SortableSeatRow({
       {...(isEditing ? listeners : {})}
       className={cn(
         "relative flex items-center justify-between gap-4 rounded-lg border px-4 py-4",
+        isConfiguration ? "min-w-0 flex-wrap" : null,
         showActiveRowHighlight
           ? "border-orange-400 bg-orange-400 text-black"
           : "border-orange-400/20 bg-orange-400/5",
@@ -246,48 +275,77 @@ function SortableSeatRow({
         </div>
       </div>
       {isEditing ? (
-        <div className="relative z-10 flex flex-nowrap items-center justify-end gap-2">
-          <Button
-            data-no-drag="true"
-            aria-pressed={isActive}
-            className="w-28 shrink-0 transition-none"
-            disabled={isPending || player.userId == null || isActive}
-            type="button"
-            variant={isActive ? "default" : "secondary"}
-            onClick={() => {
-              onMakeActive(index);
-            }}
-          >
-            {isActive ? "Active seat" : "Make active"}
-          </Button>
-          <span className="group relative inline-flex" data-no-drag="true">
+        <div
+          className={cn(
+            "relative z-10 flex items-center justify-end gap-2",
+            isConfiguration ? "min-w-0 flex-wrap" : "flex-nowrap",
+          )}
+        >
+          {isConfiguration ? (
             <Button
               data-no-drag="true"
-              className="w-28 shrink-0"
-              disabled={isPending || player.userId == null || !canClearPlayer}
+              aria-current={isSelectedForManagement ? "true" : undefined}
               type="button"
-              variant="outline"
+              variant={isSelectedForManagement ? "default" : "secondary"}
               onClick={() => {
-                onClearPlayer(index);
+                onSelectForManagement(player.id);
               }}
             >
-              Clear seat
+              Manage seat {index + 1}
+              {isSelectedForManagement ? (
+                <span aria-hidden="true" className="ml-2 text-xs uppercase">
+                  Selected
+                </span>
+              ) : null}
             </Button>
-          </span>
-          <span className="group relative inline-flex" data-no-drag="true">
-            <Button
-              data-no-drag="true"
-              className="w-28 shrink-0"
-              disabled={isPending || !canRemoveSeat}
-              type="button"
-              variant="outline"
-              onClick={() => {
-                onRemoveSeat(index);
-              }}
-            >
-              Remove seat
-            </Button>
-          </span>
+          ) : null}
+          {showSeatActions ? (
+            <>
+              <Button
+                data-no-drag="true"
+                aria-pressed={isActive}
+                className="w-28 shrink-0 transition-none"
+                disabled={isPending || player.userId == null || isActive}
+                type="button"
+                variant={isActive ? "default" : "secondary"}
+                onClick={() => {
+                  onMakeActive(index);
+                }}
+              >
+                {isActive ? "Active seat" : "Make active"}
+              </Button>
+              <span className="group relative inline-flex" data-no-drag="true">
+                <Button
+                  data-no-drag="true"
+                  className="w-28 shrink-0"
+                  disabled={
+                    isPending || player.userId == null || !canClearPlayer
+                  }
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    onClearPlayer(index);
+                  }}
+                >
+                  Clear seat
+                </Button>
+              </span>
+              <span className="group relative inline-flex" data-no-drag="true">
+                <Button
+                  data-no-drag="true"
+                  className="w-28 shrink-0"
+                  disabled={isPending || !canRemoveSeat}
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    onRemoveSeat(index);
+                  }}
+                >
+                  Remove seat
+                </Button>
+              </span>
+            </>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -299,17 +357,29 @@ export function SeatOrderEditor({
   players,
   activePlayerEntryId,
   canEdit,
+  presentation = "card",
+  onDirtyChange,
 }: SeatOrderEditorProps) {
   const router = useRouter();
-  const [isEditing, setIsEditing] = useState(false);
+  const isConfiguration = presentation === "configuration";
+  const [isCardEditing, setIsCardEditing] = useState(false);
+  const isEditing = isConfiguration ? canEdit : isCardEditing;
   const [draftPlayers, setDraftPlayers] = useState(players);
   const [draftActivePlayerEntryId, setDraftActivePlayerEntryId] =
     useState(activePlayerEntryId);
+  const [draftBaselinePlayers, setDraftBaselinePlayers] = useState(players);
+  const [
+    draftBaselineActivePlayerEntryId,
+    setDraftBaselineActivePlayerEntryId,
+  ] = useState(activePlayerEntryId);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [confirmation, setConfirmation] =
     useState<TerminalConfirmationSpec | null>(null);
   const [pendingSeatAction, setPendingSeatAction] =
     useState<PendingSeatAction | null>(null);
+  const [selectedSeatEntryId, setSelectedSeatEntryId] = useState<string | null>(
+    null,
+  );
   const [isPending, startTransition] = useTransition();
   const sensors = useSensors(
     useSensor(NoDragPointerSensor, {
@@ -328,6 +398,36 @@ export function SeatOrderEditor({
     }),
   );
   const isMutating = isPending;
+  const draftHasLocalChanges = !seatDraftsMatch(
+    draftPlayers,
+    draftActivePlayerEntryId,
+    draftBaselinePlayers,
+    draftBaselineActivePlayerEntryId,
+  );
+  const workingPlayers = draftHasLocalChanges ? draftPlayers : players;
+  const workingActivePlayerEntryId = draftHasLocalChanges
+    ? draftActivePlayerEntryId
+    : activePlayerEntryId;
+  const isDirty = !seatDraftsMatch(
+    workingPlayers,
+    workingActivePlayerEntryId,
+    players,
+    activePlayerEntryId,
+  );
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  function updateDraft(
+    nextPlayers: SeatOrderPlayer[],
+    nextActivePlayerEntryId: string | null,
+  ) {
+    setDraftPlayers(nextPlayers);
+    setDraftActivePlayerEntryId(nextActivePlayerEntryId);
+    setDraftBaselinePlayers(players);
+    setDraftBaselineActivePlayerEntryId(activePlayerEntryId);
+  }
   const pendingSeatConfirmation: TerminalActionConfirmationSpec | null =
     pendingSeatAction
       ? {
@@ -351,43 +451,44 @@ export function SeatOrderEditor({
       return;
     }
 
-    setDraftPlayers((currentPlayers) => {
-      const oldIndex = currentPlayers.findIndex(
-        (player) => player.id === active.id,
-      );
-      const newIndex = currentPlayers.findIndex(
-        (player) => player.id === over.id,
-      );
+    const oldIndex = workingPlayers.findIndex(
+      (player) => player.id === active.id,
+    );
+    const newIndex = workingPlayers.findIndex(
+      (player) => player.id === over.id,
+    );
 
-      if (oldIndex === -1 || newIndex === -1) {
-        return currentPlayers;
-      }
+    if (oldIndex === -1 || newIndex === -1) {
+      return;
+    }
 
-      return movePlayerToSeat(currentPlayers, oldIndex, newIndex);
-    });
+    updateDraft(
+      movePlayerToSeat(workingPlayers, oldIndex, newIndex),
+      workingActivePlayerEntryId,
+    );
     setErrorMessage(null);
     setConfirmation(null);
     setPendingSeatAction(null);
   }
 
   function makeSeatActive(index: number) {
-    const selectedPlayer = draftPlayers[index];
+    const selectedPlayer = workingPlayers[index];
 
     if (
       !selectedPlayer?.userId ||
-      selectedPlayer.id === draftActivePlayerEntryId
+      selectedPlayer.id === workingActivePlayerEntryId
     ) {
       return;
     }
 
-    setDraftActivePlayerEntryId(selectedPlayer.id);
+    updateDraft(workingPlayers, selectedPlayer.id);
     setErrorMessage(null);
     setConfirmation(null);
     setPendingSeatAction(null);
   }
 
   function getSeatAction(index: number, type: PendingSeatAction["type"]) {
-    const selectedPlayer = draftPlayers[index];
+    const selectedPlayer = workingPlayers[index];
 
     if (!selectedPlayer) {
       return null;
@@ -402,7 +503,7 @@ export function SeatOrderEditor({
   }
 
   function applyClearPlayerFromSeat(seatEntryId: string) {
-    const selectedPlayer = draftPlayers.find(
+    const selectedPlayer = workingPlayers.find(
       (player) => player.id === seatEntryId,
     );
 
@@ -410,7 +511,7 @@ export function SeatOrderEditor({
       return;
     }
 
-    const occupiedSeatCount = draftPlayers.filter(
+    const occupiedSeatCount = workingPlayers.filter(
       (player) => player.userId != null,
     ).length;
 
@@ -418,8 +519,8 @@ export function SeatOrderEditor({
       return;
     }
 
-    setDraftPlayers((currentPlayers) =>
-      currentPlayers.map((player) => {
+    updateDraft(
+      workingPlayers.map((player) => {
         if (player.id !== seatEntryId) {
           return player;
         }
@@ -430,21 +531,20 @@ export function SeatOrderEditor({
           displayName: null,
         };
       }),
-    );
-    setDraftActivePlayerEntryId(
       getNextOccupiedSeatEntryId(
-        draftPlayers,
-        draftActivePlayerEntryId,
+        workingPlayers,
+        workingActivePlayerEntryId,
         seatEntryId,
       ),
     );
     setErrorMessage(null);
     setConfirmation(null);
     setPendingSeatAction(null);
+    setSelectedSeatEntryId(null);
   }
 
   function applyRemoveSeatFromGame(seatEntryId: string) {
-    const selectedPlayer = draftPlayers.find(
+    const selectedPlayer = workingPlayers.find(
       (player) => player.id === seatEntryId,
     );
 
@@ -452,7 +552,7 @@ export function SeatOrderEditor({
       return;
     }
 
-    const occupiedSeatCount = draftPlayers.filter(
+    const occupiedSeatCount = workingPlayers.filter(
       (player) => player.userId != null,
     ).length;
 
@@ -460,21 +560,20 @@ export function SeatOrderEditor({
       return;
     }
 
-    setDraftPlayers((currentPlayers) =>
+    updateDraft(
       normalizeSeatOrder(
-        currentPlayers.filter((player) => player.id !== seatEntryId),
+        workingPlayers.filter((player) => player.id !== seatEntryId),
       ),
-    );
-    setDraftActivePlayerEntryId(
       getNextOccupiedSeatEntryId(
-        draftPlayers,
-        draftActivePlayerEntryId,
+        workingPlayers,
+        workingActivePlayerEntryId,
         seatEntryId,
       ),
     );
     setErrorMessage(null);
     setConfirmation(null);
     setPendingSeatAction(null);
+    setSelectedSeatEntryId(null);
   }
 
   function clearPlayerFromSeat(index: number) {
@@ -484,13 +583,13 @@ export function SeatOrderEditor({
       return;
     }
 
-    const selectedPlayer = draftPlayers[index];
+    const selectedPlayer = workingPlayers[index];
 
     if (!selectedPlayer?.userId) {
       return;
     }
 
-    const occupiedSeatCount = draftPlayers.filter(
+    const occupiedSeatCount = workingPlayers.filter(
       (player) => player.userId != null,
     ).length;
 
@@ -510,13 +609,13 @@ export function SeatOrderEditor({
       return;
     }
 
-    const selectedPlayer = draftPlayers[index];
+    const selectedPlayer = workingPlayers[index];
 
     if (!selectedPlayer) {
       return;
     }
 
-    const occupiedSeatCount = draftPlayers.filter(
+    const occupiedSeatCount = workingPlayers.filter(
       (player) => player.userId != null,
     ).length;
 
@@ -543,12 +642,12 @@ export function SeatOrderEditor({
   }
 
   function cancelEdit() {
-    setDraftPlayers(players);
-    setDraftActivePlayerEntryId(activePlayerEntryId);
-    setIsEditing(false);
+    updateDraft(players, activePlayerEntryId);
+    setIsCardEditing(false);
     setErrorMessage(null);
     setConfirmation(null);
     setPendingSeatAction(null);
+    setSelectedSeatEntryId(null);
   }
 
   function saveSeatOrder() {
@@ -565,12 +664,12 @@ export function SeatOrderEditor({
             "content-type": "application/json",
           },
           body: JSON.stringify({
-            seatEntryIds: draftPlayers.map((player) => player.id),
+            seatEntryIds: workingPlayers.map((player) => player.id),
             clearedSeatEntryIds: players
               .filter((player) => player.userId != null)
               .filter(
                 (player) =>
-                  draftPlayers.find(
+                  workingPlayers.find(
                     (draftPlayer) => draftPlayer.id === player.id,
                   )?.userId == null,
               )
@@ -578,12 +677,12 @@ export function SeatOrderEditor({
             removedSeatEntryIds: players
               .filter(
                 (player) =>
-                  !draftPlayers.some(
+                  !workingPlayers.some(
                     (draftPlayer) => draftPlayer.id === player.id,
                   ),
               )
               .map((player) => player.id),
-            activePlayerEntryId: draftActivePlayerEntryId,
+            activePlayerEntryId: workingActivePlayerEntryId,
           }),
         },
       );
@@ -596,7 +695,10 @@ export function SeatOrderEditor({
         return;
       }
 
-      setIsEditing(false);
+      updateDraft(players, activePlayerEntryId);
+      setSelectedSeatEntryId(null);
+      onDirtyChange?.(false);
+      setIsCardEditing(false);
       setConfirmation({
         command: "seat-order --commit",
         lines: [
@@ -610,10 +712,10 @@ export function SeatOrderEditor({
     });
   }
 
-  const visiblePlayers = isEditing ? draftPlayers : players;
+  const visiblePlayers = isEditing ? workingPlayers : players;
 
-  return (
-    <Card>
+  const overlays = (
+    <>
       <TerminalConfirmationModal
         confirmation={confirmation}
         onClose={() => {
@@ -628,6 +730,92 @@ export function SeatOrderEditor({
         }}
         onConfirm={confirmPendingSeatAction}
       />
+    </>
+  );
+
+  const seatRows = (
+    <>
+      {errorMessage ? (
+        <div
+          className="rounded-lg border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm font-mono text-red-300"
+          role="alert"
+        >
+          {errorMessage}
+        </div>
+      ) : null}
+      <DndContext
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+        sensors={sensors}
+      >
+        <SortableContext
+          items={visiblePlayers.map((player) => player.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          {visiblePlayers.map((player, index) => (
+            <SortableSeatRow
+              key={player.id}
+              activePlayerEntryId={
+                isEditing ? workingActivePlayerEntryId : activePlayerEntryId
+              }
+              canClearPlayer={
+                visiblePlayers.filter(
+                  (visiblePlayer) => visiblePlayer.userId != null,
+                ).length > 1
+              }
+              canRemoveSeat={
+                player.userId == null ||
+                visiblePlayers.filter(
+                  (visiblePlayer) => visiblePlayer.userId != null,
+                ).length > 1
+              }
+              index={index}
+              isEditing={isEditing}
+              isPending={isMutating}
+              isSelectedForManagement={selectedSeatEntryId === player.id}
+              onClearPlayer={clearPlayerFromSeat}
+              onMakeActive={makeSeatActive}
+              onRemoveSeat={removeSeatFromGame}
+              onSelectForManagement={setSelectedSeatEntryId}
+              player={player}
+              presentation={presentation}
+            />
+          ))}
+        </SortableContext>
+      </DndContext>
+    </>
+  );
+
+  if (isConfiguration) {
+    return (
+      <div
+        className="flex min-w-0 flex-col gap-3 overflow-hidden [overflow-wrap:anywhere]"
+        data-testid="seat-order-configuration"
+      >
+        {overlays}
+        {canEdit ? (
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              disabled={isMutating}
+              type="button"
+              variant="secondary"
+              onClick={cancelEdit}
+            >
+              Cancel
+            </Button>
+            <Button disabled={isMutating} type="button" onClick={saveSeatOrder}>
+              {isPending ? "Saving..." : "Save order"}
+            </Button>
+          </div>
+        ) : null}
+        {seatRows}
+      </div>
+    );
+  }
+
+  return (
+    <Card>
+      {overlays}
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <CardTitle>Seat order:</CardTitle>
@@ -662,11 +850,11 @@ export function SeatOrderEditor({
               type="button"
               variant="secondary"
               onClick={() => {
-                setDraftPlayers(players);
-                setDraftActivePlayerEntryId(activePlayerEntryId);
-                setIsEditing(true);
+                updateDraft(players, activePlayerEntryId);
+                setIsCardEditing(true);
                 setErrorMessage(null);
                 setConfirmation(null);
+                setSelectedSeatEntryId(null);
               }}
             >
               Edit
@@ -674,50 +862,7 @@ export function SeatOrderEditor({
           )
         ) : null}
       </CardHeader>
-      <CardContent className="space-y-3">
-        {errorMessage ? (
-          <div className="rounded-lg border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm font-mono text-red-300">
-            {errorMessage}
-          </div>
-        ) : null}
-        <DndContext
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-          sensors={sensors}
-        >
-          <SortableContext
-            items={visiblePlayers.map((player) => player.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            {visiblePlayers.map((player, index) => (
-              <SortableSeatRow
-                key={player.id}
-                activePlayerEntryId={
-                  isEditing ? draftActivePlayerEntryId : activePlayerEntryId
-                }
-                canClearPlayer={
-                  visiblePlayers.filter(
-                    (visiblePlayer) => visiblePlayer.userId != null,
-                  ).length > 1
-                }
-                canRemoveSeat={
-                  player.userId == null ||
-                  visiblePlayers.filter(
-                    (visiblePlayer) => visiblePlayer.userId != null,
-                  ).length > 1
-                }
-                index={index}
-                isEditing={isEditing}
-                isPending={isMutating}
-                onClearPlayer={clearPlayerFromSeat}
-                onMakeActive={makeSeatActive}
-                onRemoveSeat={removeSeatFromGame}
-                player={player}
-              />
-            ))}
-          </SortableContext>
-        </DndContext>
-      </CardContent>
+      <CardContent className="space-y-3">{seatRows}</CardContent>
     </Card>
   );
 }
