@@ -39,7 +39,7 @@ export function CampaignWorkspaceTabs({
   }> = [
     { id: "activity", label: "Activity", content: activity },
     { id: "campaign", label: "Campaign", content: campaign },
-    ...(administration !== undefined
+    ...(administration != null
       ? [
           {
             id: "administration" as const,
@@ -49,6 +49,12 @@ export function CampaignWorkspaceTabs({
         ]
       : []),
   ];
+  const selectedTabIsAvailable = tabs.some((tab) => tab.id === selectedTabId);
+  const activeTabId = selectedTabIsAvailable ? selectedTabId : "activity";
+
+  if (!selectedTabIsAvailable) {
+    setSelectedTabId("activity");
+  }
 
   function selectAndFocus(tabId: WorkspaceTabId) {
     setSelectedTabId(tabId);
@@ -92,7 +98,7 @@ export function CampaignWorkspaceTabs({
           role="tablist"
         >
           {tabs.map((tab, tabIndex) => {
-            const selected = selectedTabId === tab.id;
+            const selected = activeTabId === tab.id;
             const tabId = `${baseId}-${tab.id}-tab`;
             const panelId = `${baseId}-${tab.id}-panel`;
 
@@ -124,7 +130,7 @@ export function CampaignWorkspaceTabs({
       </div>
 
       {tabs.map((tab) => {
-        const selected = selectedTabId === tab.id;
+        const selected = activeTabId === tab.id;
 
         return (
           <div

@@ -148,6 +148,48 @@ describe("CampaignWorkspaceTabs", () => {
     expect(campaignTab).toHaveAttribute("aria-selected", "true");
   });
 
+  it("omits administration when its content is null", () => {
+    render(
+      <CampaignWorkspaceTabs
+        activity="Activity content"
+        campaign="Campaign content"
+        administration={null}
+      />,
+    );
+
+    expect(screen.getAllByRole("tab")).toHaveLength(2);
+    expect(screen.getAllByRole("tabpanel", { hidden: true })).toHaveLength(2);
+    expect(
+      screen.queryByRole("tab", { name: "Administration", hidden: true }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("returns to activity when the selected administration tab is removed", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <CampaignWorkspaceTabs
+        activity="Activity content"
+        campaign="Campaign content"
+        administration="Administration content"
+      />,
+    );
+    await user.click(screen.getByRole("tab", { name: "Administration" }));
+
+    rerender(
+      <CampaignWorkspaceTabs
+        activity="Activity content"
+        campaign="Campaign content"
+      />,
+    );
+
+    const activityTab = screen.getByRole("tab", { name: "Activity" });
+    const campaignTab = screen.getByRole("tab", { name: "Campaign" });
+    expect(activityTab).toHaveAttribute("aria-selected", "true");
+    expect(activityTab).toHaveAttribute("tabindex", "0");
+    expect(controlledPanel(activityTab)).toBeVisible();
+    expect(controlledPanel(campaignTab)).not.toBeVisible();
+  });
+
   it("links every tab to a uniquely identified labelled panel", () => {
     renderWorkspace({ administration: true });
     const tabs = screen.getAllByRole("tab");
