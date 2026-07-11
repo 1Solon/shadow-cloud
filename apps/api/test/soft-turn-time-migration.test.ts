@@ -90,18 +90,24 @@ describe('soft turn timing migration', () => {
       database
         .prepare(
           `INSERT INTO "NotificationDelivery" (
-             "id", "event", "status", "gameId", "gameSlug", "payload", "nextAttemptAt", "updatedAt"
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+             "id", "event", "status", "gameId", "gameSlug", "payload", "attempts", "nextAttemptAt",
+             "processingStartedAt", "deliveredAt", "lastError", "createdAt", "updatedAt"
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           'delivery-existing',
-          'SAVE_REPLACED',
-          'PENDING',
-          'game-active',
-          'active-game',
-          '{"saveId":"save-1"}',
-          startedAt,
-          startedAt,
+          'THREAD_RENAMED',
+          'FAILED',
+          'delivery-game-id',
+          'delivery-game-slug',
+          '{"delivery":"preserved"}',
+          7,
+          '2026-07-12T01:02:03.456Z',
+          '2026-07-12T02:03:04.567Z',
+          '2026-07-12T03:04:05.678Z',
+          'delivery failed distinctively',
+          '2026-07-12T04:05:06.789Z',
+          '2026-07-12T05:06:07.890Z',
         );
 
       database.exec(
@@ -155,16 +161,31 @@ describe('soft turn timing migration', () => {
       expect(
         database
           .prepare(
-            `SELECT "event", "status", "gameId", "gameSlug", "payload"
+            `SELECT "id", "event", "status", "gameId", "gameSlug", "turnRecordId", "payload", "attempts",
+                    strftime('%Y-%m-%dT%H:%M:%fZ', "nextAttemptAt") AS "nextAttemptAt",
+                    strftime('%Y-%m-%dT%H:%M:%fZ', "processingStartedAt") AS "processingStartedAt",
+                    strftime('%Y-%m-%dT%H:%M:%fZ', "deliveredAt") AS "deliveredAt",
+                    "lastError",
+                    strftime('%Y-%m-%dT%H:%M:%fZ', "createdAt") AS "createdAt",
+                    strftime('%Y-%m-%dT%H:%M:%fZ', "updatedAt") AS "updatedAt"
              FROM "NotificationDelivery" WHERE "id" = ?`,
           )
           .get('delivery-existing'),
       ).toEqual({
-        event: 'SAVE_REPLACED',
-        status: 'PENDING',
-        gameId: 'game-active',
-        gameSlug: 'active-game',
-        payload: '{"saveId":"save-1"}',
+        id: 'delivery-existing',
+        event: 'THREAD_RENAMED',
+        status: 'FAILED',
+        gameId: 'delivery-game-id',
+        gameSlug: 'delivery-game-slug',
+        turnRecordId: null,
+        payload: '{"delivery":"preserved"}',
+        attempts: 7,
+        nextAttemptAt: '2026-07-12T01:02:03.456Z',
+        processingStartedAt: '2026-07-12T02:03:04.567Z',
+        deliveredAt: '2026-07-12T03:04:05.678Z',
+        lastError: 'delivery failed distinctively',
+        createdAt: '2026-07-12T04:05:06.789Z',
+        updatedAt: '2026-07-12T05:06:07.890Z',
       });
       database
         .prepare(
