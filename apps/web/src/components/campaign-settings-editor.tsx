@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useTransition,
+  type RefObject,
+} from "react";
 import { useRouter } from "next/navigation";
 import type {
   CampaignConfigurationSection,
@@ -108,11 +115,17 @@ type MetadataPayload = {
   turnRemindersEnabled?: boolean;
 };
 
+type AuthoritativeSnapshot = {
+  draft: MetadataDraft;
+  organizerEntryId: string;
+};
+
 type PendingHostTransfer = {
   seatEntryId: string;
   seatNumber: number;
   displayName: string;
   metadataPayload: MetadataPayload;
+  gameNumber: number;
 };
 
 function createDraft(props: CampaignSettingsEditorProps): MetadataDraft {
@@ -132,6 +145,18 @@ function createDraft(props: CampaignSettingsEditorProps): MetadataDraft {
     turnReminderGraceHours: String(props.turnReminderGraceHours),
     turnReminderRepeatHours: String(props.turnReminderRepeatHours),
     turnRemindersEnabled: props.turnRemindersEnabled,
+  };
+}
+
+function createAuthoritativeSnapshot(
+  props: CampaignSettingsEditorProps,
+): AuthoritativeSnapshot {
+  return {
+    draft: createDraft(props),
+    organizerEntryId:
+      props.players.find(
+        (player) => player.userId != null && player.isOrganizer,
+      )?.id ?? "",
   };
 }
 
@@ -354,29 +379,95 @@ function SelectOptions({
 
 function HostTransferConfirmationDialog({
   target,
+  errorMessage,
   isPending,
   onCancel,
   onConfirm,
+  returnFocusRef,
 }: {
   target: PendingHostTransfer | null;
+  errorMessage: string | null;
   isPending: boolean;
   onCancel: () => void;
   onConfirm: () => void;
+  returnFocusRef: RefObject<HTMLElement | null>;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
+  const titleId = useId();
+
+  useEffect(() => {
+    if (!target) {
+      return;
+    }
+
+    function containFocus(event: FocusEvent) {
+      if (
+        event.target instanceof Node &&
+        !dialogRef.current?.contains(event.target)
+      ) {
+        cancelButtonRef.current?.focus();
+      }
+    }
+
+    const returnFocusElement = returnFocusRef.current;
+    cancelButtonRef.current?.focus();
+    document.addEventListener("focusin", containFocus);
+    return () => {
+      document.removeEventListener("focusin", containFocus);
+      returnFocusElement?.focus();
+    };
+  }, [returnFocusRef, target]);
+
   if (!target) {
     return null;
+  }
+
+  function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape" && !isPending) {
+      event.preventDefault();
+      onCancel();
+      return;
+    }
+
+    if (event.key !== "Tab") {
+      return;
+    }
+
+    const focusableElements = Array.from(
+      dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ) ?? [],
+    );
+    if (focusableElements.length === 0) {
+      event.preventDefault();
+      return;
+    }
+
+    const first = focusableElements[0];
+    const last = focusableElements.at(-1);
+    if (
+      (event.shiftKey && document.activeElement === first) ||
+      (!event.shiftKey && document.activeElement === last) ||
+      !dialogRef.current?.contains(document.activeElement)
+    ) {
+      event.preventDefault();
+      (event.shiftKey ? last : first)?.focus();
+    }
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6">
       <div
+        ref={dialogRef}
         role="dialog"
-        aria-labelledby="host-transfer-title"
+        aria-labelledby={titleId}
         aria-modal="true"
         className="relative w-full max-w-md overflow-hidden rounded-2xl border border-orange-400/30 bg-[#0a0711] shadow-2xl shadow-orange-950/40"
+        onKeyDown={handleKeyDown}
       >
         <div className="flex items-center justify-between border-b border-orange-400/20 bg-orange-400/10 px-4 py-3 font-mono text-[11px] uppercase tracking-[0.28em] text-orange-200">
-          <span id="host-transfer-title">Confirm Overlord Transfer</span>
+          <span id={titleId}>Confirm Overlord Transfer</span>
           <button
             aria-label="Close confirmation"
             className="text-orange-300/70 transition-colors hover:text-orange-200"
@@ -395,8 +486,17 @@ function HostTransferConfirmationDialog({
               new Overlord.
             </div>
           </div>
+          {errorMessage ? (
+            <div
+              role="alert"
+              className="mt-4 border border-red-400/30 bg-red-400/10 px-3 py-2 text-red-300"
+            >
+              {errorMessage}
+            </div>
+          ) : null}
           <div className="mt-6 flex justify-end gap-2">
             <Button
+              ref={cancelButtonRef}
               disabled={isPending}
               type="button"
               variant="secondary"
@@ -420,6 +520,9 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
   const [draft, setDraft] = useState(() => createDraft(props));
   const [initialDraft, setInitialDraft] = useState(() => createDraft(props));
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [transferErrorMessage, setTransferErrorMessage] = useState<
+    string | null
+  >(null);
   const [confirmation, setConfirmation] =
     useState<TerminalConfirmationSpec | null>(null);
   const [pendingTransfer, setPendingTransfer] =
@@ -438,6 +541,14 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
   const [initialOrganizerEntryId, setInitialOrganizerEntryId] = useState(
     currentOrganizerEntryId,
   );
+  const organizerSelectRef = useRef<HTMLSelectElement>(null);
+  const latestAuthoritativeDraftRef = useRef(initialDraft);
+  const latestAuthoritativeOrganizerRef = useRef(initialOrganizerEntryId);
+  const authoritativeSnapshotJson = JSON.stringify(
+    createAuthoritativeSnapshot(props),
+  );
+  const lastAuthoritativeSnapshotJsonRef = useRef(authoritativeSnapshotJson);
+  const needsAuthoritativeSyncRef = useRef(false);
   const isDirty = isSectionDirty(
     props.section,
     draft,
@@ -446,10 +557,43 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
     initialOrganizerEntryId,
   );
   const isMutating = isPending || isTransferPending;
+  const isEditorDisabled = isMutating || pendingTransfer != null;
 
   useEffect(() => {
     onDirtyChange(isDirty);
   }, [isDirty, onDirtyChange]);
+
+  useEffect(() => {
+    if (
+      authoritativeSnapshotJson !== lastAuthoritativeSnapshotJsonRef.current
+    ) {
+      const snapshot = JSON.parse(
+        authoritativeSnapshotJson,
+      ) as AuthoritativeSnapshot;
+      lastAuthoritativeSnapshotJsonRef.current = authoritativeSnapshotJson;
+      latestAuthoritativeDraftRef.current = snapshot.draft;
+      latestAuthoritativeOrganizerRef.current = snapshot.organizerEntryId;
+      needsAuthoritativeSyncRef.current = true;
+    }
+
+    if (
+      !needsAuthoritativeSyncRef.current ||
+      isDirty ||
+      pendingTransfer ||
+      isMutating
+    ) {
+      return;
+    }
+
+    needsAuthoritativeSyncRef.current = false;
+    const nextDraft = latestAuthoritativeDraftRef.current;
+    const nextOrganizerEntryId = latestAuthoritativeOrganizerRef.current;
+    setInitialDraft(nextDraft);
+    setDraft(nextDraft);
+    setInitialOrganizerEntryId(nextOrganizerEntryId);
+    setOrganizerEntryId(nextOrganizerEntryId);
+    setErrorMessage(null);
+  }, [authoritativeSnapshotJson, isDirty, isMutating, pendingTransfer]);
 
   function updateDraft<Key extends keyof MetadataDraft>(
     key: Key,
@@ -458,13 +602,17 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
     setDraft((currentDraft) => ({ ...currentDraft, [key]: value }));
   }
 
-  async function applyMetadataUpdate(payload: MetadataPayload) {
+  async function applyMetadataUpdate(
+    payload: MetadataPayload,
+    gameNumber = props.gameNumber,
+    onError: (message: string) => void = setErrorMessage,
+  ) {
     if (Object.keys(payload).length === 0) {
-      return props.gameNumber;
+      return gameNumber;
     }
 
     const response = await fetch(
-      `/api/games/${encodeURIComponent(String(props.gameNumber))}/metadata`,
+      `/api/games/${encodeURIComponent(String(gameNumber))}/metadata`,
       {
         method: "PATCH",
         headers: { "content-type": "application/json" },
@@ -476,23 +624,26 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
       const body = (await response.json().catch(() => null)) as {
         error?: string;
       } | null;
-      setErrorMessage(body?.error ?? "The game metadata update failed.");
+      onError(body?.error ?? "The game metadata update failed.");
       return null;
     }
 
     const body = (await response.json().catch(() => null)) as {
       gameNumber?: number;
     } | null;
-    return body?.gameNumber ?? props.gameNumber;
+    return body?.gameNumber ?? gameNumber;
   }
 
   function cancelEditing() {
-    const nextInitialDraft = createDraft(props);
+    const nextInitialDraft = latestAuthoritativeDraftRef.current;
+    const nextOrganizerEntryId = latestAuthoritativeOrganizerRef.current;
+    needsAuthoritativeSyncRef.current = false;
     setInitialDraft(nextInitialDraft);
     setDraft(nextInitialDraft);
-    setInitialOrganizerEntryId(currentOrganizerEntryId);
-    setOrganizerEntryId(currentOrganizerEntryId);
+    setInitialOrganizerEntryId(nextOrganizerEntryId);
+    setOrganizerEntryId(nextOrganizerEntryId);
     setErrorMessage(null);
+    setTransferErrorMessage(null);
     setConfirmation(null);
     setPendingTransfer(null);
   }
@@ -524,6 +675,7 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
       }
 
       setErrorMessage(null);
+      setTransferErrorMessage(null);
       setConfirmation(null);
       setPendingTransfer({
         seatEntryId: selectedOrganizer.id,
@@ -532,6 +684,7 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
           selectedOrganizer.displayName ??
           `Seat ${selectedOrganizer.turnOrder}`,
         metadataPayload: payload,
+        gameNumber: props.gameNumber,
       });
       return;
     }
@@ -546,7 +699,12 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
       }
 
       onDirtyChange(false);
-      const savedDraft = createDraft({ ...props, ...payload });
+      const savedDraft = createDraft({
+        ...props,
+        ...payload,
+        gameNumber: nextGameNumber,
+      });
+      latestAuthoritativeDraftRef.current = savedDraft;
       setInitialDraft(savedDraft);
       setDraft(savedDraft);
 
@@ -572,12 +730,37 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
       return;
     }
 
+    const transfer = pendingTransfer;
+    setTransferErrorMessage(null);
     startTransferTransition(async () => {
       const nextGameNumber = await applyMetadataUpdate(
-        pendingTransfer.metadataPayload,
+        transfer.metadataPayload,
+        transfer.gameNumber,
+        setTransferErrorMessage,
       );
       if (nextGameNumber == null) {
         return;
+      }
+
+      if (Object.keys(transfer.metadataPayload).length > 0) {
+        const savedDraft = createDraft({
+          ...props,
+          ...transfer.metadataPayload,
+          gameNumber: nextGameNumber,
+        });
+        latestAuthoritativeDraftRef.current = savedDraft;
+        needsAuthoritativeSyncRef.current = false;
+        setInitialDraft(savedDraft);
+        setDraft(savedDraft);
+        setPendingTransfer((currentTransfer) =>
+          currentTransfer
+            ? {
+                ...currentTransfer,
+                metadataPayload: {},
+                gameNumber: nextGameNumber,
+              }
+            : null,
+        );
       }
 
       const response = await fetch(
@@ -586,7 +769,7 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            targetPlayerEntryId: pendingTransfer.seatEntryId,
+            targetPlayerEntryId: transfer.seatEntryId,
           }),
         },
       );
@@ -595,20 +778,16 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
         const body = (await response.json().catch(() => null)) as {
           error?: string;
         } | null;
-        setErrorMessage(body?.error ?? "The Overlord transfer failed.");
+        setTransferErrorMessage(body?.error ?? "The Overlord transfer failed.");
         return;
       }
 
       onDirtyChange(false);
       setPendingTransfer(null);
-      const savedDraft = createDraft({
-        ...props,
-        ...pendingTransfer.metadataPayload,
-      });
-      setInitialDraft(savedDraft);
-      setDraft(savedDraft);
-      setInitialOrganizerEntryId(pendingTransfer.seatEntryId);
-      setOrganizerEntryId(pendingTransfer.seatEntryId);
+      setTransferErrorMessage(null);
+      latestAuthoritativeOrganizerRef.current = transfer.seatEntryId;
+      setInitialOrganizerEntryId(transfer.seatEntryId);
+      setOrganizerEntryId(transfer.seatEntryId);
 
       if (nextGameNumber !== props.gameNumber) {
         router.push(`/games/${nextGameNumber}`);
@@ -616,9 +795,9 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
       }
 
       setConfirmation({
-        command: `overlord --transfer seat-${pendingTransfer.seatNumber}`,
+        command: `overlord --transfer seat-${transfer.seatNumber}`,
         lines: [
-          `[ok] campaign control reassigned to ${pendingTransfer.displayName}`,
+          `[ok] campaign control reassigned to ${transfer.displayName}`,
           "[ok] organizer-only controls refreshed for the active campaign view",
           "<OVERLORD TRANSFERRED>",
         ],
@@ -635,239 +814,260 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
       />
       <HostTransferConfirmationDialog
         target={pendingTransfer}
+        errorMessage={transferErrorMessage}
         isPending={isTransferPending}
-        onCancel={() => setPendingTransfer(null)}
+        returnFocusRef={organizerSelectRef}
+        onCancel={() => {
+          setTransferErrorMessage(null);
+          setPendingTransfer(null);
+        }}
         onConfirm={confirmTransfer}
       />
 
-      {errorMessage ? (
-        <div
-          role="alert"
-          className="mb-4 border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm font-mono text-red-300"
-        >
-          {errorMessage}
-        </div>
-      ) : null}
+      <fieldset className="min-w-0 border-0 p-0" disabled={isEditorDisabled}>
+        {errorMessage ? (
+          <div
+            role="alert"
+            className="mb-4 border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm font-mono text-red-300"
+          >
+            {errorMessage}
+          </div>
+        ) : null}
 
-      {props.section === "identity" ? (
-        <div className="border-t border-orange-400/15">
-          <FieldRow label="Campaign number">
-            <input
-              className={controlClassName}
-              disabled={isMutating}
-              min={1}
-              step={1}
-              type="number"
-              value={draft.gameNumber}
-              onChange={(event) =>
-                updateDraft("gameNumber", event.target.value)
-              }
-            />
-          </FieldRow>
-          <FieldRow label="Campaign name">
-            <input
-              className={controlClassName}
-              disabled={isMutating}
-              maxLength={100}
-              type="text"
-              value={draft.name}
-              onChange={(event) => updateDraft("name", event.target.value)}
-            />
-          </FieldRow>
-          <FieldRow label="Overlord">
-            <select
-              className={controlClassName}
-              disabled={isMutating || organizerOptions.length === 0}
-              value={organizerEntryId}
-              onChange={(event) => {
-                setOrganizerEntryId(event.target.value);
-                setErrorMessage(null);
-                setConfirmation(null);
-                setPendingTransfer(null);
-              }}
-            >
-              {organizerOptions.map((player) => (
-                <option key={player.id} value={player.id}>
-                  {`Seat ${player.turnOrder}: ${player.displayName ?? "Unknown player"}`}
-                </option>
-              ))}
-            </select>
-          </FieldRow>
-          <FieldRow label="Round">
-            <input
-              className={controlClassName}
-              disabled={isMutating}
-              min={1}
-              step={1}
-              type="number"
-              value={draft.roundNumber}
-              onChange={(event) =>
-                updateDraft("roundNumber", event.target.value)
-              }
-            />
-          </FieldRow>
-          <FieldRow label="Player count">
-            <input
-              className={controlClassName}
-              disabled={isMutating}
-              max={100}
-              min={1}
-              step={1}
-              type="number"
-              value={draft.playerCount}
-              onChange={(event) =>
-                updateDraft("playerCount", event.target.value)
-              }
-            />
-          </FieldRow>
-        </div>
-      ) : null}
+        {props.section === "identity" ? (
+          <div className="border-t border-orange-400/15">
+            <FieldRow label="Campaign number">
+              <input
+                className={controlClassName}
+                disabled={isEditorDisabled}
+                min={1}
+                step={1}
+                type="number"
+                value={draft.gameNumber}
+                onChange={(event) =>
+                  updateDraft("gameNumber", event.target.value)
+                }
+              />
+            </FieldRow>
+            <FieldRow label="Campaign name">
+              <input
+                className={controlClassName}
+                disabled={isEditorDisabled}
+                maxLength={100}
+                type="text"
+                value={draft.name}
+                onChange={(event) => updateDraft("name", event.target.value)}
+              />
+            </FieldRow>
+            <FieldRow label="Overlord">
+              <select
+                ref={organizerSelectRef}
+                className={controlClassName}
+                disabled={isEditorDisabled || organizerOptions.length === 0}
+                value={organizerEntryId}
+                onChange={(event) => {
+                  setOrganizerEntryId(event.target.value);
+                  setErrorMessage(null);
+                  setTransferErrorMessage(null);
+                  setConfirmation(null);
+                  setPendingTransfer(null);
+                }}
+              >
+                {organizerOptions.map((player) => (
+                  <option key={player.id} value={player.id}>
+                    {`Seat ${player.turnOrder}: ${player.displayName ?? "Unknown player"}`}
+                  </option>
+                ))}
+              </select>
+            </FieldRow>
+            <FieldRow label="Round">
+              <input
+                className={controlClassName}
+                disabled={isEditorDisabled}
+                min={1}
+                step={1}
+                type="number"
+                value={draft.roundNumber}
+                onChange={(event) =>
+                  updateDraft("roundNumber", event.target.value)
+                }
+              />
+            </FieldRow>
+            <FieldRow label="Player count">
+              <input
+                className={controlClassName}
+                disabled={isEditorDisabled}
+                max={100}
+                min={1}
+                step={1}
+                type="number"
+                value={draft.playerCount}
+                onChange={(event) =>
+                  updateDraft("playerCount", event.target.value)
+                }
+              />
+            </FieldRow>
+          </div>
+        ) : null}
 
-      {props.section === "world" ? (
-        <div className="border-t border-orange-400/15">
-          <FieldRow label="AI players">
-            <select
-              className={controlClassName}
-              disabled={isMutating}
-              value={draft.hasAiPlayers}
-              onChange={(event) =>
-                updateDraft("hasAiPlayers", event.target.value)
-              }
-            >
-              <option value="">Select...</option>
-              <option value="false">None</option>
-              <option value="true">Included</option>
-            </select>
-          </FieldRow>
-          <FieldRow label="DLC">
-            <select
-              className={controlClassName}
-              disabled={isMutating}
-              value={draft.dlcMode}
-              onChange={(event) => updateDraft("dlcMode", event.target.value)}
-            >
-              <SelectOptions options={dlcOptions} />
-            </select>
-          </FieldRow>
-          <FieldRow label="Game mode">
-            <select
-              className={controlClassName}
-              disabled={isMutating}
-              value={draft.gameMode}
-              onChange={(event) => updateDraft("gameMode", event.target.value)}
-            >
-              <SelectOptions options={gameModeOptions} />
-            </select>
-          </FieldRow>
-          <FieldRow label="Tech level">
-            <select
-              className={controlClassName}
-              disabled={isMutating}
-              value={draft.techLevel}
-              onChange={(event) => updateDraft("techLevel", event.target.value)}
-            >
-              <option value="">Select...</option>
-              {techLevelOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </FieldRow>
-          <FieldRow label="Zone count">
-            <select
-              className={controlClassName}
-              disabled={isMutating}
-              value={draft.zoneCount}
-              onChange={(event) => updateDraft("zoneCount", event.target.value)}
-            >
-              <SelectOptions options={zoneCountOptions} />
-            </select>
-          </FieldRow>
-          <FieldRow label="Army count">
-            <select
-              className={controlClassName}
-              disabled={isMutating}
-              value={draft.armyCount}
-              onChange={(event) => updateDraft("armyCount", event.target.value)}
-            >
-              <SelectOptions options={armyCountOptions} />
-            </select>
-          </FieldRow>
-        </div>
-      ) : null}
+        {props.section === "world" ? (
+          <div className="border-t border-orange-400/15">
+            <FieldRow label="AI players">
+              <select
+                className={controlClassName}
+                disabled={isEditorDisabled}
+                value={draft.hasAiPlayers}
+                onChange={(event) =>
+                  updateDraft("hasAiPlayers", event.target.value)
+                }
+              >
+                <option value="">Select...</option>
+                <option value="false">None</option>
+                <option value="true">Included</option>
+              </select>
+            </FieldRow>
+            <FieldRow label="DLC">
+              <select
+                className={controlClassName}
+                disabled={isEditorDisabled}
+                value={draft.dlcMode}
+                onChange={(event) => updateDraft("dlcMode", event.target.value)}
+              >
+                <SelectOptions options={dlcOptions} />
+              </select>
+            </FieldRow>
+            <FieldRow label="Game mode">
+              <select
+                className={controlClassName}
+                disabled={isEditorDisabled}
+                value={draft.gameMode}
+                onChange={(event) =>
+                  updateDraft("gameMode", event.target.value)
+                }
+              >
+                <SelectOptions options={gameModeOptions} />
+              </select>
+            </FieldRow>
+            <FieldRow label="Tech level">
+              <select
+                className={controlClassName}
+                disabled={isEditorDisabled}
+                value={draft.techLevel}
+                onChange={(event) =>
+                  updateDraft("techLevel", event.target.value)
+                }
+              >
+                <option value="">Select...</option>
+                {techLevelOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </FieldRow>
+            <FieldRow label="Zone count">
+              <select
+                className={controlClassName}
+                disabled={isEditorDisabled}
+                value={draft.zoneCount}
+                onChange={(event) =>
+                  updateDraft("zoneCount", event.target.value)
+                }
+              >
+                <SelectOptions options={zoneCountOptions} />
+              </select>
+            </FieldRow>
+            <FieldRow label="Army count">
+              <select
+                className={controlClassName}
+                disabled={isEditorDisabled}
+                value={draft.armyCount}
+                onChange={(event) =>
+                  updateDraft("armyCount", event.target.value)
+                }
+              >
+                <SelectOptions options={armyCountOptions} />
+              </select>
+            </FieldRow>
+          </div>
+        ) : null}
 
-      {props.section === "turn-protocol" ? (
-        <div className="border-t border-orange-400/15">
-          <FieldRow label="Target turn hours">
-            <input
-              className={controlClassName}
-              disabled={isMutating}
-              max={MAX_TURN_TIMING_HOURS}
-              min={1}
-              step={1}
-              type="number"
-              value={draft.turnTargetHours}
-              onChange={(event) =>
-                updateDraft("turnTargetHours", event.target.value)
-              }
-            />
-          </FieldRow>
-          <FieldRow label="Reminder grace hours">
-            <input
-              className={controlClassName}
-              disabled={isMutating}
-              max={MAX_TURN_TIMING_HOURS}
-              min={1}
-              step={1}
-              type="number"
-              value={draft.turnReminderGraceHours}
-              onChange={(event) =>
-                updateDraft("turnReminderGraceHours", event.target.value)
-              }
-            />
-          </FieldRow>
-          <FieldRow label="Reminder repeat hours">
-            <input
-              className={controlClassName}
-              disabled={isMutating}
-              max={MAX_TURN_TIMING_HOURS}
-              min={1}
-              step={1}
-              type="number"
-              value={draft.turnReminderRepeatHours}
-              onChange={(event) =>
-                updateDraft("turnReminderRepeatHours", event.target.value)
-              }
-            />
-          </FieldRow>
-          <FieldRow label="Turn reminders enabled">
-            <input
-              checked={draft.turnRemindersEnabled}
-              className="size-4 accent-orange-400 disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={isMutating}
-              type="checkbox"
-              onChange={(event) =>
-                updateDraft("turnRemindersEnabled", event.target.checked)
-              }
-            />
-          </FieldRow>
-        </div>
-      ) : null}
+        {props.section === "turn-protocol" ? (
+          <div className="border-t border-orange-400/15">
+            <FieldRow label="Target turn hours">
+              <input
+                className={controlClassName}
+                disabled={isEditorDisabled}
+                max={MAX_TURN_TIMING_HOURS}
+                min={1}
+                step={1}
+                type="number"
+                value={draft.turnTargetHours}
+                onChange={(event) =>
+                  updateDraft("turnTargetHours", event.target.value)
+                }
+              />
+            </FieldRow>
+            <FieldRow label="Reminder grace hours">
+              <input
+                className={controlClassName}
+                disabled={isEditorDisabled}
+                max={MAX_TURN_TIMING_HOURS}
+                min={1}
+                step={1}
+                type="number"
+                value={draft.turnReminderGraceHours}
+                onChange={(event) =>
+                  updateDraft("turnReminderGraceHours", event.target.value)
+                }
+              />
+            </FieldRow>
+            <FieldRow label="Reminder repeat hours">
+              <input
+                className={controlClassName}
+                disabled={isEditorDisabled}
+                max={MAX_TURN_TIMING_HOURS}
+                min={1}
+                step={1}
+                type="number"
+                value={draft.turnReminderRepeatHours}
+                onChange={(event) =>
+                  updateDraft("turnReminderRepeatHours", event.target.value)
+                }
+              />
+            </FieldRow>
+            <FieldRow label="Turn reminders enabled">
+              <input
+                checked={draft.turnRemindersEnabled}
+                className="size-4 accent-orange-400 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={isEditorDisabled}
+                type="checkbox"
+                onChange={(event) =>
+                  updateDraft("turnRemindersEnabled", event.target.checked)
+                }
+              />
+            </FieldRow>
+          </div>
+        ) : null}
 
-      <div className="mt-4 flex justify-end gap-2">
-        <Button
-          disabled={isMutating}
-          type="button"
-          variant="secondary"
-          onClick={cancelEditing}
-        >
-          Cancel
-        </Button>
-        <Button disabled={isMutating} type="button" onClick={saveMetadata}>
-          {isPending ? "Saving..." : "Save"}
-        </Button>
-      </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button
+            disabled={isEditorDisabled}
+            type="button"
+            variant="secondary"
+            onClick={cancelEditing}
+          >
+            Cancel
+          </Button>
+          <Button
+            disabled={isEditorDisabled}
+            type="button"
+            onClick={saveMetadata}
+          >
+            {isPending ? "Saving..." : "Save"}
+          </Button>
+        </div>
+      </fieldset>
     </div>
   );
 }

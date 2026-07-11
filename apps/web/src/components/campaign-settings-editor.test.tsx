@@ -411,6 +411,197 @@ describe("CampaignSettingsEditor", () => {
     expect(onDirtyChange).toHaveBeenLastCalledWith(true);
   });
 
+  it("retries only the transfer against the committed game number after partial success", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ gameNumber: 37 }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "Transfer rejected." }), {
+          status: 503,
+        }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    renderEditor("identity");
+
+    await user.clear(screen.getByLabelText("Campaign number"));
+    await user.type(screen.getByLabelText("Campaign number"), "37");
+    await user.selectOptions(screen.getByLabelText("Overlord"), "seat-2");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "Transfer rejected.",
+    );
+    await user.click(within(dialog).getByRole("button", { name: "Confirm" }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(3));
+    expect(
+      fetchSpy.mock.calls.filter(([url]) => String(url).endsWith("/metadata")),
+    ).toHaveLength(1);
+    expect(fetchSpy.mock.calls[2]?.[0]).toBe("/api/games/37/transfer-host");
+  });
+
+  it("keeps committed metadata when cancelling after a transfer failure", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ gameNumber: 37 }), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "Transfer rejected." }), {
+          status: 503,
+        }),
+      );
+    renderEditor("identity");
+
+    await user.clear(screen.getByLabelText("Campaign number"));
+    await user.type(screen.getByLabelText("Campaign number"), "37");
+    await user.selectOptions(screen.getByLabelText("Overlord"), "seat-2");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+
+    const dialog = screen.getByRole("dialog");
+    await within(dialog).findByRole("alert");
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.getByLabelText("Campaign number")).toHaveValue(37);
+  });
+
+  it("shows metadata-step failures inside the active transfer dialog", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ error: "Metadata rejected." }), {
+        status: 400,
+      }),
+    );
+    renderEditor("identity");
+
+    await user.clear(screen.getByLabelText("Campaign number"));
+    await user.type(screen.getByLabelText("Campaign number"), "37");
+    await user.selectOptions(screen.getByLabelText("Overlord"), "seat-2");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "Metadata rejected.",
+    );
+    expect(dialog).toBeVisible();
+  });
+
+  it("shows transfer-step failures inside the active transfer dialog", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ error: "Transfer rejected." }), {
+        status: 403,
+      }),
+    );
+    renderEditor("identity");
+
+    await user.selectOptions(screen.getByLabelText("Overlord"), "seat-2");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
+
+    const dialog = screen.getByRole("dialog");
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "Transfer rejected.",
+    );
+    expect(dialog).toBeVisible();
+  });
+
+  it("syncs a clean editor to changed authoritative props", async () => {
+    const onDirtyChange = vi.fn();
+    const { rerender } = renderEditor("identity", { onDirtyChange });
+
+    rerender(
+      <CampaignSettingsEditor
+        {...baseProps}
+        gameNumber={31}
+        name="Server campaign"
+        section="identity"
+        onDirtyChange={onDirtyChange}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("Campaign number")).toHaveValue(31);
+      expect(screen.getByLabelText("Campaign name")).toHaveValue(
+        "Server campaign",
+      );
+    });
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("preserves dirty edits across prop updates and cancels to the latest authoritative props", async () => {
+    const user = userEvent.setup();
+    const onDirtyChange = vi.fn();
+    const { rerender } = renderEditor("identity", { onDirtyChange });
+
+    await user.clear(screen.getByLabelText("Campaign name"));
+    await user.type(screen.getByLabelText("Campaign name"), "Local campaign");
+    rerender(
+      <CampaignSettingsEditor
+        {...baseProps}
+        gameNumber={31}
+        name="Server campaign"
+        section="identity"
+        onDirtyChange={onDirtyChange}
+      />,
+    );
+
+    expect(screen.getByLabelText("Campaign name")).toHaveValue(
+      "Local campaign",
+    );
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.getByLabelText("Campaign number")).toHaveValue(31);
+    expect(screen.getByLabelText("Campaign name")).toHaveValue(
+      "Server campaign",
+    );
+    await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(false));
+  });
+
+  it("contains focus, blocks background editing, and restores focus on Escape", async () => {
+    const user = userEvent.setup();
+    renderEditor("identity");
+    const organizer = screen.getByLabelText("Overlord");
+    const campaignName = screen.getByLabelText("Campaign name");
+
+    organizer.focus();
+    await user.selectOptions(organizer, "seat-2");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    const dialog = screen.getByRole("dialog");
+    await waitFor(() =>
+      expect(dialog).toContainElement(
+        document.activeElement as HTMLElement | null,
+      ),
+    );
+    expect(campaignName).toBeDisabled();
+    expect(organizer).toBeDisabled();
+    await user.type(campaignName, " changed");
+    expect(campaignName).toHaveValue("Campaign 22");
+
+    await user.tab();
+    expect(dialog).toContainElement(
+      document.activeElement as HTMLElement | null,
+    );
+    await user.tab({ shift: true });
+    expect(dialog).toContainElement(
+      document.activeElement as HTMLElement | null,
+    );
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(organizer).toHaveFocus();
+  });
+
   it("refreshes after a successful host-only transfer", async () => {
     const user = userEvent.setup();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
