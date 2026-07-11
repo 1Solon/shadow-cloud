@@ -7,6 +7,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -52,7 +53,8 @@ describe("UploadSaveForm", () => {
     vi.unstubAllGlobals();
   });
 
-  it("uses the standard presentation by default", () => {
+  it("uses the standard presentation by default", async () => {
+    const user = userEvent.setup();
     render(<UploadSaveForm gameNumber={42} />);
 
     const dropZone = screen.getByRole("button", {
@@ -63,10 +65,16 @@ describe("UploadSaveForm", () => {
     expect(
       screen.getByText("Drag and drop your .se1 save files here"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "> SELECT FILES" }),
-    ).toBeInTheDocument();
+    expect(screen.getByText("> SELECT FILES")).toBeInTheDocument();
     expect(screen.getByText("> UPLOAD INSTRUCTIONS")).toBeInTheDocument();
+
+    await user.upload(
+      screen.getByLabelText("Save file"),
+      new File(["save"], "standard.se1"),
+    );
+    expect(
+      screen.getByRole("button", { name: "Upload save and advance turn" }),
+    ).toHaveClass("h-11", "px-6");
   });
 
   it("uses a shorter singular compact presentation without instructions", () => {
@@ -80,10 +88,10 @@ describe("UploadSaveForm", () => {
     expect(
       screen.getByText("Drag and drop your .se1 save file here"),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "> SELECT FILE" }),
-    ).toBeInTheDocument();
+    expect(screen.getByText("> SELECT FILE")).toBeInTheDocument();
     expect(screen.queryByText("> UPLOAD INSTRUCTIONS")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    expect(within(dropZone).queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("stages, replaces, and clears a file in the compact presentation", async () => {
@@ -117,17 +125,54 @@ describe("UploadSaveForm", () => {
     expect(input).toHaveValue("");
   });
 
-  it.each(["Enter", " "])("opens the file picker with %s", async (key) => {
+  it("wraps long selected filenames and contains the compact submit action", async () => {
     const user = userEvent.setup();
     render(<UploadSaveForm gameNumber={42} presentation="compact" />);
-    const input = screen.getByLabelText("Save file");
-    const clickSpy = vi.spyOn(input, "click");
+    const longName = `${"long-save-name-".repeat(12)}.se1`;
 
-    screen.getByRole("button", { name: "Drop save file here" }).focus();
-    await user.keyboard(key === " " ? "[Space]" : "[Enter]");
+    await user.upload(
+      screen.getByLabelText("Save file"),
+      new File(["save"], longName),
+    );
 
-    expect(clickSpy).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(`> ${longName}`)).toHaveClass(
+      "min-w-0",
+      "[overflow-wrap:anywhere]",
+    );
+    expect(
+      screen.getByRole("button", { name: "Upload save and advance turn" }),
+    ).toHaveClass(
+      "max-w-full",
+      "whitespace-normal",
+      "h-auto",
+      "min-h-11",
+      "px-4",
+      "py-3",
+      "text-center",
+    );
   });
+
+  it.each(["click", "Enter", " "])(
+    "opens the file picker with %s",
+    async (interaction) => {
+      const user = userEvent.setup();
+      render(<UploadSaveForm gameNumber={42} presentation="compact" />);
+      const input = screen.getByLabelText("Save file");
+      const clickSpy = vi.spyOn(input, "click");
+      const dropZone = screen.getByRole("button", {
+        name: "Drop save file here",
+      });
+
+      if (interaction === "click") {
+        await user.click(dropZone);
+      } else {
+        dropZone.focus();
+        await user.keyboard(interaction === " " ? "[Space]" : "[Enter]");
+      }
+
+      expect(clickSpy).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it("shows adjacent validation when submitted without a file", () => {
     const { container } = render(

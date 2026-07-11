@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 
 type UploadSaveFormProps = {
   gameNumber: number;
@@ -137,7 +137,12 @@ export function UploadSaveForm({
         {/* Upload icon */}
         {selectedFile ? (
           <>
-            <div className="text-base font-mono uppercase tracking-[0.2em] text-orange-300 mb-1">
+            <div
+              className={[
+                "text-base font-mono uppercase tracking-[0.2em] text-orange-300 mb-1",
+                isCompact ? "min-w-0 [overflow-wrap:anywhere]" : "",
+              ].join(" ")}
+            >
               {`> ${selectedFile.name}`}
             </div>
             <div className="text-sm text-orange-300/60 font-mono">
@@ -154,16 +159,9 @@ export function UploadSaveForm({
                 ? "Drag and drop your .se1 save file here"
                 : "Drag and drop your .se1 save files here"}
             </div>
-            <Button
-              type="button"
-              className="animate-pulse"
-              onClick={(e) => {
-                e.stopPropagation();
-                fileInputRef.current?.click();
-              }}
-            >
+            <span className={buttonVariants({ className: "animate-pulse" })}>
               {isCompact ? "> SELECT FILE" : "> SELECT FILES"}
-            </Button>
+            </span>
           </>
         )}
       </div>
@@ -177,8 +175,17 @@ export function UploadSaveForm({
 
       {/* Submit row — only when a file is staged */}
       {selectedFile ? (
-        <div className="mt-4 flex flex-wrap items-center gap-4">
-          <Button disabled={isPending} size="lg" type="submit">
+        <div className="mt-4 flex min-w-0 flex-wrap items-center gap-4">
+          <Button
+            className={
+              isCompact
+                ? "max-w-full whitespace-normal h-auto min-h-11 px-4 py-3 text-center"
+                : undefined
+            }
+            disabled={isPending}
+            size="lg"
+            type="submit"
+          >
             {isPending ? "Uploading..." : "Upload save and advance turn"}
           </Button>
           <button
