@@ -1,9 +1,15 @@
 import { createApiAccessToken, getServerAuthSession } from "@/auth";
 
 const apiBaseUrl = process.env.SHADOW_CLOUD_API_URL ?? "http://localhost:3001";
+const MAX_TURN_TIMING_HOURS = 1_000_000_000;
 
 function isPositiveSafeWholeHours(value: unknown): value is number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+  return (
+    typeof value === "number" &&
+    Number.isSafeInteger(value) &&
+    value >= 1 &&
+    value <= MAX_TURN_TIMING_HOURS
+  );
 }
 
 export async function PATCH(
@@ -168,7 +174,9 @@ export async function PATCH(
       !isPositiveSafeWholeHours(payload.turnReminderRepeatHours))
   ) {
     return Response.json(
-      { error: "Turn timing policy metadata is invalid." },
+      {
+        error: `Turn timing policy hours must be between 1 and ${MAX_TURN_TIMING_HOURS}.`,
+      },
       { status: 400 },
     );
   }

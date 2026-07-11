@@ -94,6 +94,7 @@ const armyCountOptions = [
 ] as const;
 
 const techLevelOptions = [3, 4, 5] as const;
+const MAX_TURN_TIMING_HOURS = 1_000_000_000;
 
 type MetadataDraft = {
   gameNumber: string;
@@ -157,10 +158,14 @@ export function parsePositiveSafeWholeHours(value: string, label: string) {
     };
   }
   const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+  if (
+    !Number.isSafeInteger(parsed) ||
+    parsed < 1 ||
+    parsed > MAX_TURN_TIMING_HOURS
+  ) {
     return {
       ok: false as const,
-      message: `${label} must be a positive safe whole number of hours.`,
+      message: `${label} must be a whole number of hours between 1 and ${MAX_TURN_TIMING_HOURS}.`,
     };
   }
   return { ok: true as const, value: parsed };
@@ -884,7 +889,7 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
                 <EditField label="Target turn hours">
                   <input
                     className={controlClassName}
-                    max={Number.MAX_SAFE_INTEGER}
+                    max={MAX_TURN_TIMING_HOURS}
                     min={1}
                     step={1}
                     type="number"
@@ -900,7 +905,7 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
                 <EditField label="Reminder grace hours">
                   <input
                     className={controlClassName}
-                    max={Number.MAX_SAFE_INTEGER}
+                    max={MAX_TURN_TIMING_HOURS}
                     min={1}
                     step={1}
                     type="number"
@@ -916,7 +921,7 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
                 <EditField label="Reminder repeat hours">
                   <input
                     className={controlClassName}
-                    max={Number.MAX_SAFE_INTEGER}
+                    max={MAX_TURN_TIMING_HOURS}
                     min={1}
                     step={1}
                     type="number"

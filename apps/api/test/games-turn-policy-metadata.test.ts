@@ -53,9 +53,12 @@ function createGame(override = {}) {
   };
 }
 
-function createTransaction(openRecord = {}) {
+function createTransaction(openRecord = {}, currentGame = createGame()) {
   return {
-    game: { findUnique: vi.fn(), update: vi.fn(async () => ({})) },
+    game: {
+      findUnique: vi.fn(async () => currentGame),
+      update: vi.fn(async ({ data }) => Object.assign(currentGame, data)),
+    },
     turnState: { update: vi.fn(async () => ({})) },
     turnRecord: {
       findMany: vi.fn(async () => [
@@ -168,6 +171,61 @@ describe('GamesService turn policy metadata', () => {
     expect(transaction.turnRecord.update).toHaveBeenCalledWith({
       where: { id: 'turn-1' },
       data: { nextReminderAt: new Date('2026-07-12T14:00:00.000Z') },
+    });
+  });
+
+  it('keeps an undelivered turn on its first-reminder schedule after a repeat edit', async () => {
+    const transaction = createTransaction({
+      reminderCount: 0,
+      lastReminderAt: null,
+    });
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback(transaction),
+    );
+
+    await createService().updateGameMetadata('game-1', 'organizer-1', {
+      turnReminderRepeatHours: 6,
+    });
+
+    expect(transaction.turnRecord.update).toHaveBeenCalledWith({
+      where: { id: 'turn-1' },
+      data: { nextReminderAt: new Date('2026-07-11T12:00:00.000Z') },
+    });
+  });
+
+  it('merges a policy edit with transaction-local concurrent policy fields', async () => {
+    const transaction = createTransaction(
+      {},
+      createGame({ turnReminderGraceHours: 6 }),
+    );
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback(transaction),
+    );
+
+    const response = await createService().updateGameMetadata('game-1', 'organizer-1', {
+      turnTargetHours: 48,
+    });
+
+    expect(transaction.turnRecord.update).toHaveBeenCalledWith({
+      where: { id: 'turn-1' },
+      data: { nextReminderAt: new Date('2026-07-12T06:00:00.000Z') },
+    });
+    expect(response).toMatchObject({
+      turnTargetHours: 48,
+      turnReminderGraceHours: 6,
+    });
+    const auditEvents = transaction.auditEvent.create.mock.calls as unknown as [
+      { data: { payload: string } },
+    ][];
+    const auditPayload = JSON.parse(auditEvents[0]![0].data.payload) as {
+      nextMetadata: {
+        turnTargetHours: number;
+        turnReminderGraceHours: number;
+      };
+    };
+    expect(auditPayload.nextMetadata).toMatchObject({
+      turnTargetHours: 48,
+      turnReminderGraceHours: 6,
     });
   });
 

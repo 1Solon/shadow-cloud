@@ -5,6 +5,8 @@ export type TurnReminderPolicy = {
   turnRemindersEnabled: boolean;
 };
 
+export const MAX_TURN_TIMING_HOURS = 1_000_000_000;
+
 const HOUR_MS = 60 * 60 * 1000;
 
 export function addWholeHours(at: Date, hours: number): Date {

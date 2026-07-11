@@ -44,9 +44,9 @@ describe("PATCH /api/games/[gameNumber]/metadata", () => {
 
   it.each([
     ["turnTargetHours", 1],
-    ["turnTargetHours", Number.MAX_SAFE_INTEGER],
+    ["turnTargetHours", 1_000_000_000],
     ["turnReminderGraceHours", 1],
-    ["turnReminderRepeatHours", Number.MAX_SAFE_INTEGER],
+    ["turnReminderRepeatHours", 1_000_000_000],
   ] as const)(
     "forwards a valid positive safe %s value of %s",
     async (field, value) => {
@@ -83,6 +83,8 @@ describe("PATCH /api/games/[gameNumber]/metadata", () => {
     0,
     -1,
     1.5,
+    1_000_000_001,
+    Number.MAX_SAFE_INTEGER,
     Number.MAX_SAFE_INTEGER + 1,
   ])("rejects %s for a duration", async (value) => {
     mockedGetServerAuthSession.mockResolvedValue({

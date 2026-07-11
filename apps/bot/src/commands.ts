@@ -1,5 +1,7 @@
 import { SlashCommandBuilder } from "discord.js";
 
+const MAX_TURN_TIMING_HOURS = 1_000_000_000;
+
 const dlcChoices = [
   { name: "None", value: "NONE" },
   { name: "Oceania", value: "OCEANIA" },
@@ -106,7 +108,7 @@ const initCommand = new SlashCommandBuilder()
       .setDescription("Target duration for each turn in hours.")
       .setRequired(false)
       .setMinValue(1)
-      .setMaxValue(Number.MAX_SAFE_INTEGER),
+      .setMaxValue(MAX_TURN_TIMING_HOURS),
   )
   .addIntegerOption((option) =>
     option
@@ -114,7 +116,7 @@ const initCommand = new SlashCommandBuilder()
       .setDescription("Hours after the target before the first reminder.")
       .setRequired(false)
       .setMinValue(1)
-      .setMaxValue(Number.MAX_SAFE_INTEGER),
+      .setMaxValue(MAX_TURN_TIMING_HOURS),
   )
   .addIntegerOption((option) =>
     option
@@ -122,7 +124,7 @@ const initCommand = new SlashCommandBuilder()
       .setDescription("Hours between subsequent turn reminders.")
       .setRequired(false)
       .setMinValue(1)
-      .setMaxValue(Number.MAX_SAFE_INTEGER),
+      .setMaxValue(MAX_TURN_TIMING_HOURS),
   );
 
 const registerCommand = new SlashCommandBuilder()

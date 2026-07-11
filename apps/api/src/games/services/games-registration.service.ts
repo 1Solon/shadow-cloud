@@ -154,7 +154,6 @@ export class GamesRegistrationService {
         },
         roundNumber: 1,
         startedAt,
-        policy,
       });
 
       if (input.playerCount != null) {

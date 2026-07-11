@@ -217,16 +217,31 @@ describe('TurnRemindersService', () => {
         },
       },
     ],
-  ])('advances without delivery when %s', async (_reason, override) => {
+  ])('advances without delivery or delivery accounting when %s', async (reason, override) => {
     const transaction = createTransaction(createCandidate(override));
     prismaMock.$transaction.mockImplementation(async (callback) =>
       callback(transaction),
     );
+    const logWarning = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
 
     await new TurnRemindersService().processTurnReminderCandidate('turn-1', now);
 
-    expect(transaction.turnRecord.updateMany).toHaveBeenCalledTimes(1);
+    expect(transaction.turnRecord.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'turn-1',
+        endedAt: null,
+        nextReminderAt: dueAt,
+      },
+      data: { nextReminderAt: new Date('2026-07-11T12:05:00.000Z') },
+    });
     expect(transaction.notificationDelivery.create).not.toHaveBeenCalled();
+    expect(logWarning).toHaveBeenCalledWith(
+      `Turn reminder skipped for turn-1: missing Discord ${
+        reason.includes('thread') ? 'thread' : 'identity'
+      }.`,
+    );
   });
 
   it('selects an ordered batch of due open turns for a poll', async () => {

@@ -34,7 +34,7 @@ describe('commands', () => {
     ]);
   });
 
-  it('exposes optional positive whole-hour turn timing options on init', () => {
+  it('exposes bounded whole-hour turn timing options on init', () => {
     const initCommand = slashCommands.find((command) => command.name === 'init');
     const optionsByName = new Map(
       (initCommand?.toJSON().options ?? []).map((option) => [
@@ -52,7 +52,7 @@ describe('commands', () => {
         type: ApplicationCommandOptionType.Integer,
         required: false,
         min_value: 1,
-        max_value: Number.MAX_SAFE_INTEGER,
+        max_value: 1_000_000_000,
       });
     }
   });

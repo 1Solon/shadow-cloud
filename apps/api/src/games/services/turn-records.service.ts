@@ -27,7 +27,6 @@ export type TransitionTurnInput = {
   next: TurnParticipantSnapshot & { roundNumber: number };
   completionReason: TurnCompletionReason;
   transitionedAt: Date;
-  policy: TurnReminderPolicy;
 };
 
 type CreateInitialTurnInput = {
@@ -35,12 +34,10 @@ type CreateInitialTurnInput = {
   participant: TurnParticipantSnapshot;
   roundNumber: number;
   startedAt: Date;
-  policy: TurnReminderPolicy;
 };
 
 type RecalculateOpenReminderInput = {
   gameId: string;
-  policy: TurnReminderPolicy;
 };
 
 type SynchronizeOpenRoundInput = {
@@ -58,13 +55,15 @@ export class TurnRecordsService {
     transaction: Prisma.TransactionClient,
     input: CreateInitialTurnInput,
   ): Promise<TurnRecord> {
+    const policy = await this.getCurrentPolicy(transaction, input.gameId);
+
     return transaction.turnRecord.create({
       data: {
         gameId: input.gameId,
         ...input.participant,
         roundNumber: input.roundNumber,
         startedAt: input.startedAt,
-        nextReminderAt: calculateFirstReminderAt(input.startedAt, input.policy),
+        nextReminderAt: calculateFirstReminderAt(input.startedAt, policy),
       },
     });
   }
@@ -107,7 +106,6 @@ export class TurnRecordsService {
       participant: input.next,
       roundNumber: input.next.roundNumber,
       startedAt: input.transitionedAt,
-      policy: input.policy,
     });
   }
 
@@ -115,14 +113,12 @@ export class TurnRecordsService {
     transaction: Prisma.TransactionClient,
     input: RecalculateOpenReminderInput,
   ): Promise<TurnRecord> {
+    const policy = await this.getCurrentPolicy(transaction, input.gameId);
     const openRecord = await this.findOnlyOpenRecord(transaction, input.gameId);
     const nextReminderAt =
       openRecord.reminderCount > 0
-        ? this.calculateRepeatedReminder(
-            openRecord.lastReminderAt,
-            input.policy,
-          )
-        : calculateFirstReminderAt(openRecord.startedAt, input.policy);
+        ? this.calculateRepeatedReminder(openRecord.lastReminderAt, policy)
+        : calculateFirstReminderAt(openRecord.startedAt, policy);
 
     return transaction.turnRecord.update({
       where: { id: openRecord.id },
@@ -203,5 +199,26 @@ export class TurnRecordsService {
     }
 
     return calculateNextReminderAt(lastReminderAt, policy);
+  }
+
+  private async getCurrentPolicy(
+    transaction: Prisma.TransactionClient,
+    gameId: string,
+  ): Promise<TurnReminderPolicy> {
+    const game = await transaction.game.findUnique({
+      where: { id: gameId },
+      select: {
+        turnTargetHours: true,
+        turnReminderGraceHours: true,
+        turnReminderRepeatHours: true,
+        turnRemindersEnabled: true,
+      },
+    });
+
+    if (!game) {
+      throw new ConflictException('The game changed before updating its turn.');
+    }
+
+    return game;
   }
 }

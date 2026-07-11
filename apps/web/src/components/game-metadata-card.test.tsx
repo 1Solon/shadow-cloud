@@ -141,7 +141,7 @@ describe("GameMetadataCard turn timing policy", () => {
     });
   });
 
-  it.each(["", "0", "-1", "1.5", "9007199254740992"])(
+  it.each(["", "0", "-1", "1.5", "1000000001", "9007199254740991"])(
     "rejects an invalid target string without submitting: %s",
     async (value) => {
       const user = userEvent.setup();
@@ -160,7 +160,16 @@ describe("GameMetadataCard turn timing policy", () => {
     },
   );
 
-  it.each(["", "0", "-1", "1.5", "1e3", "9007199254740992"])(
+  it.each([
+    "",
+    "0",
+    "-1",
+    "1.5",
+    "1e3",
+    "1000000001",
+    "9007199254740991",
+    "9007199254740992",
+  ])(
     "rejects invalid policy string %s before constructing a request",
     (value) => {
       expect(parsePositiveSafeWholeHours(value, "Target turn")).toEqual(
@@ -168,6 +177,13 @@ describe("GameMetadataCard turn timing policy", () => {
       );
     },
   );
+
+  it("accepts the maximum supported whole-hour value", () => {
+    expect(parsePositiveSafeWholeHours("1000000000", "Target turn")).toEqual({
+      ok: true,
+      value: 1_000_000_000,
+    });
+  });
 
   it.each([400, 401, 403])(
     "keeps a %s policy update failure inline",

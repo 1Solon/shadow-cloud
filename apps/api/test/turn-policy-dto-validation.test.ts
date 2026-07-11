@@ -9,6 +9,8 @@ const durationFields = [
   'turnReminderRepeatHours',
 ] as const;
 
+const MAX_TURN_TIMING_HOURS = 1_000_000_000;
+
 const invalidDurations = [
   0,
   -1,
@@ -16,6 +18,7 @@ const invalidDurations = [
   '1',
   Number.NaN,
   Infinity,
+  MAX_TURN_TIMING_HOURS + 1,
   Number.MAX_SAFE_INTEGER + 1,
 ];
 
@@ -31,8 +34,8 @@ async function validateDuration(
 }
 
 describe('turn policy DTO validation', () => {
-  it.each([1, Number.MAX_SAFE_INTEGER])(
-    'accepts safe positive integer durations in both DTOs: %s',
+  it.each([1, MAX_TURN_TIMING_HOURS])(
+    'accepts in-range whole-hour durations in both DTOs: %s',
     async (value) => {
       for (const field of durationFields) {
         await expect(

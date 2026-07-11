@@ -103,33 +103,40 @@ export class TurnRemindersService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
+      const activePlayer = turnRecord.gamePlayer;
+      const discordId = activePlayer?.user
+        ? getDiscordIdentity(activePlayer.user)
+        : null;
+      const discordThreadId = turnRecord.game.discordThreadId;
+      const missingDeliveryReason = !discordThreadId
+        ? 'thread'
+        : !discordId
+          ? 'identity'
+          : null;
+
       const claimed = await transaction.turnRecord.updateMany({
         where: {
           id: turnRecord.id,
           endedAt: null,
           nextReminderAt: dueAt,
         },
-        data: {
-          reminderCount: { increment: 1 },
-          lastReminderAt: now,
-          nextReminderAt,
-        },
+        data: missingDeliveryReason
+          ? { nextReminderAt }
+          : {
+              reminderCount: { increment: 1 },
+              lastReminderAt: now,
+              nextReminderAt,
+            },
       });
 
       if (claimed.count !== 1) {
         return;
       }
 
-      const activePlayer = turnRecord.gamePlayer;
-
-      if (!activePlayer?.user) {
-        return;
-      }
-
-      const discordId = getDiscordIdentity(activePlayer.user);
-      const discordThreadId = turnRecord.game.discordThreadId;
-
       if (!discordId || !discordThreadId) {
+        this.logger.warn(
+          `Turn reminder skipped for ${turnRecord.id}: missing Discord ${missingDeliveryReason!}.`,
+        );
         return;
       }
 
@@ -150,10 +157,10 @@ export class TurnRemindersService implements OnModuleInit, OnModuleDestroy {
           ),
           targetHours: turnRecord.game.turnTargetHours,
           activePlayer: {
-            id: activePlayer.userId!,
-            displayName: activePlayer.user.displayName,
+            id: activePlayer!.userId!,
+            displayName: activePlayer!.user!.displayName,
             discordId,
-            turnOrder: activePlayer.turnOrder,
+            turnOrder: activePlayer!.turnOrder,
           },
         },
       };

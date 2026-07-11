@@ -98,6 +98,9 @@ function createOpenRecord(override = {}) {
 
 function createTransaction() {
   return {
+    game: {
+      findUnique: vi.fn(async () => policy),
+    },
     turnRecord: {
       create: vi.fn(async () => ({ id: 'turn-2' })),
       findMany: vi.fn(async () => [createOpenRecord()]),
@@ -128,7 +131,6 @@ describe('TurnRecordsService', () => {
       },
       roundNumber: 1,
       startedAt,
-      policy,
     });
 
     expect(transaction.turnRecord.create).toHaveBeenCalledWith({
@@ -170,7 +172,6 @@ describe('TurnRecordsService', () => {
       },
       completionReason: reason,
       transitionedAt,
-      policy,
     });
 
     expect(transaction.turnRecord.findMany).toHaveBeenCalledWith({
@@ -206,6 +207,39 @@ describe('TurnRecordsService', () => {
     });
   });
 
+  it('uses a policy committed before a transition to schedule the new open turn', async () => {
+    const transaction = createTransaction();
+    transaction.game.findUnique.mockResolvedValue({
+      ...policy,
+      turnTargetHours: 48,
+      turnReminderGraceHours: 6,
+    });
+
+    await new TurnRecordsService().transitionTurn(transaction as never, {
+      gameId: 'game-1',
+      expectedCurrent: {
+        gamePlayerId: 'seat-1',
+        userId: 'user-1',
+        roundNumber: 4,
+      },
+      next: {
+        gamePlayerId: 'seat-2',
+        userId: 'user-2',
+        seatNumber: 2,
+        playerDisplayName: 'Beta',
+        roundNumber: 4,
+      },
+      completionReason: TurnCompletionReason.SAVE_UPLOADED,
+      transitionedAt,
+    });
+
+    expect(transaction.turnRecord.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        nextReminderAt: new Date('2026-07-13T08:30:00.000Z'),
+      }),
+    });
+  });
+
   it('rejects a transition when the open record does not match the active turn', async () => {
     const transaction = createTransaction();
     transaction.turnRecord.findMany.mockResolvedValue([
@@ -229,7 +263,6 @@ describe('TurnRecordsService', () => {
         },
         completionReason: TurnCompletionReason.SKIPPED,
         transitionedAt,
-        policy,
       }),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(transaction.turnRecord.updateMany).not.toHaveBeenCalled();
@@ -263,7 +296,6 @@ describe('TurnRecordsService', () => {
           },
           completionReason: TurnCompletionReason.SKIPPED,
           transitionedAt,
-          policy,
         }),
       ).rejects.toBeInstanceOf(ConflictException);
       expect(transaction.turnRecord.updateMany).not.toHaveBeenCalled();
@@ -294,7 +326,6 @@ describe('TurnRecordsService', () => {
         },
         completionReason: TurnCompletionReason.SKIPPED,
         transitionedAt,
-        policy,
       }),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(transaction.turnRecord.updateMany).not.toHaveBeenCalled();
@@ -321,7 +352,6 @@ describe('TurnRecordsService', () => {
         },
         completionReason: TurnCompletionReason.SKIPPED,
         transitionedAt,
-        policy,
       }),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(transaction.notificationDelivery.updateMany).not.toHaveBeenCalled();
@@ -330,10 +360,13 @@ describe('TurnRecordsService', () => {
 
   it('recalculates an unreminded open turn from its original start time', async () => {
     const transaction = createTransaction();
+    transaction.game.findUnique.mockResolvedValue({
+      ...policy,
+      turnTargetHours: 48,
+    });
 
     await new TurnRecordsService().recalculateOpenReminder(transaction as never, {
       gameId: 'game-1',
-      policy: { ...policy, turnTargetHours: 48 },
     });
 
     expect(transaction.turnRecord.update).toHaveBeenCalledWith({
@@ -342,8 +375,33 @@ describe('TurnRecordsService', () => {
     });
   });
 
+  it('recalculates a transitioned open turn when a policy commit follows it', async () => {
+    const transaction = createTransaction();
+    transaction.turnRecord.findMany.mockResolvedValue([
+      createOpenRecord({ startedAt: transitionedAt }),
+    ]);
+    transaction.game.findUnique.mockResolvedValue({
+      ...policy,
+      turnTargetHours: 48,
+      turnReminderGraceHours: 6,
+    });
+
+    await new TurnRecordsService().recalculateOpenReminder(transaction as never, {
+      gameId: 'game-1',
+    });
+
+    expect(transaction.turnRecord.update).toHaveBeenCalledWith({
+      where: { id: 'turn-1' },
+      data: { nextReminderAt: new Date('2026-07-13T08:30:00.000Z') },
+    });
+  });
+
   it('recalculates a reminded open turn from its latest reminder', async () => {
     const transaction = createTransaction();
+    transaction.game.findUnique.mockResolvedValue({
+      ...policy,
+      turnReminderRepeatHours: 6,
+    });
     const lastReminderAt = new Date('2026-07-12T08:00:00.000Z');
     transaction.turnRecord.findMany.mockResolvedValue([
       createOpenRecord({ reminderCount: 1, lastReminderAt }),
@@ -351,7 +409,6 @@ describe('TurnRecordsService', () => {
 
     await new TurnRecordsService().recalculateOpenReminder(transaction as never, {
       gameId: 'game-1',
-      policy: { ...policy, turnReminderRepeatHours: 6 },
     });
 
     expect(transaction.turnRecord.update).toHaveBeenCalledWith({
@@ -362,10 +419,13 @@ describe('TurnRecordsService', () => {
 
   it('clears an open turn reminder when reminders are disabled', async () => {
     const transaction = createTransaction();
+    transaction.game.findUnique.mockResolvedValue({
+      ...policy,
+      turnRemindersEnabled: false,
+    });
 
     await new TurnRecordsService().recalculateOpenReminder(transaction as never, {
       gameId: 'game-1',
-      policy: { ...policy, turnRemindersEnabled: false },
     });
 
     expect(transaction.turnRecord.update).toHaveBeenCalledWith({
@@ -485,12 +545,6 @@ describe('GamesRegistrationService turn record initialization', () => {
       },
       roundNumber: 1,
       startedAt: new Date('2026-07-10T09:00:00.000Z'),
-      policy: {
-        turnTargetHours: 48,
-        turnReminderGraceHours: 6,
-        turnReminderRepeatHours: 12,
-        turnRemindersEnabled: true,
-      },
     });
   });
 });

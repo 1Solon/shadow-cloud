@@ -426,7 +426,6 @@ export class GamesTurnService {
           },
           completionReason: TurnCompletionReason.SAVE_UPLOADED,
           transitionedAt,
-          policy: game,
         });
 
         await transaction.auditEvent.create({
@@ -781,7 +780,6 @@ export class GamesTurnService {
             },
             completionReason: TurnCompletionReason.REASSIGNED,
             transitionedAt,
-            policy: game,
           });
         }
       }
@@ -944,7 +942,6 @@ export class GamesTurnService {
           },
           completionReason: TurnCompletionReason.REPLACED,
           transitionedAt,
-          policy: game,
         });
       }
 
@@ -1221,7 +1218,6 @@ export class GamesTurnService {
           },
           completionReason: TurnCompletionReason.RESIGNED,
           transitionedAt,
-          policy: game,
         });
       }
 
@@ -1375,7 +1371,6 @@ export class GamesTurnService {
         },
         completionReason: TurnCompletionReason.SKIPPED,
         transitionedAt,
-        policy: game,
       });
 
       await transaction.auditEvent.create({

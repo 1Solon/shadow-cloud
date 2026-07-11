@@ -187,16 +187,6 @@ export class GamesService {
         input.turnRemindersEnabled ?? previousMetadata.turnRemindersEnabled,
     };
 
-    const nextThreadName = buildCanonicalThreadName({
-      gameNumber: nextMetadata.gameNumber,
-      name: nextMetadata.name,
-      playerCount: nextMetadata.playerCount,
-      gameMode: nextMetadata.gameMode,
-      techLevel: nextMetadata.techLevel,
-      zoneCount: nextMetadata.zoneCount,
-      armyCount: nextMetadata.armyCount,
-    });
-
     if (
       input.playerCount != null &&
       nextMetadata.playerCount != null &&
@@ -207,14 +197,7 @@ export class GamesService {
       );
     }
 
-    const policyChanged =
-      nextMetadata.turnTargetHours !== previousMetadata.turnTargetHours ||
-      nextMetadata.turnReminderGraceHours !==
-        previousMetadata.turnReminderGraceHours ||
-      nextMetadata.turnReminderRepeatHours !==
-        previousMetadata.turnReminderRepeatHours ||
-      nextMetadata.turnRemindersEnabled !==
-        previousMetadata.turnRemindersEnabled;
+    let committedMetadata = nextMetadata;
 
     await prisma.$transaction(async (transaction) => {
       if (
@@ -232,6 +215,41 @@ export class GamesService {
           );
         }
       }
+
+      const currentPolicy = await transaction.game.findUnique({
+        where: { id: game.id },
+        select: {
+          turnTargetHours: true,
+          turnReminderGraceHours: true,
+          turnReminderRepeatHours: true,
+          turnRemindersEnabled: true,
+        },
+      });
+
+      if (!currentPolicy) {
+        throw new NotFoundException(`Game ${gameId} was not found.`);
+      }
+
+      const transactionNextMetadata = {
+        ...nextMetadata,
+        turnTargetHours: input.turnTargetHours ?? currentPolicy.turnTargetHours,
+        turnReminderGraceHours:
+          input.turnReminderGraceHours ?? currentPolicy.turnReminderGraceHours,
+        turnReminderRepeatHours:
+          input.turnReminderRepeatHours ??
+          currentPolicy.turnReminderRepeatHours,
+        turnRemindersEnabled:
+          input.turnRemindersEnabled ?? currentPolicy.turnRemindersEnabled,
+      };
+      const policyChanged =
+        transactionNextMetadata.turnTargetHours !==
+          currentPolicy.turnTargetHours ||
+        transactionNextMetadata.turnReminderGraceHours !==
+          currentPolicy.turnReminderGraceHours ||
+        transactionNextMetadata.turnReminderRepeatHours !==
+          currentPolicy.turnReminderRepeatHours ||
+        transactionNextMetadata.turnRemindersEnabled !==
+          currentPolicy.turnRemindersEnabled;
 
       if (
         input.roundNumber != null &&
@@ -266,61 +284,63 @@ export class GamesService {
       const gameUpdateData: Prisma.GameUpdateInput = {};
 
       if (input.gameNumber != null) {
-        gameUpdateData.gameNumber = nextMetadata.gameNumber;
+        gameUpdateData.gameNumber = transactionNextMetadata.gameNumber;
       }
 
       if (input.name !== undefined) {
-        gameUpdateData.name = nextMetadata.name;
+        gameUpdateData.name = transactionNextMetadata.name;
       }
 
       if (input.playerCount != null) {
-        gameUpdateData.playerCount = nextMetadata.playerCount;
+        gameUpdateData.playerCount = transactionNextMetadata.playerCount;
       }
 
       if (input.hasAiPlayers != null) {
-        gameUpdateData.hasAiPlayers = nextMetadata.hasAiPlayers;
+        gameUpdateData.hasAiPlayers = transactionNextMetadata.hasAiPlayers;
       }
 
       if (input.dlcMode != null) {
-        gameUpdateData.dlcMode = nextMetadata.dlcMode;
+        gameUpdateData.dlcMode = transactionNextMetadata.dlcMode;
       }
 
       if (input.gameMode != null) {
-        gameUpdateData.gameMode = nextMetadata.gameMode;
+        gameUpdateData.gameMode = transactionNextMetadata.gameMode;
       }
 
       if (input.techLevel != null) {
-        gameUpdateData.techLevel = nextMetadata.techLevel;
+        gameUpdateData.techLevel = transactionNextMetadata.techLevel;
       }
 
       if (input.zoneCount != null) {
-        gameUpdateData.zoneCount = nextMetadata.zoneCount;
+        gameUpdateData.zoneCount = transactionNextMetadata.zoneCount;
       }
 
       if (input.armyCount != null) {
-        gameUpdateData.armyCount = nextMetadata.armyCount;
+        gameUpdateData.armyCount = transactionNextMetadata.armyCount;
       }
 
       if (input.notes !== undefined) {
-        gameUpdateData.notes = nextMetadata.notes;
+        gameUpdateData.notes = transactionNextMetadata.notes;
       }
 
       if (input.turnTargetHours !== undefined) {
-        gameUpdateData.turnTargetHours = nextMetadata.turnTargetHours;
+        gameUpdateData.turnTargetHours =
+          transactionNextMetadata.turnTargetHours;
       }
 
       if (input.turnReminderGraceHours !== undefined) {
         gameUpdateData.turnReminderGraceHours =
-          nextMetadata.turnReminderGraceHours;
+          transactionNextMetadata.turnReminderGraceHours;
       }
 
       if (input.turnReminderRepeatHours !== undefined) {
         gameUpdateData.turnReminderRepeatHours =
-          nextMetadata.turnReminderRepeatHours;
+          transactionNextMetadata.turnReminderRepeatHours;
       }
 
       if (input.turnRemindersEnabled !== undefined) {
-        gameUpdateData.turnRemindersEnabled = nextMetadata.turnRemindersEnabled;
+        gameUpdateData.turnRemindersEnabled =
+          transactionNextMetadata.turnRemindersEnabled;
       }
 
       if (Object.keys(gameUpdateData).length > 0) {
@@ -333,14 +353,10 @@ export class GamesService {
       if (policyChanged) {
         await this.turnRecords.recalculateOpenReminder(transaction, {
           gameId: game.id,
-          policy: {
-            turnTargetHours: nextMetadata.turnTargetHours,
-            turnReminderGraceHours: nextMetadata.turnReminderGraceHours,
-            turnReminderRepeatHours: nextMetadata.turnReminderRepeatHours,
-            turnRemindersEnabled: nextMetadata.turnRemindersEnabled,
-          },
         });
       }
+
+      committedMetadata = transactionNextMetadata;
 
       await transaction.auditEvent.create({
         data: {
@@ -348,18 +364,28 @@ export class GamesService {
           actorId: userId,
           eventType: metadataUpdatedAuditEventType,
           payload: JSON.stringify({
-            previousMetadata,
-            nextMetadata,
+            previousMetadata: { ...previousMetadata, ...currentPolicy },
+            nextMetadata: committedMetadata,
           }),
         },
       });
+    });
+
+    const nextThreadName = buildCanonicalThreadName({
+      gameNumber: committedMetadata.gameNumber,
+      name: committedMetadata.name,
+      playerCount: committedMetadata.playerCount,
+      gameMode: committedMetadata.gameMode,
+      techLevel: committedMetadata.techLevel,
+      zoneCount: committedMetadata.zoneCount,
+      armyCount: committedMetadata.armyCount,
     });
 
     if (game.discordThreadId) {
       await this.gamesRegistration.notifyThreadRename({
         id: game.id,
         slug: game.slug,
-        name: nextMetadata.name,
+        name: committedMetadata.name,
         threadName: nextThreadName,
         discordThreadId: game.discordThreadId,
       });
@@ -368,7 +394,7 @@ export class GamesService {
     return {
       id: game.id,
       slug: game.slug,
-      ...nextMetadata,
+      ...committedMetadata,
     };
   }
 
