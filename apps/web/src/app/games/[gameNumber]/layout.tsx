@@ -62,7 +62,7 @@ export default async function GameLayout({
         <div
           className={`flex flex-wrap items-center justify-between gap-3 border-b pb-4 mb-6 shrink-0 ${shellHeaderClassName}`}
         >
-          <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
+          <div className="flex min-w-0 flex-1 basis-full items-center gap-3 sm:basis-0 sm:gap-4">
             <Link
               className={`inline-flex h-9 items-center rounded-md border px-3 text-sm font-mono transition-colors hover:text-black ${shellLinkClassName}`}
               href="/"
@@ -73,7 +73,7 @@ export default async function GameLayout({
               className={`min-w-0 break-words text-base sm:text-xl font-mono ${shellTitleClassName}`}
             >{`> ${game.gameNumber} : ${game.name}`}</div>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-4">
+          <div className="flex w-full max-w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:gap-4">
             <UserBadge
               name={
                 session?.user?.name ?? session?.user?.email ?? "Guest overlord"
@@ -96,7 +96,7 @@ export default async function GameLayout({
 
         {/* Status bar */}
         <div
-          className={`mt-auto pt-4 border-t flex justify-between text-xs text-orange-300/70 shrink-0 ${shellStatusClassName}`}
+          className={`mt-auto pt-4 border-t flex flex-wrap justify-between gap-2 text-xs text-orange-300/70 shrink-0 ${shellStatusClassName}`}
         >
           <div>{componentVersionStatus}</div>
           <div>WORLD: {`#${game.gameNumber}`} MONITORED</div>
