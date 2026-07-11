@@ -57,7 +57,15 @@ export default async function GameDetailPage({
   const activePlayer = game.players.find(
     (player) => player.id === game.activePlayerEntryId,
   );
-  const latestSave = game.fileVersions[0] ?? null;
+  const latestFileVersion = game.fileVersions[0];
+  const latestSave = latestFileVersion
+    ? {
+        id: latestFileVersion.id,
+        originalName: latestFileVersion.originalName,
+        uploadedAt: latestFileVersion.uploadedAt,
+        uploadedByDisplayName: latestFileVersion.uploadedByDisplayName,
+      }
+    : null;
   const currentTurnStartedAt =
     game.currentTurnStartedAt ?? game.openTurn?.startedAt ?? null;
 

@@ -71,10 +71,10 @@ function createFileVersion(
     uploadedAt: "2026-07-10T11:00:00.000Z",
     uploadedById: "player-2",
     uploadedByDisplayName: "Rhea",
-    contentHash: null,
-    idempotencyKey: null,
-    replacedAt: null,
-    replacedByDisplayName: null,
+    contentHash: "internal-content-hash",
+    idempotencyKey: "internal-idempotency-key",
+    replacedAt: "2026-07-10T11:30:00.000Z",
+    replacedByDisplayName: "Internal Operator",
     ...overrides,
   };
 }
@@ -230,9 +230,14 @@ describe("GameDetailPage workspace composition", () => {
       initialNow: "2026-07-10T12:00:00.000Z",
       isActivePlayer: true,
       isSignedIn: true,
-      latestSave: expect.objectContaining({ id: "file-newest" }),
       roundNumber: 4,
       turnTargetHours: 24,
+    });
+    expect(command.props.latestSave).toEqual({
+      id: "file-newest",
+      originalName: "round-4-newest.Civ6Save",
+      uploadedAt: "2026-07-10T11:00:00.000Z",
+      uploadedByDisplayName: "Rhea",
     });
   });
 
@@ -365,8 +370,33 @@ describe("GameDetailPage workspace composition", () => {
       canDownloadLatestSave: true,
       isActivePlayer: false,
       isSignedIn: false,
-      latestSave: expect.objectContaining({ id: "file-newest" }),
     });
+    expect(command?.props.latestSave).toEqual({
+      id: "file-newest",
+      originalName: "round-4-newest.Civ6Save",
+      uploadedAt: "2026-07-10T11:00:00.000Z",
+      uploadedByDisplayName: "Rhea",
+    });
+  });
+
+  it("disables latest-save download when no file version exists", async () => {
+    const page = await renderPage({ game: createGame({ fileVersions: [] }) });
+    const command = findElementByType(page, TurnCommandCenter);
+
+    expect(command?.props.latestSave).toBeNull();
+    expect(command?.props.canDownloadLatestSave).toBe(false);
+  });
+
+  it("falls back to the open turn seat when the active player entry is missing", async () => {
+    const page = await renderPage({
+      game: createGame({
+        activePlayerEntryId: "missing-seat",
+        openTurn: createTurnRecord({ seatNumber: 7 }),
+      }),
+    });
+    const command = findElementByType(page, TurnCommandCenter);
+
+    expect(command?.props.activeSeatNumber).toBe(7);
   });
 
   it("uses the no-open-turn key and open-turn start fallback", async () => {
