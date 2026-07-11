@@ -33,17 +33,21 @@ vi.mock("@/components/campaign-configuration-shell", () => ({
     ) => ReactNode;
   }) => {
     const [activeEditor, setActiveEditor] = useState<ReactNode>(null);
+    const [isDirty, setIsDirty] = useState(false);
 
     return (
       <div data-testid="configuration-shell">
-        <button onClick={onExit}>Exit mock shell</button>
+        <button disabled={isDirty} onClick={onExit}>
+          Exit mock shell
+        </button>
+        {isDirty ? <p role="status">Dirty mock editor</p> : null}
         {(
           ["identity", "world", "turn-protocol", "seat-order", "notes"] as const
         ).map((section) => (
           <button
             key={section}
             onClick={() => {
-              const onDirtyChange = vi.fn();
+              const onDirtyChange = vi.fn(setIsDirty);
               mocks.dirtyCallbacks.push(onDirtyChange);
               setActiveEditor(renderSection(section, { onDirtyChange }));
             }}
@@ -60,7 +64,16 @@ vi.mock("@/components/campaign-configuration-shell", () => ({
 vi.mock("@/components/campaign-settings-editor", () => ({
   CampaignSettingsEditor: (props: unknown) => {
     mocks.settings(props);
-    return <div data-testid="settings-editor" />;
+    const { onDirtyChange } = props as {
+      onDirtyChange: (dirty: boolean) => void;
+    };
+    return (
+      <div data-testid="settings-editor">
+        <button onClick={() => onDirtyChange(true)}>
+          Dirty settings draft
+        </button>
+      </div>
+    );
   },
 }));
 
@@ -217,7 +230,13 @@ describe("CampaignDetailsWorkspace", () => {
     const { rerender } = render(<CampaignDetailsWorkspace {...props} />);
     fireEvent.click(screen.getByRole("button", { name: "Configure campaign" }));
     fireEvent.click(screen.getByRole("button", { name: "Open identity" }));
-    mocks.dirtyCallbacks.at(-1)?.(true);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Dirty settings draft" }),
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Dirty mock editor");
+    expect(
+      screen.getByRole("button", { name: "Exit mock shell" }),
+    ).toBeDisabled();
 
     rerender(<CampaignDetailsWorkspace {...props} canEdit={false} />);
 

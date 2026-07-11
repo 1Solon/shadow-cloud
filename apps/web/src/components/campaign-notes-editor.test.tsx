@@ -49,9 +49,12 @@ describe("CampaignNotesEditor", () => {
 
     const notesField = screen.getByLabelText("Campaign notes");
     expect(notesField).toHaveValue("Opening note");
+    const guidance = screen.getByText(/Markdown is supported/i);
+    expect(guidance).toHaveAttribute("id");
+    expect(notesField).toHaveAttribute("aria-describedby", guidance.id);
     await user.click(notesField);
     expect(notesField).toHaveFocus();
-    expect(screen.getByText(/Markdown is supported/i)).toBeInTheDocument();
+    expect(guidance).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
     expect(

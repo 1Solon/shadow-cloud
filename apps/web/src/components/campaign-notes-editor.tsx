@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CampaignEditorStateProps } from "@/components/campaign-configuration-shell";
 import {
@@ -25,6 +25,7 @@ export function CampaignNotesEditor({
   onDirtyChange,
 }: CampaignNotesEditorProps) {
   const router = useRouter();
+  const markdownGuidanceId = useId();
   const authoritativeNotes = notes ?? "";
   const [draftNotes, setDraftNotes] = useState(authoritativeNotes);
   const [committedNotes, setCommittedNotes] = useState(authoritativeNotes);
@@ -148,6 +149,7 @@ export function CampaignNotesEditor({
         </label>
         <textarea
           id="campaign-notes"
+          aria-describedby={markdownGuidanceId}
           disabled={isPending}
           className="min-h-48 min-w-0 w-full resize-y border border-orange-400/30 bg-black px-3 py-3 text-sm text-orange-200 outline-none transition-colors focus:border-orange-300 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
           value={draftNotes}
@@ -155,7 +157,10 @@ export function CampaignNotesEditor({
             setDraftNotes(event.target.value);
           }}
         />
-        <p className="text-xs leading-relaxed text-orange-300/70">
+        <p
+          id={markdownGuidanceId}
+          className="text-xs leading-relaxed text-orange-300/70"
+        >
           Markdown is supported. Links render in the notes view; raw HTML and
           images are ignored.
         </p>

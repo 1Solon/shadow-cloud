@@ -1050,7 +1050,7 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
           </div>
         ) : null}
 
-        <div className="mt-4 flex justify-end gap-2">
+        <div className="mt-4 flex flex-wrap justify-end gap-2">
           <Button
             disabled={isEditorDisabled}
             type="button"

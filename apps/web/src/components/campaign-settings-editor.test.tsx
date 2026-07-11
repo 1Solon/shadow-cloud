@@ -639,6 +639,14 @@ describe("CampaignSettingsEditor", () => {
     expect(editor.querySelector(".grid-cols-2")).toBeNull();
     expect(editor.querySelector(".space-y-4")).toBeNull();
   });
+
+  it("wraps editor actions on narrow layouts", () => {
+    renderEditor("world");
+
+    expect(
+      screen.getByRole("button", { name: "Save" }).parentElement,
+    ).toHaveClass("flex-wrap");
+  });
 });
 
 describe("parsePositiveSafeWholeHours", () => {
