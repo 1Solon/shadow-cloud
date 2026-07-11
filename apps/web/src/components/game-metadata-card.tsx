@@ -306,12 +306,20 @@ function DetailTile({
 function EditField({
   label,
   children,
+  appearance = "tile",
 }: {
   label: string;
   children: React.ReactNode;
+  appearance?: "tile" | "plain";
 }) {
   return (
-    <label className="rounded-lg border border-orange-400/20 bg-orange-400/5 px-4 py-4 text-sm font-mono text-orange-200">
+    <label
+      className={
+        appearance === "tile"
+          ? "rounded-lg border border-orange-400/20 bg-orange-400/5 px-4 py-4 text-sm font-mono text-orange-200"
+          : "text-sm font-mono text-orange-200"
+      }
+    >
       <div className="text-xs uppercase tracking-[0.24em] text-orange-300/70">
         {label}
       </div>
@@ -886,7 +894,7 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
                 Turn timing policy
               </legend>
               <div className="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <EditField label="Target turn hours">
+                <EditField appearance="plain" label="Target turn hours">
                   <input
                     className={controlClassName}
                     max={MAX_TURN_TIMING_HOURS}
@@ -902,7 +910,7 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
                     }}
                   />
                 </EditField>
-                <EditField label="Reminder grace hours">
+                <EditField appearance="plain" label="Reminder grace hours">
                   <input
                     className={controlClassName}
                     max={MAX_TURN_TIMING_HOURS}
@@ -918,7 +926,7 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
                     }}
                   />
                 </EditField>
-                <EditField label="Reminder repeat hours">
+                <EditField appearance="plain" label="Reminder repeat hours">
                   <input
                     className={controlClassName}
                     max={MAX_TURN_TIMING_HOURS}
@@ -934,7 +942,7 @@ export function GameMetadataCard(props: GameMetadataCardProps) {
                     }}
                   />
                 </EditField>
-                <label className="flex items-center gap-3 rounded-lg border border-orange-400/20 bg-orange-400/5 px-4 py-4 text-sm font-mono text-orange-200">
+                <label className="flex min-h-20 items-center gap-3 text-sm font-mono text-orange-200">
                   <input
                     checked={draft.turnRemindersEnabled}
                     className="size-4 accent-orange-400"

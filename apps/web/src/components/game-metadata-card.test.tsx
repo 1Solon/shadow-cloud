@@ -93,6 +93,29 @@ describe("GameMetadataCard turn timing policy", () => {
     expect(screen.getByRole("checkbox", { name: "Enabled" })).toBeChecked();
   });
 
+  it("keeps one policy group surface without per-field tiles", async () => {
+    const user = userEvent.setup();
+    renderCard();
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+
+    const group = screen.getByRole("group", { name: "Turn timing policy" });
+    const targetLabel = screen.getByLabelText("Target turn hours").closest("label");
+    const graceLabel = screen
+      .getByLabelText("Reminder grace hours")
+      .closest("label");
+    const repeatLabel = screen
+      .getByLabelText("Reminder repeat hours")
+      .closest("label");
+    const enabledLabel = screen.getByLabelText("Enabled").closest("label");
+
+    expect(group).toHaveClass("border", "border-orange-400/20");
+
+    for (const label of [targetLabel, graceLabel, repeatLabel, enabledLabel]) {
+      expect(label).not.toHaveClass("border", "bg-orange-400/5", "px-4", "py-4");
+    }
+  });
+
   it("submits only a changed target policy field", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi
