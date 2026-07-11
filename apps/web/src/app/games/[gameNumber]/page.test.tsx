@@ -250,8 +250,12 @@ describe("GameDetailPage workspace composition", () => {
       page,
       CampaignWorkspaceTabs,
     ) as ReactElement<ComponentProps<typeof CampaignWorkspaceTabs>>;
+    const activity = workspace.props.activity as ReactElement<ElementProps>;
     const activityChildren = elementChildren(workspace.props.activity);
 
+    expect(activity.props.className).toBe(
+      "grid grid-cols-[minmax(0,1fr)] gap-6",
+    );
     expect(activityChildren.map((child) => child.type)).toEqual([
       WorldStateHistoryCard,
       TurnTimingHistoryCard,

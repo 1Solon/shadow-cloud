@@ -119,7 +119,7 @@ export default async function GameDetailPage({
 
       <CampaignWorkspaceTabs
         activity={
-          <div className="grid gap-6">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
             <WorldStateHistoryCard
               currentUserId={session?.user?.id ?? null}
               fileVersions={game.fileVersions}
