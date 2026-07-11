@@ -12,6 +12,7 @@ export type CampaignBriefingPlayer = {
 };
 
 export type CampaignBriefingProps = {
+  activePlayerEntryId: string | null;
   name: string;
   organizerDisplayName: string;
   playerCount: number | null;
@@ -118,6 +119,7 @@ function DisclosureButton({
 }
 
 export function CampaignBriefing({
+  activePlayerEntryId,
   name,
   organizerDisplayName,
   playerCount,
@@ -227,6 +229,7 @@ export function CampaignBriefing({
             <ol className="flex flex-col gap-2">
               {orderedPlayers.map((player) => {
                 const occupied = player.userId != null;
+                const isActive = occupied && player.id === activePlayerEntryId;
                 return (
                   <li
                     key={player.id}
@@ -240,6 +243,7 @@ export function CampaignBriefing({
                       <span className="block text-xs uppercase tracking-[0.12em] text-orange-300/60">
                         {occupied ? "Occupied" : "Empty"}
                         {player.isOrganizer ? " · Overlord" : ""}
+                        {isActive ? " · Active" : ""}
                       </span>
                     </span>
                   </li>

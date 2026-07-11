@@ -15,7 +15,6 @@ import { CampaignSettingsEditor } from "@/components/campaign-settings-editor";
 import { SeatOrderEditor } from "@/components/seat-order-editor";
 
 type CampaignDetailsWorkspaceProps = Omit<CampaignBriefingProps, "notes"> & {
-  activePlayerEntryId: string | null;
   canEdit: boolean;
   gameNumber: number;
   notes: string | null;
@@ -111,6 +110,7 @@ export function CampaignDetailsWorkspace(props: CampaignDetailsWorkspaceProps) {
         </div>
       ) : null}
       <CampaignBriefing
+        activePlayerEntryId={props.activePlayerEntryId}
         armyCount={props.armyCount}
         dlcMode={props.dlcMode}
         gameMode={props.gameMode}

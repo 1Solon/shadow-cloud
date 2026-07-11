@@ -146,6 +146,7 @@ describe("CampaignDetailsWorkspace", () => {
     ).toHaveLength(1);
     expect(mocks.briefing).toHaveBeenLastCalledWith(
       expect.objectContaining({
+        activePlayerEntryId: props.activePlayerEntryId,
         name: props.name,
         players: props.players,
         notes: props.notes,

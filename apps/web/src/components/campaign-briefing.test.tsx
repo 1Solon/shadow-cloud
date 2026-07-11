@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { CampaignBriefing } from "@/components/campaign-briefing";
 
 const props = {
+  activePlayerEntryId: "seat-1",
   armyCount: "ONE_PER_ZONE",
   dlcMode: "BOTH",
   gameMode: "FFA_AI",
@@ -72,7 +73,8 @@ describe("CampaignBriefing", () => {
     }
   });
 
-  it("does not duplicate active player, round, or turn target in the opening summary", () => {
+  it("keeps active player out of the opening summary and identifies the matching expanded seat", async () => {
+    const user = userEvent.setup();
     renderBriefing();
 
     const values = screen.getByTestId("campaign-briefing-values");
@@ -82,6 +84,15 @@ describe("CampaignBriefing", () => {
     expect(within(values).queryByText(/round/i)).not.toBeInTheDocument();
     expect(within(values).queryByText(/target/i)).not.toBeInTheDocument();
     expect(within(values).queryByText("12")).not.toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole("button", { name: "SEAT ORDER · 1/2 SEATS" }),
+    );
+
+    const seats = screen.getAllByRole("listitem");
+    expect(seats[0]).toHaveTextContent("Active");
+    expect(seats[1]).not.toHaveTextContent("Active");
+    expect(screen.getAllByText(/Active/)).toHaveLength(1);
   });
 
   it("starts all disclosures collapsed with inaccessible content", () => {
@@ -140,7 +151,7 @@ describe("CampaignBriefing", () => {
     expect(seats[0]).toHaveTextContent("Overlord");
     expect(seats[1]).toHaveTextContent("SEAT 02");
     expect(seats[1]).toHaveTextContent("Empty");
-    expect(screen.queryByText(/active/i)).not.toBeInTheDocument();
+    expect(seats[0]).toHaveTextContent("Active");
   });
 
   it("renders non-empty campaign notes as Markdown", async () => {
