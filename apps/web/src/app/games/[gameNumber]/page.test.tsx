@@ -376,10 +376,18 @@ describe("GameDetailPage workspace composition", () => {
     const fallbackPage = await renderPage({
       game: createGame({ currentTurnStartedAt: null }),
     });
+    const noOpenWorkspace = findElementByType(
+      noOpenPage,
+      CampaignWorkspaceTabs,
+    ) as ReactElement<ComponentProps<typeof CampaignWorkspaceTabs>>;
 
     expect(findElementByType(noOpenPage, TurnCommandCenter)?.key).toBe(
       "no-open-turn",
     );
+    expect(
+      findElementByType(noOpenWorkspace.props.activity, TurnTimingHistoryCard)
+        ?.key,
+    ).toBe("no-open-turn");
     expect(
       findElementByType(fallbackPage, TurnCommandCenter)?.props
         .currentTurnStartedAt,
