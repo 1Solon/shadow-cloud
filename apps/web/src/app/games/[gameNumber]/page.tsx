@@ -1,10 +1,8 @@
 import { notFound } from "next/navigation";
 import { AdministratorActionsCard } from "@/components/administrator-actions-card";
 import { getServerAuthSession } from "@/auth";
+import { CampaignDetailsWorkspace } from "@/components/campaign-details-workspace";
 import { CampaignWorkspaceTabs } from "@/components/campaign-workspace-tabs";
-import { GameMetadataCard } from "@/components/game-metadata-card";
-import { GameNotesCard } from "@/components/game-notes-card";
-import { SeatOrderEditor } from "@/components/seat-order-editor";
 import { TerminalConfirmationModal } from "@/components/terminal-confirmation-modal";
 import { TurnCommandCenter } from "@/components/turn-command-center";
 import { TurnTimingHistoryCard } from "@/components/turn-timing-history-card";
@@ -144,41 +142,27 @@ export default async function GameDetailPage({
           ) : undefined
         }
         campaign={
-          <div className="grid gap-6">
-            <div className="grid min-w-0 gap-6 xl:grid-cols-2">
-              <SeatOrderEditor
-                activePlayerEntryId={game.activePlayerEntryId}
-                canEdit={canEditSeatOrder}
-                gameNumber={game.gameNumber}
-                players={game.players}
-              />
-              <GameNotesCard
-                canEdit={canEditSeatOrder}
-                gameNumber={game.gameNumber}
-                notes={game.notes}
-              />
-            </div>
-            <GameMetadataCard
-              activePlayerDisplayName={game.activePlayerDisplayName}
-              armyCount={game.armyCount}
-              canEdit={canEditSeatOrder}
-              dlcMode={game.dlcMode}
-              gameMode={game.gameMode}
-              gameNumber={game.gameNumber}
-              hasAiPlayers={game.hasAiPlayers}
-              name={game.name}
-              organizerDisplayName={game.organizerDisplayName}
-              players={game.players}
-              playerCount={game.playerCount}
-              roundNumber={game.roundNumber}
-              techLevel={game.techLevel}
-              turnReminderGraceHours={game.turnReminderGraceHours}
-              turnReminderRepeatHours={game.turnReminderRepeatHours}
-              turnRemindersEnabled={game.turnRemindersEnabled}
-              turnTargetHours={game.turnTargetHours}
-              zoneCount={game.zoneCount}
-            />
-          </div>
+          <CampaignDetailsWorkspace
+            activePlayerEntryId={game.activePlayerEntryId}
+            armyCount={game.armyCount}
+            canEdit={canEditSeatOrder}
+            dlcMode={game.dlcMode}
+            gameMode={game.gameMode}
+            gameNumber={game.gameNumber}
+            hasAiPlayers={game.hasAiPlayers}
+            name={game.name}
+            notes={game.notes}
+            organizerDisplayName={game.organizerDisplayName}
+            playerCount={game.playerCount}
+            players={game.players}
+            roundNumber={game.roundNumber}
+            techLevel={game.techLevel}
+            turnReminderGraceHours={game.turnReminderGraceHours}
+            turnReminderRepeatHours={game.turnReminderRepeatHours}
+            turnRemindersEnabled={game.turnRemindersEnabled}
+            turnTargetHours={game.turnTargetHours}
+            zoneCount={game.zoneCount}
+          />
         }
       />
     </div>

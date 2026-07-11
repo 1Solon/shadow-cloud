@@ -7,10 +7,8 @@ import {
 } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AdministratorActionsCard } from "@/components/administrator-actions-card";
+import { CampaignDetailsWorkspace } from "@/components/campaign-details-workspace";
 import { CampaignWorkspaceTabs } from "@/components/campaign-workspace-tabs";
-import { GameMetadataCard } from "@/components/game-metadata-card";
-import { GameNotesCard } from "@/components/game-notes-card";
-import { SeatOrderEditor } from "@/components/seat-order-editor";
 import { TerminalConfirmationModal } from "@/components/terminal-confirmation-modal";
 import { TurnCommandCenter } from "@/components/turn-command-center";
 import { TurnTimingHistoryCard } from "@/components/turn-timing-history-card";
@@ -266,26 +264,41 @@ describe("GameDetailPage workspace composition", () => {
     );
   });
 
-  it("groups seat order and notes in a two-column Campaign row before metadata", async () => {
+  it("composes the complete campaign data into one details workspace", async () => {
     const page = await renderPage();
     const workspace = findElementByType(
       page,
       CampaignWorkspaceTabs,
     ) as ReactElement<ComponentProps<typeof CampaignWorkspaceTabs>>;
-    const campaignChildren = elementChildren(workspace.props.campaign);
-    const campaignRow = campaignChildren[0];
-
-    expect(campaignChildren.map((child) => child.type)).toEqual([
-      "div",
-      GameMetadataCard,
-    ]);
-    expect(campaignRow.props.className).toBe(
-      "grid min-w-0 gap-6 xl:grid-cols-2",
+    const details = findElementByType(
+      workspace.props.campaign,
+      CampaignDetailsWorkspace,
     );
-    expect(elementChildren(campaignRow).map((child) => child.type)).toEqual([
-      SeatOrderEditor,
-      GameNotesCard,
-    ]);
+
+    expect(details?.props).toEqual({
+      activePlayerEntryId: "seat-2",
+      armyCount: "ONE_PER_ZONE",
+      canEdit: false,
+      dlcMode: "NONE",
+      gameMode: "TEAMS",
+      gameNumber: 42,
+      hasAiPlayers: false,
+      name: "Campaign 42",
+      notes: "Hold the western pass.",
+      organizerDisplayName: "Overlord",
+      playerCount: 2,
+      players: expect.arrayContaining([
+        expect.objectContaining({ id: "seat-1" }),
+        expect.objectContaining({ id: "seat-2" }),
+      ]),
+      roundNumber: 4,
+      techLevel: 4,
+      turnReminderGraceHours: 12,
+      turnReminderRepeatHours: 6,
+      turnRemindersEnabled: true,
+      turnTargetHours: 24,
+      zoneCount: "TWO_ZONE_START",
+    });
   });
 
   it.each([
@@ -324,20 +337,29 @@ describe("GameDetailPage workspace composition", () => {
       page,
       CampaignWorkspaceTabs,
     ) as ReactElement<ComponentProps<typeof CampaignWorkspaceTabs>>;
-    const seatOrder = findElementByType(
+    const details = findElementByType(
       workspace.props.campaign,
-      SeatOrderEditor,
-    );
-    const notes = findElementByType(workspace.props.campaign, GameNotesCard);
-    const metadata = findElementByType(
-      workspace.props.campaign,
-      GameMetadataCard,
+      CampaignDetailsWorkspace,
     );
 
-    expect(seatOrder?.props.canEdit).toBe(true);
-    expect(notes?.props.canEdit).toBe(true);
-    expect(metadata?.props.canEdit).toBe(true);
+    expect(details?.props.canEdit).toBe(true);
     expect(workspace.props.administration).toBeUndefined();
+  });
+
+  it("lets an enabled shadow override configure campaign data", async () => {
+    const page = await renderPage({
+      session: { user: { id: "admin-1", isShadowOverride: true } },
+      shadowOverrideEnabled: true,
+    });
+    const workspace = findElementByType(
+      page,
+      CampaignWorkspaceTabs,
+    ) as ReactElement<ComponentProps<typeof CampaignWorkspaceTabs>>;
+
+    expect(
+      findElementByType(workspace.props.campaign, CampaignDetailsWorkspace)
+        ?.props.canEdit,
+    ).toBe(true);
   });
 
   it("preserves replacement authorization props on world history", async () => {
