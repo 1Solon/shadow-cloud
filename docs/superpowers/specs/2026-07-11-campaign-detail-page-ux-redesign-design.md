@@ -6,6 +6,12 @@ Rework the campaign detail page around the active player's most common task: und
 
 No API, database, authorization, or campaign-domain behavior changes are part of this redesign.
 
+## Approved Direction
+
+Use the turn-command-center layout selected during visual review. The screen prioritizes the active player's core loop: understand the current turn, retrieve the latest save, and submit the next save. Supporting campaign information remains readily accessible without competing with that task.
+
+The approved direction rejects a persistent split dashboard because it would retain excessive card density and collapse poorly on small screens. It also rejects a linear accordion-style console because hiding sections would slow comparison and navigation. The selected command-center-plus-tabs structure provides the clearest hierarchy and responsive behavior while preserving the terminal character.
+
 ## Information Architecture
 
 Replace the current sequence of equally weighted cards with two persistent page layers.
