@@ -6,15 +6,20 @@ import { Button } from "@/components/ui/button";
 
 type UploadSaveFormProps = {
   gameNumber: number;
+  presentation?: "standard" | "compact";
 };
 
-export function UploadSaveForm({ gameNumber }: UploadSaveFormProps) {
+export function UploadSaveForm({
+  gameNumber,
+  presentation = "standard",
+}: UploadSaveFormProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const isCompact = presentation === "compact";
 
   function handleFile(file: File | undefined) {
     setSelectedFile(file ?? null);
@@ -88,6 +93,7 @@ export function UploadSaveForm({ gameNumber }: UploadSaveFormProps) {
         ref={fileInputRef}
         type="file"
         accept=".se1"
+        aria-label="Save file"
         className="hidden"
         onChange={(e) => handleFile(e.target.files?.[0])}
       />
@@ -96,8 +102,16 @@ export function UploadSaveForm({ gameNumber }: UploadSaveFormProps) {
       <div
         role="button"
         tabIndex={0}
+        aria-label={
+          selectedFile
+            ? `Selected save file ${selectedFile.name}`
+            : isCompact
+              ? "Drop save file here"
+              : "Drop save files here"
+        }
         className={[
-          "rounded-lg border-2 border-dashed px-8 py-14 text-center transition-colors cursor-pointer",
+          "rounded-lg border-2 border-dashed text-center transition-colors cursor-pointer",
+          isCompact ? "px-4 py-6" : "px-8 py-14",
           isDragOver
             ? "border-orange-400 bg-orange-400/10"
             : "border-orange-400/40 bg-orange-400/5 hover:border-orange-400/60 hover:bg-orange-400/[0.07]",
@@ -133,10 +147,12 @@ export function UploadSaveForm({ gameNumber }: UploadSaveFormProps) {
         ) : (
           <>
             <div className="text-base font-mono uppercase tracking-[0.2em] text-orange-300 mb-2">
-              {"> DROP SAVE FILES HERE"}
+              {isCompact ? "> DROP SAVE FILE HERE" : "> DROP SAVE FILES HERE"}
             </div>
             <div className="text-sm text-orange-300/60 font-mono mb-6">
-              Drag and drop your .se1 save files here
+              {isCompact
+                ? "Drag and drop your .se1 save file here"
+                : "Drag and drop your .se1 save files here"}
             </div>
             <Button
               type="button"
@@ -146,7 +162,7 @@ export function UploadSaveForm({ gameNumber }: UploadSaveFormProps) {
                 fileInputRef.current?.click();
               }}
             >
-              {"> SELECT FILES"}
+              {isCompact ? "> SELECT FILE" : "> SELECT FILES"}
             </Button>
           </>
         )}
@@ -161,7 +177,7 @@ export function UploadSaveForm({ gameNumber }: UploadSaveFormProps) {
 
       {/* Submit row — only when a file is staged */}
       {selectedFile ? (
-        <div className="mt-4 flex items-center gap-4">
+        <div className="mt-4 flex flex-wrap items-center gap-4">
           <Button disabled={isPending} size="lg" type="submit">
             {isPending ? "Uploading..." : "Upload save and advance turn"}
           </Button>
@@ -176,19 +192,21 @@ export function UploadSaveForm({ gameNumber }: UploadSaveFormProps) {
       ) : null}
 
       {/* Instructions panel */}
-      <div className="mt-6 rounded-lg border border-orange-400/20 bg-orange-400/5 px-5 py-4">
-        <div className="text-xs font-mono uppercase tracking-[0.2em] text-orange-300 mb-3">
-          {"> UPLOAD INSTRUCTIONS"}
+      {!isCompact ? (
+        <div className="mt-6 rounded-lg border border-orange-400/20 bg-orange-400/5 px-5 py-4">
+          <div className="text-xs font-mono uppercase tracking-[0.2em] text-orange-300 mb-3">
+            {"> UPLOAD INSTRUCTIONS"}
+          </div>
+          <ul className="space-y-1.5 text-sm text-orange-300/60 font-mono">
+            <li>· Supported formats: .se1</li>
+            <li>· Maximum file size: 25MB per file</li>
+            <li>
+              · Uploading advances the seat order and notifies the next lord
+            </li>
+            <li>· Only the active lord can submit a save</li>
+          </ul>
         </div>
-        <ul className="space-y-1.5 text-sm text-orange-300/60 font-mono">
-          <li>· Supported formats: .se1</li>
-          <li>· Maximum file size: 25MB per file</li>
-          <li>
-            · Uploading advances the seat order and notifies the next lord
-          </li>
-          <li>· Only the active lord can submit a save</li>
-        </ul>
-      </div>
+      ) : null}
     </form>
   );
 }
