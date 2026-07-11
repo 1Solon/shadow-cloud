@@ -111,6 +111,17 @@ describe("TurnCommandCenter", () => {
     expect(screen.getByTestId("upload-save-form")).toBeVisible();
   });
 
+  it("shows latest-save metadata without a download when access is denied", () => {
+    renderCommandCenter({ canDownloadLatestSave: false });
+
+    expect(screen.getByText(latestSave.originalName)).toBeVisible();
+    expect(screen.getByText("Uploaded by Rhea")).toBeVisible();
+    expect(screen.getByText("Jul 11, 2026, 11:45 AM UTC")).toBeVisible();
+    expect(
+      screen.queryByTestId("download-save-button"),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows a signed-in non-active player the waiting state and public download only", () => {
     renderCommandCenter({ isActivePlayer: false });
 
@@ -151,6 +162,41 @@ describe("TurnCommandCenter", () => {
     expect(document.querySelector("time")).not.toBeInTheDocument();
   });
 
+  it.each([
+    [0, "zero"],
+    [-1, "negative"],
+    [1.5, "fractional"],
+    [Number.POSITIVE_INFINITY, "infinite"],
+    [Number.MAX_SAFE_INTEGER + 1, "unsafe"],
+  ])("renders an %s (%s) target as Unknown", (turnTargetHours) => {
+    renderCommandCenter({ turnTargetHours });
+
+    expect(screen.getByText("59m / Unknown")).toBeVisible();
+  });
+
+  it("does not start a refresh interval for a malformed turn start", () => {
+    vi.useFakeTimers();
+    const setIntervalSpy = vi.spyOn(window, "setInterval");
+
+    renderCommandCenter({ currentTurnStartedAt: "invalid-start" });
+
+    expect(screen.getByText("Unknown / 24h")).toBeVisible();
+    expect(setIntervalSpy).not.toHaveBeenCalled();
+  });
+
+  it("clears the refresh interval when a valid turn start becomes null", () => {
+    vi.useFakeTimers();
+    const clearIntervalSpy = vi.spyOn(window, "clearInterval");
+    const { rerender } = renderCommandCenter();
+
+    rerender(
+      <TurnCommandCenter {...defaultProps} currentTurnStartedAt={null} />,
+    );
+
+    expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("Unknown / 24h")).toBeVisible();
+  });
+
   it("refreshes elapsed time each minute and clears its interval on unmount", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-11T12:00:00.000Z"));
@@ -160,7 +206,13 @@ describe("TurnCommandCenter", () => {
     expect(screen.getByText("59m / 24h")).toBeVisible();
 
     act(() => {
-      vi.advanceTimersByTime(60 * 1000);
+      vi.advanceTimersByTime(60 * 1000 - 1);
+    });
+
+    expect(screen.getByText("59m / 24h")).toBeVisible();
+
+    act(() => {
+      vi.advanceTimersByTime(1);
     });
 
     expect(screen.getByText("1h / 24h")).toBeVisible();
@@ -181,5 +233,9 @@ describe("TurnCommandCenter", () => {
     expect(
       within(panel as HTMLElement).getByTestId("command-center-body"),
     ).toHaveClass("lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]");
+    expect(screen.getByRole("region", { name: "Current turn" })).toBe(panel);
+    expect(screen.getByRole("heading", { name: "Current turn" })).toHaveClass(
+      "sr-only",
+    );
   });
 });

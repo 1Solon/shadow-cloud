@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { DownloadSaveButton } from "@/components/download-save-button";
 import { UploadSaveForm } from "@/components/upload-save-form";
 import {
@@ -68,10 +68,14 @@ export function TurnCommandCenter({
   roundNumber,
   turnTargetHours,
 }: TurnCommandCenterProps) {
+  const headingId = useId();
   const [now, setNow] = useState(() => new Date(initialNow));
+  const hasValidTurnStart =
+    currentTurnStartedAt !== null &&
+    !Number.isNaN(new Date(currentTurnStartedAt).getTime());
 
   useEffect(() => {
-    if (currentTurnStartedAt === null) {
+    if (!hasValidTurnStart) {
       return;
     }
 
@@ -82,21 +86,30 @@ export function TurnCommandCenter({
     return () => {
       window.clearInterval(interval);
     };
-  }, [currentTurnStartedAt]);
+  }, [currentTurnStartedAt, hasValidTurnStart]);
 
-  const elapsedMs = currentTurnStartedAt
-    ? getTurnDurationMs({ startedAt: currentTurnStartedAt, endedAt: null }, now)
-    : null;
-  const elapsed =
-    currentTurnStartedAt === null ? "Unknown" : formatTurnDuration(elapsedMs);
+  const elapsedMs =
+    hasValidTurnStart && currentTurnStartedAt !== null
+      ? getTurnDurationMs(
+          { startedAt: currentTurnStartedAt, endedAt: null },
+          now,
+        )
+      : null;
+  const elapsed = hasValidTurnStart ? formatTurnDuration(elapsedMs) : "Unknown";
   const target =
-    Number.isFinite(turnTargetHours) && turnTargetHours >= 0
+    Number.isSafeInteger(turnTargetHours) && turnTargetHours > 0
       ? `${turnTargetHours}h`
       : "Unknown";
   const canUpload = isSignedIn && isActivePlayer;
 
   return (
-    <section className="overflow-hidden rounded-lg border border-orange-400/40 bg-black font-mono text-orange-100">
+    <section
+      aria-labelledby={headingId}
+      className="overflow-hidden rounded-lg border border-orange-400/40 bg-black font-mono text-orange-100"
+    >
+      <h2 className="sr-only" id={headingId}>
+        Current turn
+      </h2>
       <div
         className={
           canUpload
