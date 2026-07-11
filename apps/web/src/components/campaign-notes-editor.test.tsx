@@ -43,10 +43,14 @@ describe("CampaignNotesEditor", () => {
 
   afterEach(cleanup);
 
-  it("renders a focused labeled Markdown editor without card or edit chrome", () => {
+  it("renders a focused labeled Markdown editor without card or edit chrome", async () => {
+    const user = userEvent.setup();
     renderEditor();
 
-    expect(screen.getByLabelText("Campaign notes")).toHaveValue("Opening note");
+    const notesField = screen.getByLabelText("Campaign notes");
+    expect(notesField).toHaveValue("Opening note");
+    await user.click(notesField);
+    expect(notesField).toHaveFocus();
     expect(screen.getByText(/Markdown is supported/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
