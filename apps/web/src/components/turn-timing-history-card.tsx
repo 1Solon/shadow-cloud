@@ -109,9 +109,7 @@ export function TurnTimingHistoryCard({
     <Card className="overflow-hidden">
       <CardHeader>
         <CardTitle>Recent turn timing:</CardTitle>
-        <CardDescription>
-          Current and recently completed turn timing snapshots.
-        </CardDescription>
+        <CardDescription>Current and recently completed turns.</CardDescription>
       </CardHeader>
       <CardContent>
         {hasTurns ? (
