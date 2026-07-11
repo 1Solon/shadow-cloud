@@ -43,7 +43,7 @@ export function CampaignConfigurationShell({
     useState<CampaignConfigurationSection>("identity");
   const [isDirty, setIsDirty] = useState(false);
   const editorHeadingRef = useRef<HTMLHeadingElement>(null);
-  const hasMounted = useRef(false);
+  const previousSectionRef = useRef(activeSection);
   const activeSectionDetails = sections.find(
     (section) => section.id === activeSection,
   )!;
@@ -53,11 +53,11 @@ export function CampaignConfigurationShell({
   }, []);
 
   useEffect(() => {
-    if (!hasMounted.current) {
-      hasMounted.current = true;
+    if (previousSectionRef.current === activeSection) {
       return;
     }
 
+    previousSectionRef.current = activeSection;
     editorHeadingRef.current?.focus();
   }, [activeSection]);
 

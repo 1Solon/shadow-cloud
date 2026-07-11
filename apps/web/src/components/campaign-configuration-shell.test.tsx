@@ -3,6 +3,7 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CampaignConfigurationShell,
@@ -89,6 +90,18 @@ describe("CampaignConfigurationShell", () => {
 
   it("does not move focus to the editor heading on initial mount", () => {
     render(<Harness />);
+
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Identity & Progress" }),
+    ).not.toHaveFocus();
+  });
+
+  it("does not move focus to the editor heading during StrictMode initial effect replay", () => {
+    render(
+      <StrictMode>
+        <Harness />
+      </StrictMode>,
+    );
 
     expect(
       screen.getByRole("heading", { level: 3, name: "Identity & Progress" }),
