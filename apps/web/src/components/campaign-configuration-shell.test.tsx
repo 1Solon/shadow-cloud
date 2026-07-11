@@ -3,7 +3,7 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { StrictMode } from "react";
+import { StrictMode, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CampaignConfigurationShell,
@@ -40,6 +40,25 @@ function Harness({ onExit = vi.fn() }: { onExit?: () => void }) {
   );
 }
 
+function StatefulEditor({
+  section,
+}: {
+  section: CampaignConfigurationSection;
+}) {
+  const [draft, setDraft] = useState("");
+
+  return (
+    <label>
+      {section} draft
+      <input
+        aria-label={`${section} draft`}
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+      />
+    </label>
+  );
+}
+
 describe("CampaignConfigurationShell", () => {
   afterEach(cleanup);
 
@@ -50,6 +69,24 @@ describe("CampaignConfigurationShell", () => {
     expect(screen.getAllByText(/^editor:/)).toHaveLength(1);
     expect(
       screen.getByText("[CONFIGURING: IDENTITY & PROGRESS]"),
+    ).toBeVisible();
+  });
+
+  it("names the configuration region with an h2 above the editor h3", () => {
+    render(<Harness />);
+
+    const configurationHeading = screen.getByRole("heading", {
+      level: 2,
+      name: "[CONFIGURING: IDENTITY & PROGRESS]",
+    });
+    expect(
+      screen.getByRole("region", {
+        name: "[CONFIGURING: IDENTITY & PROGRESS]",
+      }),
+    ).toBeVisible();
+    expect(configurationHeading).toBeVisible();
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Identity & Progress" }),
     ).toBeVisible();
   });
 
@@ -172,6 +209,26 @@ describe("CampaignConfigurationShell", () => {
     expect(
       screen.getByRole("button", { name: "Exit configuration" }),
     ).toBeEnabled();
+  });
+
+  it("remounts shared editor component types when the active section changes", async () => {
+    const user = userEvent.setup();
+    render(
+      <CampaignConfigurationShell
+        onExit={vi.fn()}
+        renderSection={(section) => <StatefulEditor section={section} />}
+      />,
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "identity draft" }),
+      "leaked value",
+    );
+
+    await user.click(screen.getByRole("button", { name: "World Setup" }));
+
+    expect(screen.getByRole("textbox", { name: "world draft" })).toHaveValue(
+      "",
+    );
   });
 
   it("passes a stable dirty-state callback across shell rerenders", async () => {

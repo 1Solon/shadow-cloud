@@ -4,6 +4,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useId,
   useRef,
   useState,
 } from "react";
@@ -42,6 +43,7 @@ export function CampaignConfigurationShell({
   const [activeSection, setActiveSection] =
     useState<CampaignConfigurationSection>("identity");
   const [isDirty, setIsDirty] = useState(false);
+  const configurationHeadingId = useId();
   const editorHeadingRef = useRef<HTMLHeadingElement>(null);
   const previousSectionRef = useRef(activeSection);
   const activeSectionDetails = sections.find(
@@ -71,11 +73,17 @@ export function CampaignConfigurationShell({
   }
 
   return (
-    <section className="min-w-0 border border-orange-400/30 bg-black/50 font-mono text-orange-200">
+    <section
+      aria-labelledby={configurationHeadingId}
+      className="min-w-0 border border-orange-400/30 bg-black/50 font-mono text-orange-200"
+    >
       <header className="flex min-w-0 flex-col gap-3 border-b border-orange-400/25 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-300">
+        <h2
+          id={configurationHeadingId}
+          className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-300"
+        >
           [CONFIGURING: {activeSectionDetails.label.toUpperCase()}]
-        </p>
+        </h2>
         <button
           type="button"
           disabled={isDirty}
@@ -129,7 +137,7 @@ export function CampaignConfigurationShell({
           ) : null}
         </div>
 
-        <div className="min-w-0 px-4 py-5 sm:px-6">
+        <div key={activeSection} className="min-w-0 px-4 py-5 sm:px-6">
           <h3
             ref={editorHeadingRef}
             tabIndex={-1}
