@@ -1,11 +1,12 @@
 import { notFound } from "next/navigation";
 import { AdministratorActionsCard } from "@/components/administrator-actions-card";
 import { getServerAuthSession } from "@/auth";
+import { CampaignWorkspaceTabs } from "@/components/campaign-workspace-tabs";
 import { GameMetadataCard } from "@/components/game-metadata-card";
 import { GameNotesCard } from "@/components/game-notes-card";
-import { SaveUploadCard } from "@/components/save-upload-card";
 import { SeatOrderEditor } from "@/components/seat-order-editor";
 import { TerminalConfirmationModal } from "@/components/terminal-confirmation-modal";
+import { TurnCommandCenter } from "@/components/turn-command-center";
 import { TurnTimingHistoryCard } from "@/components/turn-timing-history-card";
 import { WorldStateHistoryCard } from "@/components/world-state-history-card";
 import { getShadowOverrideEnabled } from "@/lib/shadow-override";
@@ -53,9 +54,15 @@ export default async function GameDetailPage({
     ? decodeURIComponent(query.message)
     : null;
   const initialNow = new Date().toISOString();
+  const activePlayer = game.players.find(
+    (player) => player.id === game.activePlayerEntryId,
+  );
+  const latestSave = game.fileVersions[0] ?? null;
+  const currentTurnStartedAt =
+    game.currentTurnStartedAt ?? game.openTurn?.startedAt ?? null;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-8 pb-6">
       <TerminalConfirmationModal
         confirmation={
           query.metadata === "success"
@@ -85,82 +92,87 @@ export default async function GameDetailPage({
         </div>
       ) : null}
 
-      {canDeleteGame ? (
-        <section>
-          <AdministratorActionsCard
-            gameName={game.name}
-            gameNumber={game.gameNumber}
-          />
-        </section>
-      ) : null}
+      <TurnCommandCenter
+        activePlayerDisplayName={game.activePlayerDisplayName}
+        activeSeatNumber={
+          activePlayer?.turnOrder ?? game.openTurn?.seatNumber ?? null
+        }
+        canDownloadLatestSave={latestSave !== null}
+        currentTurnStartedAt={currentTurnStartedAt}
+        gameNumber={game.gameNumber}
+        initialNow={initialNow}
+        isActivePlayer={isActivePlayer}
+        isSignedIn={Boolean(session?.user)}
+        key={game.openTurn?.id ?? "no-open-turn"}
+        latestSave={latestSave}
+        roundNumber={game.roundNumber}
+        turnTargetHours={game.turnTargetHours}
+      />
 
-      <section className="scroll-mt-6" id="save-upload">
-        <SaveUploadCard
-          activePlayerDisplayName={game.activePlayerDisplayName}
-          gameNumber={game.gameNumber}
-          isActivePlayer={isActivePlayer}
-          isSignedIn={Boolean(session?.user)}
-        />
-      </section>
-
-      <section>
-        <GameNotesCard
-          canEdit={canEditSeatOrder}
-          gameNumber={game.gameNumber}
-          notes={game.notes}
-        />
-      </section>
-
-      <section>
-        <GameMetadataCard
-          activePlayerDisplayName={game.activePlayerDisplayName}
-          armyCount={game.armyCount}
-          canEdit={canEditSeatOrder}
-          dlcMode={game.dlcMode}
-          gameMode={game.gameMode}
-          gameNumber={game.gameNumber}
-          hasAiPlayers={game.hasAiPlayers}
-          name={game.name}
-          organizerDisplayName={game.organizerDisplayName}
-          players={game.players}
-          playerCount={game.playerCount}
-          roundNumber={game.roundNumber}
-          techLevel={game.techLevel}
-          turnReminderGraceHours={game.turnReminderGraceHours}
-          turnReminderRepeatHours={game.turnReminderRepeatHours}
-          turnRemindersEnabled={game.turnRemindersEnabled}
-          turnTargetHours={game.turnTargetHours}
-          zoneCount={game.zoneCount}
-        />
-      </section>
-
-      <section>
-        <TurnTimingHistoryCard
-          initialNow={initialNow}
-          key={game.openTurn?.id ?? "no-open-turn"}
-          openTurn={game.openTurn}
-          recentCompletedTurns={game.recentCompletedTurns}
-        />
-      </section>
-
-      <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <SeatOrderEditor
-          activePlayerEntryId={game.activePlayerEntryId}
-          canEdit={canEditSeatOrder}
-          gameNumber={game.gameNumber}
-          players={game.players}
-        />
-
-        <div className="grid gap-6">
-          <WorldStateHistoryCard
-            currentUserId={session?.user?.id ?? null}
-            fileVersions={game.fileVersions}
-            gameNumber={game.gameNumber}
-            isShadowOverrideUser={session?.user?.isShadowOverride === true}
-            shadowOverrideEnabled={shadowOverrideEnabled}
-          />
-        </div>
-      </section>
+      <CampaignWorkspaceTabs
+        activity={
+          <div className="grid gap-6">
+            <WorldStateHistoryCard
+              currentUserId={session?.user?.id ?? null}
+              fileVersions={game.fileVersions}
+              gameNumber={game.gameNumber}
+              isShadowOverrideUser={session?.user?.isShadowOverride === true}
+              shadowOverrideEnabled={shadowOverrideEnabled}
+            />
+            <TurnTimingHistoryCard
+              initialNow={initialNow}
+              key={game.openTurn?.id ?? "no-open-turn"}
+              openTurn={game.openTurn}
+              recentCompletedTurns={game.recentCompletedTurns}
+            />
+          </div>
+        }
+        administration={
+          canDeleteGame ? (
+            <AdministratorActionsCard
+              gameName={game.name}
+              gameNumber={game.gameNumber}
+            />
+          ) : undefined
+        }
+        campaign={
+          <div className="grid gap-6">
+            <div className="grid min-w-0 gap-6 xl:grid-cols-2">
+              <SeatOrderEditor
+                activePlayerEntryId={game.activePlayerEntryId}
+                canEdit={canEditSeatOrder}
+                gameNumber={game.gameNumber}
+                players={game.players}
+              />
+              <GameNotesCard
+                canEdit={canEditSeatOrder}
+                gameNumber={game.gameNumber}
+                notes={game.notes}
+              />
+            </div>
+            <GameMetadataCard
+              activePlayerDisplayName={game.activePlayerDisplayName}
+              armyCount={game.armyCount}
+              canEdit={canEditSeatOrder}
+              dlcMode={game.dlcMode}
+              gameMode={game.gameMode}
+              gameNumber={game.gameNumber}
+              hasAiPlayers={game.hasAiPlayers}
+              name={game.name}
+              organizerDisplayName={game.organizerDisplayName}
+              players={game.players}
+              playerCount={game.playerCount}
+              roundNumber={game.roundNumber}
+              techLevel={game.techLevel}
+              turnReminderGraceHours={game.turnReminderGraceHours}
+              turnReminderRepeatHours={game.turnReminderRepeatHours}
+              turnRemindersEnabled={game.turnRemindersEnabled}
+              turnTargetHours={game.turnTargetHours}
+              zoneCount={game.zoneCount}
+            />
+          </div>
+        }
+      />
     </div>
   );
 }
