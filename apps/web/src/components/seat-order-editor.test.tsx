@@ -175,12 +175,75 @@ describe("SeatOrderEditor", () => {
     );
   });
 
+  it("keeps a dirty configuration draft editable when presentation changes to card", async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderEditor();
+
+    await user.click(screen.getByRole("button", { name: "Manage seat 2" }));
+    await user.click(screen.getByRole("button", { name: "Make active" }));
+    rerender(
+      <SeatOrderEditor
+        activePlayerEntryId="seat-1"
+        canEdit
+        gameNumber={42}
+        players={players}
+        presentation="card"
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Save order" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Active seat" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+  });
+
+  it("removes editing controls and clears reported dirty state when permission is lost", async () => {
+    const user = userEvent.setup();
+    const onDirtyChange = vi.fn();
+    const { rerender } = render(
+      <SeatOrderEditor
+        activePlayerEntryId="seat-1"
+        canEdit
+        gameNumber={42}
+        onDirtyChange={onDirtyChange}
+        players={players}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.click(
+      screen.getAllByRole("button", { name: "Make active" })[0]!,
+    );
+    await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(true));
+    rerender(
+      <SeatOrderEditor
+        activePlayerEntryId="seat-1"
+        canEdit={false}
+        gameNumber={42}
+        onDirtyChange={onDirtyChange}
+        players={players}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: /^Move seat/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Clear seat" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Remove seat" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save order" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+    await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(false));
+  });
+
   it("preserves active, empty, and last-occupied eligibility rules", async () => {
     const user = userEvent.setup();
     const { rerender } = renderEditor();
 
     await user.click(screen.getByRole("button", { name: "Manage seat 1" }));
     expect(screen.getByRole("button", { name: "Active seat" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Remove seat" })).toBeDisabled();
+    expect(
+      screen.getByText("Clear this occupied seat and save before removing it."),
+    ).toBeVisible();
 
     await user.click(screen.getByRole("button", { name: "Manage seat 3" }));
     expect(screen.getByRole("button", { name: "Make active" })).toBeDisabled();
@@ -296,10 +359,13 @@ describe("SeatOrderEditor", () => {
       },
     );
     renderEditor({ onDirtyChange });
-    const firstRow = screen.getByText("Overlord").closest("[role='button']");
+    const firstRow = screen.getByText("Overlord").parentElement?.parentElement;
+    const firstHandle = screen.getByRole("button", { name: "Move seat 1" });
 
     expect(firstRow).not.toBeNull();
-    (firstRow as HTMLElement).focus();
+    expect(firstRow).not.toHaveAttribute("role");
+    expect(firstHandle).toHaveAttribute("tabindex", "0");
+    firstHandle.focus();
     await user.keyboard(" ");
     await user.keyboard("{ArrowDown}");
     await user.keyboard(" ");
@@ -308,6 +374,18 @@ describe("SeatOrderEditor", () => {
     expect(
       screen.getAllByText(/Seat \d/).map((node) => node.textContent),
     ).toEqual(["Seat 1", "Seat 2 · Overlord", "Seat 3"]);
+  });
+
+  it("keeps management controls independently keyboard activatable", async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    const manageSeat = screen.getByRole("button", { name: "Manage seat 2" });
+
+    manageSeat.focus();
+    await user.keyboard("{Enter}");
+
+    expect(manageSeat).toHaveAttribute("aria-current", "true");
+    expect(screen.getByRole("button", { name: "Clear seat" })).toBeVisible();
   });
 
   it("posts the exact changed seat payload and clears dirty state on success", async () => {
@@ -357,6 +435,8 @@ describe("SeatOrderEditor", () => {
         name: "Confirm",
       }),
     );
+    await user.click(screen.getByRole("button", { name: "Manage seat 2" }));
+    expect(screen.getByRole("button", { name: "Remove seat" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "Manage seat 3" }));
     await user.click(screen.getByRole("button", { name: "Remove seat" }));
     await user.click(
@@ -379,6 +459,17 @@ describe("SeatOrderEditor", () => {
         }),
       ),
     );
+    const requestBody = JSON.parse(
+      String((fetchSpy.mock.calls[0]?.[1] as RequestInit | undefined)?.body),
+    ) as {
+      clearedSeatEntryIds: string[];
+      removedSeatEntryIds: string[];
+    };
+    expect(
+      requestBody.clearedSeatEntryIds.filter((id) =>
+        requestBody.removedSeatEntryIds.includes(id),
+      ),
+    ).toEqual([]);
   });
 
   it("keeps dirty drafts across prop updates and cancels to the latest props", async () => {
@@ -426,6 +517,23 @@ describe("SeatOrderEditor", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Seat order rejected.",
+    );
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+    expect(router.refresh).not.toHaveBeenCalled();
+  });
+
+  it("keeps a rejected save inline and dirty without an unhandled rejection", async () => {
+    const user = userEvent.setup();
+    const onDirtyChange = vi.fn();
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
+    renderEditor({ onDirtyChange });
+
+    await user.click(screen.getByRole("button", { name: "Manage seat 2" }));
+    await user.click(screen.getByRole("button", { name: "Make active" }));
+    await user.click(screen.getByRole("button", { name: "Save order" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "The seat order update failed.",
     );
     expect(onDirtyChange).toHaveBeenLastCalledWith(true);
     expect(router.refresh).not.toHaveBeenCalled();

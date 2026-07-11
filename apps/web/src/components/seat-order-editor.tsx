@@ -171,6 +171,7 @@ type SortableSeatRowProps = {
   isEditing: boolean;
   isPending: boolean;
   isSelectedForManagement: boolean;
+  requiresSavedClearBeforeRemove: boolean;
   presentation: "card" | "configuration";
   onSelectForManagement: (seatEntryId: string) => void;
   onMakeActive: (index: number) => void;
@@ -187,6 +188,7 @@ function SortableSeatRow({
   isEditing,
   isPending,
   isSelectedForManagement,
+  requiresSavedClearBeforeRemove,
   presentation,
   onSelectForManagement,
   onMakeActive,
@@ -207,6 +209,7 @@ function SortableSeatRow({
   const {
     attributes,
     listeners,
+    setActivatorNodeRef,
     setNodeRef,
     transform,
     transition,
@@ -223,17 +226,12 @@ function SortableSeatRow({
         transform: CSS.Transform.toString(transform),
         transition,
       }}
-      {...(isEditing ? attributes : {})}
-      {...(isEditing ? listeners : {})}
       className={cn(
         "relative flex items-center justify-between gap-4 rounded-lg border px-4 py-4",
         isConfiguration ? "min-w-0 flex-wrap" : null,
         showActiveRowHighlight
           ? "border-orange-400 bg-orange-400 text-black"
           : "border-orange-400/20 bg-orange-400/5",
-        isEditing && !isPending
-          ? "cursor-grab touch-none active:cursor-grabbing"
-          : null,
         isDragging ? "opacity-70 shadow-2xl shadow-orange-400/30" : null,
       )}
     >
@@ -281,6 +279,18 @@ function SortableSeatRow({
             isConfiguration ? "min-w-0 flex-wrap" : "flex-nowrap",
           )}
         >
+          <Button
+            {...attributes}
+            {...listeners}
+            ref={setActivatorNodeRef}
+            aria-label={`Move seat ${index + 1}`}
+            className="cursor-grab touch-none active:cursor-grabbing"
+            disabled={isPending}
+            type="button"
+            variant="outline"
+          >
+            Move
+          </Button>
           {isConfiguration ? (
             <Button
               data-no-drag="true"
@@ -344,6 +354,11 @@ function SortableSeatRow({
                   Remove seat
                 </Button>
               </span>
+              {isConfiguration && requiresSavedClearBeforeRemove ? (
+                <span className="basis-full text-xs text-orange-200/80">
+                  Clear this occupied seat and save before removing it.
+                </span>
+              ) : null}
             </>
           ) : null}
         </div>
@@ -363,7 +378,6 @@ export function SeatOrderEditor({
   const router = useRouter();
   const isConfiguration = presentation === "configuration";
   const [isCardEditing, setIsCardEditing] = useState(false);
-  const isEditing = isConfiguration ? canEdit : isCardEditing;
   const [draftPlayers, setDraftPlayers] = useState(players);
   const [draftActivePlayerEntryId, setDraftActivePlayerEntryId] =
     useState(activePlayerEntryId);
@@ -414,10 +428,12 @@ export function SeatOrderEditor({
     players,
     activePlayerEntryId,
   );
+  const isEditing = canEdit && (isConfiguration || isCardEditing || isDirty);
+  const reportedDirty = canEdit && isDirty;
 
   useEffect(() => {
-    onDirtyChange?.(isDirty);
-  }, [isDirty, onDirtyChange]);
+    onDirtyChange?.(reportedDirty);
+  }, [onDirtyChange, reportedDirty]);
 
   function updateDraft(
     nextPlayers: SeatOrderPlayer[],
@@ -547,16 +563,15 @@ export function SeatOrderEditor({
     const selectedPlayer = workingPlayers.find(
       (player) => player.id === seatEntryId,
     );
+    const authoritativePlayer = players.find(
+      (player) => player.id === seatEntryId,
+    );
 
-    if (!selectedPlayer) {
-      return;
-    }
-
-    const occupiedSeatCount = workingPlayers.filter(
-      (player) => player.userId != null,
-    ).length;
-
-    if (selectedPlayer.userId != null && occupiedSeatCount <= 1) {
+    if (
+      !selectedPlayer ||
+      selectedPlayer.userId != null ||
+      authoritativePlayer?.userId != null
+    ) {
       return;
     }
 
@@ -610,16 +625,15 @@ export function SeatOrderEditor({
     }
 
     const selectedPlayer = workingPlayers[index];
+    const authoritativePlayer = players.find(
+      (player) => player.id === selectedPlayer?.id,
+    );
 
-    if (!selectedPlayer) {
-      return;
-    }
-
-    const occupiedSeatCount = workingPlayers.filter(
-      (player) => player.userId != null,
-    ).length;
-
-    if (selectedPlayer.userId != null && occupiedSeatCount <= 1) {
+    if (
+      !selectedPlayer ||
+      selectedPlayer.userId != null ||
+      authoritativePlayer?.userId != null
+    ) {
       return;
     }
 
@@ -656,42 +670,52 @@ export function SeatOrderEditor({
     setPendingSeatAction(null);
 
     startTransition(async () => {
-      const response = await fetch(
-        `/api/games/${encodeURIComponent(String(gameNumber))}/seat-order`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
+      try {
+        const removedSeatEntryIds = players
+          .filter(
+            (player) =>
+              !workingPlayers.some(
+                (draftPlayer) => draftPlayer.id === player.id,
+              ),
+          )
+          .map((player) => player.id);
+        const removedSeatEntryIdSet = new Set(removedSeatEntryIds);
+        const clearedSeatEntryIds = players
+          .filter(
+            (player) =>
+              player.userId != null && !removedSeatEntryIdSet.has(player.id),
+          )
+          .filter(
+            (player) =>
+              workingPlayers.find((draftPlayer) => draftPlayer.id === player.id)
+                ?.userId == null,
+          )
+          .map((player) => player.id);
+        const response = await fetch(
+          `/api/games/${encodeURIComponent(String(gameNumber))}/seat-order`,
+          {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              seatEntryIds: workingPlayers.map((player) => player.id),
+              clearedSeatEntryIds,
+              removedSeatEntryIds,
+              activePlayerEntryId: workingActivePlayerEntryId,
+            }),
           },
-          body: JSON.stringify({
-            seatEntryIds: workingPlayers.map((player) => player.id),
-            clearedSeatEntryIds: players
-              .filter((player) => player.userId != null)
-              .filter(
-                (player) =>
-                  workingPlayers.find(
-                    (draftPlayer) => draftPlayer.id === player.id,
-                  )?.userId == null,
-              )
-              .map((player) => player.id),
-            removedSeatEntryIds: players
-              .filter(
-                (player) =>
-                  !workingPlayers.some(
-                    (draftPlayer) => draftPlayer.id === player.id,
-                  ),
-              )
-              .map((player) => player.id),
-            activePlayerEntryId: workingActivePlayerEntryId,
-          }),
-        },
-      );
+        );
 
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as {
-          error?: string;
-        } | null;
-        setErrorMessage(payload?.error ?? "The seat order update failed.");
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as {
+            error?: string;
+          } | null;
+          setErrorMessage(payload?.error ?? "The seat order update failed.");
+          return;
+        }
+      } catch {
+        setErrorMessage("The seat order update failed.");
         return;
       }
 
@@ -764,10 +788,10 @@ export function SeatOrderEditor({
                 ).length > 1
               }
               canRemoveSeat={
-                player.userId == null ||
-                visiblePlayers.filter(
-                  (visiblePlayer) => visiblePlayer.userId != null,
-                ).length > 1
+                player.userId == null &&
+                players.find(
+                  (authoritativePlayer) => authoritativePlayer.id === player.id,
+                )?.userId == null
               }
               index={index}
               isEditing={isEditing}
@@ -779,6 +803,11 @@ export function SeatOrderEditor({
               onSelectForManagement={setSelectedSeatEntryId}
               player={player}
               presentation={presentation}
+              requiresSavedClearBeforeRemove={
+                players.find(
+                  (authoritativePlayer) => authoritativePlayer.id === player.id,
+                )?.userId != null
+              }
             />
           ))}
         </SortableContext>
