@@ -53,16 +53,16 @@ export default async function GameLayout({
 
   return (
     <main
-      className={`h-screen overflow-hidden bg-black font-mono p-4 flex flex-col ${shellTextClassName}`}
+      className={`h-screen overflow-hidden bg-black font-mono p-2 sm:p-4 flex flex-col ${shellTextClassName}`}
     >
       <div
-        className={`flex-1 min-h-0 flex flex-col rounded-lg border p-6 bg-black/90 shadow-2xl overflow-hidden ${shellFrameClassName}`}
+        className={`flex-1 min-h-0 flex flex-col rounded-lg border p-3 sm:p-6 bg-black/90 shadow-2xl overflow-hidden ${shellFrameClassName}`}
       >
         {/* Terminal header bar */}
         <div
-          className={`flex items-center justify-between border-b pb-4 mb-6 shrink-0 ${shellHeaderClassName}`}
+          className={`flex flex-wrap items-center justify-between gap-3 border-b pb-4 mb-6 shrink-0 ${shellHeaderClassName}`}
         >
-          <div className="flex items-center gap-4">
+          <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
             <Link
               className={`inline-flex h-9 items-center rounded-md border px-3 text-sm font-mono transition-colors hover:text-black ${shellLinkClassName}`}
               href="/"
@@ -70,10 +70,10 @@ export default async function GameLayout({
               &lt; BACK
             </Link>
             <div
-              className={`text-xl font-mono ${shellTitleClassName}`}
+              className={`min-w-0 break-words text-base sm:text-xl font-mono ${shellTitleClassName}`}
             >{`> ${game.gameNumber} : ${game.name}`}</div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-4">
             <UserBadge
               name={
                 session?.user?.name ?? session?.user?.email ?? "Guest overlord"
