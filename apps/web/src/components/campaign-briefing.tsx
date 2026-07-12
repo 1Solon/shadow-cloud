@@ -284,7 +284,7 @@ export function CampaignBriefing({
           expanded={openDisclosure === "protocol"}
           onClick={() => toggleDisclosure("protocol")}
         >
-          TURN PROTOCOL · {hasKnownTarget ? `${turnTargetHours}H` : "UNKNOWN"}{" "}
+          TURN REMINDERS · {hasKnownTarget ? `${turnTargetHours}H` : "UNKNOWN"}{" "}
           TARGET
         </DisclosureButton>
         {openDisclosure === "protocol" ? (

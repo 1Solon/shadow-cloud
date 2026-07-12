@@ -175,11 +175,11 @@ describe("CampaignBriefing", () => {
     expect(screen.getByText("No campaign notes recorded.")).toBeInTheDocument();
   });
 
-  it("shows the complete turn protocol", async () => {
+  it("shows the complete turn reminders", async () => {
     const user = userEvent.setup();
     renderBriefing();
     await user.click(
-      screen.getByRole("button", { name: "TURN PROTOCOL · 12H TARGET" }),
+      screen.getByRole("button", { name: "TURN REMINDERS · 12H TARGET" }),
     );
 
     expect(screen.getByText("12 hours")).toBeInTheDocument();
@@ -209,7 +209,7 @@ describe("CampaignBriefing", () => {
     const user = userEvent.setup();
     renderBriefing({ turnTargetHours: null });
     await user.click(
-      screen.getByRole("button", { name: "TURN PROTOCOL · UNKNOWN TARGET" }),
+      screen.getByRole("button", { name: "TURN REMINDERS · UNKNOWN TARGET" }),
     );
 
     expect(screen.getByText("Unknown", { selector: "dd" })).toBeInTheDocument();

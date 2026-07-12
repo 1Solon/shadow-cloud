@@ -16,7 +16,7 @@ const sections: Array<{
 }> = [
   { id: "identity", label: "Identity & Progress" },
   { id: "world", label: "World Setup" },
-  { id: "turn-protocol", label: "Turn Protocol" },
+  { id: "turn-protocol", label: "Turn Reminders" },
   { id: "seat-order", label: "Seat Order" },
   { id: "notes", label: "Notes" },
 ];

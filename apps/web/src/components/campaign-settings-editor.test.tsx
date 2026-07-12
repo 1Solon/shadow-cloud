@@ -130,7 +130,7 @@ describe("CampaignSettingsEditor", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("renders only turn protocol fields", () => {
+  it("renders only turn reminder fields", () => {
     renderEditor("turn-protocol");
 
     expect(screen.getByLabelText("Target turn hours")).toHaveValue(24);
