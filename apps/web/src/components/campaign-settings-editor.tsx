@@ -530,6 +530,11 @@ function HostTransferConfirmationDialog({
 
 export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
   const router = useRouter();
+  const turnDescriptionIdPrefix = useId();
+  const turnTargetHoursDescriptionId = `${turnDescriptionIdPrefix}-turn-target-hours-description`;
+  const turnReminderGraceHoursDescriptionId = `${turnDescriptionIdPrefix}-turn-reminder-grace-hours-description`;
+  const turnReminderRepeatHoursDescriptionId = `${turnDescriptionIdPrefix}-turn-reminder-repeat-hours-description`;
+  const turnRemindersEnabledDescriptionId = `${turnDescriptionIdPrefix}-turn-reminders-enabled-description`;
   const { onDirtyChange } = props;
   const [draft, setDraft] = useState(() => createDraft(props));
   const [initialDraft, setInitialDraft] = useState(() => createDraft(props));
@@ -1019,11 +1024,11 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
             </div>
             <FieldRow
               description="The expected time allowed for each player's turn."
-              descriptionId="turn-target-hours-description"
+              descriptionId={turnTargetHoursDescriptionId}
               label="Target turn hours"
             >
               <input
-                aria-describedby="turn-target-hours-description"
+                aria-describedby={turnTargetHoursDescriptionId}
                 aria-label="Target turn hours"
                 className={controlClassName}
                 disabled={isEditorDisabled}
@@ -1039,11 +1044,11 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
             </FieldRow>
             <FieldRow
               description="Extra time after the target before the first reminder."
-              descriptionId="turn-reminder-grace-hours-description"
+              descriptionId={turnReminderGraceHoursDescriptionId}
               label="Reminder grace hours"
             >
               <input
-                aria-describedby="turn-reminder-grace-hours-description"
+                aria-describedby={turnReminderGraceHoursDescriptionId}
                 aria-label="Reminder grace hours"
                 className={controlClassName}
                 disabled={isEditorDisabled}
@@ -1059,11 +1064,11 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
             </FieldRow>
             <FieldRow
               description="Time between later reminders while the turn remains open."
-              descriptionId="turn-reminder-repeat-hours-description"
+              descriptionId={turnReminderRepeatHoursDescriptionId}
               label="Reminder repeat hours"
             >
               <input
-                aria-describedby="turn-reminder-repeat-hours-description"
+                aria-describedby={turnReminderRepeatHoursDescriptionId}
                 aria-label="Reminder repeat hours"
                 className={controlClassName}
                 disabled={isEditorDisabled}
@@ -1079,11 +1084,11 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
             </FieldRow>
             <FieldRow
               description="Send automated reminder messages using this schedule."
-              descriptionId="turn-reminders-enabled-description"
+              descriptionId={turnRemindersEnabledDescriptionId}
               label="Turn reminders enabled"
             >
               <input
-                aria-describedby="turn-reminders-enabled-description"
+                aria-describedby={turnRemindersEnabledDescriptionId}
                 aria-label="Turn reminders enabled"
                 checked={draft.turnRemindersEnabled}
                 className="size-4 accent-orange-400 disabled:cursor-not-allowed disabled:opacity-50"

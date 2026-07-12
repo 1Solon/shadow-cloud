@@ -156,36 +156,57 @@ describe("CampaignSettingsEditor", () => {
     const descriptions = [
       [
         "Target turn hours",
-        "turn-target-hours-description",
         "The expected time allowed for each player's turn.",
       ],
       [
         "Reminder grace hours",
-        "turn-reminder-grace-hours-description",
         "Extra time after the target before the first reminder.",
       ],
       [
         "Reminder repeat hours",
-        "turn-reminder-repeat-hours-description",
         "Time between later reminders while the turn remains open.",
       ],
       [
         "Turn reminders enabled",
-        "turn-reminders-enabled-description",
         "Send automated reminder messages using this schedule.",
       ],
     ] as const;
 
-    for (const [label, descriptionId, description] of descriptions) {
-      expect(screen.getByText(description)).toHaveAttribute(
-        "id",
-        descriptionId,
+    for (const [label, description] of descriptions) {
+      const descriptionElement = screen.getByText(description);
+      expect(descriptionElement.id).not.toBe("");
+      expect(screen.getByLabelText(label)).toHaveAccessibleDescription(
+        description,
       );
       expect(screen.getByLabelText(label)).toHaveAttribute(
         "aria-describedby",
-        descriptionId,
+        descriptionElement.id,
       );
     }
+  });
+
+  it("uses distinct description relationships for multiple turn protocol editors", () => {
+    const first = renderEditor("turn-protocol");
+    const second = renderEditor("turn-protocol");
+    const description = "The expected time allowed for each player's turn.";
+
+    const firstDescription = within(first.container).getByText(description);
+    const secondDescription = within(second.container).getByText(description);
+    const firstInput = within(first.container).getByLabelText(
+      "Target turn hours",
+    );
+    const secondInput = within(second.container).getByLabelText(
+      "Target turn hours",
+    );
+
+    expect(firstDescription.id).not.toBe(secondDescription.id);
+    expect(firstInput).toHaveAttribute("aria-describedby", firstDescription.id);
+    expect(secondInput).toHaveAttribute(
+      "aria-describedby",
+      secondDescription.id,
+    );
+    expect(firstInput).toHaveAccessibleDescription(description);
+    expect(secondInput).toHaveAccessibleDescription(description);
   });
 
   it("rejects saving a clean section without fetching", async () => {
