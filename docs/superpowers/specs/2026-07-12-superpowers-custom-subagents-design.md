@@ -43,7 +43,7 @@ The faster model is appropriate because this role is read-heavy and returns dist
 ### `superpowers_implementer`
 
 - **Purpose:** Execute one bounded task from an approved implementation plan.
-- **Model:** `gpt-5.6`
+- **Model:** `gpt-5.6-sol`
 - **Reasoning effort:** `high`
 - **Sandbox:** Inherit the parent session's permissions.
 - **Behavior:** Load and follow the test-driven-development and verification-before-completion skills when applicable. Use red-green-refactor, keep changes within the assigned task, run focused verification, and report changed files and evidence. Stop and report conflicts, ambiguous requirements, or unrelated failures rather than guessing.
@@ -53,7 +53,7 @@ The implementer does not own design or integration decisions and must not commit
 ### `superpowers_spec_reviewer`
 
 - **Purpose:** Verify implementation compliance with the approved specification and assigned plan task.
-- **Model:** `gpt-5.6`
+- **Model:** `gpt-5.6-sol`
 - **Reasoning effort:** `high`
 - **Sandbox:** `read-only`
 - **Behavior:** Compare requirements against the actual implementation and tests. Return either approval or exact deviations with file-level evidence. Avoid maintainability and style feedback unless it represents a direct requirement violation.
@@ -63,7 +63,7 @@ This reviewer runs before the quality reviewer and remains independent from impl
 ### `superpowers_quality_reviewer`
 
 - **Purpose:** Review correctness, regressions, maintainability, and test quality after specification compliance passes.
-- **Model:** `gpt-5.6`
+- **Model:** `gpt-5.6-sol`
 - **Reasoning effort:** `high`
 - **Sandbox:** `read-only`
 - **Behavior:** Report only actionable findings, ordered by severity, with concrete file references and reasoning. Check edge cases, failure handling, test adequacy, and unnecessary complexity. Do not edit files or repeat already-resolved specification issues.
@@ -124,6 +124,6 @@ Discovery verification may require starting a fresh Codex session because agent 
 
 ## Source Basis
 
-OpenAI's Codex subagent documentation supports standalone personal agents under `~/.codex/agents/`, per-agent model and `model_reasoning_effort` settings, inherited configuration, read-only sandbox overrides, and narrow role definitions. It recommends `gpt-5.6-terra` for fast read-heavy work and `gpt-5.6` for demanding multi-step work, with `medium` as a balanced reasoning level and `high` for complex logic and edge cases.
+OpenAI's Codex subagent documentation supports standalone personal agents under `~/.codex/agents/`, per-agent model and `model_reasoning_effort` settings, inherited configuration, read-only sandbox overrides, and narrow role definitions. It recommends the `gpt-5.6` family for demanding multi-step work and `gpt-5.6-terra` for fast read-heavy work, with `medium` as a balanced reasoning level and `high` for complex logic and edge cases. The installed Codex model catalog exposes the demanding model as `gpt-5.6-sol`, so the personal agent files pin that verified local slug rather than the generic family name used by the public guide.
 
 Reference: [Codex subagents documentation](https://learn.chatgpt.com/docs/agent-configuration/subagents)
