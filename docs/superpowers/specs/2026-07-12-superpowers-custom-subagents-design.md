@@ -109,21 +109,27 @@ The parent integrates results, decides which findings are valid, and performs fi
 - If a reviewer lacks enough evidence, it requests the missing input instead of assuming compliance or inventing a finding.
 - Parent runtime permission overrides remain authoritative over custom-agent defaults.
 
+## Current Runtime Limitation
+
+Static installation, TOML schema validation, and installed-model-catalog validation are complete. Runtime custom-profile discovery and enforcement are not currently available in Codex CLI 0.144.1 tool-backed/app-server sessions: routing can create a real child with a task/path label such as `superpowers_explorer`, but that child remains generic and does not apply the standalone profile's configured model or `developer_instructions`. Live parent permission overrides can also supersede an agent's sandbox default.
+
+The four personal profiles remain valid and installed for future or otherwise supported surfaces. Runtime discovery of the four profiles, application of their custom model and instructions, and enforcement of their per-agent sandbox settings remain pending upstream support. See the [Codex subagents documentation](https://learn.chatgpt.com/docs/agent-configuration/subagents) and [OpenAI Codex issue #15250](https://github.com/openai/codex/issues/15250).
+
 ## Verification
 
-Implementation is complete when:
+Static installation is complete when:
 
 1. All four TOML files exist in `~/.codex/agents/`.
 2. Each file parses as TOML and contains all required fields.
 3. Model, reasoning, and sandbox values match this design.
 4. The four instruction sets have no overlapping ownership or contradictory directives.
-5. A fresh Codex session discovers the four custom-agent names.
-6. A read-only agent can be selected without receiving write permissions.
+5. The configured model slugs and reasoning levels exist in the installed Codex model catalog.
+6. The global `config.toml` hash is preserved and installation creates no repository changes.
 
-Discovery verification may require starting a fresh Codex session because agent configuration is loaded by the client. It should avoid running an unnecessary paid task when listing or inspecting loaded agents is sufficient.
+Runtime completion additionally requires a supported surface to discover each custom profile and demonstrably apply its configured model, `developer_instructions`, and sandbox behavior. Those criteria are pending upstream support and are not satisfied by a generic child carrying the requested task/path label.
 
 ## Source Basis
 
 OpenAI's Codex subagent documentation supports standalone personal agents under `~/.codex/agents/`, per-agent model and `model_reasoning_effort` settings, inherited configuration, read-only sandbox overrides, and narrow role definitions. It recommends the `gpt-5.6` family for demanding multi-step work and `gpt-5.6-terra` for fast read-heavy work, with `medium` as a balanced reasoning level and `high` for complex logic and edge cases. The installed Codex model catalog exposes the demanding model as `gpt-5.6-sol`, so the personal agent files pin that verified local slug rather than the generic family name used by the public guide.
 
-Reference: [Codex subagents documentation](https://learn.chatgpt.com/docs/agent-configuration/subagents)
+References: [Codex subagents documentation](https://learn.chatgpt.com/docs/agent-configuration/subagents); [OpenAI Codex issue #15250](https://github.com/openai/codex/issues/15250)
