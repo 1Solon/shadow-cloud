@@ -345,15 +345,29 @@ const controlClassName =
 
 function FieldRow({
   label,
+  description,
+  descriptionId,
   children,
 }: {
   label: string;
+  description?: string;
+  descriptionId?: string;
   children: React.ReactNode;
 }) {
   return (
-    <label className="grid gap-2 border-b border-orange-400/15 py-3 text-sm font-mono text-orange-200 sm:grid-cols-[minmax(10rem,0.45fr)_minmax(0,1fr)] sm:items-center">
-      <span className="text-xs uppercase tracking-[0.16em] text-orange-300/75">
-        {label}
+    <label className="grid min-w-0 gap-2 border-b border-orange-400/15 py-3 text-sm font-mono text-orange-200 sm:grid-cols-[minmax(10rem,0.45fr)_minmax(0,1fr)] sm:items-center">
+      <span className="min-w-0">
+        <span className="block text-xs uppercase tracking-[0.16em] text-orange-300/75">
+          {label}
+        </span>
+        {description ? (
+          <span
+            className="mt-1 block min-w-0 text-xs leading-relaxed text-orange-200/60"
+            id={descriptionId}
+          >
+            {description}
+          </span>
+        ) : null}
       </span>
       {children}
     </label>
@@ -993,9 +1007,24 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
         ) : null}
 
         {props.section === "turn-protocol" ? (
-          <div className="border-t border-orange-400/15">
-            <FieldRow label="Target turn hours">
+          <div className="min-w-0 border-t border-orange-400/15">
+            <div className="min-w-0 py-3 font-mono text-orange-200">
+              <p className="text-xs uppercase tracking-[0.16em] text-orange-300/75">
+                REMINDER SCHEDULE
+              </p>
+              <p className="mt-1 text-sm leading-relaxed text-orange-200/70">
+                Sets the expected turn pace and controls when automated reminder
+                messages are sent.
+              </p>
+            </div>
+            <FieldRow
+              description="The expected time allowed for each player's turn."
+              descriptionId="turn-target-hours-description"
+              label="Target turn hours"
+            >
               <input
+                aria-describedby="turn-target-hours-description"
+                aria-label="Target turn hours"
                 className={controlClassName}
                 disabled={isEditorDisabled}
                 max={MAX_TURN_TIMING_HOURS}
@@ -1008,8 +1037,14 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
                 }
               />
             </FieldRow>
-            <FieldRow label="Reminder grace hours">
+            <FieldRow
+              description="Extra time after the target before the first reminder."
+              descriptionId="turn-reminder-grace-hours-description"
+              label="Reminder grace hours"
+            >
               <input
+                aria-describedby="turn-reminder-grace-hours-description"
+                aria-label="Reminder grace hours"
                 className={controlClassName}
                 disabled={isEditorDisabled}
                 max={MAX_TURN_TIMING_HOURS}
@@ -1022,8 +1057,14 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
                 }
               />
             </FieldRow>
-            <FieldRow label="Reminder repeat hours">
+            <FieldRow
+              description="Time between later reminders while the turn remains open."
+              descriptionId="turn-reminder-repeat-hours-description"
+              label="Reminder repeat hours"
+            >
               <input
+                aria-describedby="turn-reminder-repeat-hours-description"
+                aria-label="Reminder repeat hours"
                 className={controlClassName}
                 disabled={isEditorDisabled}
                 max={MAX_TURN_TIMING_HOURS}
@@ -1036,8 +1077,14 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
                 }
               />
             </FieldRow>
-            <FieldRow label="Turn reminders enabled">
+            <FieldRow
+              description="Send automated reminder messages using this schedule."
+              descriptionId="turn-reminders-enabled-description"
+              label="Turn reminders enabled"
+            >
               <input
+                aria-describedby="turn-reminders-enabled-description"
+                aria-label="Turn reminders enabled"
                 checked={draft.turnRemindersEnabled}
                 className="size-4 accent-orange-400 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={isEditorDisabled}

@@ -143,6 +143,51 @@ describe("CampaignSettingsEditor", () => {
     expect(screen.queryByLabelText("Game mode")).not.toBeInTheDocument();
   });
 
+  it("explains the turn reminder schedule and associates each field description", () => {
+    renderEditor("turn-protocol");
+
+    expect(screen.getByText("REMINDER SCHEDULE")).toBeVisible();
+    expect(
+      screen.getByText(
+        "Sets the expected turn pace and controls when automated reminder messages are sent.",
+      ),
+    ).toBeVisible();
+
+    const descriptions = [
+      [
+        "Target turn hours",
+        "turn-target-hours-description",
+        "The expected time allowed for each player's turn.",
+      ],
+      [
+        "Reminder grace hours",
+        "turn-reminder-grace-hours-description",
+        "Extra time after the target before the first reminder.",
+      ],
+      [
+        "Reminder repeat hours",
+        "turn-reminder-repeat-hours-description",
+        "Time between later reminders while the turn remains open.",
+      ],
+      [
+        "Turn reminders enabled",
+        "turn-reminders-enabled-description",
+        "Send automated reminder messages using this schedule.",
+      ],
+    ] as const;
+
+    for (const [label, descriptionId, description] of descriptions) {
+      expect(screen.getByText(description)).toHaveAttribute(
+        "id",
+        descriptionId,
+      );
+      expect(screen.getByLabelText(label)).toHaveAttribute(
+        "aria-describedby",
+        descriptionId,
+      );
+    }
+  });
+
   it("rejects saving a clean section without fetching", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi.spyOn(globalThis, "fetch");
