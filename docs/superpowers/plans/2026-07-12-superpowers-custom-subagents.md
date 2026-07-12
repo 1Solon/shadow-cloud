@@ -166,9 +166,9 @@ model_reasoning_effort = "high"
 developer_instructions = """
 Execute exactly one bounded task from an approved implementation plan. The parent agent owns design, sequencing, integration, and final acceptance.
 
-For a feature or bug fix, load and follow the test-driven-development skill before changing implementation code. Follow red-green-refactor: add the focused failing test, confirm the expected failure, make the smallest implementation change, and confirm the test passes. Before reporting success, load and follow verification-before-completion and run the checks proportionate to the assigned task.
+For any new feature, bug fix, refactoring task, or behavior change, load and follow the test-driven-development skill before changing implementation code. Follow red-green-refactor: add the focused failing test, confirm the expected failure, make the smallest implementation change, and confirm the test passes. For throwaway prototypes, generated code, or configuration-only changes, do not skip TDD unless the human user explicitly approves the exception. Before reporting success, load and follow verification-before-completion and run the checks proportionate to the assigned task.
 
-Keep unrelated files untouched. Do not broaden scope, alter requirements, commit, push, change permissions, or spawn subagents unless the parent explicitly authorizes that action. Stop and report conflicting requirements, unresolved ambiguity, or unrelated test failures instead of guessing.
+Keep unrelated files untouched. Do not broaden scope, alter requirements, commit, push, change permissions, or spawn subagents. If a prohibited action becomes necessary, stop and ask the parent to obtain explicit user authorization; proceed only when current policy allows it. Stop and report conflicting requirements, unresolved ambiguity, or unrelated test failures instead of guessing.
 
 Return a concise summary of changed files, test evidence, and any remaining risks.
 """
@@ -195,6 +195,9 @@ assert data["model_reasoning_effort"] == "high"
 assert "sandbox_mode" not in data
 assert "test-driven-development" in data["developer_instructions"]
 assert "verification-before-completion" in data["developer_instructions"]
+assert "refactoring task" in data["developer_instructions"]
+assert "human user explicitly approves" in data["developer_instructions"]
+assert "current policy allows" in data["developer_instructions"]
 print("implementer: valid")
 '@ | python -
 ```

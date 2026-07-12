@@ -26,7 +26,7 @@ This creates four clear boundaries:
 3. Specification review verifies that the result matches the approved requirements.
 4. Quality review evaluates the implementation only after specification compliance passes.
 
-Agents must not spawn further subagents. They must not broaden their assigned task, commit, push, or change permissions unless the parent explicitly authorizes that action.
+Agents must not broaden their assigned task, commit, push, change permissions, or spawn further subagents. If any prohibited action becomes necessary, they must stop and ask the parent to obtain explicit user authorization, and may proceed only when current policy allows it.
 
 ## Agent Definitions
 
@@ -46,9 +46,9 @@ The faster model is appropriate because this role is read-heavy and returns dist
 - **Model:** `gpt-5.6-sol`
 - **Reasoning effort:** `high`
 - **Sandbox:** Inherit the parent session's permissions.
-- **Behavior:** Load and follow the test-driven-development and verification-before-completion skills when applicable. Use red-green-refactor, keep changes within the assigned task, run focused verification, and report changed files and evidence. Stop and report conflicts, ambiguous requirements, or unrelated failures rather than guessing.
+- **Behavior:** For any new feature, bug fix, refactoring task, or behavior change, load and follow the test-driven-development skill before changing implementation code and use red-green-refactor. TDD exceptions for throwaway prototypes, generated code, or configuration-only changes require explicit human user approval. Before reporting success, load and follow verification-before-completion, run focused verification, and report changed files and evidence. Keep changes within the assigned task; do not commit, push, change permissions, or spawn subagents. If a prohibited action becomes necessary, ask the parent to obtain explicit user authorization and proceed only when current policy allows it. Stop and report conflicts, ambiguous requirements, or unrelated failures rather than guessing.
 
-The implementer does not own design or integration decisions and must not commit unless explicitly instructed.
+The implementer does not own design or integration decisions.
 
 ### `superpowers_spec_reviewer`
 
