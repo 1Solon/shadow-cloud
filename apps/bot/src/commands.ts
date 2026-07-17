@@ -184,6 +184,17 @@ const unpinCommand = new SlashCommandBuilder()
       .setRequired(true),
   );
 
+const debugCommand = new SlashCommandBuilder()
+  .setName("debug")
+  .setDescription("Preview Shadow Cloud Discord notifications and responses.")
+  .setDMPermission(false)
+  .addStringOption((option) =>
+    option
+      .setName("notifications")
+      .setDescription("Comma-separated preview names; omit to show all.")
+      .setRequired(false),
+  );
+
 export const supportedCommandNames = [
   "init",
   "register",
@@ -193,6 +204,7 @@ export const supportedCommandNames = [
   "link",
   "pin",
   "unpin",
+  "debug",
 ] as const;
 
 export type SupportedCommandName = (typeof supportedCommandNames)[number];
@@ -214,4 +226,5 @@ export const slashCommands = [
   linkCommand,
   pinCommand,
   unpinCommand,
+  debugCommand,
 ] as const;

@@ -31,7 +31,26 @@ describe('commands', () => {
       'link',
       'pin',
       'unpin',
+      'debug',
     ]);
+  });
+
+  it('registers a guild-only debug command with an optional notification list', () => {
+    const debugCommand = slashCommands.find(
+      (command) => command.name === 'debug',
+    )?.toJSON();
+
+    expect(debugCommand).toMatchObject({
+      name: 'debug',
+      dm_permission: false,
+      options: [
+        {
+          name: 'notifications',
+          type: ApplicationCommandOptionType.String,
+          required: false,
+        },
+      ],
+    });
   });
 
   it('exposes bounded whole-hour turn timing options on init', () => {
