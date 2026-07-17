@@ -214,8 +214,8 @@ function formatDiscordActor(displayName: string, discordId: string | null) {
   return discordId ? `<@${discordId}>` : displayName;
 }
 
-function formatUploadedAt(uploadedAt: string) {
-  const parsedDate = new Date(uploadedAt);
+function formatDiscordTimestamp(timestamp: string) {
+  const parsedDate = new Date(timestamp);
 
   if (Number.isNaN(parsedDate.getTime())) {
     return null;
@@ -334,7 +334,7 @@ export function buildSaveNotificationMessage(
     payload.turn.activePlayer.displayName,
     payload.turn.activePlayer.discordId,
   );
-  const uploadedAtLabel = formatUploadedAt(payload.upload.uploadedAt);
+  const uploadedAtLabel = formatDiscordTimestamp(payload.upload.uploadedAt);
   const gameUrl = new URL(
     `/games/${encodeURIComponent(String(payload.game.gameNumber))}`,
     webBaseUrl,
@@ -364,7 +364,7 @@ export function buildSaveReplacedNotificationMessage(
     payload.replacement.replacedBy.displayName,
     payload.replacement.replacedBy.discordId,
   );
-  const replacedAt = formatUploadedAt(payload.replacement.replacedAt);
+  const replacedAt = formatDiscordTimestamp(payload.replacement.replacedAt);
   const downloadUrl = new URL(
     `/api/games/${encodeURIComponent(String(payload.game.gameNumber))}/files/${encodeURIComponent(payload.replacement.versionId)}`,
     webBaseUrl,
@@ -396,6 +396,7 @@ export function buildTurnNudgeNotificationMessage(
     `/games/${encodeURIComponent(String(payload.game.gameNumber))}`,
     webBaseUrl,
   ).toString();
+  const startedAt = formatDiscordTimestamp(payload.turnRecord.startedAt);
 
   return buildStandardNotification({
     title: `Turn reminder for ${player}`,
@@ -404,9 +405,7 @@ export function buildTurnNudgeNotificationMessage(
       `**Round** ${payload.turnRecord.roundNumber} | **Seat** ${payload.turnRecord.activePlayer.turnOrder}`,
       `This turn has been active for **${hours(payload.turnRecord.elapsedHours)}**, against a target of **${hours(payload.turnRecord.targetHours)}**.`,
     ],
-    actionLines: [
-      "This is a reminder only; Shadow Cloud will not automatically skip the turn.",
-    ],
+    actionLines: startedAt ? [`-# ${startedAt}`] : [],
     mentionedUserIds: [payload.turnRecord.activePlayer.discordId],
   });
 }

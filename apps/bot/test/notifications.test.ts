@@ -103,8 +103,9 @@ describe("buildTurnNudgeNotificationMessage", () => {
     expect(rendered).toContain("**Round** 3 | **Seat** 2");
     expect(rendered).toContain("**25 hours**");
     expect(rendered).toContain("**24 hours**");
-    expect(rendered).toContain("reminder only");
-    expect(rendered).toContain("will not automatically skip the turn");
+    expect(rendered).toContain("-# <t:1783684800:F>");
+    expect(rendered).not.toContain("This is a reminder only");
+    expect(rendered).not.toContain("will not automatically skip the turn");
   });
 
   it("uses only the required active-player mention for singular-hour nudges", () => {
