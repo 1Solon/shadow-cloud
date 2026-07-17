@@ -74,9 +74,9 @@ describe("response message builders", () => {
     expect(
       rendered(buildGameLinkReply("https://shadow.example/games/42")),
     ).toContain("<https://shadow.example/games/42>");
-    expect(
-      rendered(buildRegistrationSubmittedReply("Debug World")),
-    ).toContain("Registration submitted");
+    expect(rendered(buildRegistrationSubmittedReply("Debug World"))).toContain(
+      "Registration submitted",
+    );
   });
 
   it("distinguishes pinning and approval outcomes", () => {
@@ -92,8 +92,8 @@ describe("response message builders", () => {
     expect(
       rendered(buildApprovalFailureReply("approve", "Rejected")),
     ).toContain("Approval failed");
-    expect(
-      rendered(buildApprovalFailureReply("reject", "Rejected")),
-    ).toContain("Rejection failed");
+    expect(rendered(buildApprovalFailureReply("reject", "Rejected"))).toContain(
+      "Rejection failed",
+    );
   });
 });

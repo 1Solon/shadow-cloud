@@ -63,9 +63,7 @@ describe("selectDebugPreviewNames", () => {
 
   it("normalizes, deduplicates, and returns registry order", () => {
     expect(
-      selectDebugPreviewNames(
-        " TURN-REMINDER,game-initialized,turn-reminder ",
-      ),
+      selectDebugPreviewNames(" TURN-REMINDER,game-initialized,turn-reminder "),
     ).toEqual({
       ok: true,
       names: ["game-initialized", "turn-reminder"],
@@ -86,7 +84,9 @@ describe("buildDebugPreviews", () => {
 
     expect(previews.map((preview) => preview.name)).toEqual(debugPreviewNames);
     for (const preview of previews) {
-      expect(Number(preview.message.flags) & MessageFlags.Ephemeral).toBeTruthy();
+      expect(
+        Number(preview.message.flags) & MessageFlags.Ephemeral,
+      ).toBeTruthy();
       expect(
         Number(preview.message.flags) & MessageFlags.IsComponentsV2,
       ).toBeTruthy();

@@ -173,7 +173,9 @@ async function handleRegistrationButton(
           payload?.error ??
           `Failed to ${action} registration.`);
 
-      await interaction.followUp(buildApprovalFailureReply(action, errorMessage));
+      await interaction.followUp(
+        buildApprovalFailureReply(action, errorMessage),
+      );
       return;
     }
 
@@ -265,12 +267,16 @@ async function handlePinningCommand(
 
     if (commandName === "pin") {
       await message.pin();
-      await interaction.editReply(buildMessagePinReply("pin", target.messageId));
+      await interaction.editReply(
+        buildMessagePinReply("pin", target.messageId),
+      );
       return;
     }
 
     await message.unpin();
-    await interaction.editReply(buildMessagePinReply("unpin", target.messageId));
+    await interaction.editReply(
+      buildMessagePinReply("unpin", target.messageId),
+    );
   } catch (error) {
     console.warn(`Failed to ${commandName} Discord message.`, {
       channelId: channel.id,
@@ -417,8 +423,7 @@ async function handleDebugCommand(
 
   const previews = buildDebugPreviews(selection.names, {
     userId: interaction.user.id,
-    userDisplayName:
-      interaction.user.globalName ?? interaction.user.username,
+    userDisplayName: interaction.user.globalName ?? interaction.user.username,
     webBaseUrl,
   });
   const [firstPreview, ...remainingPreviews] = previews;

@@ -3,10 +3,7 @@ import type {
   InteractionReplyOptions,
   MessageCreateOptions,
 } from "discord.js";
-import type {
-  ApprovalAction,
-  CommandResponsePayload,
-} from "./bot-api.js";
+import type { ApprovalAction, CommandResponsePayload } from "./bot-api.js";
 import type { SupportedCommandName } from "./commands.js";
 import {
   buildStandardEditReply,
@@ -118,9 +115,7 @@ export function buildMessagePinReply(
 
   return buildStandardEditReply({
     title: pinned ? "Message pinned" : "Message unpinned",
-    facts: [
-      `${pinned ? "Pinned" : "Unpinned"} message ${messageId}.`,
-    ],
+    facts: [`${pinned ? "Pinned" : "Unpinned"} message ${messageId}.`],
   });
 }
 
@@ -221,9 +216,7 @@ export function buildTurnAdvancedAnnouncement({
   nextDiscordId: string | null;
   nextSeat: number | string;
 }): MessageCreateOptions {
-  const nextMention = nextDiscordId
-    ? `<@${nextDiscordId}>`
-    : `**${nextName}**`;
+  const nextMention = nextDiscordId ? `<@${nextDiscordId}>` : `**${nextName}**`;
 
   return buildStandardNotification({
     title: `Turn advanced in ${gameName}`,

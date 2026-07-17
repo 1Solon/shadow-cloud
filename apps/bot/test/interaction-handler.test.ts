@@ -49,7 +49,10 @@ describe("createInteractionHandler debug command", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await createInteractionHandler(client as never, config)(interaction as never);
+    await createInteractionHandler(
+      client as never,
+      config,
+    )(interaction as never);
 
     expect(interaction.deferReply).toHaveBeenCalledWith({
       flags: MessageFlags.Ephemeral,
@@ -72,7 +75,10 @@ describe("createInteractionHandler debug command", () => {
       channels: { fetch: vi.fn(async () => null) },
     };
 
-    await createInteractionHandler(client as never, config)(interaction as never);
+    await createInteractionHandler(
+      client as never,
+      config,
+    )(interaction as never);
 
     expect(interaction.deferReply).toHaveBeenCalledWith({
       flags: MessageFlags.Ephemeral,

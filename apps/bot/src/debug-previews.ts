@@ -78,15 +78,15 @@ type DebugPreviewContext = {
 };
 
 type PreviewSource =
-  | MessageCreateOptions
-  | InteractionReplyOptions
-  | InteractionEditReplyOptions;
+  MessageCreateOptions | InteractionReplyOptions | InteractionEditReplyOptions;
 
 type DebugPreviewFactory = (context: DebugPreviewContext) => PreviewSource;
 
 const knownPreviewNames = new Set<string>(debugPreviewNames);
 
-export function selectDebugPreviewNames(value: string | null):
+export function selectDebugPreviewNames(
+  value: string | null,
+):
   | { ok: true; names: readonly DebugPreviewName[] }
   | { ok: false; unknownNames: string[] } {
   const requestedNames = (value ?? "")
@@ -276,8 +276,7 @@ const previewFactories: Record<DebugPreviewName, DebugPreviewFactory> = {
     }),
   "registration-submitted": () =>
     buildRegistrationSubmittedReply("Debug World"),
-  "resignation-complete": () =>
-    buildResignationCompleteReply("Debug World"),
+  "resignation-complete": () => buildResignationCompleteReply("Debug World"),
   "resignation-announcement": (context) =>
     buildResignationAnnouncement(context.userId, "Debug World", 2, true),
   "seat-filled": (context) =>
