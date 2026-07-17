@@ -1,4 +1,4 @@
-import { MessageFlags } from "discord.js";
+import { ChannelType, MessageFlags } from "discord.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { debugPreviewNames } from "../src/debug-previews.js";
 import { createInteractionHandler } from "../src/interaction-handler.js";
@@ -112,7 +112,7 @@ describe("createInteractionHandler debug command", () => {
     )(interaction as never);
 
     expect(interaction.editReply).toHaveBeenCalledTimes(1);
-    expect(interaction.followUp).toHaveBeenCalledTimes(33);
+    expect(interaction.followUp).toHaveBeenCalledTimes(32);
     for (const [message] of interaction.followUp.mock.calls) {
       expect(message).toMatchObject({
         flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
@@ -155,6 +155,154 @@ describe("createInteractionHandler debug command", () => {
 
     expect(interaction.editReply).toHaveBeenCalledTimes(2);
     expect(JSON.stringify(interaction.editReply.mock.calls[1]?.[0])).toContain(
+      "Shadow Cloud unavailable",
+    );
+  });
+});
+
+describe("createInteractionHandler skip command", () => {
+  it("sends one public announcement before deleting the deferred reply", async () => {
+    const send = vi.fn(async () => undefined);
+    const channel = {
+      id: "thread-1",
+      name: "Debug World",
+      parentId: "forum-1",
+      parent: { type: ChannelType.GuildForum },
+      isThread: () => true,
+      joinable: false,
+      send,
+    };
+    const interaction = {
+      isButton: () => false,
+      isChatInputCommand: () => true,
+      commandName: "skip",
+      channel,
+      channelId: channel.id,
+      guildId: "guild-1",
+      guild: null,
+      user: {
+        id: "overlord-1",
+        globalName: "Overlord",
+        username: "overlord",
+      },
+      options: {},
+      deferReply: vi.fn(async () => undefined),
+      editReply: vi.fn(async () => undefined),
+      deleteReply: vi.fn(async () => undefined),
+    };
+    const client = {
+      channels: { fetch: vi.fn(async () => null) },
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              name: "Debug World",
+              skippedPlayer: {
+                displayName: "Previous Player",
+                turnOrder: 1,
+              },
+              nextPlayer: {
+                displayName: "Solon",
+                discordId: "user-2",
+                turnOrder: 2,
+              },
+            }),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          ),
+      ),
+    );
+
+    await createInteractionHandler(client as never, {
+      ...config,
+      botApiToken: "token",
+    })(interaction as never);
+
+    expect(send).toHaveBeenCalledOnce();
+    expect(interaction.editReply).not.toHaveBeenCalled();
+    expect(interaction.deleteReply).toHaveBeenCalledOnce();
+    expect(send.mock.invocationCallOrder[0] ?? 0).toBeLessThan(
+      interaction.deleteReply.mock.invocationCallOrder[0] ?? 0,
+    );
+    const renderedMessage = JSON.stringify(send.mock.calls[0]?.[0]);
+    expect(renderedMessage).toContain("It is now <@user-2>'s turn!");
+    expect(renderedMessage).toContain(
+      "**Previous Player** (seat 1) was skipped in **Debug World**.",
+    );
+    expect(renderedMessage).not.toContain("**Seat** 2");
+  });
+
+  it("keeps the deferred reply when the public announcement fails", async () => {
+    const send = vi.fn(async () => {
+      throw new Error("Discord rejected the announcement");
+    });
+    const channel = {
+      id: "thread-1",
+      name: "Debug World",
+      parentId: "forum-1",
+      parent: { type: ChannelType.GuildForum },
+      isThread: () => true,
+      joinable: false,
+      send,
+    };
+    const interaction = {
+      isButton: () => false,
+      isChatInputCommand: () => true,
+      commandName: "skip",
+      channel,
+      channelId: channel.id,
+      guildId: "guild-1",
+      guild: null,
+      user: {
+        id: "overlord-1",
+        globalName: "Overlord",
+        username: "overlord",
+      },
+      options: {},
+      deferReply: vi.fn(async () => undefined),
+      editReply: vi.fn(async () => undefined),
+      deleteReply: vi.fn(async () => undefined),
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              name: "Debug World",
+              skippedPlayer: {
+                displayName: "Previous Player",
+                turnOrder: 1,
+              },
+              nextPlayer: {
+                displayName: "Solon",
+                discordId: "user-2",
+                turnOrder: 2,
+              },
+            }),
+            {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            },
+          ),
+      ),
+    );
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await createInteractionHandler(
+      { channels: { fetch: vi.fn(async () => null) } } as never,
+      { ...config, botApiToken: "token" },
+    )(interaction as never);
+
+    expect(send).toHaveBeenCalledOnce();
+    expect(interaction.deleteReply).not.toHaveBeenCalled();
+    expect(interaction.editReply).toHaveBeenCalledOnce();
+    expect(JSON.stringify(interaction.editReply.mock.calls[0]?.[0])).toContain(
       "Shadow Cloud unavailable",
     );
   });

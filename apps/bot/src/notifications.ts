@@ -232,14 +232,6 @@ function formatDiscordTimestamp(timestamp: string) {
   return `<t:${Math.floor(parsedDate.getTime() / 1000)}:F>`;
 }
 
-function formatGameSetting(label: string, value: string | number | null) {
-  if (value == null) {
-    return null;
-  }
-
-  return `${label}: ${value}`;
-}
-
 function formatEnumLabel(value: string | null, labels: Record<string, string>) {
   if (!value) {
     return null;
@@ -248,11 +240,15 @@ function formatEnumLabel(value: string | null, labels: Record<string, string>) {
   return labels[value] ?? value;
 }
 
-function buildGameSettingsLine(
+function buildGameDetailsTable(
   game: GameInitializedNotificationPayload["game"],
+  organizerName: string,
 ) {
-  const settings = [
-    formatGameSetting(
+  const rows: Array<[string, string | number | null]> = [
+    ["Game", `#${game.gameNumber}`],
+    ["Seats", game.playerCount ?? "Not set yet"],
+    ["Overlord", organizerName],
+    [
       "DLC",
       formatEnumLabel(game.dlcMode, {
         NONE: "None",
@@ -260,8 +256,8 @@ function buildGameSettingsLine(
         REPUBLICA: "Republica",
         BOTH: "Both",
       }),
-    ),
-    formatGameSetting(
+    ],
+    [
       "Mode",
       formatEnumLabel(game.gameMode, {
         TEAMS: "Teams",
@@ -269,62 +265,61 @@ function buildGameSettingsLine(
         FFA: "FFA",
         FFA_AI: "FFA+AI",
       }),
-    ),
-    formatGameSetting("Tech", game.techLevel),
-    formatGameSetting(
+    ],
+    ["Tech", game.techLevel],
+    [
       "Zones",
       formatEnumLabel(game.zoneCount, {
         CITY_STATE: "City State",
         TWO_ZONE_START: "2 Zone Start",
         THREE_ZONE_START: "3 Zone Start",
       }),
-    ),
-    formatGameSetting(
+    ],
+    [
       "Armies",
       formatEnumLabel(game.armyCount, {
         MILITIA_ONLY: "Militia Only",
         ONE_PER_ZONE: "1 Army per Zone",
         TWO_PER_ZONE: "2 Armies per Zone",
       }),
-    ),
-    formatGameSetting(
+    ],
+    [
       "AI",
       game.hasAiPlayers == null ? null : game.hasAiPlayers ? "Yes" : "No",
+    ],
+  ].filter((row): row is [string, string | number] => row[1] != null);
+  const labelWidth = Math.max(
+    ...rows.map(([label]) => `${label}:`.length),
+  );
+
+  return [
+    "```",
+    ...rows.map(
+      ([label, value]) => `${`${label}:`.padEnd(labelWidth + 2)}${value}`,
     ),
-  ].filter((setting): setting is string => setting != null);
-
-  if (settings.length === 0) {
-    return null;
-  }
-
-  return `**Settings** ${settings.join(" | ")}`;
+    "```",
+  ].join("\n");
 }
 
 export function buildGameInitNotificationMessage(
   payload: GameInitializedNotificationPayload,
   webBaseUrl: string,
 ): MessageCreateOptions {
-  const organizerLabel = formatDiscordActor(
-    payload.organizer.displayName,
-    payload.organizer.discordId,
-  );
   const gameUrl = new URL(
     `/games/${encodeURIComponent(String(payload.game.gameNumber))}`,
     webBaseUrl,
   ).toString();
-  const settingsLine = buildGameSettingsLine(payload.game);
 
-  return buildDiscordNotification({
-    headline: `${payload.game.name} is ready!`,
-    message: `Review the [world page](${gameUrl}), then use /register in this thread to claim an open seat.`,
-    details: [
-      `**Game** #${payload.game.gameNumber} | **Seats** ${payload.game.playerCount ?? "Not set yet"} | **Overlord** ${organizerLabel}`,
-      ...(settingsLine ? [settingsLine] : []),
-    ],
-    mentionedUserIds: payload.organizer.discordId
-      ? [payload.organizer.discordId]
-      : [],
-  });
+  return {
+    ...buildDiscordNotification({
+      headline: `${payload.game.name} is ready!`,
+      message: `Review the [world page](${gameUrl}), then use /register in this thread to claim an open seat.`,
+      details: [
+        buildGameDetailsTable(payload.game, payload.organizer.displayName),
+      ],
+    }),
+    allowedMentions: { parse: [] },
+  };
 }
 
 export function buildSaveNotificationMessage(
@@ -372,7 +367,7 @@ export function buildSaveReplacedNotificationMessage(
   return buildDiscordNotification({
     headline: `The save for ${payload.game.name} was corrected`,
     message: `Download [${payload.replacement.originalName}](${downloadUrl}) to continue with the corrected save.`,
-    details: [`**Corrected by** ${correctedBy}`],
+    details: [`**Corrected by:** ${correctedBy}`],
     metadata: replacedAt ? [`-# ${replacedAt}`] : [],
     mentionedUserIds: payload.replacement.replacedBy.discordId
       ? [payload.replacement.replacedBy.discordId]
@@ -382,26 +377,17 @@ export function buildSaveReplacedNotificationMessage(
 
 export function buildTurnNudgeNotificationMessage(
   payload: TurnNudgeNotificationPayload,
-  webBaseUrl: string,
 ): MessageCreateOptions {
   const player = formatDiscordActor(
     payload.turnRecord.activePlayer.displayName,
     payload.turnRecord.activePlayer.discordId,
   );
   const hours = (value: number) => `${value} hour${value === 1 ? "" : "s"}`;
-  const gameUrl = new URL(
-    `/games/${encodeURIComponent(String(payload.game.gameNumber))}`,
-    webBaseUrl,
-  ).toString();
   const startedAt = formatDiscordTimestamp(payload.turnRecord.startedAt);
 
   return buildDiscordNotification({
     headline: `${player}, your turn needs attention`,
     message: `This turn has been active for **${hours(payload.turnRecord.elapsedHours)}**, against a target of **${hours(payload.turnRecord.targetHours)}**.`,
-    details: [
-      `**World** [${payload.game.name}](${gameUrl})`,
-      `**Round** ${payload.turnRecord.roundNumber} | **Seat** ${payload.turnRecord.activePlayer.turnOrder}`,
-    ],
     metadata: startedAt ? [`-# ${startedAt}`] : [],
     mentionedUserIds: [payload.turnRecord.activePlayer.discordId],
   });

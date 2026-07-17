@@ -14,7 +14,6 @@ import {
   buildSeatFilledReply,
   buildShadowCloudUnavailableReply,
   buildTurnAdvancedAnnouncement,
-  buildTurnSkippedReply,
   buildWrongChannelReply,
 } from "../src/response-messages.js";
 
@@ -30,7 +29,8 @@ describe("response message builders", () => {
     expect(renderedMessage).toContain(
       "Shadow Cloud could not complete /register.",
     );
-    expect(renderedMessage).toContain("**Reason** The game is full.");
+    expect(renderedMessage).toContain("**Reason:** The game is full.");
+    expect(renderedMessage).not.toContain("**Reason**");
   });
 
   it("gives every response a specific headline and primary sentence", () => {
@@ -58,7 +58,6 @@ describe("response message builders", () => {
       skippedSeat: 1,
       nextName: "Next Player",
       nextDiscordId: "user-2",
-      nextSeat: 2,
     });
     const renderedMessage = rendered(message);
 
@@ -66,7 +65,7 @@ describe("response message builders", () => {
     expect(renderedMessage).toContain(
       "**Previous Player** (seat 1) was skipped in **Debug World**.",
     );
-    expect(renderedMessage).toContain("**Seat** 2");
+    expect(renderedMessage).not.toContain("**Seat**");
     expect(message.allowedMentions).toEqual({ users: ["user-2"] });
   });
 
@@ -79,7 +78,34 @@ describe("response message builders", () => {
     expect(renderedMessage).toContain(
       "Shadow Cloud could not approve this registration.",
     );
-    expect(renderedMessage).toContain("**Reason** The request expired.");
+    expect(renderedMessage).toContain("**Reason:** The request expired.");
+    expect(renderedMessage).not.toContain("**Reason**");
+  });
+
+  it("punctuates configuration and next-step labels", () => {
+    const misconfigured = rendered(buildBotMisconfiguredReply());
+    const pinFailure = rendered(buildDiscordPinFailureReply("pin"));
+
+    expect(misconfigured).toContain("**Missing setting:** BOT_API_TOKEN");
+    expect(misconfigured).not.toContain("**Missing setting**");
+    expect(pinFailure).toContain(
+      "**Next step:** Check that the message exists",
+    );
+    expect(pinFailure).not.toContain("**Next step**");
+  });
+
+  it("emphasizes the resigned seat and directs transfers to the webui", () => {
+    const renderedMessage = rendered(
+      buildResignationAnnouncement("user-1", "Debug World", 2, true),
+    );
+
+    expect(renderedMessage).toContain(
+      "**Seat 2** is now empty and will be skipped during turn rotation.",
+    );
+    expect(renderedMessage).toContain(
+      "They remain the Overlord until campaign control is transferred in the webui.",
+    );
+    expect(renderedMessage).not.toContain("web app");
   });
 
   it("builds command errors with command-specific titles and fallback text", () => {
@@ -120,16 +146,12 @@ describe("response message builders", () => {
         .allowedMentions,
     ).toEqual({ users: ["user-1"] });
     expect(
-      rendered(buildTurnSkippedReply("Debug World", "Player", 2)),
-    ).toContain("Turn skipped");
-    expect(
       buildTurnAdvancedAnnouncement({
         gameName: "Debug World",
         skippedName: "Player",
         skippedSeat: 2,
         nextName: "Next",
         nextDiscordId: "user-1",
-        nextSeat: 3,
       }).allowedMentions,
     ).toEqual({ users: ["user-1"] });
     expect(

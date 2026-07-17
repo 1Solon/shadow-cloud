@@ -204,7 +204,6 @@ export function startNotificationServer(
       } else if (isTurnNudgeRequest) {
         notificationMessage = buildTurnNudgeNotificationMessage(
           payload as TurnNudgeNotificationPayload,
-          webBaseUrl,
         );
       } else {
         notificationMessage = buildGameInitNotificationMessage(

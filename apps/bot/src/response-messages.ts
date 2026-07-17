@@ -81,7 +81,7 @@ export function buildBotMisconfiguredReply(): InteractionReplyOptions {
   return buildDiscordReply({
     headline: "Bot misconfigured",
     message: "This bot cannot process commands until its API token is configured.",
-    details: ["**Missing setting** BOT_API_TOKEN"],
+    details: ["**Missing setting:** BOT_API_TOKEN"],
     ephemeral: true,
   });
 }
@@ -98,7 +98,7 @@ export function buildCommandErrorReply(
   return buildDiscordEditReply({
     headline: details.title,
     message: `Shadow Cloud could not complete /${commandName}.`,
-    details: [`**Reason** ${errorMessage}`],
+    details: [`**Reason:** ${errorMessage}`],
   });
 }
 
@@ -130,7 +130,7 @@ export function buildDiscordPinFailureReply(
     headline: action === "pin" ? "Pin failed" : "Unpin failed",
     message: "The bot could not access or modify that message.",
     details: [
-      "**Next step** Check that the message exists in this thread and that the bot can manage pinned messages.",
+      "**Next step:** Check that the message exists in this thread and that the bot can manage pinned messages.",
     ],
   });
 }
@@ -152,12 +152,12 @@ export function buildResignationAnnouncement(
 ): MessageCreateOptions {
   const mention = `<@${userId}>`;
   const organizerNote = wasOrganizer
-    ? " They remain the Overlord until campaign control is transferred in the web app."
+    ? " They remain the Overlord until campaign control is transferred in the webui."
     : "";
 
   return buildDiscordNotification({
     headline: `${mention} resigned from ${gameName}`,
-    message: `Seat ${turnOrder} is now empty and will be skipped during turn rotation.${organizerNote}`,
+    message: `**Seat ${turnOrder}** is now empty and will be skipped during turn rotation.${organizerNote}`,
     mentionedUserIds: [userId],
   });
 }
@@ -189,39 +189,24 @@ export function buildSeatFilledAnnouncement(
   });
 }
 
-export function buildTurnSkippedReply(
-  gameName: string,
-  skippedName: string,
-  skippedSeat: number | string,
-): InteractionEditReplyOptions {
-  return buildDiscordEditReply({
-    headline: "Turn skipped",
-    message: `**${skippedName}**'s turn was skipped in **${gameName}**.`,
-    details: [`**Seat** ${skippedSeat}`],
-  });
-}
-
 export function buildTurnAdvancedAnnouncement({
   gameName,
   skippedName,
   skippedSeat,
   nextName,
   nextDiscordId,
-  nextSeat,
 }: {
   gameName: string;
   skippedName: string;
   skippedSeat: number | string;
   nextName: string;
   nextDiscordId: string | null;
-  nextSeat: number | string;
 }): MessageCreateOptions {
   const nextMention = nextDiscordId ? `<@${nextDiscordId}>` : `**${nextName}**`;
 
   return buildDiscordNotification({
     headline: `It is now ${nextMention}'s turn!`,
     message: `**${skippedName}** (seat ${skippedSeat}) was skipped in **${gameName}**.`,
-    details: [`**Seat** ${nextSeat}`],
     mentionedUserIds: nextDiscordId ? [nextDiscordId] : [],
   });
 }
@@ -253,7 +238,7 @@ export function buildApprovalFailureReply(
   return buildDiscordReply({
     headline: approving ? "Approval failed" : "Rejection failed",
     message: `Shadow Cloud could not ${approving ? "approve" : "reject"} this registration.`,
-    details: [`**Reason** ${errorMessage}`],
+    details: [`**Reason:** ${errorMessage}`],
     ephemeral: true,
   });
 }

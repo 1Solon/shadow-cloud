@@ -32,7 +32,6 @@ describe("selectDebugPreviewNames", () => {
       "resignation-announcement",
       "seat-filled",
       "seat-filled-announcement",
-      "turn-skipped",
       "turn-advanced",
       "game-link",
       "message-pinned",

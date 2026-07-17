@@ -31,7 +31,6 @@ import {
   buildSeatFilledReply,
   buildShadowCloudUnavailableReply,
   buildTurnAdvancedAnnouncement,
-  buildTurnSkippedReply,
   buildWrongChannelReply,
 } from "./response-messages.js";
 
@@ -48,7 +47,6 @@ export const debugPreviewNames = [
   "resignation-announcement",
   "seat-filled",
   "seat-filled-announcement",
-  "turn-skipped",
   "turn-advanced",
   "game-link",
   "message-pinned",
@@ -247,7 +245,6 @@ const previewFactories: Record<DebugPreviewName, DebugPreviewFactory> = {
           activePlayer: fixture.activePlayer,
         },
       },
-      context.webBaseUrl,
     );
   },
   "registration-approval": (context) => {
@@ -286,8 +283,6 @@ const previewFactories: Record<DebugPreviewName, DebugPreviewFactory> = {
     buildSeatFilledReply("Debug World", context.userDisplayName, 2),
   "seat-filled-announcement": (context) =>
     buildSeatFilledAnnouncement(context.userId, "Debug World", 2, true),
-  "turn-skipped": (context) =>
-    buildTurnSkippedReply("Debug World", context.userDisplayName, 2),
   "turn-advanced": (context) =>
     buildTurnAdvancedAnnouncement({
       gameName: "Debug World",
@@ -295,7 +290,6 @@ const previewFactories: Record<DebugPreviewName, DebugPreviewFactory> = {
       skippedSeat: 1,
       nextName: context.userDisplayName,
       nextDiscordId: context.userId,
-      nextSeat: 2,
     }),
   "game-link": (context) =>
     buildGameLinkReply(new URL("/games/42", context.webBaseUrl).toString()),

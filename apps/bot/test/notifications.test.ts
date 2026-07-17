@@ -185,7 +185,7 @@ describe("buildDiscordNotification", () => {
       buildDiscordNotification({
         headline: "Registration failed",
         message: "Shadow Cloud could not submit your registration.",
-        details: ["**Reason** The game is full."],
+        details: ["**Reason:** The game is full."],
       }),
     );
 
@@ -223,20 +223,68 @@ describe("buildDiscordNotification", () => {
 });
 
 describe("production notification style", () => {
-  it("uses the concise hierarchy for initialized games", () => {
+  it("renders initialized-game details as an aligned code-block table", () => {
+    const message = buildGameInitNotificationMessage(
+      {
+        ...gameInitializedPayload,
+        game: {
+          ...gameInitializedPayload.game,
+          hasAiPlayers: true,
+          dlcMode: "BOTH",
+          gameMode: "FFA_AI",
+          techLevel: 4,
+          zoneCount: "TWO_ZONE_START",
+          armyCount: "ONE_PER_ZONE",
+        },
+      },
+      "https://shadow.example",
+    );
+    const serialized = JSON.parse(JSON.stringify(message)) as {
+      components: Array<{ components: Array<{ content?: string }> }>;
+    };
+    const details = serialized.components[0]?.components.find(({ content }) =>
+      content?.startsWith("```"),
+    );
+
+    expect(details?.content).toBe(
+      [
+        "```",
+        "Game:      #42",
+        "Seats:     4",
+        "Overlord:  Solon",
+        "DLC:       Both",
+        "Mode:      FFA+AI",
+        "Tech:      4",
+        "Zones:     2 Zone Start",
+        "Armies:    1 Army per Zone",
+        "AI:        Yes",
+        "```",
+      ].join("\n"),
+    );
+    expect(message.allowedMentions).toEqual({ parse: [] });
+    expect(JSON.stringify(message)).not.toContain("<@discord-1>");
+  });
+
+  it("omits unavailable world settings from the code-block table", () => {
     const rendered = JSON.stringify(
       buildGameInitNotificationMessage(
-        gameInitializedPayload,
+        {
+          ...gameInitializedPayload,
+          game: { ...gameInitializedPayload.game, playerCount: null },
+        },
         "https://shadow.example",
       ),
     );
 
-    expect(rendered).toContain("The Game is ready!");
-    expect(rendered).toContain(
-      "Review the [world page](https://shadow.example/games/42), then use /register in this thread to claim an open seat.",
-    );
-    expect(rendered).toContain("**Game** #42");
-    expect(rendered).toContain("**Overlord** <@discord-1>");
+    expect(rendered).toContain("Game:");
+    expect(rendered).toContain("Seats:     Not set yet");
+    expect(rendered).toContain("Overlord:");
+    expect(rendered).toContain("AI:");
+    expect(rendered).not.toContain("DLC:");
+    expect(rendered).not.toContain("Mode:");
+    expect(rendered).not.toContain("Tech:");
+    expect(rendered).not.toContain("Zones:");
+    expect(rendered).not.toContain("Armies:");
   });
 
   it("keeps the turn notification as the timestamped baseline", () => {
@@ -339,6 +387,8 @@ describe("buildSaveReplacedNotificationMessage", () => {
     expect(message).toContain("42-T4-S2-Other.se1");
     expect(message).toContain("<@discord-1>");
     expect(message).toContain("<t:1783693800:F>");
+    expect(message).toContain("**Corrected by:** <@discord-1>");
+    expect(message).not.toContain("**Corrected by**");
     expect(message).not.toContain("active player");
     expect(message).not.toContain("next player");
     expect(message).not.toContain("current turn");
@@ -349,18 +399,14 @@ describe("buildSaveReplacedNotificationMessage", () => {
 
 describe("buildTurnNudgeNotificationMessage", () => {
   it("builds an allowlisted soft reminder with campaign and turn context", () => {
-    const message = buildTurnNudgeNotificationMessage(
-      turnNudgePayload,
-      "https://shadow.example",
-    );
+    const message = buildTurnNudgeNotificationMessage(turnNudgePayload);
     const rendered = JSON.stringify(message);
 
     expect(message.allowedMentions).toEqual({ users: ["discord-2"] });
     expect(rendered).toContain("<@discord-2>, your turn needs attention");
-    expect(rendered).toContain(
-      "**World** [The Game](https://shadow.example/games/42)",
-    );
-    expect(rendered).toContain("**Round** 3 | **Seat** 2");
+    expect(rendered).not.toContain("**World**");
+    expect(rendered).not.toContain("**Round**");
+    expect(rendered).not.toContain("**Seat**");
     expect(rendered).toContain("**25 hours**");
     expect(rendered).toContain("**24 hours**");
     expect(rendered).toContain("-# <t:1783684800:F>");
@@ -382,7 +428,6 @@ describe("buildTurnNudgeNotificationMessage", () => {
           },
         },
       },
-      "https://shadow.example",
     );
     const rendered = JSON.stringify(message);
 

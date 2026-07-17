@@ -50,7 +50,6 @@ import {
   buildSeatFilledReply,
   buildShadowCloudUnavailableReply,
   buildTurnAdvancedAnnouncement,
-  buildTurnSkippedReply,
   buildWrongChannelReply,
 } from "./response-messages.js";
 
@@ -347,11 +346,7 @@ async function handleSuccessfulCommand(
     const skippedSeat = payload?.skippedPlayer?.turnOrder ?? "?";
     const nextName = payload?.nextPlayer?.displayName ?? "Unknown";
     const nextDiscordId = payload?.nextPlayer?.discordId ?? null;
-    const nextSeat = payload?.nextPlayer?.turnOrder ?? "?";
 
-    await interaction.editReply(
-      buildTurnSkippedReply(gameName, skippedName, skippedSeat),
-    );
     await channel.send(
       buildTurnAdvancedAnnouncement({
         gameName,
@@ -359,9 +354,9 @@ async function handleSuccessfulCommand(
         skippedSeat,
         nextName,
         nextDiscordId,
-        nextSeat,
       }),
     );
+    await interaction.deleteReply().catch(() => undefined);
     return;
   }
 
