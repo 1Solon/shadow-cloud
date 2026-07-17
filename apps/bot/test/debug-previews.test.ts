@@ -5,6 +5,7 @@ import {
   debugPreviewNames,
   selectDebugPreviewNames,
 } from "../src/debug-previews.js";
+import { ACCENT_COLOR } from "../src/notifications.js";
 
 const context = {
   userId: "user-1",
@@ -93,6 +94,17 @@ describe("buildDebugPreviews", () => {
         Number(preview.message.flags) & MessageFlags.IsComponentsV2,
       ).toBeTruthy();
       expect(preview.message.components).toHaveLength(1);
+      const serialized = JSON.parse(JSON.stringify(preview.message)) as {
+        components: Array<{
+          accent_color: number;
+          components: Array<{ type: number }>;
+        }>;
+      };
+      const [container] = serialized.components;
+
+      expect(container?.accent_color).toBe(ACCENT_COLOR);
+      expect(container?.components[0]?.type).toBe(ComponentType.TextDisplay);
+      expect(container?.components[1]?.type).toBe(ComponentType.TextDisplay);
     }
   });
 

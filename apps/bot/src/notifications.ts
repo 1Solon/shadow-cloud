@@ -119,14 +119,6 @@ export type TurnNudgeNotificationPayload = {
   };
 };
 
-type StandardNotificationOptions = {
-  title?: string;
-  facts: string[];
-  actionLines?: string[];
-  actionRow?: ActionRowBuilder<ButtonBuilder>;
-  mentionedUserIds?: string[];
-};
-
 type DiscordResponseOptions = {
   headline: string;
   message: string;
@@ -135,41 +127,6 @@ type DiscordResponseOptions = {
   actionRow?: ActionRowBuilder<ButtonBuilder>;
   mentionedUserIds?: string[];
 };
-
-function buildStandardNotificationContainer({
-  title,
-  facts,
-  actionLines = [],
-  actionRow,
-}: StandardNotificationOptions) {
-  const container = new ContainerBuilder().setAccentColor(ACCENT_COLOR);
-
-  if (title) {
-    container.addTextDisplayComponents((textDisplay) =>
-      textDisplay.setContent(`## ${title}`),
-    );
-  }
-
-  container.addTextDisplayComponents((textDisplay) =>
-    textDisplay.setContent(facts.join("\n")),
-  );
-
-  if (actionLines.length > 0) {
-    container
-      .addSeparatorComponents((separator) =>
-        separator.setDivider(true).setSpacing(SeparatorSpacingSize.Small),
-      )
-      .addTextDisplayComponents((textDisplay) =>
-        textDisplay.setContent(actionLines.join("\n")),
-      );
-  }
-
-  if (actionRow) {
-    container.addActionRowComponents(actionRow);
-  }
-
-  return container;
-}
 
 function buildDiscordResponseContainer({
   headline,
@@ -255,44 +212,6 @@ export function buildDiscordEditReply({
 }: DiscordResponseOptions): InteractionEditReplyOptions {
   return {
     components: [buildDiscordResponseContainer(options)],
-    flags: MessageFlags.IsComponentsV2,
-    allowedMentions: buildAllowedMentions(mentionedUserIds),
-  };
-}
-
-export function buildStandardNotification({
-  mentionedUserIds = [],
-  ...options
-}: StandardNotificationOptions): MessageCreateOptions {
-  return {
-    components: [buildStandardNotificationContainer(options)],
-    flags: MessageFlags.IsComponentsV2,
-    allowedMentions: buildAllowedMentions(mentionedUserIds),
-  };
-}
-
-export function buildStandardReply({
-  ephemeral = false,
-  mentionedUserIds = [],
-  ...options
-}: StandardNotificationOptions & {
-  ephemeral?: boolean;
-}): InteractionReplyOptions {
-  return {
-    components: [buildStandardNotificationContainer(options)],
-    flags: ephemeral
-      ? MessageFlags.Ephemeral | MessageFlags.IsComponentsV2
-      : MessageFlags.IsComponentsV2,
-    allowedMentions: buildAllowedMentions(mentionedUserIds),
-  };
-}
-
-export function buildStandardEditReply({
-  mentionedUserIds = [],
-  ...options
-}: StandardNotificationOptions): InteractionEditReplyOptions {
-  return {
-    components: [buildStandardNotificationContainer(options)],
     flags: MessageFlags.IsComponentsV2,
     allowedMentions: buildAllowedMentions(mentionedUserIds),
   };
