@@ -23,11 +23,17 @@ import {
   type SupportedCommandName,
 } from "./commands.js";
 import {
+  buildStandardEditReply,
   buildStandardReply,
   buildApprovalNotificationMessage,
   buildApprovalResultMessage,
 } from "./notifications.js";
 import { parseThreadMessageTarget } from "./message-target.js";
+import {
+  buildDebugPreviews,
+  debugPreviewNames,
+  selectDebugPreviewNames,
+} from "./debug-previews.js";
 import {
   buildApprovalFailureReply,
   buildBotMisconfiguredReply,
@@ -387,6 +393,51 @@ async function handleSuccessfulCommand(
   }
 }
 
+async function handleDebugCommand(
+  interaction: ChatInputCommandInteraction,
+  webBaseUrl: string,
+) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const selection = selectDebugPreviewNames(
+    interaction.options.getString("notifications"),
+  );
+
+  if (!selection.ok) {
+    await interaction.editReply(
+      buildStandardEditReply({
+        title: "Unknown debug notification",
+        facts: [
+          `Unknown: ${selection.unknownNames.join(", ")}`,
+          `Valid names: ${debugPreviewNames.join(", ")}`,
+        ],
+      }),
+    );
+    return;
+  }
+
+  const previews = buildDebugPreviews(selection.names, {
+    userId: interaction.user.id,
+    userDisplayName:
+      interaction.user.globalName ?? interaction.user.username,
+    webBaseUrl,
+  });
+  const [firstPreview, ...remainingPreviews] = previews;
+
+  if (!firstPreview) {
+    return;
+  }
+
+  await interaction.editReply({
+    components: firstPreview.message.components,
+    allowedMentions: firstPreview.message.allowedMentions,
+    flags: MessageFlags.IsComponentsV2,
+  });
+
+  for (const preview of remainingPreviews) {
+    await interaction.followUp(preview.message);
+  }
+}
+
 export function createInteractionHandler(client: Client, config: BotApiConfig) {
   return async (interaction: Interaction) => {
     if (interaction.isButton()) {
@@ -422,6 +473,7 @@ export function createInteractionHandler(client: Client, config: BotApiConfig) {
     }
 
     if (interaction.commandName === "debug") {
+      await handleDebugCommand(interaction, config.webBaseUrl);
       return;
     }
 
