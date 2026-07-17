@@ -48,6 +48,7 @@ describe("commands", () => {
           name: "notifications",
           type: ApplicationCommandOptionType.String,
           required: false,
+          max_length: 1_000,
         },
       ],
     });

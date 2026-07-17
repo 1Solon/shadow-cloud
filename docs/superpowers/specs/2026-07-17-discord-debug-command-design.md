@@ -14,6 +14,8 @@ Add a `/debug` Discord slash command for safely previewing the bot's production 
 
 Names are case-insensitive. Surrounding whitespace is ignored, and duplicate names are emitted once in registry order. Omitting the option, or supplying only whitespace, selects every registered preview.
 
+The option is limited to 1,000 characters so an unknown-name response, including the valid-name list, remains within Discord's component text limits.
+
 If any supplied name is unknown, the command emits one ephemeral validation response that identifies the unknown names and lists every valid name. It does not emit a partial set of previews.
 
 The command is available in guild channels. It bypasses the game-command forum-thread, forum-parent, and bot API token checks. It does not call the API, join a thread, send a public channel message, pin or unpin a message, rename a thread, or mutate application data.
@@ -42,6 +44,7 @@ The registry covers these current message outcomes:
 - `message-pinned`
 - `message-unpinned`
 - `wrong-channel`
+- `forum-thread-required`
 - `bot-misconfigured`
 - `initialization-failed`
 - `registration-failed`
@@ -53,6 +56,7 @@ The registry covers these current message outcomes:
 - `unpin-failed`
 - `invalid-message`
 - `discord-pin-failed`
+- `discord-unpin-failed`
 - `shadow-cloud-unavailable`
 - `approval-failed`
 - `rejection-failed`
@@ -71,7 +75,7 @@ Every preview is sent ephemerally. Mention allowlists remain present so the prev
 
 The interaction handler recognizes `debug` before resolving or joining a thread and before checking the API token. It defers an ephemeral reply, parses the optional list, builds the selected previews, edits the deferred reply with the first preview, and sends the remaining previews as ephemeral follow-ups.
 
-Rendering failures are handled by the existing top-level interaction error behavior or a debug-specific unavailable response. No successfully parsed debug request enters the normal API-backed command path.
+Rendering or delivery failures are caught by the debug interaction branch. It logs the Discord error and best-effort replaces the deferred response with the standard unavailable response, preventing rejected follow-ups from escaping the asynchronous Discord event handler. No successfully parsed debug request enters the normal API-backed command path.
 
 ## Testing
 

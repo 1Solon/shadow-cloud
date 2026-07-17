@@ -34,6 +34,7 @@ function buildDebugInteraction(notifications: string | null) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe("createInteractionHandler debug command", () => {
@@ -92,5 +93,64 @@ describe("createInteractionHandler debug command", () => {
       expect(rendered).toContain(name);
     }
     expect(client.channels.fetch).not.toHaveBeenCalled();
+  });
+
+  it("delivers every preview when the notification list is omitted", async () => {
+    const interaction = buildDebugInteraction(null);
+    const client = {
+      channels: { fetch: vi.fn(async () => null) },
+    };
+
+    await createInteractionHandler(
+      client as never,
+      config,
+    )(interaction as never);
+
+    expect(interaction.editReply).toHaveBeenCalledTimes(1);
+    expect(interaction.followUp).toHaveBeenCalledTimes(33);
+    for (const [message] of interaction.followUp.mock.calls) {
+      expect(message).toMatchObject({
+        flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+      });
+    }
+    expect(client.channels.fetch).not.toHaveBeenCalled();
+  });
+
+  it("renders a bounded maximum-length unknown name", async () => {
+    const unknownName = "x".repeat(1_000);
+    const interaction = buildDebugInteraction(unknownName);
+    const client = {
+      channels: { fetch: vi.fn(async () => null) },
+    };
+
+    await createInteractionHandler(
+      client as never,
+      config,
+    )(interaction as never);
+
+    expect(interaction.editReply).toHaveBeenCalledTimes(1);
+    const rendered = JSON.stringify(interaction.editReply.mock.calls[0]?.[0]);
+    expect(rendered).toContain("Unknown debug notification");
+    expect(rendered).toContain(unknownName);
+  });
+
+  it("contains preview delivery failures inside the debug interaction", async () => {
+    const interaction = buildDebugInteraction(
+      "turn-notification,turn-reminder",
+    );
+    interaction.followUp.mockRejectedValueOnce(new Error("Discord rejected"));
+    const client = {
+      channels: { fetch: vi.fn(async () => null) },
+    };
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+
+    await expect(
+      createInteractionHandler(client as never, config)(interaction as never),
+    ).resolves.toBeUndefined();
+
+    expect(interaction.editReply).toHaveBeenCalledTimes(2);
+    expect(JSON.stringify(interaction.editReply.mock.calls[1]?.[0])).toContain(
+      "Shadow Cloud unavailable",
+    );
   });
 });

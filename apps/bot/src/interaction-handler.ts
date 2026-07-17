@@ -478,7 +478,14 @@ export function createInteractionHandler(client: Client, config: BotApiConfig) {
     }
 
     if (interaction.commandName === "debug") {
-      await handleDebugCommand(interaction, config.webBaseUrl);
+      try {
+        await handleDebugCommand(interaction, config.webBaseUrl);
+      } catch (error) {
+        console.error("Failed to deliver Discord debug previews.", error);
+        await interaction
+          .editReply(buildShadowCloudUnavailableReply())
+          .catch(() => undefined);
+      }
       return;
     }
 

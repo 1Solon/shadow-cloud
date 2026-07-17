@@ -192,7 +192,8 @@ const debugCommand = new SlashCommandBuilder()
     option
       .setName("notifications")
       .setDescription("Comma-separated preview names; omit to show all.")
-      .setRequired(false),
+      .setRequired(false)
+      .setMaxLength(1_000),
   );
 
 export const supportedCommandNames = [
