@@ -394,19 +394,12 @@ export function buildGameInitNotificationMessage(
   ).toString();
   const settingsLine = buildGameSettingsLine(payload.game);
 
-  return buildStandardNotification({
-    title: `World initialized: ${payload.game.name}`,
-    facts: [
-      `**Game #** ${payload.game.gameNumber}`,
-      `**Overlord** ${organizerLabel}`,
-      payload.game.playerCount != null
-        ? `**Seats** ${payload.game.playerCount}`
-        : `**Seats** Not set yet`,
+  return buildDiscordNotification({
+    headline: `${payload.game.name} is ready!`,
+    message: `Review the [world page](${gameUrl}), then use /register in this thread to claim an open seat.`,
+    details: [
+      `**Game** #${payload.game.gameNumber} | **Seats** ${payload.game.playerCount ?? "Not set yet"} | **Overlord** ${organizerLabel}`,
       ...(settingsLine ? [settingsLine] : []),
-    ],
-    actionLines: [
-      `Review the [world page](${gameUrl}) for status, roster, and uploads.`,
-      `Use /register in-thread to claim an open seat.`,
     ],
     mentionedUserIds: payload.organizer.discordId
       ? [payload.organizer.discordId]
@@ -432,12 +425,10 @@ export function buildSaveNotificationMessage(
     webBaseUrl,
   ).toString();
 
-  return buildStandardNotification({
-    title: `It is ${nextPlayerLabel}'s turn!`,
-    facts: [
-      `You can download the [current turn](${downloadUrl}) here, once done with your turn, upload your [completed turn](${gameUrl}).`,
-    ],
-    actionLines: uploadedAtLabel ? [`-# ${uploadedAtLabel}`] : [],
+  return buildDiscordNotification({
+    headline: `It is ${nextPlayerLabel}'s turn!`,
+    message: `Download the [current turn](${downloadUrl}), then upload your [completed turn](${gameUrl}) when finished.`,
+    metadata: uploadedAtLabel ? [`-# ${uploadedAtLabel}`] : [],
     mentionedUserIds: payload.turn.activePlayer.discordId
       ? [payload.turn.activePlayer.discordId]
       : [],
@@ -458,13 +449,11 @@ export function buildSaveReplacedNotificationMessage(
     webBaseUrl,
   ).toString();
 
-  return buildStandardNotification({
-    title: `Save corrected: ${payload.game.name}`,
-    facts: [
-      `**Save** [${payload.replacement.originalName}](${downloadUrl})`,
-      `**Corrected by** ${correctedBy}`,
-    ],
-    actionLines: replacedAt ? [`-# ${replacedAt}`] : [],
+  return buildDiscordNotification({
+    headline: `The save for ${payload.game.name} was corrected`,
+    message: `Download [${payload.replacement.originalName}](${downloadUrl}) to continue with the corrected save.`,
+    details: [`**Corrected by** ${correctedBy}`],
+    metadata: replacedAt ? [`-# ${replacedAt}`] : [],
     mentionedUserIds: payload.replacement.replacedBy.discordId
       ? [payload.replacement.replacedBy.discordId]
       : [],
@@ -486,14 +475,14 @@ export function buildTurnNudgeNotificationMessage(
   ).toString();
   const startedAt = formatDiscordTimestamp(payload.turnRecord.startedAt);
 
-  return buildStandardNotification({
-    title: `Turn reminder for ${player}`,
-    facts: [
+  return buildDiscordNotification({
+    headline: `${player}, your turn needs attention`,
+    message: `This turn has been active for **${hours(payload.turnRecord.elapsedHours)}**, against a target of **${hours(payload.turnRecord.targetHours)}**.`,
+    details: [
       `**World** [${payload.game.name}](${gameUrl})`,
       `**Round** ${payload.turnRecord.roundNumber} | **Seat** ${payload.turnRecord.activePlayer.turnOrder}`,
-      `This turn has been active for **${hours(payload.turnRecord.elapsedHours)}**, against a target of **${hours(payload.turnRecord.targetHours)}**.`,
     ],
-    actionLines: startedAt ? [`-# ${startedAt}`] : [],
+    metadata: startedAt ? [`-# ${startedAt}`] : [],
     mentionedUserIds: [payload.turnRecord.activePlayer.discordId],
   });
 }
@@ -511,9 +500,9 @@ export function buildApprovalNotificationMessage({
   approveButton: ButtonBuilder;
   rejectButton: ButtonBuilder;
 }): MessageCreateOptions {
-  return buildStandardNotification({
-    title: `Overlord action needed: ${formatDiscordActor("Overlord", organizerDiscordId)}`,
-    facts: [`**World** ${gameName}`, `**Applicant** ${applicantName}`],
+  return buildDiscordNotification({
+    headline: `${formatDiscordActor("Overlord", organizerDiscordId)}, review this registration`,
+    message: `Approve or reject **${applicantName}**'s request to join **${gameName}**.`,
     actionRow: new ActionRowBuilder<ButtonBuilder>().addComponents(
       approveButton,
       rejectButton,
@@ -537,17 +526,15 @@ export function buildApprovalResultMessage({
   turnOrder?: number;
   actionRow?: ActionRowBuilder<ButtonBuilder>;
 }): InteractionEditReplyOptions {
-  return buildStandardEditReply({
-    title: approved ? "Registration approved" : "Registration rejected",
-    facts: [
-      buildNotificationResultText({
-        approved,
-        gameName,
-        gameUrl,
-        playerName,
-        turnOrder,
-      }),
-    ],
+  return buildDiscordEditReply({
+    headline: approved ? "Registration approved" : "Registration rejected",
+    message: buildNotificationResultText({
+      approved,
+      gameName,
+      gameUrl,
+      playerName,
+      turnOrder,
+    }),
     actionRow,
   });
 }
@@ -565,13 +552,13 @@ export function buildNotificationResultText({
   playerName: string;
   turnOrder?: number;
 }) {
-  const gameLabel = gameUrl ? `[${gameName}](${gameUrl})` : gameName;
+  const gameLabel = gameUrl ? `[${gameName}](${gameUrl})` : `**${gameName}**`;
 
   if (!approved) {
-    return `❌ Rejected **${playerName}** for **${gameLabel}**.`;
+    return `**${playerName}**'s request to join ${gameLabel} was rejected.`;
   }
 
-  return `✅ Approved **${playerName}** for **${gameLabel}** as seat ${turnOrder ?? "unknown"}.`;
+  return `**${playerName}** joined ${gameLabel} as seat ${turnOrder ?? "unknown"}.`;
 }
 
 export { ACCENT_COLOR };
