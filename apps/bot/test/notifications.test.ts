@@ -1,5 +1,14 @@
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ComponentType,
+  MessageFlags,
+} from "discord.js";
 import { describe, expect, it } from "vitest";
 import {
+  ACCENT_COLOR,
+  buildDiscordNotification,
   buildSaveReplacedNotificationMessage,
   buildTurnNudgeNotificationMessage,
 } from "../src/notifications.js";
@@ -64,6 +73,76 @@ const turnNudgePayload = {
     },
   },
 };
+
+describe("buildDiscordNotification", () => {
+  it("renders headline, message, details, divider, metadata, and actions in order", () => {
+    const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId("approve")
+        .setLabel("Approve")
+        .setStyle(ButtonStyle.Success),
+    );
+    const notification = buildDiscordNotification({
+      headline: "Review this registration",
+      message: "Approve or reject this request.",
+      details: ["**Applicant** Solon"],
+      metadata: ["-# <t:1784299200:F>"],
+      actionRow,
+      mentionedUserIds: ["user-1", "user-1", ""],
+    });
+    const rendered = JSON.stringify(notification);
+
+    expect(notification.flags).toBe(MessageFlags.IsComponentsV2);
+    expect(notification.allowedMentions).toEqual({ users: ["user-1"] });
+    expect(rendered).toContain(`"accent_color":${ACCENT_COLOR}`);
+    expect(rendered).toContain(`"type":${ComponentType.Separator}`);
+    expect(rendered.indexOf("Review this registration")).toBeLessThan(
+      rendered.indexOf("Approve or reject this request."),
+    );
+    expect(rendered.indexOf("Approve or reject this request.")).toBeLessThan(
+      rendered.indexOf("**Applicant** Solon"),
+    );
+    expect(rendered.indexOf("**Applicant** Solon")).toBeLessThan(
+      rendered.indexOf("-# <t:1784299200:F>"),
+    );
+    expect(rendered.indexOf("-# <t:1784299200:F>")).toBeLessThan(
+      rendered.indexOf('"label":"Approve"'),
+    );
+  });
+
+  it("omits the divider when there is no footer content", () => {
+    const rendered = JSON.stringify(
+      buildDiscordNotification({
+        headline: "Registration failed",
+        message: "Shadow Cloud could not submit your registration.",
+        details: ["**Reason** The game is full."],
+      }),
+    );
+
+    expect(rendered).not.toContain(`"type":${ComponentType.Separator}`);
+  });
+
+  it("renders the divider for action-only footers", () => {
+    const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId("reject")
+        .setLabel("Reject")
+        .setStyle(ButtonStyle.Danger),
+    );
+    const rendered = JSON.stringify(
+      buildDiscordNotification({
+        headline: "Review this registration",
+        message: "Approve or reject this request.",
+        actionRow,
+      }),
+    );
+
+    expect(rendered).toContain(`"type":${ComponentType.Separator}`);
+    expect(rendered.indexOf(`"type":${ComponentType.Separator}`)).toBeLessThan(
+      rendered.indexOf('"label":"Reject"'),
+    );
+  });
+});
 
 describe("buildSaveReplacedNotificationMessage", () => {
   it("builds a correction message without turn instructions", () => {

@@ -127,6 +127,15 @@ type StandardNotificationOptions = {
   mentionedUserIds?: string[];
 };
 
+type DiscordResponseOptions = {
+  headline: string;
+  message: string;
+  details?: string[];
+  metadata?: string[];
+  actionRow?: ActionRowBuilder<ButtonBuilder>;
+  mentionedUserIds?: string[];
+};
+
 function buildStandardNotificationContainer({
   title,
   facts,
@@ -162,6 +171,47 @@ function buildStandardNotificationContainer({
   return container;
 }
 
+function buildDiscordResponseContainer({
+  headline,
+  message,
+  details = [],
+  metadata = [],
+  actionRow,
+}: DiscordResponseOptions) {
+  const container = new ContainerBuilder()
+    .setAccentColor(ACCENT_COLOR)
+    .addTextDisplayComponents((textDisplay) =>
+      textDisplay.setContent(`## ${headline}`),
+    )
+    .addTextDisplayComponents((textDisplay) =>
+      textDisplay.setContent(message),
+    );
+
+  if (details.length > 0) {
+    container.addTextDisplayComponents((textDisplay) =>
+      textDisplay.setContent(details.join("\n")),
+    );
+  }
+
+  if (metadata.length > 0 || actionRow) {
+    container.addSeparatorComponents((separator) =>
+      separator.setDivider(true).setSpacing(SeparatorSpacingSize.Small),
+    );
+  }
+
+  if (metadata.length > 0) {
+    container.addTextDisplayComponents((textDisplay) =>
+      textDisplay.setContent(metadata.join("\n")),
+    );
+  }
+
+  if (actionRow) {
+    container.addActionRowComponents(actionRow);
+  }
+
+  return container;
+}
+
 function buildAllowedMentions(mentionedUserIds: string[]) {
   const uniqueMentionedUserIds = Array.from(
     new Set(mentionedUserIds.filter((userId) => userId.length > 0)),
@@ -170,6 +220,44 @@ function buildAllowedMentions(mentionedUserIds: string[]) {
   return uniqueMentionedUserIds.length > 0
     ? { users: uniqueMentionedUserIds }
     : undefined;
+}
+
+export function buildDiscordNotification({
+  mentionedUserIds = [],
+  ...options
+}: DiscordResponseOptions): MessageCreateOptions {
+  return {
+    components: [buildDiscordResponseContainer(options)],
+    flags: MessageFlags.IsComponentsV2,
+    allowedMentions: buildAllowedMentions(mentionedUserIds),
+  };
+}
+
+export function buildDiscordReply({
+  ephemeral = false,
+  mentionedUserIds = [],
+  ...options
+}: DiscordResponseOptions & {
+  ephemeral?: boolean;
+}): InteractionReplyOptions {
+  return {
+    components: [buildDiscordResponseContainer(options)],
+    flags: ephemeral
+      ? MessageFlags.Ephemeral | MessageFlags.IsComponentsV2
+      : MessageFlags.IsComponentsV2,
+    allowedMentions: buildAllowedMentions(mentionedUserIds),
+  };
+}
+
+export function buildDiscordEditReply({
+  mentionedUserIds = [],
+  ...options
+}: DiscordResponseOptions): InteractionEditReplyOptions {
+  return {
+    components: [buildDiscordResponseContainer(options)],
+    flags: MessageFlags.IsComponentsV2,
+    allowedMentions: buildAllowedMentions(mentionedUserIds),
+  };
 }
 
 export function buildStandardNotification({
