@@ -6,9 +6,9 @@ import type {
 import type { ApprovalAction, CommandResponsePayload } from "./bot-api.js";
 import type { SupportedCommandName } from "./commands.js";
 import {
-  buildStandardEditReply,
-  buildStandardNotification,
-  buildStandardReply,
+  buildDiscordEditReply,
+  buildDiscordNotification,
+  buildDiscordReply,
 } from "./notifications.js";
 
 type GameCommandName = Exclude<SupportedCommandName, "debug">;
@@ -56,12 +56,12 @@ export function buildWrongChannelReply(
   observedType: string,
   channelId: string,
 ): InteractionReplyOptions {
-  return buildStandardReply({
-    title: "Wrong channel",
-    facts: [
-      `Run /${commandName} inside the forum thread that should own the game.`,
-      `Observed channel type: ${observedType}`,
-      `Channel id: ${channelId}`,
+  return buildDiscordReply({
+    headline: "Use this command in a game thread",
+    message: `Run /${commandName} inside the forum thread that owns the game.`,
+    details: [
+      `**Channel type** ${observedType}`,
+      `**Channel ID** ${channelId}`,
     ],
     ephemeral: true,
   });
@@ -70,17 +70,18 @@ export function buildWrongChannelReply(
 export function buildForumThreadRequiredReply(
   commandName: string,
 ): InteractionReplyOptions {
-  return buildStandardReply({
-    title: "Wrong channel",
-    facts: [`Run /${commandName} inside a Discord forum thread.`],
+  return buildDiscordReply({
+    headline: "Use this command in a game thread",
+    message: `Run /${commandName} inside a Discord forum thread.`,
     ephemeral: true,
   });
 }
 
 export function buildBotMisconfiguredReply(): InteractionReplyOptions {
-  return buildStandardReply({
-    title: "Bot misconfigured",
-    facts: ["BOT_API_TOKEN is not configured for the bot."],
+  return buildDiscordReply({
+    headline: "Bot misconfigured",
+    message: "This bot cannot process commands until its API token is configured.",
+    details: ["**Missing setting** BOT_API_TOKEN"],
     ephemeral: true,
   });
 }
@@ -94,16 +95,17 @@ export function buildCommandErrorReply(
     ? payload.message.join(", ")
     : (payload?.message ?? details.fallback);
 
-  return buildStandardEditReply({
-    title: details.title,
-    facts: [errorMessage],
+  return buildDiscordEditReply({
+    headline: details.title,
+    message: `Shadow Cloud could not complete /${commandName}.`,
+    details: [`**Reason** ${errorMessage}`],
   });
 }
 
 export function buildInvalidMessageTargetReply(): InteractionEditReplyOptions {
-  return buildStandardEditReply({
-    title: "Invalid message",
-    facts: ["Use a Discord message ID or message link from this forum thread."],
+  return buildDiscordEditReply({
+    headline: "Use a message from this thread",
+    message: "Provide a Discord message ID or message link from this forum thread.",
   });
 }
 
@@ -113,19 +115,22 @@ export function buildMessagePinReply(
 ): InteractionEditReplyOptions {
   const pinned = action === "pin";
 
-  return buildStandardEditReply({
-    title: pinned ? "Message pinned" : "Message unpinned",
-    facts: [`${pinned ? "Pinned" : "Unpinned"} message ${messageId}.`],
+  return buildDiscordEditReply({
+    headline: pinned ? "Message pinned" : "Message unpinned",
+    message: pinned
+      ? `Message ${messageId} is now pinned in this thread.`
+      : `Message ${messageId} is no longer pinned in this thread.`,
   });
 }
 
 export function buildDiscordPinFailureReply(
   action: "pin" | "unpin",
 ): InteractionEditReplyOptions {
-  return buildStandardEditReply({
-    title: action === "pin" ? "Pin failed" : "Unpin failed",
-    facts: [
-      "The bot could not access or modify that message. Check that the message exists in this thread and the bot has permission to manage pinned messages.",
+  return buildDiscordEditReply({
+    headline: action === "pin" ? "Pin failed" : "Unpin failed",
+    message: "The bot could not access or modify that message.",
+    details: [
+      "**Next step** Check that the message exists in this thread and that the bot can manage pinned messages.",
     ],
   });
 }
@@ -133,9 +138,9 @@ export function buildDiscordPinFailureReply(
 export function buildResignationCompleteReply(
   gameName: string,
 ): InteractionEditReplyOptions {
-  return buildStandardEditReply({
-    title: "Resignation complete",
-    facts: [`You have successfully resigned from **${gameName}**.`],
+  return buildDiscordEditReply({
+    headline: "Resignation complete",
+    message: `You resigned from **${gameName}**.`,
   });
 }
 
@@ -150,11 +155,9 @@ export function buildResignationAnnouncement(
     ? " They remain the Overlord until campaign control is transferred in the web app."
     : "";
 
-  return buildStandardNotification({
-    title: `${mention} resigned from ${gameName}`,
-    facts: [
-      `Seat ${turnOrder} is now empty and will be skipped during turn rotation.${organizerNote}`,
-    ],
+  return buildDiscordNotification({
+    headline: `${mention} resigned from ${gameName}`,
+    message: `Seat ${turnOrder} is now empty and will be skipped during turn rotation.${organizerNote}`,
     mentionedUserIds: [userId],
   });
 }
@@ -164,11 +167,9 @@ export function buildSeatFilledReply(
   playerDisplayName: string,
   seatNumber: number | string,
 ): InteractionEditReplyOptions {
-  return buildStandardEditReply({
-    title: "Seat filled",
-    facts: [
-      `Seat ${seatNumber} has been filled by **${playerDisplayName}** in **${gameName}**.`,
-    ],
+  return buildDiscordEditReply({
+    headline: "Seat filled",
+    message: `**${playerDisplayName}** now occupies seat ${seatNumber} in **${gameName}**.`,
   });
 }
 
@@ -181,9 +182,9 @@ export function buildSeatFilledAnnouncement(
   const mention = `<@${userId}>`;
   const activeTurnNote = tookActiveTurn ? ` It is now ${mention}'s turn.` : "";
 
-  return buildStandardNotification({
-    title: `${mention} joined ${gameName}`,
-    facts: [`They have taken seat ${seatNumber}.${activeTurnNote}`],
+  return buildDiscordNotification({
+    headline: `${mention} joined ${gameName}`,
+    message: `They have taken seat ${seatNumber}.${activeTurnNote}`,
     mentionedUserIds: [userId],
   });
 }
@@ -193,11 +194,10 @@ export function buildTurnSkippedReply(
   skippedName: string,
   skippedSeat: number | string,
 ): InteractionEditReplyOptions {
-  return buildStandardEditReply({
-    title: "Turn skipped",
-    facts: [
-      `**${skippedName}**'s turn (seat ${skippedSeat}) has been skipped in **${gameName}**.`,
-    ],
+  return buildDiscordEditReply({
+    headline: "Turn skipped",
+    message: `**${skippedName}**'s turn was skipped in **${gameName}**.`,
+    details: [`**Seat** ${skippedSeat}`],
   });
 }
 
@@ -218,11 +218,10 @@ export function buildTurnAdvancedAnnouncement({
 }): MessageCreateOptions {
   const nextMention = nextDiscordId ? `<@${nextDiscordId}>` : `**${nextName}**`;
 
-  return buildStandardNotification({
-    title: `Turn advanced in ${gameName}`,
-    facts: [
-      `**${skippedName}** (seat ${skippedSeat}) was skipped. It is now ${nextMention}'s turn (seat ${nextSeat}).`,
-    ],
+  return buildDiscordNotification({
+    headline: `It is now ${nextMention}'s turn!`,
+    message: `**${skippedName}** (seat ${skippedSeat}) was skipped in **${gameName}**.`,
+    details: [`**Seat** ${nextSeat}`],
     mentionedUserIds: nextDiscordId ? [nextDiscordId] : [],
   });
 }
@@ -230,19 +229,18 @@ export function buildTurnAdvancedAnnouncement({
 export function buildGameLinkReply(
   gameUrl: string,
 ): InteractionEditReplyOptions {
-  return buildStandardEditReply({
-    facts: [`<${gameUrl}>`],
+  return buildDiscordEditReply({
+    headline: "Open this game in Shadow Cloud",
+    message: `[View the game](${gameUrl}) for status, roster, and uploads.`,
   });
 }
 
 export function buildRegistrationSubmittedReply(
   gameName: string,
 ): InteractionEditReplyOptions {
-  return buildStandardEditReply({
-    title: "Registration submitted",
-    facts: [
-      `Your registration request for **${gameName}** has been submitted. The game overlord must approve it before you are added.`,
-    ],
+  return buildDiscordEditReply({
+    headline: "Registration submitted",
+    message: `Your request to join **${gameName}** is waiting for the game overlord's approval.`,
   });
 }
 
@@ -250,16 +248,19 @@ export function buildApprovalFailureReply(
   action: ApprovalAction,
   errorMessage: string,
 ): InteractionReplyOptions {
-  return buildStandardReply({
-    title: action === "approve" ? "Approval failed" : "Rejection failed",
-    facts: [errorMessage],
+  const approving = action === "approve";
+
+  return buildDiscordReply({
+    headline: approving ? "Approval failed" : "Rejection failed",
+    message: `Shadow Cloud could not ${approving ? "approve" : "reject"} this registration.`,
+    details: [`**Reason** ${errorMessage}`],
     ephemeral: true,
   });
 }
 
 export function buildShadowCloudUnavailableReply(): InteractionEditReplyOptions {
-  return buildStandardEditReply({
-    title: "Shadow Cloud unavailable",
-    facts: ["Unable to reach the Shadow Cloud API right now."],
+  return buildDiscordEditReply({
+    headline: "Shadow Cloud unavailable",
+    message: "Unable to reach the Shadow Cloud API right now. Please try again.",
   });
 }

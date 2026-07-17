@@ -89,6 +89,11 @@ describe("createInteractionHandler debug command", () => {
     const rendered = JSON.stringify(interaction.editReply.mock.calls[0]?.[0]);
     expect(rendered).toContain("Unknown debug notification");
     expect(rendered).toContain("missing");
+    expect(rendered).toContain(
+      "Choose one or more registered notification names.",
+    );
+    expect(rendered).toContain("**Unknown** missing");
+    expect(rendered).toContain("**Valid names**");
     for (const name of debugPreviewNames) {
       expect(rendered).toContain(name);
     }

@@ -21,6 +21,67 @@ import {
 const rendered = (value: unknown) => JSON.stringify(value);
 
 describe("response message builders", () => {
+  it("renders command failures with guidance and a reason detail", () => {
+    const renderedMessage = rendered(
+      buildCommandErrorReply("register", { message: "The game is full." }),
+    );
+
+    expect(renderedMessage).toContain("Registration failed");
+    expect(renderedMessage).toContain(
+      "Shadow Cloud could not complete /register.",
+    );
+    expect(renderedMessage).toContain("**Reason** The game is full.");
+  });
+
+  it("gives every response a specific headline and primary sentence", () => {
+    const gameLink = rendered(
+      buildGameLinkReply("https://shadow.example/games/42"),
+    );
+    const wrongChannel = rendered(
+      buildWrongChannelReply("register", "GuildText", "channel-1"),
+    );
+
+    expect(gameLink).toContain("Open this game in Shadow Cloud");
+    expect(gameLink).toContain(
+      "[View the game](https://shadow.example/games/42) for status, roster, and uploads.",
+    );
+    expect(gameLink).not.toContain("<https://shadow.example/games/42>");
+    expect(wrongChannel).toContain("Use this command in a game thread");
+    expect(wrongChannel).toContain("**Channel type** GuildText");
+    expect(wrongChannel).toContain("**Channel ID** channel-1");
+  });
+
+  it("leads turn advancement with the next player", () => {
+    const message = buildTurnAdvancedAnnouncement({
+      gameName: "Debug World",
+      skippedName: "Previous Player",
+      skippedSeat: 1,
+      nextName: "Next Player",
+      nextDiscordId: "user-2",
+      nextSeat: 2,
+    });
+    const renderedMessage = rendered(message);
+
+    expect(renderedMessage).toContain("It is now <@user-2>'s turn!");
+    expect(renderedMessage).toContain(
+      "**Previous Player** (seat 1) was skipped in **Debug World**.",
+    );
+    expect(renderedMessage).toContain("**Seat** 2");
+    expect(message.allowedMentions).toEqual({ users: ["user-2"] });
+  });
+
+  it("renders approval failures without losing the API reason", () => {
+    const renderedMessage = rendered(
+      buildApprovalFailureReply("approve", "The request expired."),
+    );
+
+    expect(renderedMessage).toContain("Approval failed");
+    expect(renderedMessage).toContain(
+      "Shadow Cloud could not approve this registration.",
+    );
+    expect(renderedMessage).toContain("**Reason** The request expired.");
+  });
+
   it("builds command errors with command-specific titles and fallback text", () => {
     expect(rendered(buildCommandErrorReply("init", null))).toContain(
       "Initialization failed",
@@ -45,7 +106,7 @@ describe("response message builders", () => {
 
   it("builds successful command replies and announcements", () => {
     expect(rendered(buildResignationCompleteReply("Debug World"))).toContain(
-      "successfully resigned",
+      "You resigned from",
     );
     expect(
       buildResignationAnnouncement("user-1", "Debug World", 2, true)
@@ -53,7 +114,7 @@ describe("response message builders", () => {
     ).toEqual({ users: ["user-1"] });
     expect(
       rendered(buildSeatFilledReply("Debug World", "Player", 2)),
-    ).toContain("Seat 2 has been filled");
+    ).toContain("now occupies seat 2");
     expect(
       buildSeatFilledAnnouncement("user-1", "Debug World", 2, true)
         .allowedMentions,
@@ -73,7 +134,9 @@ describe("response message builders", () => {
     ).toEqual({ users: ["user-1"] });
     expect(
       rendered(buildGameLinkReply("https://shadow.example/games/42")),
-    ).toContain("<https://shadow.example/games/42>");
+    ).toContain(
+      "[View the game](https://shadow.example/games/42) for status, roster, and uploads.",
+    );
     expect(rendered(buildRegistrationSubmittedReply("Debug World"))).toContain(
       "Registration submitted",
     );

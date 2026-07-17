@@ -23,10 +23,10 @@ import {
   type SupportedCommandName,
 } from "./commands.js";
 import {
-  buildStandardEditReply,
-  buildStandardReply,
   buildApprovalNotificationMessage,
   buildApprovalResultMessage,
+  buildDiscordEditReply,
+  buildDiscordReply,
 } from "./notifications.js";
 import { parseThreadMessageTarget } from "./message-target.js";
 import {
@@ -216,9 +216,10 @@ async function handleRegistrationButton(
   } catch (error) {
     console.error(`Failed to ${action} registration ${requestId}.`, error);
     await interaction.followUp(
-      buildStandardReply({
-        title: "Shadow Cloud unavailable",
-        facts: ["Unable to reach the Shadow Cloud API right now."],
+      buildDiscordReply({
+        headline: "Shadow Cloud unavailable",
+        message:
+          "Unable to reach the Shadow Cloud API right now. Please try again.",
         ephemeral: true,
       }),
     );
@@ -410,11 +411,12 @@ async function handleDebugCommand(
 
   if (!selection.ok) {
     await interaction.editReply(
-      buildStandardEditReply({
-        title: "Unknown debug notification",
-        facts: [
-          `Unknown: ${selection.unknownNames.join(", ")}`,
-          `Valid names: ${debugPreviewNames.join(", ")}`,
+      buildDiscordEditReply({
+        headline: "Unknown debug notification",
+        message: "Choose one or more registered notification names.",
+        details: [
+          `**Unknown** ${selection.unknownNames.join(", ")}`,
+          `**Valid names** ${debugPreviewNames.join(", ")}`,
         ],
       }),
     );
