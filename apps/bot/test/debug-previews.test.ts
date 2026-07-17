@@ -1,5 +1,5 @@
 import { ComponentType, MessageFlags } from "discord.js";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildDebugPreviews,
   debugPreviewNames,
@@ -12,6 +12,10 @@ const context = {
   userDisplayName: "Debug User",
   webBaseUrl: "https://shadow.example",
 };
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("selectDebugPreviewNames", () => {
   it("registers every production notification and response outcome", () => {
@@ -83,6 +87,9 @@ describe("selectDebugPreviewNames", () => {
 
 describe("buildDebugPreviews", () => {
   it("renders every registered preview as ephemeral Components V2", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-17T12:00:00.000Z"));
+
     const previews = buildDebugPreviews(debugPreviewNames, context);
 
     expect(previews.map((preview) => preview.name)).toEqual(debugPreviewNames);
@@ -97,14 +104,21 @@ describe("buildDebugPreviews", () => {
       const serialized = JSON.parse(JSON.stringify(preview.message)) as {
         components: Array<{
           accent_color: number;
-          components: Array<{ type: number }>;
+          components: Array<{ type: number; content?: string }>;
         }>;
       };
       const [container] = serialized.components;
+      const componentTypes =
+        container?.components.map(({ type }) => type) ?? [];
+      const timestamp = container?.components.find(({ content }) =>
+        content?.includes("<t:"),
+      );
 
       expect(container?.accent_color).toBe(ACCENT_COLOR);
       expect(container?.components[0]?.type).toBe(ComponentType.TextDisplay);
       expect(container?.components[1]?.type).toBe(ComponentType.TextDisplay);
+      expect(componentTypes).toContain(ComponentType.Separator);
+      expect(timestamp?.content).toMatch(/^-# <t:\d+:F>$/);
     }
   });
 

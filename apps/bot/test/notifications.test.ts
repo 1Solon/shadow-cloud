@@ -5,7 +5,7 @@ import {
   ComponentType,
   MessageFlags,
 } from "discord.js";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ACCENT_COLOR,
   buildApprovalNotificationMessage,
@@ -33,6 +33,10 @@ type TurnNudgeActivePlayerIdIsRequired = Assert<
     string
   >
 >;
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 const gameInitializedPayload = {
   game: {
@@ -135,6 +139,9 @@ const turnNudgePayload = {
 
 describe("buildDiscordNotification", () => {
   it("renders headline, message, details, divider, metadata, and actions in order", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-17T12:00:00.000Z"));
+
     const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId("approve")
@@ -167,9 +174,13 @@ describe("buildDiscordNotification", () => {
     expect(rendered.indexOf("-# <t:1784299200:F>")).toBeLessThan(
       rendered.indexOf('"label":"Approve"'),
     );
+    expect(rendered).not.toContain("-# <t:1784289600:F>");
   });
 
-  it("omits the divider when there is no footer content", () => {
+  it("generates a delivery timestamp when metadata is absent", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-17T12:00:00.000Z"));
+
     const rendered = JSON.stringify(
       buildDiscordNotification({
         headline: "Registration failed",
@@ -178,10 +189,14 @@ describe("buildDiscordNotification", () => {
       }),
     );
 
-    expect(rendered).not.toContain(`"type":${ComponentType.Separator}`);
+    expect(rendered).toContain(`"type":${ComponentType.Separator}`);
+    expect(rendered).toContain("-# <t:1784289600:F>");
   });
 
   it("renders the divider for action-only footers", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-17T12:00:00.000Z"));
+
     const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId("reject")
@@ -197,7 +212,11 @@ describe("buildDiscordNotification", () => {
     );
 
     expect(rendered).toContain(`"type":${ComponentType.Separator}`);
+    expect(rendered).toContain("-# <t:1784289600:F>");
     expect(rendered.indexOf(`"type":${ComponentType.Separator}`)).toBeLessThan(
+      rendered.indexOf("-# <t:1784289600:F>"),
+    );
+    expect(rendered.indexOf("-# <t:1784289600:F>")).toBeLessThan(
       rendered.indexOf('"label":"Reject"'),
     );
   });
@@ -234,6 +253,27 @@ describe("production notification style", () => {
     );
     expect(rendered).toContain(`"type":${ComponentType.Separator}`);
     expect(rendered).toContain("-# <t:1778500800:F>");
+  });
+
+  it("falls back to delivery time when an event timestamp is invalid", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-17T12:00:00.000Z"));
+
+    const rendered = JSON.stringify(
+      buildSaveNotificationMessage(
+        {
+          ...saveUploadedPayload,
+          upload: {
+            ...saveUploadedPayload.upload,
+            uploadedAt: "not-a-date",
+          },
+        },
+        "https://shadow.example",
+      ),
+    );
+
+    expect(rendered).toContain(`"type":${ComponentType.Separator}`);
+    expect(rendered).toContain("-# <t:1784289600:F>");
   });
 
   it("uses an action footer for registration approval", () => {

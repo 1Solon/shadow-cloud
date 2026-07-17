@@ -150,17 +150,18 @@ function buildDiscordResponseContainer({
     );
   }
 
-  if (metadata.length > 0 || actionRow) {
-    container.addSeparatorComponents((separator) =>
-      separator.setDivider(true).setSpacing(SeparatorSpacingSize.Small),
-    );
-  }
+  const footerMetadata =
+    metadata.length > 0
+      ? metadata
+      : [`-# <t:${Math.floor(Date.now() / 1000)}:F>`];
 
-  if (metadata.length > 0) {
-    container.addTextDisplayComponents((textDisplay) =>
-      textDisplay.setContent(metadata.join("\n")),
+  container
+    .addSeparatorComponents((separator) =>
+      separator.setDivider(true).setSpacing(SeparatorSpacingSize.Small),
+    )
+    .addTextDisplayComponents((textDisplay) =>
+      textDisplay.setContent(footerMetadata.join("\n")),
     );
-  }
 
   if (actionRow) {
     container.addActionRowComponents(actionRow);
