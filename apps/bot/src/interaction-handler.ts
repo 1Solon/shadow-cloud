@@ -23,13 +23,30 @@ import {
   type SupportedCommandName,
 } from "./commands.js";
 import {
-  buildStandardEditReply,
-  buildStandardNotification,
   buildStandardReply,
   buildApprovalNotificationMessage,
   buildApprovalResultMessage,
 } from "./notifications.js";
 import { parseThreadMessageTarget } from "./message-target.js";
+import {
+  buildApprovalFailureReply,
+  buildBotMisconfiguredReply,
+  buildCommandErrorReply,
+  buildDiscordPinFailureReply,
+  buildForumThreadRequiredReply,
+  buildGameLinkReply,
+  buildInvalidMessageTargetReply,
+  buildMessagePinReply,
+  buildRegistrationSubmittedReply,
+  buildResignationAnnouncement,
+  buildResignationCompleteReply,
+  buildSeatFilledAnnouncement,
+  buildSeatFilledReply,
+  buildShadowCloudUnavailableReply,
+  buildTurnAdvancedAnnouncement,
+  buildTurnSkippedReply,
+  buildWrongChannelReply,
+} from "./response-messages.js";
 
 const APPROVE_PREFIX = "sc_approve_";
 const REJECT_PREFIX = "sc_reject_";
@@ -150,13 +167,7 @@ async function handleRegistrationButton(
           payload?.error ??
           `Failed to ${action} registration.`);
 
-      await interaction.followUp(
-        buildStandardReply({
-          title: action === "approve" ? "Approval failed" : "Rejection failed",
-          facts: [errorMessage],
-          ephemeral: true,
-        }),
-      );
+      await interaction.followUp(buildApprovalFailureReply(action, errorMessage));
       return;
     }
 
@@ -206,61 +217,10 @@ async function handleRegistrationButton(
   }
 }
 
-function buildCommandErrorReply(
-  commandName: SupportedCommandName,
-  payload: CommandResponsePayload,
-) {
-  const errorMessage = Array.isArray(payload?.message)
-    ? payload.message.join(", ")
-    : (payload?.message ??
-      (commandName === "init"
-        ? "The API rejected the game creation request."
-        : commandName === "resign"
-          ? "The API rejected the resignation request."
-          : commandName === "replace"
-            ? "The API rejected the replacement request."
-            : commandName === "skip"
-              ? "The API rejected the skip request."
-              : commandName === "link"
-                ? "The API rejected the link request."
-                : commandName === "pin"
-                  ? "The API rejected the pin request."
-                  : commandName === "unpin"
-                    ? "The API rejected the unpin request."
-                    : "The API rejected the registration request."));
-
-  return buildStandardEditReply({
-    title:
-      commandName === "init"
-        ? "Initialization failed"
-        : commandName === "resign"
-          ? "Resignation failed"
-          : commandName === "replace"
-            ? "Replacement failed"
-            : commandName === "skip"
-              ? "Skip failed"
-              : commandName === "link"
-                ? "Link failed"
-                : commandName === "pin"
-                  ? "Pin failed"
-                  : commandName === "unpin"
-                    ? "Unpin failed"
-                    : "Registration failed",
-    facts: [errorMessage],
-  });
-}
-
 function isPinningCommand(
   commandName: SupportedCommandName,
 ): commandName is "pin" | "unpin" {
   return commandName === "pin" || commandName === "unpin";
-}
-
-function buildInvalidMessageTargetReply() {
-  return buildStandardEditReply({
-    title: "Invalid message",
-    facts: ["Use a Discord message ID or message link from this forum thread."],
-  });
 }
 
 async function handlePinningCommand(
@@ -299,22 +259,12 @@ async function handlePinningCommand(
 
     if (commandName === "pin") {
       await message.pin();
-      await interaction.editReply(
-        buildStandardEditReply({
-          title: "Message pinned",
-          facts: [`Pinned message ${target.messageId}.`],
-        }),
-      );
+      await interaction.editReply(buildMessagePinReply("pin", target.messageId));
       return;
     }
 
     await message.unpin();
-    await interaction.editReply(
-      buildStandardEditReply({
-        title: "Message unpinned",
-        facts: [`Unpinned message ${target.messageId}.`],
-      }),
-    );
+    await interaction.editReply(buildMessagePinReply("unpin", target.messageId));
   } catch (error) {
     console.warn(`Failed to ${commandName} Discord message.`, {
       channelId: channel.id,
@@ -322,14 +272,7 @@ async function handlePinningCommand(
       messageId: target.messageId,
       error,
     });
-    await interaction.editReply(
-      buildStandardEditReply({
-        title: commandName === "pin" ? "Pin failed" : "Unpin failed",
-        facts: [
-          "The bot could not access or modify that message. Check that the message exists in this thread and the bot has permission to manage pinned messages.",
-        ],
-      }),
-    );
+    await interaction.editReply(buildDiscordPinFailureReply(commandName));
   }
 }
 
@@ -350,25 +293,14 @@ async function handleSuccessfulCommand(
     const gameName = payload?.name ?? fallbackName;
     const wasOrganizer = payload?.player?.wasOrganizer ?? false;
 
-    await interaction.editReply(
-      buildStandardEditReply({
-        title: "Resignation complete",
-        facts: [`You have successfully resigned from **${gameName}**.`],
-      }),
-    );
-
-    const mention = `<@${interaction.user.id}>`;
-    const organizerNote = wasOrganizer
-      ? " They remain the Overlord until campaign control is transferred in the web app."
-      : "";
+    await interaction.editReply(buildResignationCompleteReply(gameName));
     await channel.send(
-      buildStandardNotification({
-        title: `${mention} resigned from ${gameName}`,
-        facts: [
-          `Seat ${payload?.player?.turnOrder ?? "?"} is now empty and will be skipped during turn rotation.${organizerNote}`,
-        ],
-        mentionedUserIds: [interaction.user.id],
-      }),
+      buildResignationAnnouncement(
+        interaction.user.id,
+        gameName,
+        payload?.player?.turnOrder ?? "?",
+        wasOrganizer,
+      ),
     );
     return;
   }
@@ -383,24 +315,15 @@ async function handleSuccessfulCommand(
     const tookActiveTurn = payload?.player?.tookActiveTurn ?? false;
 
     await interaction.editReply(
-      buildStandardEditReply({
-        title: "Seat filled",
-        facts: [
-          `Seat ${seatNumber} has been filled by **${playerDisplayName}** in **${gameName}**.`,
-        ],
-      }),
+      buildSeatFilledReply(gameName, playerDisplayName, seatNumber),
     );
-
-    const mention = `<@${newPlayerUser.id}>`;
-    const activeTurnNote = tookActiveTurn
-      ? ` It is now ${mention}'s turn.`
-      : "";
     await channel.send(
-      buildStandardNotification({
-        title: `${mention} joined ${gameName}`,
-        facts: [`They have taken seat ${seatNumber}.${activeTurnNote}`],
-        mentionedUserIds: [newPlayerUser.id],
-      }),
+      buildSeatFilledAnnouncement(
+        newPlayerUser.id,
+        gameName,
+        seatNumber,
+        tookActiveTurn,
+      ),
     );
     return;
   }
@@ -414,24 +337,16 @@ async function handleSuccessfulCommand(
     const nextSeat = payload?.nextPlayer?.turnOrder ?? "?";
 
     await interaction.editReply(
-      buildStandardEditReply({
-        title: "Turn skipped",
-        facts: [
-          `**${skippedName}**'s turn (seat ${skippedSeat}) has been skipped in **${gameName}**.`,
-        ],
-      }),
+      buildTurnSkippedReply(gameName, skippedName, skippedSeat),
     );
-
-    const nextMention = nextDiscordId
-      ? `<@${nextDiscordId}>`
-      : `**${nextName}**`;
     await channel.send(
-      buildStandardNotification({
-        title: `Turn advanced in ${gameName}`,
-        facts: [
-          `**${skippedName}** (seat ${skippedSeat}) was skipped. It is now ${nextMention}'s turn (seat ${nextSeat}).`,
-        ],
-        mentionedUserIds: nextDiscordId ? [nextDiscordId] : [],
+      buildTurnAdvancedAnnouncement({
+        gameName,
+        skippedName,
+        skippedSeat,
+        nextName,
+        nextDiscordId,
+        nextSeat,
       }),
     );
     return;
@@ -447,11 +362,7 @@ async function handleSuccessfulCommand(
           ).toString()
         : config.webBaseUrl;
 
-    await interaction.editReply(
-      buildStandardEditReply({
-        facts: [`<${gameUrl}>`],
-      }),
-    );
+    await interaction.editReply(buildGameLinkReply(gameUrl));
     return;
   }
 
@@ -463,14 +374,7 @@ async function handleSuccessfulCommand(
     interaction.user.username;
   const gameName = payload?.name ?? fallbackName;
 
-  await interaction.editReply(
-    buildStandardEditReply({
-      title: "Registration submitted",
-      facts: [
-        `Your registration request for **${gameName}** has been submitted. The game overlord must approve it before you are added.`,
-      ],
-    }),
-  );
+  await interaction.editReply(buildRegistrationSubmittedReply(gameName));
 
   if (requestId) {
     await sendApprovalMessage(
@@ -517,6 +421,10 @@ export function createInteractionHandler(client: Client, config: BotApiConfig) {
       return;
     }
 
+    if (interaction.commandName === "debug") {
+      return;
+    }
+
     const commandName = interaction.commandName;
     const { channel, observedType } = await resolveThreadChannel(
       client,
@@ -535,15 +443,11 @@ export function createInteractionHandler(client: Client, config: BotApiConfig) {
       );
 
       await interaction.reply(
-        buildStandardReply({
-          title: "Wrong channel",
-          facts: [
-            `Run /${commandName} inside the forum thread that should own the game.`,
-            `Observed channel type: ${observedType}`,
-            `Channel id: ${interaction.channelId}`,
-          ],
-          ephemeral: true,
-        }),
+        buildWrongChannelReply(
+          commandName,
+          observedType,
+          interaction.channelId,
+        ),
       );
       return;
     }
@@ -561,24 +465,12 @@ export function createInteractionHandler(client: Client, config: BotApiConfig) {
     }
 
     if (channel.parent?.type !== ChannelType.GuildForum) {
-      await interaction.reply(
-        buildStandardReply({
-          title: "Wrong channel",
-          facts: [`Run /${commandName} inside a Discord forum thread.`],
-          ephemeral: true,
-        }),
-      );
+      await interaction.reply(buildForumThreadRequiredReply(commandName));
       return;
     }
 
     if (!config.botApiToken) {
-      await interaction.reply(
-        buildStandardReply({
-          title: "Bot misconfigured",
-          facts: ["BOT_API_TOKEN is not configured for the bot."],
-          ephemeral: true,
-        }),
-      );
+      await interaction.reply(buildBotMisconfiguredReply());
       return;
     }
 
@@ -615,12 +507,7 @@ export function createInteractionHandler(client: Client, config: BotApiConfig) {
       );
     } catch (error) {
       console.error(`Failed to ${commandName} game from Discord.`, error);
-      await interaction.editReply(
-        buildStandardEditReply({
-          title: "Shadow Cloud unavailable",
-          facts: ["Unable to reach the Shadow Cloud API right now."],
-        }),
-      );
+      await interaction.editReply(buildShadowCloudUnavailableReply());
     }
   };
 }
