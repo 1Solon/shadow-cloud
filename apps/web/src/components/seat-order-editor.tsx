@@ -279,18 +279,6 @@ function SortableSeatRow({
             isConfiguration ? "min-w-0 flex-wrap" : "flex-nowrap",
           )}
         >
-          <Button
-            {...attributes}
-            {...listeners}
-            ref={setActivatorNodeRef}
-            aria-label={`Move seat ${index + 1}`}
-            className="cursor-grab touch-none active:cursor-grabbing"
-            disabled={isPending}
-            type="button"
-            variant="outline"
-          >
-            Move
-          </Button>
           {isConfiguration ? (
             <Button
               data-no-drag="true"
@@ -354,12 +342,39 @@ function SortableSeatRow({
                   Remove seat
                 </Button>
               </span>
-              {isConfiguration && requiresSavedClearBeforeRemove ? (
-                <span className="basis-full text-xs text-orange-200/80">
-                  Clear this occupied seat and save before removing it.
-                </span>
-              ) : null}
             </>
+          ) : null}
+          <Button
+            {...attributes}
+            {...listeners}
+            ref={setActivatorNodeRef}
+            aria-label={`Move seat ${index + 1}`}
+            className="size-10 shrink-0 cursor-grab touch-none p-0 active:cursor-grabbing"
+            disabled={isPending}
+            type="button"
+            variant="outline"
+          >
+            <svg
+              aria-hidden="true"
+              className="size-5"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <path
+                d="m8 7 4-4 4 4M12 3v18m-4-4 4 4 4-4"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+              />
+            </svg>
+          </Button>
+          {showSeatActions &&
+            isConfiguration &&
+            requiresSavedClearBeforeRemove ? (
+            <span className="basis-full text-xs text-orange-200/80">
+              Clear this occupied seat and save before removing it.
+            </span>
           ) : null}
         </div>
       ) : null}

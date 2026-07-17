@@ -107,6 +107,22 @@ describe("SeatOrderEditor", () => {
     );
   });
 
+  it("renders an icon-only move control as the rightmost seat button", async () => {
+    const user = userEvent.setup();
+    renderEditor();
+
+    await user.click(screen.getByRole("button", { name: "Manage seat 2" }));
+
+    const moveButton = screen.getByRole("button", { name: "Move seat 2" });
+    const actionGroup = moveButton.parentElement;
+    const moveIcon = moveButton.querySelector("svg");
+
+    expect(actionGroup).not.toBeNull();
+    expect(moveButton).not.toHaveTextContent("Move");
+    expect(moveIcon).toHaveAttribute("aria-hidden", "true");
+    expect(within(actionGroup!).getAllByRole("button").at(-1)).toBe(moveButton);
+  });
+
   it("preserves card presentation and renders configuration without card chrome", () => {
     const { rerender } = render(
       <SeatOrderEditor
