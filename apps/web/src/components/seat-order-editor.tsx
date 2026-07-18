@@ -277,7 +277,7 @@ function SortableSeatRow({
         >
           Seat {index + 1}
           {player.isOrganizer ? " · Overlord" : ""}
-          {isActive && !isEditing ? " · Active" : ""}
+          {isActive && (!isEditing || isConfiguration) ? " · Active" : ""}
         </div>
       </div>
       {isEditing ? (
@@ -290,6 +290,7 @@ function SortableSeatRow({
           {isConfiguration ? (
             <Button
               data-no-drag="true"
+              disabled={isPending}
               type="button"
               variant="secondary"
               onClick={(event) => {

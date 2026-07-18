@@ -344,11 +344,17 @@ describe("SeatOrderEditor", () => {
     );
 
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
-    expect(
-      screen.getByRole("dialog", { name: "Confirm seat change" }),
-    ).toBeVisible();
+    const confirmationDialog = screen.getByRole("dialog", {
+      name: "Confirm seat change",
+    });
+    expect(confirmationDialog).toBeVisible();
+    await waitFor(() =>
+      expect(
+        within(confirmationDialog).getByRole("button", { name: "Cancel" }),
+      ).toHaveFocus(),
+    );
     await user.click(
-      within(screen.getByRole("dialog")).getByRole("button", {
+      within(confirmationDialog).getByRole("button", {
         name: "Cancel",
       }),
     );
@@ -418,6 +424,7 @@ describe("SeatOrderEditor", () => {
     await user.click(screen.getByRole("button", { name: "Manage seat 2" }));
     await user.click(screen.getByRole("button", { name: "Make active" }));
     await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(true));
+    expect(screen.getByText("Seat 2 · Active")).toBeVisible();
 
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
@@ -482,7 +489,7 @@ describe("SeatOrderEditor", () => {
     await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(true));
     expect(
       screen.getAllByText(/Seat \d/).map((node) => node.textContent),
-    ).toEqual(["Seat 1", "Seat 2 · Overlord", "Seat 3"]);
+    ).toEqual(["Seat 1", "Seat 2 · Overlord · Active", "Seat 3"]);
 
     await user.click(screen.getByRole("button", { name: "Manage seat 1" }));
     const dialog = screen.getByRole("dialog", { name: "Manage seat 1" });
@@ -503,6 +510,34 @@ describe("SeatOrderEditor", () => {
     expect(
       screen.getByRole("dialog", { name: "Manage seat 2" }),
     ).toBeVisible();
+  });
+
+  it("prevents management from opening while a save is pending", async () => {
+    const user = userEvent.setup();
+    let resolveRequest!: (response: Response) => void;
+    vi.spyOn(globalThis, "fetch").mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveRequest = resolve;
+        }),
+    );
+    renderEditor();
+
+    await user.click(screen.getByRole("button", { name: "Manage seat 2" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Make active",
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "Save order" }));
+
+    const manageSeat1 = screen.getByRole("button", { name: "Manage seat 1" });
+    expect(manageSeat1).toBeDisabled();
+    await user.click(manageSeat1);
+    expect(screen.queryByRole("dialog", { name: /manage seat/i })).toBeNull();
+
+    resolveRequest(new Response(null, { status: 204 }));
+    await waitFor(() => expect(router.refresh).toHaveBeenCalledOnce());
   });
 
   it("posts the exact changed seat payload and clears dirty state on success", async () => {

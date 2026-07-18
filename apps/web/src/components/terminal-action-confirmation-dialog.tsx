@@ -32,6 +32,9 @@ export function TerminalActionConfirmationDialog({
   const [renderedLines, setRenderedLines] = useState<string[]>([]);
   const [activeLineIndex, setActiveLineIndex] = useState<number | null>(null);
   const timeoutIdsRef = useRef<number[]>([]);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
+  const confirmationCommand = confirmation?.command;
 
   function clearScheduledTimeouts() {
     timeoutIdsRef.current.forEach((timeoutId) =>
@@ -101,8 +104,64 @@ export function TerminalActionConfirmationDialog({
     };
   }, [confirmation]);
 
+  useEffect(() => {
+    if (!confirmationCommand) {
+      return;
+    }
+
+    function containFocus(event: FocusEvent) {
+      if (
+        event.target instanceof Node &&
+        !dialogRef.current?.contains(event.target)
+      ) {
+        cancelButtonRef.current?.focus();
+      }
+    }
+
+    cancelButtonRef.current?.focus();
+    document.addEventListener("focusin", containFocus);
+
+    return () => {
+      document.removeEventListener("focusin", containFocus);
+    };
+  }, [confirmationCommand]);
+
   if (!confirmation) {
     return null;
+  }
+
+  function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape" && !isPending) {
+      event.preventDefault();
+      onCancel();
+      return;
+    }
+
+    if (event.key !== "Tab") {
+      return;
+    }
+
+    const focusableElements = Array.from(
+      dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ) ?? [],
+    );
+    const first = focusableElements[0];
+    const last = focusableElements.at(-1);
+
+    if (!first || !last) {
+      event.preventDefault();
+      return;
+    }
+
+    if (
+      (event.shiftKey && document.activeElement === first) ||
+      (!event.shiftKey && document.activeElement === last) ||
+      !dialogRef.current?.contains(document.activeElement)
+    ) {
+      event.preventDefault();
+      (event.shiftKey ? last : first).focus();
+    }
   }
 
   return (
@@ -111,13 +170,16 @@ export function TerminalActionConfirmationDialog({
         aria-label={confirmation.title}
         aria-modal="true"
         className="relative w-full max-w-md overflow-hidden rounded-2xl border border-orange-400/30 bg-[#0a0711] shadow-2xl shadow-orange-950/40"
+        ref={dialogRef}
         role="dialog"
+        onKeyDown={handleKeyDown}
       >
         <div className="flex items-center justify-between border-b border-orange-400/20 bg-orange-400/10 px-4 py-3 font-mono text-[11px] uppercase tracking-[0.28em] text-orange-200">
           <span>{confirmation.title}</span>
           <button
             aria-label="Close confirmation"
             className="text-orange-300/70 transition-colors hover:text-orange-200"
+            disabled={isPending}
             type="button"
             onClick={onCancel}
           >
@@ -141,6 +203,7 @@ export function TerminalActionConfirmationDialog({
           {children}
           <div className="flex justify-end gap-2 pt-2">
             <Button
+              ref={cancelButtonRef}
               disabled={isPending}
               type="button"
               variant="secondary"
