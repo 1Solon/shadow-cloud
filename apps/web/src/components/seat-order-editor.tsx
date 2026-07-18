@@ -290,6 +290,7 @@ function SortableSeatRow({
           {isConfiguration ? (
             <Button
               data-no-drag="true"
+              aria-label={`Manage seat ${index + 1}`}
               disabled={isPending}
               type="button"
               variant="secondary"
@@ -297,7 +298,7 @@ function SortableSeatRow({
                 onSelectForManagement(player.id, event.currentTarget);
               }}
             >
-              Manage seat {index + 1}
+              Manage
             </Button>
           ) : null}
           {showSeatActions ? (

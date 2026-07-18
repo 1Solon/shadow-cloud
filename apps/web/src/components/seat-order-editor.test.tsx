@@ -79,7 +79,12 @@ describe("SeatOrderEditor", () => {
     expect(screen.queryByRole("dialog", { name: /manage seat/i })).toBeNull();
     expect(screen.queryByRole("button", { name: "Clear seat" })).toBeNull();
 
-    await user.click(screen.getByRole("button", { name: "Manage seat 2" }));
+    const manageSeat2Button = screen.getByRole("button", {
+      name: "Manage seat 2",
+    });
+    expect(manageSeat2Button).toHaveTextContent(/^Manage$/);
+
+    await user.click(manageSeat2Button);
 
     const occupiedDialog = screen.getByRole("dialog", {
       name: "Manage seat 2",
