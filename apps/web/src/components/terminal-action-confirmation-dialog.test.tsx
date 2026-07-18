@@ -3,6 +3,7 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { TerminalActionConfirmationDialog } from "@/components/terminal-action-confirmation-dialog";
 
@@ -47,6 +48,44 @@ describe("TerminalActionConfirmationDialog", () => {
 
     screen.getByRole("button", { name: "Background action" }).focus();
     expect(cancel).toHaveFocus();
+  });
+
+  it("restores focus to the invoking control after dismissal", async () => {
+    const user = userEvent.setup();
+
+    function ConfirmationHarness() {
+      const [isOpen, setIsOpen] = useState(false);
+
+      return (
+        <>
+          <button type="button" onClick={() => setIsOpen(true)}>
+            Request action
+          </button>
+          <TerminalActionConfirmationDialog
+            confirmation={isOpen ? confirmation : null}
+            isPending={false}
+            onCancel={() => setIsOpen(false)}
+            onConfirm={vi.fn()}
+          />
+        </>
+      );
+    }
+
+    render(<ConfirmationHarness />);
+    const trigger = screen.getByRole("button", { name: "Request action" });
+
+    await user.click(trigger);
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole("dialog")).getByRole("button", {
+          name: "Cancel",
+        }),
+      ).toHaveFocus(),
+    );
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(trigger).toHaveFocus();
   });
 
   it("cancels with Escape when no action is pending", async () => {

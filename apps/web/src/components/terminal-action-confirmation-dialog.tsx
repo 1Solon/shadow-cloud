@@ -118,11 +118,18 @@ export function TerminalActionConfirmationDialog({
       }
     }
 
+    const returnFocusElement =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
     cancelButtonRef.current?.focus();
     document.addEventListener("focusin", containFocus);
 
     return () => {
       document.removeEventListener("focusin", containFocus);
+      if (returnFocusElement?.isConnected) {
+        returnFocusElement.focus();
+      }
     };
   }, [confirmationCommand]);
 
