@@ -72,39 +72,41 @@ describe("SeatOrderEditor", () => {
     cleanup();
   });
 
-  it("focuses configuration management actions on one selected seat", async () => {
+  it("opens one management modal for the selected configuration seat", async () => {
     const user = userEvent.setup();
     renderEditor();
 
+    expect(screen.queryByRole("dialog", { name: /manage seat/i })).toBeNull();
     expect(screen.queryByRole("button", { name: "Clear seat" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Remove seat" })).toBeNull();
 
     await user.click(screen.getByRole("button", { name: "Manage seat 2" }));
 
+    const occupiedDialog = screen.getByRole("dialog", {
+      name: "Manage seat 2",
+    });
+    expect(within(occupiedDialog).getByText("Rhea")).toBeVisible();
     expect(
-      screen.getByRole("button", { name: "Manage seat 2" }),
-    ).toHaveAttribute("aria-current", "true");
-    expect(screen.getAllByRole("button", { name: "Make active" })).toHaveLength(
-      1,
-    );
-    expect(screen.getAllByRole("button", { name: "Clear seat" })).toHaveLength(
-      1,
-    );
-    expect(screen.getAllByRole("button", { name: "Remove seat" })).toHaveLength(
-      1,
-    );
+      within(occupiedDialog).getByRole("button", { name: "Make active" }),
+    ).toBeVisible();
+    expect(
+      within(occupiedDialog).getByRole("button", { name: "Clear seat" }),
+    ).toBeVisible();
+    expect(
+      within(occupiedDialog).getByRole("button", { name: "Remove seat" }),
+    ).toBeVisible();
+    expect(within(occupiedDialog).queryByText("Occupied")).toBeNull();
+    expect(within(occupiedDialog).queryByText("Not active")).toBeNull();
 
+    await user.click(
+      within(occupiedDialog).getByRole("button", { name: "Close" }),
+    );
     await user.click(screen.getByRole("button", { name: "Manage seat 3" }));
 
+    const openDialog = screen.getByRole("dialog", { name: "Manage seat 3" });
+    expect(within(openDialog).getByText("[Open]")).toBeVisible();
     expect(
-      screen.getByRole("button", { name: "Manage seat 3" }),
-    ).toHaveAttribute("aria-current", "true");
-    expect(
-      screen.getByRole("button", { name: "Manage seat 2" }),
-    ).not.toHaveAttribute("aria-current");
-    expect(screen.getAllByRole("button", { name: "Remove seat" })).toHaveLength(
-      1,
-    );
+      within(openDialog).queryByText("Open", { exact: true }),
+    ).toBeNull();
   });
 
   it("renders an icon-only move control as the rightmost seat button", async () => {
@@ -250,22 +252,66 @@ describe("SeatOrderEditor", () => {
     await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(false));
   });
 
-  it("preserves active, empty, and last-occupied eligibility rules", async () => {
+  it("closes management and removes configuration controls when permission is lost", async () => {
+    const user = userEvent.setup();
+    const onDirtyChange = vi.fn();
+    const { rerender } = renderEditor({ onDirtyChange });
+
+    await user.click(screen.getByRole("button", { name: "Manage seat 2" }));
+    expect(
+      screen.getByRole("dialog", { name: "Manage seat 2" }),
+    ).toBeVisible();
+
+    rerender(
+      <SeatOrderEditor
+        activePlayerEntryId="seat-1"
+        canEdit={false}
+        gameNumber={42}
+        onDirtyChange={onDirtyChange}
+        players={players}
+        presentation="configuration"
+      />,
+    );
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("button", { name: /manage seat/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Save order" })).toBeNull();
+    await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(false));
+  });
+
+  it("explains active, empty, last-occupied, and unsaved-clear rules", async () => {
     const user = userEvent.setup();
     const { rerender } = renderEditor();
 
     await user.click(screen.getByRole("button", { name: "Manage seat 1" }));
-    expect(screen.getByRole("button", { name: "Active seat" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Remove seat" })).toBeDisabled();
+    let dialog = screen.getByRole("dialog", { name: "Manage seat 1" });
     expect(
-      screen.getByText("Clear this occupied seat and save before removing it."),
+      within(dialog).getByRole("button", { name: "Make active" }),
+    ).toBeDisabled();
+    expect(
+      within(dialog).getByText("This seat is already active."),
+    ).toBeVisible();
+    expect(
+      within(dialog).getByRole("button", { name: "Remove seat" }),
+    ).toBeDisabled();
+    expect(
+      within(dialog).getByText("Only empty seats can be removed."),
     ).toBeVisible();
 
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
     await user.click(screen.getByRole("button", { name: "Manage seat 3" }));
-    expect(screen.getByRole("button", { name: "Make active" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Clear seat" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Remove seat" })).toBeEnabled();
+    dialog = screen.getByRole("dialog", { name: "Manage seat 3" });
+    expect(
+      within(dialog).getByRole("button", { name: "Make active" }),
+    ).toBeDisabled();
+    expect(
+      within(dialog).getByRole("button", { name: "Clear seat" }),
+    ).toBeDisabled();
+    expect(
+      within(dialog).getByRole("button", { name: "Remove seat" }),
+    ).toBeEnabled();
 
+    await user.click(within(dialog).getByRole("button", { name: "Close" }));
     rerender(
       <SeatOrderEditor
         activePlayerEntryId="seat-1"
@@ -276,43 +322,90 @@ describe("SeatOrderEditor", () => {
       />,
     );
     await user.click(screen.getByRole("button", { name: "Manage seat 1" }));
-    expect(screen.getByRole("button", { name: "Clear seat" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Remove seat" })).toBeDisabled();
+    dialog = screen.getByRole("dialog", { name: "Manage seat 1" });
+    expect(
+      within(dialog).getByRole("button", { name: "Clear seat" }),
+    ).toBeDisabled();
+    expect(
+      within(dialog).getByText("At least one occupied seat must remain."),
+    ).toBeVisible();
   });
 
-  it("retains selection when confirmation is cancelled and clears it after clear or remove", async () => {
+  it("transitions to destructive confirmation without stacking overlays", async () => {
     const user = userEvent.setup();
     const onDirtyChange = vi.fn();
     renderEditor({ onDirtyChange });
 
     await user.click(screen.getByRole("button", { name: "Manage seat 2" }));
-    await user.click(screen.getByRole("button", { name: "Clear seat" }));
+    await user.click(
+      within(
+        screen.getByRole("dialog", { name: "Manage seat 2" }),
+      ).getByRole("button", { name: "Clear seat" }),
+    );
+
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(
+      screen.getByRole("dialog", { name: "Confirm seat change" }),
+    ).toBeVisible();
     await user.click(
       within(screen.getByRole("dialog")).getByRole("button", {
         name: "Cancel",
       }),
     );
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
     expect(
-      screen.getByRole("button", { name: "Manage seat 2" }),
-    ).toHaveAttribute("aria-current", "true");
+      screen.getByRole("dialog", { name: "Manage seat 2" }),
+    ).toBeVisible();
 
-    await user.click(screen.getByRole("button", { name: "Clear seat" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Clear seat",
+      }),
+    );
     await user.click(
       within(screen.getByRole("dialog")).getByRole("button", {
         name: "Confirm",
       }),
     );
-    expect(screen.queryByRole("button", { name: "Clear seat" })).toBeNull();
+    expect(screen.queryByRole("dialog", { name: /manage seat/i })).toBeNull();
     await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(true));
 
+    await user.click(screen.getByRole("button", { name: "Manage seat 2" }));
+    expect(
+      within(screen.getByRole("dialog")).getByText(
+        "Save the cleared seat before removing it.",
+      ),
+    ).toBeVisible();
+  });
+
+  it("restores focus to the trigger or Save order after the trigger is removed", async () => {
+    const user = userEvent.setup();
+    renderEditor();
+    const manageSeat2 = screen.getByRole("button", { name: "Manage seat 2" });
+
+    await user.click(manageSeat2);
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Close",
+      }),
+    );
+    await waitFor(() => expect(manageSeat2).toHaveFocus());
+
     await user.click(screen.getByRole("button", { name: "Manage seat 3" }));
-    await user.click(screen.getByRole("button", { name: "Remove seat" }));
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Remove seat",
+      }),
+    );
     await user.click(
       within(screen.getByRole("dialog")).getByRole("button", {
         name: "Confirm",
       }),
     );
-    expect(screen.queryByRole("button", { name: "Clear seat" })).toBeNull();
+
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Save order" })).toHaveFocus(),
+    );
     expect(screen.queryByRole("button", { name: "Manage seat 3" })).toBeNull();
   });
 
@@ -390,9 +483,16 @@ describe("SeatOrderEditor", () => {
     expect(
       screen.getAllByText(/Seat \d/).map((node) => node.textContent),
     ).toEqual(["Seat 1", "Seat 2 · Overlord", "Seat 3"]);
+
+    await user.click(screen.getByRole("button", { name: "Manage seat 1" }));
+    const dialog = screen.getByRole("dialog", { name: "Manage seat 1" });
+    expect(within(dialog).getByText("Rhea")).toBeVisible();
+    expect(
+      within(dialog).getByText("Set seat 1 as the current turn."),
+    ).toBeVisible();
   });
 
-  it("keeps management controls independently keyboard activatable", async () => {
+  it("opens seat management from the keyboard", async () => {
     const user = userEvent.setup();
     renderEditor();
     const manageSeat = screen.getByRole("button", { name: "Manage seat 2" });
@@ -400,8 +500,9 @@ describe("SeatOrderEditor", () => {
     manageSeat.focus();
     await user.keyboard("{Enter}");
 
-    expect(manageSeat).toHaveAttribute("aria-current", "true");
-    expect(screen.getByRole("button", { name: "Clear seat" })).toBeVisible();
+    expect(
+      screen.getByRole("dialog", { name: "Manage seat 2" }),
+    ).toBeVisible();
   });
 
   it("posts the exact changed seat payload and clears dirty state on success", async () => {
@@ -510,11 +611,29 @@ describe("SeatOrderEditor", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "Manage seat 2" }));
-    expect(screen.getByRole("button", { name: "Active seat" })).toBeVisible();
+    expect(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Make active",
+      }),
+    ).toBeDisabled();
+    expect(
+      within(screen.getByRole("dialog")).getByText(
+        "This seat is already active.",
+      ),
+    ).toBeVisible();
+    await user.click(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Close",
+      }),
+    );
     await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.getByText("Renamed Overlord")).toBeVisible();
     await user.click(screen.getByRole("button", { name: "Manage seat 1" }));
-    expect(screen.getByRole("button", { name: "Active seat" })).toBeVisible();
+    expect(
+      within(screen.getByRole("dialog")).getByRole("button", {
+        name: "Make active",
+      }),
+    ).toBeDisabled();
   });
 
   it("keeps a failed save inline and dirty", async () => {

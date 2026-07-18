@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import {
   closestCenter,
   DndContext,
@@ -20,6 +20,10 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useRouter } from "next/navigation";
+import {
+  ManageSeatModal,
+  type ManageSeatModalSeat,
+} from "@/components/manage-seat-modal";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -101,6 +105,16 @@ function normalizeSeatOrder(players: SeatOrderPlayer[]) {
   }));
 }
 
+function getSeatPlayerLabel(player: SeatOrderPlayer, index: number) {
+  if (player.userId != null) {
+    return player.displayName ?? `Player ${index + 1}`;
+  }
+
+  return player.displayName != null
+    ? `${player.displayName} (Resigned)`
+    : "[Open]";
+}
+
 function movePlayerToSeat(
   players: SeatOrderPlayer[],
   fromIndex: number,
@@ -170,10 +184,11 @@ type SortableSeatRowProps = {
   activePlayerEntryId: string | null;
   isEditing: boolean;
   isPending: boolean;
-  isSelectedForManagement: boolean;
-  requiresSavedClearBeforeRemove: boolean;
   presentation: "card" | "configuration";
-  onSelectForManagement: (seatEntryId: string) => void;
+  onSelectForManagement: (
+    seatEntryId: string,
+    trigger: HTMLButtonElement,
+  ) => void;
   onMakeActive: (index: number) => void;
   onClearPlayer: (index: number) => void;
   onRemoveSeat: (index: number) => void;
@@ -187,8 +202,6 @@ function SortableSeatRow({
   activePlayerEntryId,
   isEditing,
   isPending,
-  isSelectedForManagement,
-  requiresSavedClearBeforeRemove,
   presentation,
   onSelectForManagement,
   onMakeActive,
@@ -197,15 +210,10 @@ function SortableSeatRow({
 }: SortableSeatRowProps) {
   const isActive = player.id === activePlayerEntryId;
   const isEmptySeat = player.userId == null;
-  const playerLabel = isEmptySeat
-    ? player.displayName != null
-      ? `${player.displayName} (Resigned)`
-      : "[Open]"
-    : player.displayName;
+  const playerLabel = getSeatPlayerLabel(player, index);
   const showActiveRowHighlight = isActive && !isEditing;
   const isConfiguration = presentation === "configuration";
-  const showSeatActions =
-    isEditing && (!isConfiguration || isSelectedForManagement);
+  const showSeatActions = isEditing && !isConfiguration;
   const {
     attributes,
     listeners,
@@ -282,19 +290,13 @@ function SortableSeatRow({
           {isConfiguration ? (
             <Button
               data-no-drag="true"
-              aria-current={isSelectedForManagement ? "true" : undefined}
               type="button"
-              variant={isSelectedForManagement ? "default" : "secondary"}
-              onClick={() => {
-                onSelectForManagement(player.id);
+              variant="secondary"
+              onClick={(event) => {
+                onSelectForManagement(player.id, event.currentTarget);
               }}
             >
               Manage seat {index + 1}
-              {isSelectedForManagement ? (
-                <span aria-hidden="true" className="ml-2 text-xs uppercase">
-                  Selected
-                </span>
-              ) : null}
             </Button>
           ) : null}
           {showSeatActions ? (
@@ -369,13 +371,6 @@ function SortableSeatRow({
               />
             </svg>
           </Button>
-          {showSeatActions &&
-            isConfiguration &&
-            requiresSavedClearBeforeRemove ? (
-            <span className="basis-full text-xs text-orange-200/80">
-              Clear this occupied seat and save before removing it.
-            </span>
-          ) : null}
         </div>
       ) : null}
     </div>
@@ -409,6 +404,9 @@ export function SeatOrderEditor({
   const [selectedSeatEntryId, setSelectedSeatEntryId] = useState<string | null>(
     null,
   );
+  const managementTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const saveOrderButtonRef = useRef<HTMLButtonElement | null>(null);
+  const pendingFocusTargetRef = useRef<HTMLElement | null>(null);
   const [isPending, startTransition] = useTransition();
   const sensors = useSensors(
     useSensor(NoDragPointerSensor, {
@@ -450,6 +448,25 @@ export function SeatOrderEditor({
     onDirtyChange?.(reportedDirty);
   }, [onDirtyChange, reportedDirty]);
 
+  useEffect(() => {
+    const focusTarget = pendingFocusTargetRef.current;
+
+    if (focusTarget && document.contains(focusTarget)) {
+      focusTarget.focus();
+    }
+
+    pendingFocusTargetRef.current = null;
+  });
+
+  useEffect(() => {
+    if (!canEdit || !isConfiguration) {
+      // Permission or presentation changes invalidate overlay-only state.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSelectedSeatEntryId(null);
+      setPendingSeatAction(null);
+    }
+  }, [canEdit, isConfiguration]);
+
   function updateDraft(
     nextPlayers: SeatOrderPlayer[],
     nextActivePlayerEntryId: string | null,
@@ -474,6 +491,18 @@ export function SeatOrderEditor({
           ],
         }
       : null;
+
+  function openSeatManagement(
+    seatEntryId: string,
+    trigger: HTMLButtonElement,
+  ) {
+    pendingFocusTargetRef.current = null;
+    managementTriggerRef.current = trigger;
+    setSelectedSeatEntryId(seatEntryId);
+    setPendingSeatAction(null);
+    setErrorMessage(null);
+    setConfirmation(null);
+  }
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
@@ -571,6 +600,7 @@ export function SeatOrderEditor({
     setErrorMessage(null);
     setConfirmation(null);
     setPendingSeatAction(null);
+    pendingFocusTargetRef.current = managementTriggerRef.current;
     setSelectedSeatEntryId(null);
   }
 
@@ -603,6 +633,7 @@ export function SeatOrderEditor({
     setErrorMessage(null);
     setConfirmation(null);
     setPendingSeatAction(null);
+    pendingFocusTargetRef.current = saveOrderButtonRef.current;
     setSelectedSeatEntryId(null);
   }
 
@@ -752,6 +783,36 @@ export function SeatOrderEditor({
   }
 
   const visiblePlayers = isEditing ? workingPlayers : players;
+  const selectedSeatIndex = workingPlayers.findIndex(
+    (player) => player.id === selectedSeatEntryId,
+  );
+  const selectedSeat =
+    selectedSeatIndex >= 0 ? workingPlayers[selectedSeatIndex] : null;
+  const occupiedSeatCount = workingPlayers.filter(
+    (player) => player.userId != null,
+  ).length;
+  const managedSeat: ManageSeatModalSeat | null =
+    isConfiguration &&
+    isEditing &&
+    !pendingSeatAction &&
+    selectedSeat != null
+      ? {
+          id: selectedSeat.id,
+          seatNumber: selectedSeatIndex + 1,
+          playerLabel: getSeatPlayerLabel(selectedSeat, selectedSeatIndex),
+          isActive: selectedSeat.id === workingActivePlayerEntryId,
+          isEmpty: selectedSeat.userId == null,
+          canClear: selectedSeat.userId != null && occupiedSeatCount > 1,
+          canRemove:
+            selectedSeat.userId == null &&
+            players.find((player) => player.id === selectedSeat.id)?.userId ==
+              null,
+          requiresSavedClearBeforeRemove:
+            selectedSeat.userId == null &&
+            players.find((player) => player.id === selectedSeat.id)?.userId !=
+              null,
+        }
+      : null;
 
   const overlays = (
     <>
@@ -759,6 +820,31 @@ export function SeatOrderEditor({
         confirmation={confirmation}
         onClose={() => {
           setConfirmation(null);
+        }}
+      />
+      <ManageSeatModal
+        isPending={isMutating}
+        seat={managedSeat}
+        onClear={() => {
+          if (selectedSeatIndex >= 0) {
+            clearPlayerFromSeat(selectedSeatIndex);
+          }
+        }}
+        onClose={() => {
+          pendingFocusTargetRef.current = managementTriggerRef.current;
+          setSelectedSeatEntryId(null);
+        }}
+        onMakeActive={() => {
+          if (selectedSeatIndex >= 0) {
+            makeSeatActive(selectedSeatIndex);
+            pendingFocusTargetRef.current = managementTriggerRef.current;
+            setSelectedSeatEntryId(null);
+          }
+        }}
+        onRemove={() => {
+          if (selectedSeatIndex >= 0) {
+            removeSeatFromGame(selectedSeatIndex);
+          }
         }}
       />
       <TerminalActionConfirmationDialog
@@ -811,18 +897,12 @@ export function SeatOrderEditor({
               index={index}
               isEditing={isEditing}
               isPending={isMutating}
-              isSelectedForManagement={selectedSeatEntryId === player.id}
               onClearPlayer={clearPlayerFromSeat}
               onMakeActive={makeSeatActive}
               onRemoveSeat={removeSeatFromGame}
-              onSelectForManagement={setSelectedSeatEntryId}
+              onSelectForManagement={openSeatManagement}
               player={player}
               presentation={presentation}
-              requiresSavedClearBeforeRemove={
-                players.find(
-                  (authoritativePlayer) => authoritativePlayer.id === player.id,
-                )?.userId != null
-              }
             />
           ))}
         </SortableContext>
@@ -847,7 +927,12 @@ export function SeatOrderEditor({
             >
               Cancel
             </Button>
-            <Button disabled={isMutating} type="button" onClick={saveSeatOrder}>
+            <Button
+              ref={saveOrderButtonRef}
+              disabled={isMutating}
+              type="button"
+              onClick={saveSeatOrder}
+            >
               {isPending ? "Saving..." : "Save order"}
             </Button>
           </div>
