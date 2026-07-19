@@ -5,13 +5,71 @@ on:
     types:
       - published
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing semantic release tag to build (for example, 0.11.0)
+        required: true
+        type: string
 
 permissions:
   contents: write
 
 jobs:
+  prepare:
+    name: Validate desktop release
+    runs-on: ubuntu-latest
+    outputs:
+      prerelease: ${{ steps.release.outputs.prerelease }}
+      release_id: ${{ steps.release.outputs.release_id }}
+      release_sha: ${{ steps.release.outputs.release_sha }}
+      release_tag: ${{ steps.release.outputs.release_tag }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Resolve release
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
+        run: |
+          set -euo pipefail
+
+          git fetch --force --tags origin
+          if ! release_sha="$(git rev-parse --verify "$RELEASE_TAG^{commit}" 2>/dev/null)"; then
+            echo "Release tag $RELEASE_TAG does not exist or does not point to a commit." >&2
+            exit 1
+          fi
+
+          if ! git merge-base --is-ancestor "$release_sha" HEAD; then
+            echo "Release $RELEASE_TAG is not contained in the default branch." >&2
+            exit 1
+          fi
+
+          version="${RELEASE_TAG#refs/tags/}"
+          version="${version#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Release tag $RELEASE_TAG is not semantic." >&2
+            exit 1
+          fi
+
+          release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG")"
+          release_id="$(jq -r '.id' <<< "$release_json")"
+          prerelease="$(jq -r '.prerelease' <<< "$release_json")"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+          echo "release_id=$release_id" >> "$GITHUB_OUTPUT"
+          echo "release_sha=$release_sha" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
   publish-desktop:
     name: Build desktop app (${{ matrix.platform }})
+    needs: prepare
     runs-on: ${{ matrix.platform }}
     strategy:
       fail-fast: false
@@ -31,8 +89,10 @@ jobs:
             rust-targets: ''
 
     steps:
-      - name: Check out repository
+      - name: Check out release source
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ needs.prepare.outputs.release_sha }}
 
       - name: Install Linux desktop dependencies
         if: matrix.platform == 'ubuntu-22.04'
@@ -60,6 +120,7 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88 # stable
         with:
+          toolchain: stable
           targets: ${{ matrix.rust-targets }}
 
       - name: Cache Rust build artifacts
@@ -70,7 +131,7 @@ jobs:
       - name: Apply git release version
         shell: bash
         env:
-          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref_type == 'tag' && github.ref_name || '' }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
         run: |
           node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync } from "node:fs";
@@ -109,12 +170,12 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: apps/desktop
-          releaseId: ${{ github.event_name == 'release' && github.event.release.id || '' }}
-          tagName: ${{ github.event_name == 'release' && github.event.release.tag_name || 'desktop-v__VERSION__' }}
-          releaseName: ${{ github.event_name == 'release' && github.event.release.name || 'Shadow Cloud Local v__VERSION__' }}
+          releaseId: ${{ needs.prepare.outputs.release_id }}
+          tagName: ${{ needs.prepare.outputs.release_tag }}
+          releaseName: Shadow Cloud Local v__VERSION__
           releaseBody: See the assets to download this desktop version.
-          releaseDraft: ${{ github.event_name != 'release' }}
-          prerelease: ${{ github.event_name == 'release' && github.event.release.prerelease || false }}
+          releaseDraft: false
+          prerelease: ${{ needs.prepare.outputs.prerelease }}
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
           tauriScript: pnpm tauri
