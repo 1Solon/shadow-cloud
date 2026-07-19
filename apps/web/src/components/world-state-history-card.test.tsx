@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorldStateHistoryCard } from "@/components/world-state-history-card";
 import type { GameDetailFileVersion } from "@/lib/shadow-cloud-api";
@@ -102,17 +102,27 @@ describe("WorldStateHistoryCard", () => {
     expect(
       screen.getByRole("link", { name: "42-T4-S2-Older.se1" }),
     ).toHaveAttribute("href", "/api/games/42/files/version-older");
-    expect(screen.getAllByText(/Uploaded by Owner on/)).toHaveLength(2);
-    expect(screen.getByText(/Corrected by Corrector on/)).toBeInTheDocument();
-
-    const latestName = screen.getAllByText("42-T4-S3-Latest.se1")[0];
-    const olderName = screen.getAllByText("42-T4-S2-Older.se1")[0];
+    const table = screen.getByRole("table", { name: "Campaign save history" });
+    const rows = within(table).getAllByRole("row");
+    expect(rows).toHaveLength(3);
+    expect(rows[1]).toHaveClass("h-16", "bg-orange-400", "text-black");
+    expect(rows[2]).toHaveClass(
+      "h-16",
+      "bg-orange-400/5",
+      "text-orange-200",
+    );
+    expect(within(rows[1]).getByText("Corrector")).toBeVisible();
+    expect(within(rows[2]).getByText("None")).toBeVisible();
+    expect(within(table).getAllByText("Owner")).toHaveLength(2);
     expect(
-      latestName.compareDocumentPosition(olderName) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(latestName.closest(".rounded-lg")).toHaveClass("bg-orange-400");
-    expect(olderName.closest(".rounded-lg")).toHaveClass("bg-orange-400/5");
+      screen.getByRole("region", { name: "Save history table" }),
+    ).toHaveClass("overflow-x-auto", "rounded-lg");
+    expect(table).toHaveClass("min-w-[52rem]", "font-mono");
+    const saveFileHeader = within(table).getByRole("columnheader", {
+      name: "Save file",
+    });
+    expect(saveFileHeader).toHaveAttribute("scope", "col");
+    expect(saveFileHeader.closest("tr")).toHaveClass("h-12");
   });
 
   it("renders replacement controls for an enabled Shadow override user", () => {
@@ -156,8 +166,17 @@ describe("WorldStateHistoryCard", () => {
       }),
     ]);
 
-    expect(screen.getByText(/Corrected by Corrector on/)).toBeInTheDocument();
-    expect(screen.getAllByText(/Corrected by/)).toHaveLength(1);
-    expect(screen.queryByText(/Corrected by Missing time on/)).toBeNull();
+    expect(screen.getByText("Corrector")).toBeInTheDocument();
+    expect(screen.queryByText("Missing time")).not.toBeInTheDocument();
+    expect(screen.getAllByText("None")).toHaveLength(2);
+  });
+
+  it("renders the save empty state without a table", () => {
+    renderHistory([]);
+
+    expect(
+      screen.getByText("No campaign saves have been uploaded yet."),
+    ).toHaveAttribute("role", "status");
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 });

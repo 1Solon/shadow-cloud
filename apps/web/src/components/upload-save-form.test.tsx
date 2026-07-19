@@ -25,6 +25,8 @@ vi.mock("next/navigation", () => ({
 }));
 
 const fetchMock = vi.fn();
+const compactDropZoneLabel =
+  "Download the latest save above. When you’ve finished your turn, click here or drag and drop your new save for the next Lord.";
 
 function mockResponse(
   ok: boolean,
@@ -77,18 +79,27 @@ describe("UploadSaveForm", () => {
     ).toHaveClass("h-11", "px-6");
   });
 
-  it("uses a shorter singular compact presentation without instructions", () => {
-    render(<UploadSaveForm gameNumber={42} presentation="compact" />);
+  it("uses a full-height singular compact presentation without instructions", () => {
+    const { container } = render(
+      <UploadSaveForm gameNumber={42} presentation="compact" />,
+    );
 
+    const form = container.querySelector("form");
     const dropZone = screen.getByRole("button", {
-      name: "Drop save file here",
+      name: compactDropZoneLabel,
     });
-    expect(dropZone).toHaveClass("px-4", "py-6");
-    expect(screen.getByText("> DROP SAVE FILE HERE")).toBeInTheDocument();
-    expect(
-      screen.getByText("Drag and drop your .se1 save file here"),
-    ).toBeInTheDocument();
-    expect(screen.getByText("> SELECT FILE")).toBeInTheDocument();
+    expect(form).toHaveClass("flex", "h-full", "flex-col");
+    expect(dropZone).toHaveClass(
+      "flex",
+      "flex-1",
+      "flex-col",
+      "justify-center",
+      "px-4",
+      "py-6",
+      "text-left",
+    );
+    expect(screen.getByText(`> ${compactDropZoneLabel}`)).toBeInTheDocument();
+    expect(screen.queryByText("> SELECT FILE")).not.toBeInTheDocument();
     expect(screen.queryByText("> UPLOAD INSTRUCTIONS")).not.toBeInTheDocument();
     expect(screen.getAllByRole("button")).toHaveLength(1);
     expect(within(dropZone).queryByRole("button")).not.toBeInTheDocument();
@@ -120,7 +131,7 @@ describe("UploadSaveForm", () => {
 
     await user.click(screen.getByRole("button", { name: "Clear" }));
     expect(
-      screen.getByRole("button", { name: "Drop save file here" }),
+      screen.getByRole("button", { name: compactDropZoneLabel }),
     ).toBeInTheDocument();
     expect(input).toHaveValue("");
   });
@@ -160,7 +171,7 @@ describe("UploadSaveForm", () => {
       const input = screen.getByLabelText("Save file");
       const clickSpy = vi.spyOn(input, "click");
       const dropZone = screen.getByRole("button", {
-        name: "Drop save file here",
+        name: compactDropZoneLabel,
       });
 
       if (interaction === "click") {
@@ -179,7 +190,7 @@ describe("UploadSaveForm", () => {
       <UploadSaveForm gameNumber={42} presentation="compact" />,
     );
     const dropZone = screen.getByRole("button", {
-      name: "Drop save file here",
+      name: compactDropZoneLabel,
     });
 
     fireEvent.submit(container.querySelector("form")!);

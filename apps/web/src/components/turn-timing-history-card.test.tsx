@@ -64,6 +64,8 @@ describe("TurnTimingHistoryCard", () => {
     });
 
     const rows = within(screen.getByRole("table")).getAllByRole("row");
+    expect(rows[1]).toHaveClass("h-16");
+    expect(rows[2]).toHaveClass("h-16");
     expect(
       within(rows[1]).getByText("Current turn: In progress"),
     ).toBeVisible();
@@ -223,7 +225,7 @@ describe("TurnTimingHistoryCard", () => {
     renderCard();
 
     expect(
-      screen.getByText("No turn timing history is available yet."),
+      screen.getByText("No turn timings are available yet."),
     ).toHaveAttribute("role", "status");
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
@@ -251,9 +253,11 @@ describe("TurnTimingHistoryCard", () => {
     expect(within(table).getByText("Recent turn timing history")).toBe(
       table.querySelector("caption"),
     );
-    expect(
-      within(table).getByRole("columnheader", { name: "Round" }),
-    ).toHaveAttribute("scope", "col");
+    const roundHeader = within(table).getByRole("columnheader", {
+      name: "Round",
+    });
+    expect(roundHeader).toHaveAttribute("scope", "col");
+    expect(roundHeader.closest("tr")).toHaveClass("h-12");
 
     expect(
       table.querySelector('time[datetime="2026-07-10T10:00:00.000Z"]'),

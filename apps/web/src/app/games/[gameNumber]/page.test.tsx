@@ -209,7 +209,7 @@ describe("GameDetailPage workspace composition", () => {
     vi.useRealTimers();
   });
 
-  it("derives the current-turn command center from the active seat and newest save", async () => {
+  it("derives the command center from the active turn", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-10T12:00:00.000Z"));
 
@@ -222,7 +222,6 @@ describe("GameDetailPage workspace composition", () => {
     expect(command.props).toMatchObject({
       activePlayerDisplayName: "Rhea",
       activeSeatNumber: 2,
-      canDownloadLatestSave: true,
       currentTurnStartedAt: "2026-07-10T10:05:00.000Z",
       gameNumber: 42,
       initialNow: "2026-07-10T12:00:00.000Z",
@@ -232,15 +231,9 @@ describe("GameDetailPage workspace composition", () => {
       roundNumber: 4,
       turnTargetHours: 24,
     });
-    expect(command.props.latestSave).toEqual({
-      id: "file-newest",
-      originalName: "round-4-newest.Civ6Save",
-      uploadedAt: "2026-07-10T11:00:00.000Z",
-      uploadedByDisplayName: "Rhea",
-    });
   });
 
-  it("puts world state before turn timing in Activity and preserves timing refresh props", async () => {
+  it("places Saves and Timing in separate workspace tabs", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-10T12:00:00.000Z"));
 
@@ -249,20 +242,29 @@ describe("GameDetailPage workspace composition", () => {
       page,
       CampaignWorkspaceTabs,
     ) as ReactElement<ComponentProps<typeof CampaignWorkspaceTabs>>;
-    const activity = workspace.props.activity as ReactElement<ElementProps>;
-    const activityChildren = elementChildren(workspace.props.activity);
-
-    expect(activity.props.className).toBe(
-      "grid grid-cols-[minmax(0,1fr)] gap-6",
-    );
-    expect(activityChildren.map((child) => child.type)).toEqual([
+    const saves = findElementByType(
+      workspace.props.saves,
       WorldStateHistoryCard,
-      TurnTimingHistoryCard,
-    ]);
-    expect(activityChildren[1].key).toBe("turn-2");
-    expect(activityChildren[1].props.initialNow).toBe(
-      "2026-07-10T12:00:00.000Z",
     );
+    const timing = findElementByType(
+      workspace.props.timing,
+      TurnTimingHistoryCard,
+    );
+
+    expect(saves?.props.fileVersions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "file-newest" }),
+        expect.objectContaining({ id: "file-older" }),
+      ]),
+    );
+    expect(timing?.key).toBe("turn-2");
+    expect(timing?.props).toMatchObject({
+      initialNow: "2026-07-10T12:00:00.000Z",
+      openTurn: expect.objectContaining({ id: "turn-2" }),
+      recentCompletedTurns: expect.arrayContaining([
+        expect.objectContaining({ id: "turn-1" }),
+      ]),
+    });
   });
 
   it("composes the complete campaign data into one details workspace", async () => {
@@ -363,7 +365,7 @@ describe("GameDetailPage workspace composition", () => {
     ).toBe(true);
   });
 
-  it("preserves replacement authorization props on world history", async () => {
+  it("preserves replacement authorization props on save history", async () => {
     const page = await renderPage({
       session: { user: { id: "admin-1", isShadowOverride: true } },
       shadowOverrideEnabled: true,
@@ -372,12 +374,12 @@ describe("GameDetailPage workspace composition", () => {
       page,
       CampaignWorkspaceTabs,
     ) as ReactElement<ComponentProps<typeof CampaignWorkspaceTabs>>;
-    const worldHistory = findElementByType(
-      workspace.props.activity,
+    const saveHistory = findElementByType(
+      workspace.props.saves,
       WorldStateHistoryCard,
     );
 
-    expect(worldHistory?.props).toMatchObject({
+    expect(saveHistory?.props).toMatchObject({
       currentUserId: "admin-1",
       fileVersions: expect.arrayContaining([
         expect.objectContaining({ id: "file-newest" }),
@@ -389,29 +391,14 @@ describe("GameDetailPage workspace composition", () => {
     });
   });
 
-  it("keeps the latest save downloadable for signed-out visitors", async () => {
+  it("marks signed-out visitors as waiting in the command center", async () => {
     const page = await renderPage({ session: null });
     const command = findElementByType(page, TurnCommandCenter);
 
     expect(command?.props).toMatchObject({
-      canDownloadLatestSave: true,
       isActivePlayer: false,
       isSignedIn: false,
     });
-    expect(command?.props.latestSave).toEqual({
-      id: "file-newest",
-      originalName: "round-4-newest.Civ6Save",
-      uploadedAt: "2026-07-10T11:00:00.000Z",
-      uploadedByDisplayName: "Rhea",
-    });
-  });
-
-  it("disables latest-save download when no file version exists", async () => {
-    const page = await renderPage({ game: createGame({ fileVersions: [] }) });
-    const command = findElementByType(page, TurnCommandCenter);
-
-    expect(command?.props.latestSave).toBeNull();
-    expect(command?.props.canDownloadLatestSave).toBe(false);
   });
 
   it("falls back to the open turn seat when the active player entry is missing", async () => {
@@ -442,7 +429,7 @@ describe("GameDetailPage workspace composition", () => {
       "no-open-turn",
     );
     expect(
-      findElementByType(noOpenWorkspace.props.activity, TurnTimingHistoryCard)
+      findElementByType(noOpenWorkspace.props.timing, TurnTimingHistoryCard)
         ?.key,
     ).toBe("no-open-turn");
     expect(

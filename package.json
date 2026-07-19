@@ -5,7 +5,9 @@
   "packageManager": "pnpm@11.11.0",
   "scripts": {
     "build": "turbo run build",
-    "dev": "turbo run dev",
+    "dev": "pnpm run dev:web",
+    "dev:web": "turbo run dev --filter=@shadow-cloud/api --filter=@shadow-cloud/bot --filter=@shadow-cloud/web",
+    "dev:desktop": "turbo run dev",
     "lint": "turbo run lint",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",

@@ -54,13 +54,30 @@ describe("CampaignBriefing", () => {
     renderBriefing();
 
     expect(
-      screen.getByRole("heading", { name: "CAMPAIGN // BRIEFING" }),
+      screen.getByRole("heading", { name: "Campaign briefing:" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Dust Crown")).toBeInTheDocument();
     expect(screen.getByText("Overlord · Solon")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Review campaign settings, seat order, notes, and turn reminders.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("region", { name: "Campaign briefing:" }),
+    ).toHaveClass(
+      "rounded-lg",
+      "border-orange-400",
+      "bg-black/90",
+      "shadow-2xl",
+    );
 
     const values = screen.getByTestId("campaign-briefing-values");
     expect(values).toHaveClass("grid", "min-w-0", "sm:grid-cols-2");
+    expect(screen.getByTestId("campaign-briefing-identity")).toHaveClass(
+      "border-t",
+      "border-orange-400/25",
+    );
     expect(within(values).getAllByText("4")).toHaveLength(2);
     for (const value of [
       "Included",
@@ -71,6 +88,15 @@ describe("CampaignBriefing", () => {
     ]) {
       expect(within(values).getByText(value)).toBeInTheDocument();
     }
+  });
+
+  it("places an optional action inside the campaign header", () => {
+    renderBriefing({ headerAction: <button>Configure campaign</button> });
+
+    const action = screen.getByRole("button", { name: "Configure campaign" });
+    expect(action.closest('[role="region"]')).toBe(
+      screen.getByRole("region", { name: "Campaign briefing:" }),
+    );
   });
 
   it("keeps active player out of the opening summary and identifies the matching expanded seat", async () => {

@@ -95,22 +95,22 @@ export function CampaignDetailsWorkspace(props: CampaignDetailsWorkspaceProps) {
 
   return (
     <div
-      className="flex min-w-0 flex-col gap-3 font-mono"
+      className="min-w-0 font-mono"
       data-testid="campaign-details-workspace"
     >
-      {props.canEdit ? (
-        <div className="flex justify-end">
-          <button
-            className="border border-orange-400/40 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-orange-300 transition-colors hover:bg-orange-400/10 hover:text-orange-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            type="button"
-            onClick={() => setMode("configuration")}
-          >
-            Configure campaign
-          </button>
-        </div>
-      ) : null}
       <CampaignBriefing
         activePlayerEntryId={props.activePlayerEntryId}
+        headerAction={
+          props.canEdit ? (
+            <button
+              className="h-full border border-orange-400/40 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-orange-300 transition-colors hover:bg-orange-400/10 hover:text-orange-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              type="button"
+              onClick={() => setMode("configuration")}
+            >
+              Configure campaign
+            </button>
+          ) : undefined
+        }
         armyCount={props.armyCount}
         dlcMode={props.dlcMode}
         gameMode={props.gameMode}

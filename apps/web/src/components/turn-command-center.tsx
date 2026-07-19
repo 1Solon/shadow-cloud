@@ -4,45 +4,26 @@ import { useEffect, useId, useState } from "react";
 import { DownloadSaveButton } from "@/components/download-save-button";
 import { GameNotesMarkdown } from "@/components/game-notes-markdown";
 import { UploadSaveForm } from "@/components/upload-save-form";
-import {
-  formatTurnDuration,
-  formatTurnTimestamp,
-  getTurnDurationMs,
-} from "@/lib/turn-timing";
-
-export type TurnCommandCenterLatestSave = {
-  id: string;
-  originalName: string;
-  uploadedAt: string;
-  uploadedByDisplayName: string;
-};
+import { formatTurnDuration, getTurnDurationMs } from "@/lib/turn-timing";
 
 export type TurnCommandCenterProps = {
   activePlayerDisplayName: string;
   activeSeatNumber: number | null;
-  canDownloadLatestSave: boolean;
   currentTurnStartedAt: string | null;
   gameNumber: number;
   initialNow: string;
   isActivePlayer: boolean;
   isSignedIn: boolean;
-  latestSave: TurnCommandCenterLatestSave | null;
+  latestSave: {
+    id: string;
+    originalName: string;
+  } | null;
   notes: string;
   roundNumber: number;
   turnTargetHours: number;
 };
 
 const refreshIntervalMs = 60 * 1000;
-
-function LatestSaveTimestamp({ timestamp }: { timestamp: string }) {
-  const formattedTimestamp = formatTurnTimestamp(timestamp);
-
-  if (formattedTimestamp === "Unknown") {
-    return "Unknown";
-  }
-
-  return <time dateTime={timestamp}>{formattedTimestamp}</time>;
-}
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
@@ -60,7 +41,6 @@ function Metric({ label, value }: { label: string; value: string }) {
 export function TurnCommandCenter({
   activePlayerDisplayName,
   activeSeatNumber,
-  canDownloadLatestSave,
   currentTurnStartedAt,
   gameNumber,
   initialNow,
@@ -125,10 +105,14 @@ export function TurnCommandCenter({
       </div>
 
       <div
-        className="grid gap-6 p-4 sm:p-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]"
+        className={
+          canUpload
+            ? "grid gap-6 p-4 sm:p-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]"
+            : "p-4 sm:p-5"
+        }
         data-testid="command-center-body"
       >
-        <div className="space-y-5">
+        <div className="flex flex-col gap-5">
           <dl className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4 lg:grid-cols-2">
             <Metric label="Active lord" value={activePlayerDisplayName} />
             <Metric
@@ -160,42 +144,33 @@ export function TurnCommandCenter({
           </div>
         </div>
 
-        <div className="space-y-4 border-t border-orange-400/20 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
-          <div>
-            <h2 className="text-xs uppercase tracking-[0.18em] text-orange-300/60">
-              Latest save
-            </h2>
+        {canUpload ? (
+          <div className="flex min-h-0 flex-col border-t border-orange-400/20 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
             {latestSave ? (
-              <div className="mt-2 space-y-1">
-                <p className="break-all text-sm font-semibold text-orange-100">
-                  {latestSave.originalName}
-                </p>
-                <p className="text-xs text-orange-200/70">
-                  Uploaded by {latestSave.uploadedByDisplayName}
-                </p>
-                <p className="text-xs text-orange-200/60">
-                  <LatestSaveTimestamp timestamp={latestSave.uploadedAt} />
-                </p>
+              <div className="mb-4 flex min-w-0 items-center justify-between gap-4 rounded-lg border border-orange-400/30 bg-orange-400/10 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="text-[0.65rem] uppercase tracking-[0.18em] text-orange-300/60">
+                    Latest save
+                  </p>
+                  <p
+                    className="mt-1 truncate text-sm text-orange-100"
+                    title={latestSave.originalName}
+                  >
+                    {latestSave.originalName}
+                  </p>
+                </div>
+                <DownloadSaveButton
+                  className="inline-flex h-9 shrink-0 items-center rounded-md border border-orange-400 bg-orange-400/10 px-3 text-xs font-medium uppercase tracking-[0.18em] text-orange-300 transition-colors hover:bg-orange-400 hover:text-black"
+                  fileName={latestSave.originalName}
+                  href={`/api/games/${gameNumber}/files/${latestSave.id}`}
+                />
               </div>
-            ) : (
-              <p className="mt-2 text-sm text-orange-200/70">
-                No save has been uploaded for this campaign yet.
-              </p>
-            )}
+            ) : null}
+            <div className="min-h-0 flex-1">
+              <UploadSaveForm gameNumber={gameNumber} presentation="compact" />
+            </div>
           </div>
-
-          {latestSave && canDownloadLatestSave ? (
-            <DownloadSaveButton
-              className="inline-flex min-h-10 items-center justify-center rounded border border-orange-400/60 bg-orange-400/10 px-4 py-2 text-sm font-mono font-semibold text-orange-200 transition hover:bg-orange-400 hover:text-black"
-              fileName={latestSave.originalName}
-              href={`/api/games/${gameNumber}/files/${latestSave.id}`}
-            />
-          ) : null}
-
-          {canUpload ? (
-            <UploadSaveForm gameNumber={gameNumber} presentation="compact" />
-          ) : null}
-        </div>
+        ) : null}
       </div>
     </section>
   );

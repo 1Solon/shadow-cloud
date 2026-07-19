@@ -36,6 +36,7 @@ export function UploadSaveForm({
 
   return (
     <form
+      className={isCompact ? "flex h-full flex-col" : undefined}
       onSubmit={(event) => {
         event.preventDefault();
 
@@ -106,12 +107,14 @@ export function UploadSaveForm({
           selectedFile
             ? `Selected save file ${selectedFile.name}`
             : isCompact
-              ? "Drop save file here"
+              ? "Download the latest save above. When you’ve finished your turn, click here or drag and drop your new save for the next Lord."
               : "Drop save files here"
         }
         className={[
-          "rounded-lg border-2 border-dashed text-center transition-colors cursor-pointer",
-          isCompact ? "px-4 py-6" : "px-8 py-14",
+          "rounded-lg border-2 border-dashed transition-colors cursor-pointer",
+          isCompact
+            ? "flex flex-1 flex-col justify-center px-4 py-6 text-left"
+            : "px-8 py-14 text-center",
           isDragOver
             ? "border-orange-400 bg-orange-400/10"
             : "border-orange-400/40 bg-orange-400/5 hover:border-orange-400/60 hover:bg-orange-400/[0.07]",
@@ -149,18 +152,20 @@ export function UploadSaveForm({
               {`${(selectedFile.size / 1024 / 1024).toFixed(2)} MB · Click or drag to replace`}
             </div>
           </>
+        ) : isCompact ? (
+          <div className="text-base font-mono text-orange-300">
+            {"> Download the latest save above. When you’ve finished your turn, click here or drag and drop your new save for the next Lord."}
+          </div>
         ) : (
           <>
-            <div className="text-base font-mono uppercase tracking-[0.2em] text-orange-300 mb-2">
-              {isCompact ? "> DROP SAVE FILE HERE" : "> DROP SAVE FILES HERE"}
+            <div className="mb-2 text-base font-mono uppercase tracking-[0.2em] text-orange-300">
+              {"> DROP SAVE FILES HERE"}
             </div>
-            <div className="text-sm text-orange-300/60 font-mono mb-6">
-              {isCompact
-                ? "Drag and drop your .se1 save file here"
-                : "Drag and drop your .se1 save files here"}
+            <div className="mb-6 text-sm font-mono text-orange-300/60">
+              Drag and drop your .se1 save files here
             </div>
             <span className={buttonVariants({ className: "animate-pulse" })}>
-              {isCompact ? "> SELECT FILE" : "> SELECT FILES"}
+              {"> SELECT FILES"}
             </span>
           </>
         )}

@@ -8,10 +8,11 @@ import {
   type ReactNode,
 } from "react";
 
-type WorkspaceTabId = "activity" | "campaign" | "administration";
+type WorkspaceTabId = "saves" | "timing" | "campaign" | "administration";
 
 export type CampaignWorkspaceTabsProps = {
-  activity: ReactNode;
+  saves: ReactNode;
+  timing: ReactNode;
   campaign: ReactNode;
   administration?: ReactNode;
 };
@@ -20,15 +21,16 @@ const tabButtonClassName =
   "h-11 shrink-0 whitespace-nowrap border-b-2 px-4 font-mono text-sm font-semibold uppercase tracking-[0.16em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset";
 
 export function CampaignWorkspaceTabs({
-  activity,
+  saves,
+  timing,
   campaign,
   administration,
 }: CampaignWorkspaceTabsProps) {
   const baseId = useId();
-  const [selectedTabId, setSelectedTabId] =
-    useState<WorkspaceTabId>("activity");
+  const [selectedTabId, setSelectedTabId] = useState<WorkspaceTabId>("saves");
   const tabRefs = useRef<Record<WorkspaceTabId, HTMLButtonElement | null>>({
-    activity: null,
+    saves: null,
+    timing: null,
     campaign: null,
     administration: null,
   });
@@ -37,7 +39,8 @@ export function CampaignWorkspaceTabs({
     label: string;
     content: ReactNode;
   }> = [
-    { id: "activity", label: "Activity", content: activity },
+    { id: "saves", label: "Saves", content: saves },
+    { id: "timing", label: "Timing", content: timing },
     { id: "campaign", label: "Campaign", content: campaign },
     ...(administration != null
       ? [
@@ -50,10 +53,10 @@ export function CampaignWorkspaceTabs({
       : []),
   ];
   const selectedTabIsAvailable = tabs.some((tab) => tab.id === selectedTabId);
-  const activeTabId = selectedTabIsAvailable ? selectedTabId : "activity";
+  const activeTabId = selectedTabIsAvailable ? selectedTabId : "saves";
 
   if (!selectedTabIsAvailable) {
-    setSelectedTabId("activity");
+    setSelectedTabId("saves");
   }
 
   function selectAndFocus(tabId: WorkspaceTabId) {

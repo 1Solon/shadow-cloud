@@ -8,6 +8,12 @@ import {
   useRef,
   useState,
 } from "react";
+import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 export type CampaignConfigurationSection =
@@ -73,26 +79,40 @@ export function CampaignConfigurationShell({
   }
 
   return (
-    <section
+    <Card
       aria-labelledby={configurationHeadingId}
-      className="min-w-0 border border-orange-400/30 bg-black/50 font-mono text-orange-200"
+      className="min-w-0 overflow-hidden font-mono text-orange-200"
+      role="region"
     >
-      <header className="flex min-w-0 flex-col gap-3 border-b border-orange-400/25 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        <h2
-          id={configurationHeadingId}
-          className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-300"
-        >
-          [CONFIGURING: {activeSectionDetails.label.toUpperCase()}]
-        </h2>
-        <button
-          type="button"
-          disabled={isDirty}
-          className="self-start border border-orange-400/50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-orange-300 transition-colors hover:bg-orange-400/10 hover:text-orange-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 sm:self-auto"
-          onClick={onExit}
-        >
-          Exit configuration
-        </button>
-      </header>
+      <CardHeader>
+        <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-stretch sm:justify-between">
+          <div className="min-w-0">
+            <CardTitle id={configurationHeadingId}>
+              Configure campaign:
+            </CardTitle>
+            <CardDescription>
+              Update campaign settings, seat order, notes, and turn reminders.
+            </CardDescription>
+          </div>
+          <div className="shrink-0 self-start sm:self-stretch">
+            <button
+              type="button"
+              disabled={isDirty}
+              className="inline-flex h-full items-center justify-center border border-orange-400/50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-orange-300 transition-colors hover:bg-orange-400/10 hover:text-orange-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+              onClick={onExit}
+            >
+              Exit configuration
+            </button>
+          </div>
+        </div>
+      </CardHeader>
+
+      <p
+        className="border-t border-orange-400/25 px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-orange-300/70 sm:px-6"
+        data-testid="campaign-configuration-status"
+      >
+        [CONFIGURING: {activeSectionDetails.label.toUpperCase()}]
+      </p>
 
       <div
         data-testid="campaign-configuration-layout"
@@ -148,6 +168,6 @@ export function CampaignConfigurationShell({
           {renderSection(activeSection, { onDirtyChange })}
         </div>
       </div>
-    </section>
+    </Card>
   );
 }

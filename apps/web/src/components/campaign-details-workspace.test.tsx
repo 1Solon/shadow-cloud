@@ -17,7 +17,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/components/campaign-briefing", () => ({
   CampaignBriefing: (props: unknown) => {
     mocks.briefing(props);
-    return <div data-testid="briefing" />;
+    const { headerAction } = props as { headerAction?: ReactNode };
+    return <div data-testid="briefing">{headerAction}</div>;
   },
 }));
 
@@ -141,9 +142,11 @@ describe("CampaignDetailsWorkspace", () => {
     expect(screen.getByTestId("campaign-details-workspace")).toContainElement(
       screen.getByTestId("briefing"),
     );
-    expect(
-      screen.getAllByRole("button", { name: "Configure campaign" }),
-    ).toHaveLength(1);
+    const configureButton = screen.getByRole("button", {
+      name: "Configure campaign",
+    });
+    expect(screen.getByTestId("briefing")).toContainElement(configureButton);
+    expect(configureButton).toHaveClass("h-full");
     expect(mocks.briefing).toHaveBeenLastCalledWith(
       expect.objectContaining({
         activePlayerEntryId: props.activePlayerEntryId,

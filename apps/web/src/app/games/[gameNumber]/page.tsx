@@ -55,15 +55,6 @@ export default async function GameDetailPage({
   const activePlayer = game.players.find(
     (player) => player.id === game.activePlayerEntryId,
   );
-  const latestFileVersion = game.fileVersions[0];
-  const latestSave = latestFileVersion
-    ? {
-        id: latestFileVersion.id,
-        originalName: latestFileVersion.originalName,
-        uploadedAt: latestFileVersion.uploadedAt,
-        uploadedByDisplayName: latestFileVersion.uploadedByDisplayName,
-      }
-    : null;
   const currentTurnStartedAt =
     game.currentTurnStartedAt ?? game.openTurn?.startedAt ?? null;
 
@@ -103,36 +94,35 @@ export default async function GameDetailPage({
         activeSeatNumber={
           activePlayer?.turnOrder ?? game.openTurn?.seatNumber ?? null
         }
-        canDownloadLatestSave={latestSave !== null}
         currentTurnStartedAt={currentTurnStartedAt}
         gameNumber={game.gameNumber}
         initialNow={initialNow}
         isActivePlayer={isActivePlayer}
         isSignedIn={Boolean(session?.user)}
         key={game.openTurn?.id ?? "no-open-turn"}
-        latestSave={latestSave}
+        latestSave={game.fileVersions[0] ?? null}
         notes={game.notes ?? ""}
         roundNumber={game.roundNumber}
         turnTargetHours={game.turnTargetHours}
       />
 
       <CampaignWorkspaceTabs
-        activity={
-          <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
-            <WorldStateHistoryCard
-              currentUserId={session?.user?.id ?? null}
-              fileVersions={game.fileVersions}
-              gameNumber={game.gameNumber}
-              isShadowOverrideUser={session?.user?.isShadowOverride === true}
-              shadowOverrideEnabled={shadowOverrideEnabled}
-            />
-            <TurnTimingHistoryCard
-              initialNow={initialNow}
-              key={game.openTurn?.id ?? "no-open-turn"}
-              openTurn={game.openTurn}
-              recentCompletedTurns={game.recentCompletedTurns}
-            />
-          </div>
+        saves={
+          <WorldStateHistoryCard
+            currentUserId={session?.user?.id ?? null}
+            fileVersions={game.fileVersions}
+            gameNumber={game.gameNumber}
+            isShadowOverrideUser={session?.user?.isShadowOverride === true}
+            shadowOverrideEnabled={shadowOverrideEnabled}
+          />
+        }
+        timing={
+          <TurnTimingHistoryCard
+            initialNow={initialNow}
+            key={game.openTurn?.id ?? "no-open-turn"}
+            openTurn={game.openTurn}
+            recentCompletedTurns={game.recentCompletedTurns}
+          />
         }
         administration={
           canDeleteGame ? (

@@ -49,8 +49,8 @@ function TurnTimingHistoryRow({
     <tr
       className={
         isOpen
-          ? "border-b border-orange-400 bg-orange-400 text-black"
-          : "border-b border-orange-400/20 bg-orange-400/5 text-orange-200"
+          ? "h-16 border-b border-orange-400 bg-orange-400 text-black"
+          : "h-16 border-b border-orange-400/20 bg-orange-400/5 text-orange-200"
       }
     >
       <td className="px-4 py-3 font-medium">{record.roundNumber}</td>
@@ -108,8 +108,10 @@ export function TurnTimingHistoryCard({
   return (
     <Card className="overflow-hidden">
       <CardHeader>
-        <CardTitle>Recent turn timing:</CardTitle>
-        <CardDescription>Current and recently completed turns.</CardDescription>
+        <CardTitle>Turn timings:</CardTitle>
+        <CardDescription>
+          See how long the current and previous turns have taken.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         {hasTurns ? (
@@ -122,7 +124,7 @@ export function TurnTimingHistoryCard({
             <table className="min-w-[64rem] w-full text-left text-sm font-mono">
               <caption className="sr-only">Recent turn timing history</caption>
               <thead className="border-b border-orange-400/30 bg-orange-400/10 text-xs uppercase tracking-[0.18em] text-orange-300/80">
-                <tr>
+                <tr className="h-12">
                   <th className="px-4 py-3" scope="col">
                     Round
                   </th>
@@ -169,7 +171,7 @@ export function TurnTimingHistoryCard({
             className="rounded-lg border border-orange-400/20 bg-orange-400/5 px-4 py-4 text-sm font-mono text-orange-300"
             role="status"
           >
-            No turn timing history is available yet.
+            No turn timings are available yet.
           </div>
         )}
       </CardContent>

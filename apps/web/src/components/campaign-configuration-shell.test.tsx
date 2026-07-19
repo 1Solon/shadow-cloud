@@ -72,19 +72,29 @@ describe("CampaignConfigurationShell", () => {
     ).toBeVisible();
   });
 
-  it("names the configuration region with an h2 above the editor h3", () => {
+  it("uses the standard card heading and description for configuration", () => {
     render(<Harness />);
 
     const configurationHeading = screen.getByRole("heading", {
-      level: 2,
-      name: "[CONFIGURING: IDENTITY & PROGRESS]",
+      name: "Configure campaign:",
     });
-    expect(
-      screen.getByRole("region", {
-        name: "[CONFIGURING: IDENTITY & PROGRESS]",
-      }),
-    ).toBeVisible();
+    const region = screen.getByRole("region", {
+      name: "Configure campaign:",
+    });
+
     expect(configurationHeading).toBeVisible();
+    expect(region).toBeVisible();
+    expect(region).toHaveClass(
+      "rounded-lg",
+      "border-orange-400",
+      "bg-black/90",
+      "shadow-2xl",
+    );
+    expect(
+      screen.getByText(
+        "Update campaign settings, seat order, notes, and turn reminders.",
+      ),
+    ).toBeVisible();
     expect(
       screen.getByRole("heading", { level: 3, name: "Identity & Progress" }),
     ).toBeVisible();
@@ -275,8 +285,23 @@ describe("CampaignConfigurationShell", () => {
       "min-w-0",
       "lg:grid-cols-[minmax(10rem,0.35fr)_minmax(0,1fr)]",
     );
-    expect(screen.getByRole("heading", { level: 3 }).parentElement).toHaveClass(
-      "min-w-0",
+    expect(screen.getByTestId("campaign-configuration-status")).toHaveClass(
+      "border-t",
+      "border-orange-400/25",
     );
+    const exitButton = screen.getByRole("button", {
+      name: "Exit configuration",
+    });
+    expect(exitButton).toHaveClass("h-full");
+    expect(exitButton.parentElement).toHaveClass(
+      "shrink-0",
+      "sm:self-stretch",
+    );
+    expect(
+      screen.getByRole("heading", {
+        level: 3,
+        name: "Identity & Progress",
+      }).parentElement,
+    ).toHaveClass("min-w-0");
   });
 });

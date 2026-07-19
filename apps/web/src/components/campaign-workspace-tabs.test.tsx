@@ -17,7 +17,8 @@ function controlledPanel(tab: HTMLElement) {
 function renderWorkspace({ administration = false } = {}) {
   return render(
     <CampaignWorkspaceTabs
-      activity={<p>Activity content</p>}
+      saves={<p>Saves content</p>}
+      timing={<p>Timing content</p>}
       campaign={<StatefulCampaign />}
       administration={
         administration ? <p>Administration content</p> : undefined
@@ -29,146 +30,119 @@ function renderWorkspace({ administration = false } = {}) {
 describe("CampaignWorkspaceTabs", () => {
   afterEach(cleanup);
 
-  it("renders an accessible horizontal tablist with activity initially selected", () => {
+  it("renders Saves and Timing in the workspace row with Saves initially selected", () => {
     renderWorkspace();
 
     const tablist = screen.getByRole("tablist", {
       name: "Campaign workspace",
     });
-    const activityTab = within(tablist).getByRole("tab", {
-      name: "Activity",
-    });
+    const savesTab = within(tablist).getByRole("tab", { name: "Saves" });
+    const timingTab = within(tablist).getByRole("tab", { name: "Timing" });
     const campaignTab = within(tablist).getByRole("tab", {
       name: "Campaign",
     });
 
     expect(tablist).toHaveAttribute("aria-orientation", "horizontal");
-    expect(activityTab).toHaveAttribute("aria-selected", "true");
-    expect(activityTab).toHaveAttribute("tabindex", "0");
+    expect(within(tablist).queryByRole("tab", { name: "Activity" })).toBeNull();
+    expect(savesTab).toHaveAttribute("aria-selected", "true");
+    expect(savesTab).toHaveAttribute("tabindex", "0");
+    expect(timingTab).toHaveAttribute("aria-selected", "false");
     expect(campaignTab).toHaveAttribute("aria-selected", "false");
-    expect(campaignTab).toHaveAttribute("tabindex", "-1");
-
-    const activityPanel = controlledPanel(activityTab);
-    const campaignPanel = controlledPanel(campaignTab);
-    expect(activityPanel).toBeVisible();
-    expect(campaignPanel).not.toBeVisible();
-    expect(
-      within(campaignPanel).getByLabelText("Notes draft"),
-    ).toBeInTheDocument();
+    expect(controlledPanel(savesTab)).toBeVisible();
+    expect(controlledPanel(timingTab)).not.toBeVisible();
+    expect(controlledPanel(campaignTab)).not.toBeVisible();
   });
 
-  it("selects a clicked tab while preserving the inactive panel and its state", async () => {
+  it("selects a clicked tab while preserving inactive panel state", async () => {
     const user = userEvent.setup();
     renderWorkspace();
-    const activityTab = screen.getByRole("tab", { name: "Activity" });
+    const savesTab = screen.getByRole("tab", { name: "Saves" });
     const campaignTab = screen.getByRole("tab", { name: "Campaign" });
 
+    await user.click(campaignTab);
+    await user.type(screen.getByLabelText("Notes draft"), "preserved draft");
+    await user.click(savesTab);
     await user.click(campaignTab);
 
     expect(campaignTab).toHaveFocus();
     expect(campaignTab).toHaveAttribute("aria-selected", "true");
-    expect(campaignTab).toHaveAttribute("tabindex", "0");
-    expect(activityTab).toHaveAttribute("aria-selected", "false");
-    expect(activityTab).toHaveAttribute("tabindex", "-1");
-    expect(controlledPanel(activityTab)).not.toBeVisible();
-    expect(screen.getByRole("tabpanel", { name: "Campaign" })).toBeVisible();
-
-    await user.type(screen.getByLabelText("Notes draft"), "preserved draft");
-    await user.click(activityTab);
-    await user.click(campaignTab);
-
+    expect(savesTab).toHaveAttribute("aria-selected", "false");
     expect(screen.getByLabelText("Notes draft")).toHaveValue("preserved draft");
   });
 
-  it("selects and focuses the next tab with ArrowRight", async () => {
+  it("selects and focuses tabs with arrow keys", async () => {
     const user = userEvent.setup();
     renderWorkspace();
-    const activityTab = screen.getByRole("tab", { name: "Activity" });
+    const savesTab = screen.getByRole("tab", { name: "Saves" });
+    const timingTab = screen.getByRole("tab", { name: "Timing" });
     const campaignTab = screen.getByRole("tab", { name: "Campaign" });
 
-    activityTab.focus();
+    savesTab.focus();
     await user.keyboard("[ArrowRight]");
+    expect(timingTab).toHaveFocus();
+    expect(timingTab).toHaveAttribute("aria-selected", "true");
 
+    await user.keyboard("[ArrowRight]");
     expect(campaignTab).toHaveFocus();
-    expect(campaignTab).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tabpanel", { name: "Campaign" })).toBeVisible();
+
+    await user.keyboard("[ArrowLeft]");
+    expect(timingTab).toHaveFocus();
   });
 
   it("wraps arrow navigation when administration is available", async () => {
     const user = userEvent.setup();
     renderWorkspace({ administration: true });
-    const activityTab = screen.getByRole("tab", { name: "Activity" });
+    const savesTab = screen.getByRole("tab", { name: "Saves" });
     const administrationTab = screen.getByRole("tab", {
       name: "Administration",
     });
 
     administrationTab.focus();
     await user.keyboard("[ArrowRight]");
-    expect(activityTab).toHaveFocus();
-    expect(activityTab).toHaveAttribute("aria-selected", "true");
+    expect(savesTab).toHaveFocus();
 
     await user.keyboard("[ArrowLeft]");
     expect(administrationTab).toHaveFocus();
-    expect(administrationTab).toHaveAttribute("aria-selected", "true");
   });
 
   it("moves to the first and last available tabs with Home and End", async () => {
     const user = userEvent.setup();
     renderWorkspace({ administration: true });
-    const activityTab = screen.getByRole("tab", { name: "Activity" });
-    const campaignTab = screen.getByRole("tab", { name: "Campaign" });
+    const savesTab = screen.getByRole("tab", { name: "Saves" });
+    const timingTab = screen.getByRole("tab", { name: "Timing" });
     const administrationTab = screen.getByRole("tab", {
       name: "Administration",
     });
 
-    campaignTab.focus();
+    timingTab.focus();
     await user.keyboard("[End]");
     expect(administrationTab).toHaveFocus();
-    expect(administrationTab).toHaveAttribute("aria-selected", "true");
 
     await user.keyboard("[Home]");
-    expect(activityTab).toHaveFocus();
-    expect(activityTab).toHaveAttribute("aria-selected", "true");
+    expect(savesTab).toHaveFocus();
   });
 
-  it("uses campaign as the last tab when administration is omitted", async () => {
+  it("omits administration and uses Campaign as the last tab", async () => {
     const user = userEvent.setup();
     renderWorkspace();
-    const activityTab = screen.getByRole("tab", { name: "Activity" });
+    const savesTab = screen.getByRole("tab", { name: "Saves" });
     const campaignTab = screen.getByRole("tab", { name: "Campaign" });
 
-    expect(
-      screen.queryByRole("tab", { name: "Administration", hidden: true }),
-    ).not.toBeInTheDocument();
-    expect(screen.getAllByRole("tabpanel", { hidden: true })).toHaveLength(2);
+    expect(screen.getAllByRole("tab")).toHaveLength(3);
+    expect(screen.getAllByRole("tabpanel", { hidden: true })).toHaveLength(3);
+    expect(screen.queryByRole("tab", { name: "Administration" })).toBeNull();
 
-    activityTab.focus();
+    savesTab.focus();
     await user.keyboard("[End]");
     expect(campaignTab).toHaveFocus();
-    expect(campaignTab).toHaveAttribute("aria-selected", "true");
   });
 
-  it("omits administration when its content is null", () => {
-    render(
-      <CampaignWorkspaceTabs
-        activity="Activity content"
-        campaign="Campaign content"
-        administration={null}
-      />,
-    );
-
-    expect(screen.getAllByRole("tab")).toHaveLength(2);
-    expect(screen.getAllByRole("tabpanel", { hidden: true })).toHaveLength(2);
-    expect(
-      screen.queryByRole("tab", { name: "Administration", hidden: true }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("returns to activity when the selected administration tab is removed", async () => {
+  it("returns to Saves when the selected administration tab is removed", async () => {
     const user = userEvent.setup();
     const { rerender } = render(
       <CampaignWorkspaceTabs
-        activity="Activity content"
+        saves="Saves content"
+        timing="Timing content"
         campaign="Campaign content"
         administration="Administration content"
       />,
@@ -177,17 +151,15 @@ describe("CampaignWorkspaceTabs", () => {
 
     rerender(
       <CampaignWorkspaceTabs
-        activity="Activity content"
+        saves="Saves content"
+        timing="Timing content"
         campaign="Campaign content"
       />,
     );
 
-    const activityTab = screen.getByRole("tab", { name: "Activity" });
-    const campaignTab = screen.getByRole("tab", { name: "Campaign" });
-    expect(activityTab).toHaveAttribute("aria-selected", "true");
-    expect(activityTab).toHaveAttribute("tabindex", "0");
-    expect(controlledPanel(activityTab)).toBeVisible();
-    expect(controlledPanel(campaignTab)).not.toBeVisible();
+    const savesTab = screen.getByRole("tab", { name: "Saves" });
+    expect(savesTab).toHaveAttribute("aria-selected", "true");
+    expect(controlledPanel(savesTab)).toBeVisible();
   });
 
   it("links every tab to a uniquely identified labelled panel", () => {
@@ -198,8 +170,7 @@ describe("CampaignWorkspaceTabs", () => {
     expect(new Set(tabs.map((tab) => tab.id)).size).toBe(tabs.length);
     expect(new Set(panels.map((panel) => panel.id)).size).toBe(panels.length);
     for (const tab of tabs) {
-      const panelId = tab.getAttribute("aria-controls");
-      const panel = document.getElementById(panelId!);
+      const panel = document.getElementById(tab.getAttribute("aria-controls")!);
       expect(panel).toHaveAttribute("role", "tabpanel");
       expect(panel).toHaveAttribute("aria-labelledby", tab.id);
     }
@@ -209,11 +180,13 @@ describe("CampaignWorkspaceTabs", () => {
     render(
       <>
         <CampaignWorkspaceTabs
-          activity="First activity"
+          saves="First saves"
+          timing="First timing"
           campaign="First campaign"
         />
         <CampaignWorkspaceTabs
-          activity="Second activity"
+          saves="Second saves"
+          timing="Second timing"
           campaign="Second campaign"
         />
       </>,
@@ -229,16 +202,15 @@ describe("CampaignWorkspaceTabs", () => {
     );
   });
 
-  it("applies the workspace overflow, tab state, and panel styles", () => {
+  it("applies workspace overflow and tab state styles", () => {
     const { container } = renderWorkspace();
     const root = container.firstElementChild!;
     const tablist = screen.getByRole("tablist", {
       name: "Campaign workspace",
     });
     const navigationWrapper = tablist.parentElement!;
-    const activityTab = screen.getByRole("tab", { name: "Activity" });
-    const campaignTab = screen.getByRole("tab", { name: "Campaign" });
-    const panels = screen.getAllByRole("tabpanel", { hidden: true });
+    const savesTab = screen.getByRole("tab", { name: "Saves" });
+    const timingTab = screen.getByRole("tab", { name: "Timing" });
 
     expect(root).toHaveClass("min-w-0");
     expect(navigationWrapper).toHaveClass(
@@ -248,45 +220,24 @@ describe("CampaignWorkspaceTabs", () => {
       "border-orange-400/30",
     );
     expect(tablist).toHaveClass("flex", "min-w-max", "px-1", "pt-1");
-    for (const tab of [activityTab, campaignTab]) {
-      expect(tab).toHaveClass(
-        "h-11",
-        "shrink-0",
-        "whitespace-nowrap",
-        "border-b-2",
-        "px-4",
-        "font-mono",
-        "text-sm",
-        "font-semibold",
-        "uppercase",
-        "tracking-[0.16em]",
-        "transition-colors",
-        "focus-visible:outline-none",
-        "focus-visible:ring-2",
-        "focus-visible:ring-ring",
-        "focus-visible:ring-inset",
-      );
-    }
-    expect(activityTab).toHaveClass(
+    expect(savesTab).toHaveClass(
+      "h-11",
+      "border-b-2",
       "border-orange-400",
       "bg-orange-400",
       "text-black",
     );
-    expect(campaignTab).toHaveClass(
+    expect(timingTab).toHaveClass(
       "border-transparent",
       "text-orange-300",
       "hover:border-orange-400/60",
-      "hover:bg-orange-400/10",
-      "hover:text-orange-200",
     );
-    for (const panel of panels) {
+    for (const panel of screen.getAllByRole("tabpanel", { hidden: true })) {
       expect(panel).toHaveClass(
         "min-w-0",
         "pt-6",
         "focus-visible:outline-none",
         "focus-visible:ring-2",
-        "focus-visible:ring-ring",
-        "focus-visible:ring-inset",
       );
     }
   });

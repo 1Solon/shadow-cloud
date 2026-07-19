@@ -71,13 +71,21 @@ Prerequisites:
 	pnpm install
 	```
 
-2. Start the full workspace in dev mode:
+2. Start the web app stack in dev mode:
 
 	```bash
 	pnpm dev
+	# or explicitly
+	pnpm dev:web
 	```
 
-This starts the API, web app, and bot through the monorepo's Turbo pipeline.
+This starts the API, web app, and bot through the monorepo's Turbo pipeline. To also launch the desktop app, use:
+
+```bash
+pnpm dev:desktop
+```
+
+The desktop command starts the API, web app, bot, and Tauri desktop app.
 
 By default, the services are available at:
 

@@ -2,6 +2,12 @@
 
 import { useId, useState } from "react";
 import { GameNotesMarkdown } from "@/components/game-notes-markdown";
+import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 
 export type CampaignBriefingPlayer = {
   id: string;
@@ -13,6 +19,7 @@ export type CampaignBriefingPlayer = {
 
 export type CampaignBriefingProps = {
   activePlayerEntryId: string | null;
+  headerAction?: React.ReactNode;
   name: string;
   organizerDisplayName: string;
   playerCount: number | null;
@@ -120,6 +127,7 @@ function DisclosureButton({
 
 export function CampaignBriefing({
   activePlayerEntryId,
+  headerAction,
   name,
   organizerDisplayName,
   playerCount,
@@ -158,26 +166,34 @@ export function CampaignBriefing({
   }
 
   return (
-    <section
+    <Card
       aria-labelledby={headingId}
-      className="min-w-0 border border-orange-400/30 bg-black/50 font-mono text-orange-200"
+      className="min-w-0 overflow-hidden font-mono text-orange-200"
+      role="region"
     >
-      <header className="border-b border-orange-400/25 px-4 py-4 sm:px-6">
-        <h2
-          id={headingId}
-          className="text-sm font-semibold uppercase tracking-[0.24em] text-orange-300"
-        >
-          CAMPAIGN // BRIEFING
-        </h2>
-        <div className="mt-4 flex min-w-0 flex-col gap-1">
-          <p className="break-words text-xl font-semibold text-orange-100">
-            {name}
-          </p>
-          <p className="text-xs uppercase tracking-[0.16em] text-orange-300/60">
-            Overlord · {organizerDisplayName}
-          </p>
+      <CardHeader>
+        <div className="flex items-stretch justify-between gap-4">
+          <div className="min-w-0">
+            <CardTitle id={headingId}>Campaign briefing:</CardTitle>
+            <CardDescription>
+              Review campaign settings, seat order, notes, and turn reminders.
+            </CardDescription>
+          </div>
+          {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
         </div>
-      </header>
+      </CardHeader>
+
+      <div
+        className="border-t border-orange-400/25 px-4 py-4 sm:px-6"
+        data-testid="campaign-briefing-identity"
+      >
+        <p className="break-words text-lg font-semibold text-orange-100">
+          {name}
+        </p>
+        <p className="mt-1 text-xs uppercase tracking-[0.16em] text-orange-300/60">
+          Overlord · {organizerDisplayName}
+        </p>
+      </div>
 
       <dl
         data-testid="campaign-briefing-values"
@@ -311,6 +327,6 @@ export function CampaignBriefing({
           </dl>
         ) : null}
       </div>
-    </section>
+    </Card>
   );
 }
