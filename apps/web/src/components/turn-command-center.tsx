@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useState } from "react";
 import { DownloadSaveButton } from "@/components/download-save-button";
+import { GameNotesMarkdown } from "@/components/game-notes-markdown";
 import { UploadSaveForm } from "@/components/upload-save-form";
 import {
   formatTurnDuration,
@@ -26,6 +27,7 @@ export type TurnCommandCenterProps = {
   isActivePlayer: boolean;
   isSignedIn: boolean;
   latestSave: TurnCommandCenterLatestSave | null;
+  notes: string;
   roundNumber: number;
   turnTargetHours: number;
 };
@@ -65,6 +67,7 @@ export function TurnCommandCenter({
   isActivePlayer,
   isSignedIn,
   latestSave,
+  notes,
   roundNumber,
   turnTargetHours,
 }: TurnCommandCenterProps) {
@@ -101,6 +104,7 @@ export function TurnCommandCenter({
       ? `${turnTargetHours}h`
       : "Unknown";
   const canUpload = isSignedIn && isActivePlayer;
+  const hasNotes = notes.trim().length > 0;
 
   return (
     <section
@@ -139,13 +143,21 @@ export function TurnCommandCenter({
             <Metric label="Elapsed / target" value={`${elapsed} / ${target}`} />
           </dl>
 
-          <p className="text-sm leading-6 text-orange-200/75">
-            {canUpload
-              ? "Upload your completed turn save when your orders are ready."
-              : isSignedIn
-                ? `Waiting for ${activePlayerDisplayName} to complete the current turn.`
-                : "Sign in to participate when the campaign reaches your turn."}
-          </p>
+          <div>
+            <p className="text-[0.65rem] uppercase tracking-[0.18em] text-orange-300/60">
+              Campaign notes
+            </p>
+            {hasNotes ? (
+              <GameNotesMarkdown
+                content={notes}
+                className="mt-2 rounded-none border-0 bg-transparent px-0 py-0"
+              />
+            ) : (
+              <p className="mt-2 text-sm leading-6 text-orange-200/60">
+                No campaign notes recorded.
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="space-y-4 border-t border-orange-400/20 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">

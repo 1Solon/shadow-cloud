@@ -60,6 +60,7 @@ const defaultProps: React.ComponentProps<typeof TurnCommandCenter> = {
   isActivePlayer: true,
   isSignedIn: true,
   latestSave,
+  notes: "Hold the **western** pass.",
   roundNumber: 4,
   turnTargetHours: 24,
 };
@@ -77,7 +78,7 @@ describe("TurnCommandCenter", () => {
     vi.restoreAllMocks();
   });
 
-  it("gives the active signed-in player status, metrics, latest save, and controls", () => {
+  it("gives the active signed-in player status, metrics, campaign notes, latest save, and controls", () => {
     renderCommandCenter();
 
     expect(screen.getByText("YOUR TURN")).toBeVisible();
@@ -85,6 +86,13 @@ describe("TurnCommandCenter", () => {
     expect(screen.getByText("Seat 2")).toBeVisible();
     expect(screen.getByText("Round 4")).toBeVisible();
     expect(screen.getByText("59m / 24h")).toBeVisible();
+    expect(screen.getByText("Campaign notes")).toBeVisible();
+    expect(screen.getByText("western").tagName).toBe("STRONG");
+    expect(
+      screen.queryByText(
+        "Upload your completed turn save when your orders are ready.",
+      ),
+    ).not.toBeInTheDocument();
     expect(screen.getByText(latestSave.originalName)).toBeVisible();
     expect(screen.getByText("Uploaded by Rhea")).toBeVisible();
     expect(screen.getByText("Jul 11, 2026, 11:45 AM UTC")).toBeVisible();
@@ -128,7 +136,9 @@ describe("TurnCommandCenter", () => {
     expect(screen.getByText("WAITING")).toBeVisible();
     expect(screen.getByText("Rhea")).toBeVisible();
     expect(screen.getByText("Seat 2")).toBeVisible();
-    expect(screen.getByText(/waiting for rhea/i)).toBeVisible();
+    expect(screen.getByText("Campaign notes")).toBeVisible();
+    expect(screen.getByText("western").tagName).toBe("STRONG");
+    expect(screen.queryByText(/waiting for rhea/i)).not.toBeInTheDocument();
     expect(screen.getByTestId("download-save-button")).toBeVisible();
     expect(screen.queryByTestId("upload-save-form")).not.toBeInTheDocument();
   });
@@ -137,9 +147,22 @@ describe("TurnCommandCenter", () => {
     renderCommandCenter({ isSignedIn: false });
 
     expect(screen.getByText("WAITING")).toBeVisible();
-    expect(screen.getByText(/sign in/i)).toBeVisible();
+    expect(screen.getByText("Campaign notes")).toBeVisible();
+    expect(screen.getByText("western").tagName).toBe("STRONG");
+    expect(
+      screen.queryByText(
+        "Sign in to participate when the campaign reaches your turn.",
+      ),
+    ).not.toBeInTheDocument();
     expect(screen.getByTestId("download-save-button")).toBeVisible();
     expect(screen.queryByTestId("upload-save-form")).not.toBeInTheDocument();
+  });
+
+  it("shows the campaign notes empty state for whitespace-only notes", () => {
+    renderCommandCenter({ notes: "  \n " });
+
+    expect(screen.getByText("Campaign notes")).toBeVisible();
+    expect(screen.getByText("No campaign notes recorded.")).toBeVisible();
   });
 
   it("renders nullable seat and start values without throwing", () => {

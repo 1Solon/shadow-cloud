@@ -228,6 +228,7 @@ describe("GameDetailPage workspace composition", () => {
       initialNow: "2026-07-10T12:00:00.000Z",
       isActivePlayer: true,
       isSignedIn: true,
+      notes: "Hold the western pass.",
       roundNumber: 4,
       turnTargetHours: 24,
     });

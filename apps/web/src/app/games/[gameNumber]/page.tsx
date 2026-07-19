@@ -111,6 +111,7 @@ export default async function GameDetailPage({
         isSignedIn={Boolean(session?.user)}
         key={game.openTurn?.id ?? "no-open-turn"}
         latestSave={latestSave}
+        notes={game.notes ?? ""}
         roundNumber={game.roundNumber}
         turnTargetHours={game.turnTargetHours}
       />
