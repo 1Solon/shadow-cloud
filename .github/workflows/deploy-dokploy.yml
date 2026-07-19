@@ -4,9 +4,15 @@ on:
   release:
     types:
       - published
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Semantic release tag to deploy (for example, 0.11.0)
+        required: true
+        type: string
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: dokploy-production
@@ -28,16 +34,19 @@ jobs:
         with:
           node-version: 24.18.0
 
-      - name: Apply release version to deployment branch
+      - name: Validate release version
         shell: bash
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
         run: |
           set -euo pipefail
 
           git fetch --force --tags origin
-          release_sha="$(git rev-list -n 1 "$RELEASE_TAG")"
+          if ! release_sha="$(git rev-parse --verify "$RELEASE_TAG^{commit}" 2>/dev/null)"; then
+            echo "Release tag $RELEASE_TAG does not exist or does not point to a commit." >&2
+            exit 1
+          fi
 
           if ! git merge-base --is-ancestor "$release_sha" HEAD; then
             echo "Release $RELEASE_TAG is not contained in $DEFAULT_BRANCH." >&2
@@ -45,7 +54,7 @@ jobs:
           fi
 
           node --input-type=module <<'NODE'
-          import { readFileSync, writeFileSync } from "node:fs";
+          import { readFileSync } from "node:fs";
 
           const releaseTag = process.env.RELEASE_TAG;
           let version = releaseTag.trim().replace(/^refs\/tags\//, "");
@@ -54,43 +63,40 @@ jobs:
             throw new Error(`Release tag ${releaseTag} is not semantic.`);
           }
 
-          for (const path of ["package.json", "apps/desktop/src-tauri/tauri.conf.json"]) {
-            const contents = readFileSync(path, "utf8");
-            JSON.parse(contents);
-            writeFileSync(path, contents.replace(/("version"\s*:\s*)"[^"]+"/, `$1"${version}"`));
-          }
+          const versions = new Map([
+            ["package.json", JSON.parse(readFileSync("package.json", "utf8")).version],
+            [
+              "apps/desktop/src-tauri/tauri.conf.json",
+              JSON.parse(readFileSync("apps/desktop/src-tauri/tauri.conf.json", "utf8")).version,
+            ],
+          ]);
 
           for (const [path, pattern] of [
-            ["apps/desktop/src-tauri/Cargo.toml", /(\[package\][\s\S]*?\nversion\s*=\s*)"[^"]+"/],
-            ["apps/desktop/src-tauri/Cargo.lock", /(\[\[package\]\]\r?\nname\s*=\s*"shadow-cloud-desktop"\r?\nversion\s*=\s*)"[^"]+"/],
+            ["apps/desktop/src-tauri/Cargo.toml", /\[package\][\s\S]*?\nversion\s*=\s*"([^"]+)"/],
+            ["apps/desktop/src-tauri/Cargo.lock", /\[\[package\]\]\r?\nname\s*=\s*"shadow-cloud-desktop"\r?\nversion\s*=\s*"([^"]+)"/],
           ]) {
-            const contents = readFileSync(path, "utf8");
-            if (!pattern.test(contents)) throw new Error(`Version not found in ${path}.`);
-            writeFileSync(path, contents.replace(pattern, `$1"${version}"`));
+            const match = readFileSync(path, "utf8").match(pattern);
+            if (!match) throw new Error(`Version not found in ${path}.`);
+            versions.set(path, match[1]);
+          }
+
+          const mismatches = [...versions].filter(([, current]) => current !== version);
+          if (mismatches.length > 0) {
+            const details = mismatches.map(([path, current]) => `${path}: ${current}`).join("\n");
+            throw new Error(
+              `Release ${releaseTag} does not match the versions on the deployment branch:\n${details}\n` +
+                "Bump versions through a pull request before publishing or manually dispatching the release.",
+            );
           }
           NODE
-
-          if git diff --quiet; then
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            package.json \
-            apps/desktop/src-tauri/Cargo.lock \
-            apps/desktop/src-tauri/Cargo.toml \
-            apps/desktop/src-tauri/tauri.conf.json
-          git commit -m "chore: apply release version $RELEASE_TAG [skip ci]"
-          git push origin "HEAD:$DEFAULT_BRANCH"
 
       - name: Trigger Dokploy deployment
         shell: bash
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           DOKPLOY_DEPLOY_URL: ${{ secrets.DOKPLOY_DEPLOY_URL }}
-          RELEASE_NAME: ${{ github.event.release.name }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_NAME: ${{ github.event_name == 'release' && github.event.release.name || inputs.release_tag }}
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
         run: |
           set -euo pipefail
 
