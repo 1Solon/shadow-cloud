@@ -7,8 +7,9 @@ import {
   type MouseEvent,
 } from "react";
 import { useRouter } from "next/navigation";
+import { DownloadSaveButton } from "@/components/download-save-button";
 import { SaveUploadCard } from "@/components/save-upload-card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { GameListItem } from "@/lib/shadow-cloud-api";
 import { cn } from "@/lib/utils";
@@ -207,7 +208,30 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
             </div>
 
             {isUsersTurn ? (
-              <div className="relative z-10 w-full md:col-span-2">
+              <div
+                className="relative z-10 grid w-full grid-cols-2 gap-3 md:col-span-2"
+                onClick={(event) => {
+                  event.stopPropagation();
+                }}
+                onKeyDown={(event) => {
+                  event.stopPropagation();
+                }}
+              >
+                {game.latestSave ? (
+                  <DownloadSaveButton
+                    className={cn(
+                      buttonVariants({ variant: "outline" }),
+                      "w-full",
+                    )}
+                    fileName={game.latestSave.originalName}
+                    href={`/api/games/${game.gameNumber}/files/${game.latestSave.id}`}
+                    label="Download latest turn"
+                  />
+                ) : (
+                  <Button className="w-full" disabled variant="outline">
+                    Download latest turn
+                  </Button>
+                )}
                 <Button
                   className="w-full"
                   type="button"

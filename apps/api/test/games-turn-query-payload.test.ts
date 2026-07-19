@@ -24,7 +24,7 @@ const { GamesQueryService } =
 const startedAt = new Date('2026-07-10T00:00:00.000Z');
 const endedAt = new Date('2026-07-11T00:00:00.000Z');
 
-function createGame() {
+function createGame(override = {}) {
   return {
     id: 'game-1',
     slug: 'ashes',
@@ -63,6 +63,7 @@ function createGame() {
     fileVersions: [],
     auditEvents: [],
     turnRecords: [createTurnRecord()],
+    ...override,
   };
 }
 
@@ -90,7 +91,13 @@ describe('GamesQueryService turn timing payloads', () => {
   });
 
   it('returns list policy fields and the open turn start time without detail history', async () => {
-    prismaMock.game.findMany.mockResolvedValue([createGame()]);
+    prismaMock.game.findMany.mockResolvedValue([
+      createGame({
+        fileVersions: [
+          { id: 'file-latest', originalName: '1-T3-S1-Ashes.se1' },
+        ],
+      }),
+    ]);
 
     const [game] = await new GamesQueryService({} as never).listGames();
 
@@ -100,6 +107,10 @@ describe('GamesQueryService turn timing payloads', () => {
       turnReminderRepeatHours: 6,
       turnRemindersEnabled: true,
       currentTurnStartedAt: '2026-07-10T00:00:00.000Z',
+      latestSave: {
+        id: 'file-latest',
+        originalName: '1-T3-S1-Ashes.se1',
+      },
     });
     expect(game).not.toHaveProperty('openTurn');
     expect(game).not.toHaveProperty('recentCompletedTurns');
@@ -110,6 +121,14 @@ describe('GamesQueryService turn timing payloads', () => {
           turnRecords: {
             where: { endedAt: null },
             orderBy: { startedAt: 'desc' },
+            take: 1,
+          },
+          fileVersions: {
+            select: {
+              id: true,
+              originalName: true,
+            },
+            orderBy: { versionNumber: 'desc' },
             take: 1,
           },
         }),

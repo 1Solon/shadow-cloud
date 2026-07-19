@@ -117,6 +117,16 @@ export class GamesQueryService {
           orderBy: { startedAt: 'desc' },
           take: 1,
         },
+        fileVersions: {
+          select: {
+            id: true,
+            originalName: true,
+          },
+          orderBy: {
+            versionNumber: 'desc',
+          },
+          take: 1,
+        },
       },
       orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
     });
@@ -159,6 +169,7 @@ export class GamesQueryService {
         turnRemindersEnabled: game.turnRemindersEnabled,
         currentTurnStartedAt:
           game.turnRecords[0]?.startedAt.toISOString() ?? null,
+        latestSave: game.fileVersions[0] ?? null,
       };
     });
   }

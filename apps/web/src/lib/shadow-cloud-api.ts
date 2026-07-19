@@ -27,6 +27,10 @@ export type GameListItem = {
   turnReminderRepeatHours: number;
   turnRemindersEnabled: boolean;
   currentTurnStartedAt: string | null;
+  latestSave: {
+    id: string;
+    originalName: string;
+  } | null;
 };
 
 export type GameDetailFileVersion = {

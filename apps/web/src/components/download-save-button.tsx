@@ -10,12 +10,14 @@ type DownloadSaveButtonProps = {
   className: string;
   fileName: string;
   href: string;
+  label?: string;
 };
 
 export function DownloadSaveButton({
   className,
   fileName,
   href,
+  label = "Download",
 }: DownloadSaveButtonProps) {
   const [confirmation, setConfirmation] =
     useState<TerminalConfirmationSpec | null>(null);
@@ -50,7 +52,7 @@ export function DownloadSaveButton({
           anchor.remove();
         }}
       >
-        Download
+        {label}
       </button>
     </>
   );
