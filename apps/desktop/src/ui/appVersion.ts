@@ -1,3 +1,3 @@
-import packageJson from "../../package.json";
+import rootPackage from "../../../../package.json";
 
-export const desktopVersion = packageJson.version;
+export const desktopVersion = rootPackage.version;

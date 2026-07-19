@@ -31,6 +31,10 @@ RUN pnpm --dir apps/api exec nest build
 
 FROM node:24.18.0-bookworm-slim@sha256:cb4e8f7c443347358b7875e717c29e27bf9befc8f5a26cf18af3c3dec80e58c5 AS runner
 
+ARG SHADOW_CLOUD_VERSION
+ENV SHADOW_CLOUD_VERSION=$SHADOW_CLOUD_VERSION
+LABEL org.opencontainers.image.version=$SHADOW_CLOUD_VERSION
+
 ENV NODE_ENV=production
 ENV PORT=3001
 ENV PATH=/workspace/apps/api/node_modules/.bin:/workspace/node_modules/.bin:$PATH

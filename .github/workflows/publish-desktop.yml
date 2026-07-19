@@ -10,56 +10,9 @@ permissions:
   contents: write
 
 jobs:
-  detect-desktop-changes:
-    name: Detect desktop changes
-    runs-on: ubuntu-latest
-    outputs:
-      should_publish: ${{ steps.changes.outputs.should_publish }}
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
-        with:
-          fetch-depth: 0
-
-      - name: Check for desktop-affecting changes
-        id: changes
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "should_publish=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          current_tag="${{ github.event.release.tag_name }}"
-          previous_tag="$(git tag --sort=-creatordate | grep -vxF "$current_tag" | head -n 1 || true)"
-
-          if [[ -z "$previous_tag" ]]; then
-            echo "should_publish=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          changed_files="$(git diff --name-only "$previous_tag" "$current_tag" -- \
-            package.json \
-            pnpm-lock.yaml \
-            pnpm-workspace.yaml \
-            turbo.json \
-            apps/desktop \
-            packages \
-            .github/workflows/publish-desktop.yml)"
-
-          if [[ -n "$changed_files" ]]; then
-            echo "should_publish=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "should_publish=false" >> "$GITHUB_OUTPUT"
-          fi
-
   publish-desktop:
     name: Build desktop app (${{ matrix.platform }})
     runs-on: ${{ matrix.platform }}
-    needs: detect-desktop-changes
-    if: needs.detect-desktop-changes.outputs.should_publish == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -113,6 +66,37 @@ jobs:
         uses: swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           workspaces: apps/desktop/src-tauri -> target
+
+      - name: Apply git release version
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || github.ref_type == 'tag' && github.ref_name || '' }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from "node:fs";
+
+          const releaseTag = process.env.RELEASE_TAG || JSON.parse(readFileSync("package.json", "utf8")).version;
+          let version = releaseTag.trim().replace(/^refs\/tags\//, "");
+          if (version.startsWith("v")) version = version.slice(1);
+          if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version)) {
+            throw new Error(`Release tag ${releaseTag} is not semantic.`);
+          }
+
+          for (const path of ["package.json", "apps/desktop/src-tauri/tauri.conf.json"]) {
+            const contents = readFileSync(path, "utf8");
+            JSON.parse(contents);
+            writeFileSync(path, contents.replace(/("version"\s*:\s*)"[^"]+"/, `$1"${version}"`));
+          }
+
+          for (const [path, pattern] of [
+            ["apps/desktop/src-tauri/Cargo.toml", /(\[package\][\s\S]*?\nversion\s*=\s*)"[^"]+"/],
+            ["apps/desktop/src-tauri/Cargo.lock", /(\[\[package\]\]\r?\nname\s*=\s*"shadow-cloud-desktop"\r?\nversion\s*=\s*)"[^"]+"/],
+          ]) {
+            const contents = readFileSync(path, "utf8");
+            if (!pattern.test(contents)) throw new Error(`Version not found in ${path}.`);
+            writeFileSync(path, contents.replace(pattern, `$1"${version}"`));
+          }
+          NODE
 
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile

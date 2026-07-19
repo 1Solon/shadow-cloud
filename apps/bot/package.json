@@ -1,6 +1,5 @@
 {
   "name": "@shadow-cloud/bot",
-  "version": "0.10.0",
   "private": true,
   "type": "module",
   "scripts": {

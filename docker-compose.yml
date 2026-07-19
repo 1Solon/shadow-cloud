@@ -4,6 +4,8 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
+      args:
+        SHADOW_CLOUD_VERSION: ${SHADOW_CLOUD_VERSION:-}
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -38,6 +40,8 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        SHADOW_CLOUD_VERSION: ${SHADOW_CLOUD_VERSION:-}
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -69,6 +73,8 @@ services:
     build:
       context: .
       dockerfile: apps/bot/Dockerfile
+      args:
+        SHADOW_CLOUD_VERSION: ${SHADOW_CLOUD_VERSION:-}
     restart: unless-stopped
     environment:
       NODE_ENV: production

@@ -15,7 +15,7 @@ const sections: Array<{
   label: string;
 }> = [
   { id: "identity", label: "Identity & Progress" },
-  { id: "world", label: "World Setup" },
+  { id: "world", label: "Campaign Setup" },
   { id: "turn-protocol", label: "Turn Reminders" },
   { id: "seat-order", label: "Seat Order" },
   { id: "notes", label: "Notes" },
@@ -159,11 +159,11 @@ describe("CampaignConfigurationShell", () => {
     const user = userEvent.setup();
     render(<Harness />);
 
-    await user.click(screen.getByRole("button", { name: "World Setup" }));
+    await user.click(screen.getByRole("button", { name: "Campaign Setup" }));
 
     const heading = screen.getByRole("heading", {
       level: 3,
-      name: "World Setup",
+      name: "Campaign Setup",
     });
     expect(heading).toHaveAttribute("tabindex", "-1");
     expect(heading).toHaveFocus();
@@ -234,7 +234,7 @@ describe("CampaignConfigurationShell", () => {
       "leaked value",
     );
 
-    await user.click(screen.getByRole("button", { name: "World Setup" }));
+    await user.click(screen.getByRole("button", { name: "Campaign Setup" }));
 
     expect(screen.getByRole("textbox", { name: "world draft" })).toHaveValue(
       "",

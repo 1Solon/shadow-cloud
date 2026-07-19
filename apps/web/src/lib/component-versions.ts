@@ -1,4 +1,12 @@
-import apiPackage from "../../../api/package.json";
-import webPackage from "../../package.json";
+import rootPackage from "../../../../package.json";
 
-export const componentVersionStatus = `WEB: v${webPackage.version} / API: v${apiPackage.version}`;
+export function resolveApplicationVersion(
+  environment: { SHADOW_CLOUD_VERSION?: string } = process.env as unknown as {
+    SHADOW_CLOUD_VERSION?: string;
+  },
+) {
+  return environment.SHADOW_CLOUD_VERSION || rootPackage.version;
+}
+
+export const applicationVersion = resolveApplicationVersion();
+export const componentVersionStatus = `VERSION: v${applicationVersion}`;

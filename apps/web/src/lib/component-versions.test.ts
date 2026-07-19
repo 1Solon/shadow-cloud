@@ -1,25 +1,33 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import apiPackage from "../../../api/package.json";
-import webPackage from "../../package.json";
-import { componentVersionStatus } from "./component-versions";
+import rootPackage from "../../../../package.json";
+import {
+  componentVersionStatus,
+  resolveApplicationVersion,
+} from "./component-versions";
 
 describe("componentVersionStatus", () => {
-  it("lists web and API versions without desktop", () => {
-    expect(componentVersionStatus).toBe(
-      `WEB: v${webPackage.version} / API: v${apiPackage.version}`,
-    );
-    expect(componentVersionStatus).not.toContain("DESKTOP");
+  it("shows one application-wide version", () => {
+    expect(componentVersionStatus).toBe(`VERSION: v${rootPackage.version}`);
+    expect(componentVersionStatus).not.toContain("WEB:");
+    expect(componentVersionStatus).not.toContain("API:");
   });
 
-  it("copies API package metadata into the web Docker build context", () => {
+  it("allows release builds to inject the git release tag", () => {
+    expect(resolveApplicationVersion({ SHADOW_CLOUD_VERSION: "1.2.3" })).toBe(
+      "1.2.3",
+    );
+  });
+
+  it("passes the release version into the web Docker image", () => {
     const dockerfile = readFileSync(
       new URL("../../Dockerfile", import.meta.url),
       "utf8",
     );
 
+    expect(dockerfile).toContain("ARG SHADOW_CLOUD_VERSION");
     expect(dockerfile).toContain(
-      "COPY apps/api/package.json apps/api/package.json",
+      "ENV SHADOW_CLOUD_VERSION=$SHADOW_CLOUD_VERSION",
     );
   });
 });

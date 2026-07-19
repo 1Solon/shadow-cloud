@@ -25,6 +25,10 @@ RUN pnpm --dir apps/bot exec tsc -p tsconfig.json
 
 FROM node:24.18.0-bookworm-slim@sha256:cb4e8f7c443347358b7875e717c29e27bf9befc8f5a26cf18af3c3dec80e58c5 AS runner
 
+ARG SHADOW_CLOUD_VERSION
+ENV SHADOW_CLOUD_VERSION=$SHADOW_CLOUD_VERSION
+LABEL org.opencontainers.image.version=$SHADOW_CLOUD_VERSION
+
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 ENV NODE_ENV=production
