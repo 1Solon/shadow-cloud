@@ -100,15 +100,15 @@ pnpm --filter @shadow-cloud/api prisma:migrate
 
 ### Running With Docker
 
-The repository includes a single `docker-compose.yml` that works for both local and hosted deployments.
+The repository includes a single `docker-compose.yml` that works for both local and hosted deployments. Release CI builds the API, web, and bot images and publishes them to GitHub Container Registry; deployment hosts only pull and run those images.
 
 Prerequisites:
 
 * Docker Desktop or another Docker Engine install with Compose support
 * Optional: shell environment variables or a custom Compose env file if you want to override the built-in defaults
-* Access to the published GHCR images if you are deploying from a private repository
+* Access to the published GHCR images. Public packages can be pulled anonymously; private packages require GHCR credentials with `read:packages` access on the deployment host.
 
-The compose file does not require a root `.env` file. It provides inline example defaults in the actual service definitions, and you can override them with normal Docker Compose environment handling.
+The compose file does not require a root `.env` file. It provides inline example defaults in the actual service definitions, and you can override them with normal Docker Compose environment handling. Images default to the `latest` tag and use an always-pull policy.
 
 For a local containerized run:
 
@@ -118,8 +118,8 @@ docker compose up
 
 This publishes:
 
-* Web on `http://localhost:3000`
-* API on `http://localhost:3001/v1`
+* Web on `http://localhost:38080`
+* API on `http://localhost:38081/v1`
 
 The API stores its SQLite database and uploaded save data in the named Docker volume `shadow-cloud-data`.
 
@@ -137,6 +137,7 @@ Example override patterns:
 
 Optional runtime overrides:
 
+* `SHADOW_CLOUD_IMAGE_TAG` to deploy a specific published release instead of `latest` (for example, `0.11.0`)
 * `AUTH_URL` to set the public web URL
 * `AUTH_SECRET` to set the shared auth secret used by the web app and API
 * `AUTH_DISCORD_ID` and `AUTH_DISCORD_SECRET` to enable Discord sign-in

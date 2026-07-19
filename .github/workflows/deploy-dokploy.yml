@@ -1,4 +1,4 @@
-name: Deploy to Dokploy
+name: Publish and Deploy Containers
 
 on:
   release:
@@ -13,15 +13,20 @@ on:
 
 permissions:
   contents: read
+  packages: write
 
 concurrency:
   group: dokploy-production
   cancel-in-progress: false
 
 jobs:
-  deploy:
-    name: Deploy release
+  prepare:
+    name: Validate release
     runs-on: ubuntu-latest
+    outputs:
+      image_namespace: ${{ steps.release.outputs.image_namespace }}
+      release_sha: ${{ steps.release.outputs.release_sha }}
+      version: ${{ steps.release.outputs.version }}
     steps:
       - name: Check out deployment branch
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -35,6 +40,7 @@ jobs:
           node-version: 24.18.0
 
       - name: Validate release version
+        id: release
         shell: bash
         env:
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
@@ -53,16 +59,18 @@ jobs:
             exit 1
           fi
 
+          version="${RELEASE_TAG#refs/tags/}"
+          version="${version#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Release tag $RELEASE_TAG is not semantic." >&2
+            exit 1
+          fi
+          export RELEASE_VERSION="$version"
+
           node --input-type=module <<'NODE'
           import { readFileSync } from "node:fs";
 
-          const releaseTag = process.env.RELEASE_TAG;
-          let version = releaseTag.trim().replace(/^refs\/tags\//, "");
-          if (version.startsWith("v")) version = version.slice(1);
-          if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version)) {
-            throw new Error(`Release tag ${releaseTag} is not semantic.`);
-          }
-
+          const expectedVersion = process.env.RELEASE_VERSION;
           const versions = new Map([
             ["package.json", JSON.parse(readFileSync("package.json", "utf8")).version],
             [
@@ -80,15 +88,92 @@ jobs:
             versions.set(path, match[1]);
           }
 
-          const mismatches = [...versions].filter(([, current]) => current !== version);
+          const mismatches = [...versions].filter(
+            ([, currentVersion]) => currentVersion !== expectedVersion,
+          );
           if (mismatches.length > 0) {
-            const details = mismatches.map(([path, current]) => `${path}: ${current}`).join("\n");
+            const details = mismatches
+              .map(([path, currentVersion]) => `${path}: ${currentVersion}`)
+              .join("\n");
             throw new Error(
-              `Release ${releaseTag} does not match the versions on the deployment branch:\n${details}\n` +
+              `Release ${expectedVersion} does not match the deployment branch:\n${details}\n` +
                 "Bump versions through a pull request before publishing or manually dispatching the release.",
             );
           }
           NODE
+
+          echo "image_namespace=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+          echo "release_sha=$release_sha" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build and publish ${{ matrix.service }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: API
+            image: shadow-cloud/api
+            cache_scope: shadow-cloud-api
+            dockerfile: apps/api/Dockerfile
+          - service: Web
+            image: shadow-cloud/web
+            cache_scope: shadow-cloud-web
+            dockerfile: apps/web/Dockerfile
+          - service: Bot
+            image: shadow-cloud/bot
+            cache_scope: shadow-cloud-bot
+            dockerfile: apps/bot/Dockerfile
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          ref: ${{ needs.prepare.outputs.release_sha }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      - name: Build and publish image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            SHADOW_CLOUD_VERSION=${{ needs.prepare.outputs.version }}
+          tags: |
+            ${{ needs.prepare.outputs.image_namespace }}/${{ matrix.image }}:${{ needs.prepare.outputs.version }}
+            ${{ needs.prepare.outputs.image_namespace }}/${{ matrix.image }}:latest
+            ${{ needs.prepare.outputs.image_namespace }}/${{ matrix.image }}:sha-${{ needs.prepare.outputs.release_sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ needs.prepare.outputs.release_sha }}
+            org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
+          cache-from: type=gha,scope=${{ matrix.cache_scope }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.cache_scope }}
+
+  deploy:
+    name: Trigger Dokploy deployment
+    needs:
+      - prepare
+      - build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out deployment branch
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.repository.default_branch }}
 
       - name: Trigger Dokploy deployment
         shell: bash
@@ -105,12 +190,12 @@ jobs:
             exit 1
           fi
 
-          release_sha="$(git rev-parse HEAD)"
+          deployment_sha="$(git rev-parse HEAD)"
           repository_files="$(git ls-tree -r --name-only HEAD)"
           modified_json="$(printf '%s\n' "$repository_files" | jq -R 'select(length > 0)' | jq -s '.')"
           payload="$(jq -n \
             --arg ref "refs/heads/$DEFAULT_BRANCH" \
-            --arg id "$release_sha" \
+            --arg id "$deployment_sha" \
             --arg message "Deploy ${RELEASE_NAME:-$RELEASE_TAG}" \
             --argjson modified "$modified_json" \
             '{
