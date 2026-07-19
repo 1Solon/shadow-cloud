@@ -1,0 +1,134 @@
+name: Deploy to Dokploy
+
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dokploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out deployment branch
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 24.18.0
+
+      - name: Apply release version to deployment branch
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+
+          git fetch --force --tags origin
+          release_sha="$(git rev-list -n 1 "$RELEASE_TAG")"
+
+          if ! git merge-base --is-ancestor "$release_sha" HEAD; then
+            echo "Release $RELEASE_TAG is not contained in $DEFAULT_BRANCH." >&2
+            exit 1
+          fi
+
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from "node:fs";
+
+          const releaseTag = process.env.RELEASE_TAG;
+          let version = releaseTag.trim().replace(/^refs\/tags\//, "");
+          if (version.startsWith("v")) version = version.slice(1);
+          if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version)) {
+            throw new Error(`Release tag ${releaseTag} is not semantic.`);
+          }
+
+          for (const path of ["package.json", "apps/desktop/src-tauri/tauri.conf.json"]) {
+            const contents = readFileSync(path, "utf8");
+            JSON.parse(contents);
+            writeFileSync(path, contents.replace(/("version"\s*:\s*)"[^"]+"/, `$1"${version}"`));
+          }
+
+          for (const [path, pattern] of [
+            ["apps/desktop/src-tauri/Cargo.toml", /(\[package\][\s\S]*?\nversion\s*=\s*)"[^"]+"/],
+            ["apps/desktop/src-tauri/Cargo.lock", /(\[\[package\]\]\r?\nname\s*=\s*"shadow-cloud-desktop"\r?\nversion\s*=\s*)"[^"]+"/],
+          ]) {
+            const contents = readFileSync(path, "utf8");
+            if (!pattern.test(contents)) throw new Error(`Version not found in ${path}.`);
+            writeFileSync(path, contents.replace(pattern, `$1"${version}"`));
+          }
+          NODE
+
+          if git diff --quiet; then
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            package.json \
+            apps/desktop/src-tauri/Cargo.lock \
+            apps/desktop/src-tauri/Cargo.toml \
+            apps/desktop/src-tauri/tauri.conf.json
+          git commit -m "chore: apply release version $RELEASE_TAG [skip ci]"
+          git push origin "HEAD:$DEFAULT_BRANCH"
+
+      - name: Trigger Dokploy deployment
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          DOKPLOY_DEPLOY_URL: ${{ secrets.DOKPLOY_DEPLOY_URL }}
+          RELEASE_NAME: ${{ github.event.release.name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$DOKPLOY_DEPLOY_URL" ]]; then
+            echo "The DOKPLOY_DEPLOY_URL repository secret is not configured." >&2
+            exit 1
+          fi
+
+          release_sha="$(git rev-parse HEAD)"
+          repository_files="$(git ls-tree -r --name-only HEAD)"
+          modified_json="$(printf '%s\n' "$repository_files" | jq -R 'select(length > 0)' | jq -s '.')"
+          payload="$(jq -n \
+            --arg ref "refs/heads/$DEFAULT_BRANCH" \
+            --arg id "$release_sha" \
+            --arg message "Deploy ${RELEASE_NAME:-$RELEASE_TAG}" \
+            --argjson modified "$modified_json" \
+            '{
+              ref: $ref,
+              after: $id,
+              commits: [{ id: $id, message: $message, modified: $modified }],
+              head_commit: { id: $id, message: $message, modified: $modified }
+            }')"
+
+          response_file="$(mktemp)"
+          status="$(curl \
+            --silent \
+            --show-error \
+            --output "$response_file" \
+            --write-out '%{http_code}' \
+            --request POST \
+            --header 'Content-Type: application/json' \
+            --header 'X-GitHub-Event: push' \
+            --data "$payload" \
+            "$DOKPLOY_DEPLOY_URL")"
+
+          cat "$response_file"
+
+          if [[ ! "$status" =~ ^2[0-9][0-9]$ ]]; then
+            echo "Dokploy returned HTTP $status." >&2
+            exit 1
+          fi
