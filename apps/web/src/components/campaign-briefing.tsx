@@ -249,17 +249,27 @@ export function CampaignBriefing({
                 return (
                   <li
                     key={player.id}
-                    className="flex min-w-0 items-start justify-between gap-4 border-t border-orange-400/15 pt-2 text-sm"
+                    className="grid min-w-0 grid-cols-[6.5rem_minmax(0,1fr)] items-start gap-x-4 border-t border-orange-400/15 px-2 py-2 text-sm sm:grid-cols-[7.5rem_minmax(0,1fr)]"
                   >
                     <span className="shrink-0 text-orange-300/60">
                       SEAT {String(player.turnOrder).padStart(2, "0")}
                     </span>
-                    <span className="min-w-0 break-words text-right text-orange-100">
-                      {occupied ? (player.displayName ?? "Occupied") : "Empty"}
+                    <span className="min-w-0 text-left">
+                      <span className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+                        <span className="min-w-0 break-words text-orange-100">
+                          {occupied
+                            ? (player.displayName ?? "Occupied")
+                            : "Empty"}
+                        </span>
+                        {isActive ? (
+                          <span className="shrink-0 text-xs font-semibold uppercase tracking-[0.12em] text-orange-300">
+                            Active player
+                          </span>
+                        ) : null}
+                      </span>
                       <span className="block text-xs uppercase tracking-[0.12em] text-orange-300/60">
                         {occupied ? "Occupied" : "Empty"}
                         {player.isOrganizer ? " · Overlord" : ""}
-                        {isActive ? " · Active" : ""}
                       </span>
                     </span>
                   </li>

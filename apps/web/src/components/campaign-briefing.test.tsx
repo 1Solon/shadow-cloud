@@ -116,9 +116,17 @@ describe("CampaignBriefing", () => {
     );
 
     const seats = screen.getAllByRole("listitem");
-    expect(seats[0]).toHaveTextContent("Active");
-    expect(seats[1]).not.toHaveTextContent("Active");
-    expect(screen.getAllByText(/Active/)).toHaveLength(1);
+    expect(seats[0]).toHaveTextContent("Active player");
+    expect(seats[0]).toHaveClass(
+      "grid",
+      "grid-cols-[6.5rem_minmax(0,1fr)]",
+      "sm:grid-cols-[7.5rem_minmax(0,1fr)]",
+    );
+    expect(within(seats[0]).getByText("Solon").parentElement).toHaveTextContent(
+      /Solon\s*Active player/,
+    );
+    expect(seats[1]).not.toHaveTextContent("Active player");
+    expect(screen.getAllByText("Active player")).toHaveLength(1);
   });
 
   it("starts all disclosures collapsed with inaccessible content", () => {
