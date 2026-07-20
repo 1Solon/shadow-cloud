@@ -17,6 +17,7 @@ export function UserBadge({ name, image, isSignedIn }: UserBadgeProps) {
             fill
             className="rounded-full border border-orange-400/60 object-cover"
             sizes="32px"
+            loading="eager"
             unoptimized
           />
           {/* CRT tint overlay */}

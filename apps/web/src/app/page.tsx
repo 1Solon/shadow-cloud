@@ -1,5 +1,5 @@
 import { getServerAuthSession } from "@/auth";
-import { CampaignCard } from "@/components/campaign-card";
+import { CampaignList } from "@/components/campaign-list";
 import { TerminalClock } from "@/components/terminal-clock";
 import { UserBadge } from "@/components/user-badge";
 import { SignOutButton } from "@/components/sign-out-button";
@@ -9,55 +9,10 @@ import { listGames } from "@/lib/shadow-cloud-api";
 import { getShadowOverrideEnabled } from "@/lib/shadow-override";
 import { formatTerminalClock } from "@/lib/terminal-clock";
 import { componentVersionStatus } from "@/lib/component-versions";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-
 export const metadata = {
   title: "Shadow-Cloud",
   description: "Current Shadow Cloud PBEM campaigns and turn status.",
 };
-
-function CampaignList({
-  campaigns,
-  title,
-  emptyTitle,
-  emptyDescription,
-  currentUserId,
-}: {
-  campaigns: Awaited<ReturnType<typeof listGames>>;
-  title: string;
-  emptyTitle: string;
-  emptyDescription: React.ReactNode;
-  currentUserId?: string;
-}) {
-  return (
-    <section className="space-y-4">
-      <div className="text-orange-300 text-lg font-mono">{`> ${title} (${campaigns.length})`}</div>
-      <div className="flex flex-col gap-3">
-        {campaigns.length === 0 ? (
-          <Card className="md:col-span-2 xl:col-span-3">
-            <CardHeader>
-              <CardTitle>{emptyTitle}</CardTitle>
-              <CardDescription>{emptyDescription}</CardDescription>
-            </CardHeader>
-          </Card>
-        ) : (
-          campaigns.map((game) => (
-            <CampaignCard
-              key={game.id}
-              currentUserId={currentUserId}
-              game={game}
-            />
-          ))
-        )}
-      </div>
-    </section>
-  );
-}
 
 export default async function Home() {
   const [session, games, shadowOverrideEnabled] = await Promise.all([
@@ -68,18 +23,7 @@ export default async function Home() {
   const initialClockTime = new Date();
   const userId = session?.user?.id;
   const yourCampaigns = userId
-    ? games
-        .filter((game) => game.participantUserIds.includes(userId))
-        .sort((leftGame, rightGame) => {
-          const leftIsUsersTurn = leftGame.activePlayerUserId === userId;
-          const rightIsUsersTurn = rightGame.activePlayerUserId === userId;
-
-          if (leftIsUsersTurn === rightIsUsersTurn) {
-            return 0;
-          }
-
-          return leftIsUsersTurn ? -1 : 1;
-        })
+    ? games.filter((game) => game.participantUserIds.includes(userId))
     : [];
   const activeCampaigns = userId
     ? games.filter((game) => !game.participantUserIds.includes(userId))
@@ -144,6 +88,7 @@ export default async function Home() {
               emptyTitle="No campaigns assigned to you"
               emptyDescription="Join a Shadow Cloud campaign through Discord to see your active turns here."
               currentUserId={userId}
+              hasSortingOptions
             />
           ) : null}
           <CampaignList

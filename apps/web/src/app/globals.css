@@ -5,6 +5,13 @@
   --foreground: #fb923c;
   --card: rgba(0, 0, 0, 0.9);
   --card-foreground: #fb923c;
+  --popover: #000000;
+  --popover-foreground: #fed7aa;
+  --accent: rgba(251, 146, 60, 0.2);
+  --accent-foreground: #fff7ed;
+  --border: rgba(251, 146, 60, 0.45);
+  --input: #fb923c;
+  --muted-foreground: rgba(253, 186, 116, 0.7);
   --ring: #fb923c;
   --terminal-scanline-color: rgba(251, 146, 60, 0.15);
 }
@@ -12,6 +19,13 @@
 .terminal-override-active {
   --foreground: #f87171;
   --card-foreground: #f87171;
+  --popover: #000000;
+  --popover-foreground: #fecaca;
+  --accent: rgba(248, 113, 113, 0.2);
+  --accent-foreground: #fff1f2;
+  --border: rgba(248, 113, 113, 0.45);
+  --input: #f87171;
+  --muted-foreground: rgba(252, 165, 165, 0.7);
   --ring: #f87171;
   --terminal-scanline-color: rgba(248, 113, 113, 0.18);
 }
@@ -23,6 +37,13 @@
   --font-mono: var(--font-geist-mono);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-muted-foreground: var(--muted-foreground);
   --color-ring: var(--ring);
 }
 
