@@ -1,5 +1,6 @@
 import { ConflictException } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { TurnMutationsService } from '../src/games/services/turn-mutations.service';
 
 const prismaMock = vi.hoisted(() => ({
   game: {
@@ -43,15 +44,15 @@ vi.mock('../src/games/support/discord-user.helpers', () => ({
   upsertDiscordUser: discordUserHelpersMock.upsertDiscordUser,
 }));
 
-const { GamesTurnService } = await import(
-  '../src/games/services/games-turn.service'
-);
+const { GamesTurnService } =
+  await import('../src/games/services/games-turn.service');
 
 type GamesTurnServiceConstructor = new (
   authService: never,
   fileStorage: never,
   botNotifications: never,
   turnRecords: never,
+  turnMutations: never,
 ) => InstanceType<typeof GamesTurnService>;
 
 function createGame(override = {}) {
@@ -93,21 +94,6 @@ function createGame(override = {}) {
   };
 }
 
-function gamePlayer(
-  id: string,
-  userId: string,
-  displayName: string,
-  turnOrder: number,
-) {
-  return {
-    id,
-    userId,
-    user: { id: userId, displayName, identities: [] },
-    role: 'PLAYER',
-    turnOrder,
-  };
-}
-
 function createTransaction() {
   const game = createGame();
 
@@ -139,6 +125,9 @@ function createService() {
   const turnRecords = {
     transitionTurn: vi.fn(async () => ({})),
   };
+  const turnMutations = {
+    skipPlayerTurn: vi.fn<TurnMutationsService['skipPlayerTurn']>(),
+  };
 
   return {
     service: new (GamesTurnService as unknown as GamesTurnServiceConstructor)(
@@ -146,8 +135,10 @@ function createService() {
       {} as never,
       {} as never,
       turnRecords as never,
+      turnMutations as never,
     ),
     turnRecords,
+    turnMutations,
   };
 }
 
@@ -167,7 +158,6 @@ describe('GamesTurnService administrative turn transitions', () => {
   it.each([
     ['active occupied-seat replacement', 'REPLACED'],
     ['active-player resignation', 'RESIGNED'],
-    ['organizer skip', 'SKIPPED'],
   ])('%s transitions timing with %s', async (name, reason) => {
     const transaction = createTransaction();
     prismaMock.$transaction.mockImplementation(async (callback) =>
@@ -189,17 +179,12 @@ describe('GamesTurnService administrative turn transitions', () => {
     }
 
     if (name === 'active-player resignation') {
-      prismaMock.authIdentity.findUnique.mockResolvedValue({ userId: 'user-1' });
+      prismaMock.authIdentity.findUnique.mockResolvedValue({
+        userId: 'user-1',
+      });
       await service.resignPlayerFromDiscord({
         discordThreadId: 'thread-1',
         playerDiscordId: 'discord-1',
-      });
-    }
-
-    if (name === 'organizer skip') {
-      await service.skipPlayerTurn({
-        discordThreadId: 'thread-1',
-        callerDiscordId: 'discord-2',
       });
     }
 
@@ -367,57 +352,42 @@ describe('GamesTurnService administrative turn transitions', () => {
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
   });
 
-  it('rejects an emptied next skip seat before advancing the turn', async () => {
-    const game = createGame();
-    const transaction = createTransaction();
-    transaction.gamePlayer.findMany.mockResolvedValue([
-      game.players[0],
-      { ...game.players[1], userId: null, user: null } as never,
-    ]);
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
-    );
-    const { service, turnRecords } = createService();
-
-    await expect(
-      service.skipPlayerTurn({
+  it.each(['committed result', 'error'])(
+    'delegates skip unchanged and propagates the %s without caller-owned writes',
+    async (outcome) => {
+      const { service, turnRecords, turnMutations } = createService();
+      const input = Object.freeze({
         discordThreadId: 'thread-1',
         callerDiscordId: 'discord-2',
-      }),
-    ).rejects.toBeInstanceOf(ConflictException);
+      });
+      const result = {
+        gameId: 'game-1',
+        slug: 'ashes',
+        name: 'Ashes',
+        skippedPlayer: { displayName: 'Alpha', turnOrder: 1 },
+        nextPlayer: {
+          displayName: 'Overlord',
+          discordId: 'discord-2',
+          turnOrder: 2,
+        },
+      };
+      const error = new ConflictException('The active turn changed.');
 
-    expect(transaction.turnState.update).not.toHaveBeenCalled();
-    expect(turnRecords.transitionTurn).not.toHaveBeenCalled();
-  });
+      if (outcome === 'committed result') {
+        turnMutations.skipPlayerTurn.mockResolvedValue(result);
+        await expect(service.skipPlayerTurn(input)).resolves.toBe(result);
+      } else {
+        turnMutations.skipPlayerTurn.mockRejectedValue(error);
+        await expect(service.skipPlayerTurn(input)).rejects.toBe(error);
+      }
 
-  it('rejects a reordered successor before advancing the skipped turn', async () => {
-    const players = [
-      gamePlayer('entry-1', 'user-1', 'Alpha', 1),
-      gamePlayer('entry-2', 'user-2', 'Overlord', 2),
-      gamePlayer('entry-3', 'user-3', 'Third', 3),
-    ];
-    const game = createGame({ players });
-    prismaMock.game.findUnique.mockResolvedValue(game);
-    const transaction = createTransaction();
-    transaction.turnState.findUnique.mockResolvedValue(game.turnState);
-    transaction.gamePlayer.findMany.mockResolvedValue([
-      gamePlayer('entry-3', 'user-3', 'Third', 1),
-      gamePlayer('entry-2', 'user-2', 'Overlord', 2),
-      gamePlayer('entry-1', 'user-1', 'Alpha', 3),
-    ]);
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
-    );
-    const { service, turnRecords } = createService();
-
-    await expect(
-      service.skipPlayerTurn({
-        discordThreadId: 'thread-1',
-        callerDiscordId: 'discord-2',
-      }),
-    ).rejects.toBeInstanceOf(ConflictException);
-
-    expect(transaction.turnState.update).not.toHaveBeenCalled();
-    expect(turnRecords.transitionTurn).not.toHaveBeenCalled();
-  });
+      expect(turnMutations.skipPlayerTurn).toHaveBeenCalledExactlyOnceWith(
+        input,
+      );
+      expect(turnMutations.skipPlayerTurn.mock.calls[0][0]).toBe(input);
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+      expect(turnRecords.transitionTurn).not.toHaveBeenCalled();
+      expect(discordUserHelpersMock.upsertDiscordUser).not.toHaveBeenCalled();
+    },
+  );
 });

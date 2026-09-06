@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { prisma } from '../database';
 import { BotNotificationsService } from './bot-notifications.service';
 import { FileStorageService } from './file-storage.service';
 import { GamesController } from './games.controller';
@@ -10,6 +11,7 @@ import { GamesRegistrationService } from './services/games-registration.service'
 import { TurnRecordsService } from './services/turn-records.service';
 import { TurnRemindersService } from './services/turn-reminders.service';
 import { GamesTurnService } from './services/games-turn.service';
+import { TurnMutationsService } from './services/turn-mutations.service';
 
 @Module({
   imports: [AuthModule],
@@ -20,6 +22,12 @@ import { GamesTurnService } from './services/games-turn.service';
     GamesQueryService,
     GamesRegistrationService,
     TurnRecordsService,
+    {
+      provide: TurnMutationsService,
+      useFactory: (turnRecords: TurnRecordsService) =>
+        new TurnMutationsService(prisma, turnRecords),
+      inject: [TurnRecordsService],
+    },
     TurnRemindersService,
     GamesTurnService,
     FileStorageService,

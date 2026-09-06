@@ -148,6 +148,7 @@ model Game {
   turnReminderGraceHours  Int                   @default(12)
   turnReminderRepeatHours Int                   @default(24)
   turnRemindersEnabled    Boolean               @default(true)
+  turnRevision            Int                   @default(0)
   createdAt               DateTime              @default(now())
   updatedAt               DateTime              @updatedAt
   organizerId             String

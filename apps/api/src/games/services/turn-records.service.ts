@@ -3,7 +3,7 @@ import {
   type Prisma,
   type TurnRecord,
   TurnCompletionReason,
-} from '../../database';
+} from '@prisma/client';
 import {
   calculateFirstReminderAt,
   calculateNextReminderAt,

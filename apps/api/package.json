@@ -13,7 +13,7 @@
     "start:debug": "dotenv -e ../../.env -- nest start --debug --watch",
     "start:prod": "dotenv -e ../../.env -- node dist/main",
     "lint": "pnpm run prisma:generate && eslint \"src/**/*.ts\"",
-    "test": "vitest run",
+    "test": "pnpm run prisma:generate && vitest run",
     "typecheck": "pnpm run prisma:generate && tsc --noEmit",
     "prisma:generate": "dotenv -e ../../.env -- prisma generate --schema prisma/schema.prisma",
     "prisma:migrate": "dotenv -e ../../.env -- prisma migrate dev --schema prisma/schema.prisma",

@@ -34,6 +34,7 @@ import type {
 import { resolveUploadSaveNaming } from '../support/upload-save-naming';
 import { resolveActivePlayerEntry } from '../support/turn-state.utils';
 import { TurnRecordsService } from './turn-records.service';
+import { TurnMutationsService } from './turn-mutations.service';
 
 @Injectable()
 export class GamesTurnService {
@@ -42,6 +43,7 @@ export class GamesTurnService {
     private readonly fileStorage: FileStorageService,
     private readonly botNotifications: BotNotificationsService,
     private readonly turnRecords: TurnRecordsService,
+    private readonly turnMutations: TurnMutationsService,
   ) {}
 
   private async assertGameManagementAccess(input: {
@@ -1256,155 +1258,6 @@ export class GamesTurnService {
   }
 
   async skipPlayerTurn(input: SkipDiscordPlayerDto) {
-    const game = await prisma.game.findUnique({
-      where: { discordThreadId: input.discordThreadId },
-      include: {
-        players: {
-          include: { user: { include: { identities: true } } },
-          orderBy: { turnOrder: 'asc' },
-        },
-        turnState: true,
-      },
-    });
-
-    if (!game) {
-      throw new NotFoundException(
-        `Thread ${input.discordThreadId} is not linked to a game.`,
-      );
-    }
-
-    if (!game.turnState) {
-      throw new BadRequestException(
-        'This game has no active turn state. Upload a save file to start turns.',
-      );
-    }
-
-    const callerIdentity = await prisma.authIdentity.findUnique({
-      where: {
-        provider_providerId: {
-          provider: 'discord',
-          providerId: input.callerDiscordId,
-        },
-      },
-    });
-
-    if (!callerIdentity || callerIdentity.userId !== game.organizerId) {
-      throw new ForbiddenException(
-        'Only the game organizer can skip a player.',
-      );
-    }
-
-    const targetEntry = resolveActivePlayerEntry(game.players, game.turnState);
-
-    if (!targetEntry) {
-      throw new BadRequestException('No active player found for this game.');
-    }
-
-    const activePlayers = game.players.filter(
-      (player) => player.userId != null,
-    );
-
-    if (activePlayers.length <= 1) {
-      throw new BadRequestException(
-        'Cannot skip when there is only one active player.',
-      );
-    }
-
-    const targetIndex = game.players.findIndex(
-      (player) => player.id === targetEntry.id,
-    );
-    const remaining = activePlayers.filter(
-      (player) => player.id !== targetEntry.id,
-    );
-    const nextActivePlayer =
-      remaining.find(
-        (player) =>
-          game.players.findIndex((candidate) => candidate.id === player.id) >
-          targetIndex,
-      ) ?? remaining[0];
-
-    await prisma.$transaction(async (transaction) => {
-      const revalidated = await this.revalidateTurnSnapshot(transaction, {
-        gameId: game.id,
-        expectedTurnState: game.turnState,
-        expectedActiveSeat: targetEntry,
-      });
-      const activeSeat = revalidated.activeSeat;
-
-      if (!activeSeat) {
-        throw new ConflictException('The active turn could not be resolved.');
-      }
-
-      const { nextPlayer: revalidatedNextPlayer } = this.revalidateNextPlayer(
-        revalidated.players,
-        activeSeat,
-        {
-          id: nextActivePlayer.id,
-          userId: nextActivePlayer.userId!,
-          turnOrder: nextActivePlayer.turnOrder,
-          playerDisplayName: nextActivePlayer.user!.displayName,
-        },
-      );
-      const transitionedAt = new Date();
-
-      await transaction.turnState.update({
-        where: { gameId: game.id },
-        data: {
-          activePlayerId: revalidatedNextPlayer.userId!,
-          activePlayerEntryId: revalidatedNextPlayer.id,
-        },
-      });
-
-      await this.turnRecords.transitionTurn(transaction, {
-        gameId: game.id,
-        expectedCurrent: {
-          gamePlayerId: activeSeat.id,
-          userId: activeSeat.userId!,
-          roundNumber: revalidated.turnState.roundNumber,
-        },
-        next: {
-          gamePlayerId: revalidatedNextPlayer.id,
-          userId: revalidatedNextPlayer.userId,
-          seatNumber: revalidatedNextPlayer.turnOrder,
-          playerDisplayName: revalidatedNextPlayer.user!.displayName,
-          roundNumber: revalidated.turnState.roundNumber,
-        },
-        completionReason: TurnCompletionReason.SKIPPED,
-        transitionedAt,
-      });
-
-      await transaction.auditEvent.create({
-        data: {
-          gameId: game.id,
-          actorId: callerIdentity.userId,
-          eventType: AuditEventType.TURN_SKIPPED,
-          payload: JSON.stringify({
-            skippedPlayerDisplayName: targetEntry.user?.displayName ?? null,
-            skippedPlayerTurnOrder: targetEntry.turnOrder,
-            nextPlayerDisplayName:
-              revalidatedNextPlayer.user?.displayName ?? null,
-            nextPlayerTurnOrder: revalidatedNextPlayer.turnOrder,
-          }),
-        },
-      });
-    });
-
-    return {
-      gameId: game.id,
-      slug: game.slug,
-      name: game.name,
-      skippedPlayer: {
-        displayName: targetEntry.user?.displayName ?? null,
-        turnOrder: targetEntry.turnOrder,
-      },
-      nextPlayer: {
-        displayName: nextActivePlayer.user?.displayName ?? null,
-        discordId:
-          nextActivePlayer.user?.identities?.find(
-            (identity) => identity.provider === 'discord',
-          )?.providerId ?? null,
-        turnOrder: nextActivePlayer.turnOrder,
-      },
-    };
+    return this.turnMutations.skipPlayerTurn(input);
   }
 }
