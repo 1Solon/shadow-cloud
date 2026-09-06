@@ -12,6 +12,32 @@ import {
 } from '@prisma/client';
 import type { SkipDiscordPlayerDto } from '../dto/skip-discord-player.dto';
 import { TurnRecordsService } from './turn-records.service';
+import type { TurnMutationDependencies } from './turn-mutations/dependencies';
+import { uploadSave } from './turn-mutations/upload';
+import type {
+  UploadedSaveFile,
+  UploadSaveSafetyMetadata,
+} from '../support/game-payload.types';
+import type { ReorderSeatOrderDto } from '../dto/reorder-seat-order.dto';
+import { reorderSeatOrder } from './turn-mutations/seat-order';
+import type { ReplaceDiscordPlayerDto } from '../dto/replace-discord-player.dto';
+import {
+  replacePlayerInSeat,
+  resignPlayerFromDiscord,
+} from './turn-mutations/membership';
+import type { ResignDiscordPlayerDto } from '../dto/resign-discord-player.dto';
+import type { CreateDiscordGameDto } from '../dto/create-discord-game.dto';
+import {
+  approveRegistrationRequest,
+  createGameFromDiscordInit,
+  rejectRegistrationRequest,
+} from './turn-mutations/registration';
+import {
+  transferHost,
+  updateGameMetadata,
+} from './turn-mutations/administration';
+import type { TransferHostDto } from '../dto/transfer-host.dto';
+import type { UpdateGameMetadataDto } from '../dto/update-game-metadata.dto';
 
 const skipGameInclude = {
   players: {
@@ -28,7 +54,114 @@ export class TurnMutationsService {
   constructor(
     private readonly database: PrismaClient,
     private readonly turnRecords: TurnRecordsService,
+    private readonly dependencies: TurnMutationDependencies = {},
   ) {}
+
+  async transferHost(
+    gameId: string,
+    userId: string | undefined,
+    input: TransferHostDto,
+  ) {
+    return transferHost(
+      this.database,
+      this.turnRecords,
+      this.dependencies,
+      gameId,
+      userId,
+      input,
+    );
+  }
+
+  async updateGameMetadata(
+    gameId: string,
+    userId: string | undefined,
+    input: UpdateGameMetadataDto,
+  ) {
+    return updateGameMetadata(
+      this.database,
+      this.turnRecords,
+      this.dependencies,
+      gameId,
+      userId,
+      input,
+    );
+  }
+
+  async rejectRegistrationRequest(
+    requestId: string,
+    discordMessageId?: string,
+    approverDiscordId?: string,
+  ) {
+    return rejectRegistrationRequest(
+      this.database,
+      requestId,
+      discordMessageId,
+      approverDiscordId,
+    );
+  }
+
+  async approveRegistrationRequest(
+    requestId: string,
+    discordMessageId?: string,
+    approverDiscordId?: string,
+  ) {
+    return approveRegistrationRequest(
+      this.database,
+      this.turnRecords,
+      requestId,
+      discordMessageId,
+      approverDiscordId,
+    );
+  }
+
+  async createGameFromDiscordInit(input: CreateDiscordGameDto) {
+    return createGameFromDiscordInit(
+      this.database,
+      this.turnRecords,
+      this.dependencies,
+      input,
+    );
+  }
+
+  async replacePlayerInSeat(input: ReplaceDiscordPlayerDto) {
+    return replacePlayerInSeat(this.database, this.turnRecords, input);
+  }
+
+  async resignPlayerFromDiscord(input: ResignDiscordPlayerDto) {
+    return resignPlayerFromDiscord(this.database, this.turnRecords, input);
+  }
+
+  async reorderSeatOrder(
+    gameId: string,
+    userId: string | undefined,
+    input: ReorderSeatOrderDto,
+  ) {
+    return reorderSeatOrder(
+      this.database,
+      this.turnRecords,
+      this.dependencies,
+      gameId,
+      userId,
+      input,
+    );
+  }
+
+  uploadSave(
+    gameId: string,
+    userId: string | undefined,
+    file: UploadedSaveFile,
+    metadata: UploadSaveSafetyMetadata = {},
+  ) {
+    return uploadSave(
+      this.database,
+      this.turnRecords,
+      this.dependencies,
+      gameId,
+      userId,
+      file,
+      metadata,
+    );
+  }
 
   async skipPlayerTurn(input: SkipDiscordPlayerDto) {
     const observed = await this.findSkipGame(

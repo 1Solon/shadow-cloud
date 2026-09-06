@@ -51,6 +51,31 @@ type SynchronizeOpenRoundInput = {
 
 @Injectable()
 export class TurnRecordsService {
+  /** Validate a preserved turn without resetting its clock or reminder schedule. */
+  async assertCurrentTurn(
+    transaction: Prisma.TransactionClient,
+    gameId: string,
+  ): Promise<void> {
+    const state = await transaction.turnState.findUnique({ where: { gameId } });
+    if (!state) return;
+    const seats = await transaction.gamePlayer.findMany({
+      where: {
+        gameId,
+        ...(state.activePlayerEntryId == null
+          ? { userId: state.activePlayerId }
+          : { id: state.activePlayerEntryId }),
+      },
+    });
+    if (seats.length !== 1 || seats[0].userId !== state.activePlayerId) {
+      throw new ConflictException('The active turn could not be resolved.');
+    }
+    await this.findMatchingOpenRecord(transaction, gameId, {
+      gamePlayerId: seats[0].id,
+      userId: state.activePlayerId,
+      roundNumber: state.roundNumber,
+    });
+  }
+
   async createInitialTurn(
     transaction: Prisma.TransactionClient,
     input: CreateInitialTurnInput,

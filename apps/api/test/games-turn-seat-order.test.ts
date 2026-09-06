@@ -1,372 +1,53 @@
-import { BadRequestException, ConflictException } from '@nestjs/common';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ConflictException } from '@nestjs/common';
+import { describe, expect, it, vi } from 'vitest';
 
-const prismaMock = vi.hoisted(() => ({
-  game: {
-    findFirst: vi.fn(),
-  },
-  $transaction: vi.fn(),
+// This transport seam must not use a production database singleton.
+vi.mock('../src/database', async () => ({
+  ...(await import('@prisma/client')),
+  prisma: {},
 }));
+const { GamesTurnService } =
+  await import('../src/games/services/games-turn.service');
 
-vi.mock('../src/database', () => ({
-  AuditEventType: {
-    TURN_REASSIGNED: 'TURN_REASSIGNED',
-  },
-  GameRole: {
-    ORGANIZER: 'ORGANIZER',
-    PLAYER: 'PLAYER',
-  },
-  TurnCompletionReason: {
-    REASSIGNED: 'REASSIGNED',
-  },
-  prisma: prismaMock,
-}));
-
-const { GamesTurnService } = await import(
-  '../src/games/services/games-turn.service'
-);
-
-type GamesTurnServiceConstructor = new (
-  authService: never,
-  fileStorage: never,
-  botNotifications: never,
-  turnRecords: never,
-) => InstanceType<typeof GamesTurnService>;
-
-function createGame(override = {}) {
-  const game = {
-    id: 'game-1',
-    gameNumber: 1,
-    slug: 'ashes',
-    name: 'Ashes',
-    playerCount: 2,
-    organizerId: 'user-1',
-    players: [
-      {
-        id: 'entry-1',
-        userId: 'user-1',
-        user: {
-          id: 'user-1',
-          displayName: 'Overlord',
-        },
-        role: 'ORGANIZER',
-        turnOrder: 1,
-      },
-      {
-        id: 'entry-2',
-        userId: 'user-2',
-        user: {
-          id: 'user-2',
-          displayName: 'Other',
-        },
-        role: 'PLAYER',
-        turnOrder: 2,
-      },
-    ],
-    turnState: {
-      activePlayerId: 'user-1',
-      activePlayerEntryId: 'entry-1',
-      roundNumber: 4,
-    },
-  };
-
-  return {
-    ...game,
-    ...override,
-  };
-}
-
-function createService() {
-  const turnRecords = {
-    transitionTurn: vi.fn(async () => ({})),
-  };
-
-  return {
-    service: new (GamesTurnService as unknown as GamesTurnServiceConstructor)(
-    {
-      isUserShadowOverride: vi.fn(async () => false),
-    } as never,
-    {} as never,
-    {} as never,
-    turnRecords as never,
-    ),
-    turnRecords,
-  };
-}
-
-function createTransaction() {
-  const game = createGame();
-
-  return {
-    gamePlayer: {
-      findMany: vi.fn(async () => game.players),
-      update: vi.fn(async () => ({})),
-      deleteMany: vi.fn(async () => ({ count: 0 })),
-    },
-    game: {
-      update: vi.fn(async () => ({})),
-    },
-    turnState: {
-      findUnique: vi.fn(async () => game.turnState),
-      update: vi.fn(async () => ({})),
-    },
-    auditEvent: {
-      create: vi.fn(async () => ({})),
-    },
-  };
-}
-
-describe('GamesTurnService seat order organizer clearing', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    prismaMock.game.findFirst.mockResolvedValue(createGame());
-  });
-
-  it('clears an organizer seat while preserving game ownership', async () => {
-    const transaction = createTransaction();
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
-    );
-
-    await createService().service.reorderSeatOrder('1', 'user-1', {
-      seatEntryIds: ['entry-1', 'entry-2'],
-      clearedSeatEntryIds: ['entry-1'],
-      activePlayerEntryId: 'entry-2',
-    });
-
-    expect(transaction.game.update).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          organizerId: expect.any(String),
-        }),
-      }),
-    );
-    expect(transaction.gamePlayer.update).toHaveBeenCalledWith({
-      where: { id: 'entry-1' },
-      data: {
-        turnOrder: 1,
-        userId: null,
-        role: 'PLAYER',
-      },
-    });
-    expect(transaction.turnState.update).toHaveBeenCalledWith({
-      where: { gameId: 'game-1' },
-      data: {
-        activePlayerId: 'user-2',
-        activePlayerEntryId: 'entry-2',
-      },
-    });
-  });
-
-  it('removes an organizer seat while preserving game ownership', async () => {
-    const transaction = createTransaction();
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
-    );
-
-    await createService().service.reorderSeatOrder('1', 'user-1', {
-      seatEntryIds: ['entry-2'],
-      removedSeatEntryIds: ['entry-1'],
-      activePlayerEntryId: 'entry-2',
-    });
-
-    expect(transaction.game.update).toHaveBeenCalledWith({
-      where: { id: 'game-1' },
-      data: {
-        playerCount: 1,
-      },
-    });
-    expect(transaction.game.update).not.toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          organizerId: expect.any(String),
-        }),
-      }),
-    );
-    expect(transaction.gamePlayer.deleteMany).toHaveBeenCalledWith({
-      where: {
-        gameId: 'game-1',
-        id: {
-          in: ['entry-1'],
-        },
-      },
-    });
-  });
-
-  it('explains that occupied seats must be cleared before removal', async () => {
-    await expect(
-      createService().service.reorderSeatOrder('1', 'user-1', {
-        seatEntryIds: ['entry-2'],
-        clearedSeatEntryIds: ['entry-1'],
-        removedSeatEntryIds: ['entry-1'],
-        activePlayerEntryId: 'entry-2',
-      }),
-    ).rejects.toThrow(
-      'Occupied seats must be cleared and saved before they can be removed.',
-    );
-    expect(prismaMock.$transaction).not.toHaveBeenCalled();
-  });
-
-  it('still rejects clearing the only occupied seat', async () => {
-    prismaMock.game.findFirst.mockResolvedValue(
-      createGame({
-        playerCount: 1,
-        players: [
-          {
-            id: 'entry-1',
-            userId: 'user-1',
-            user: {
-              id: 'user-1',
-              displayName: 'Overlord',
-            },
-            role: 'ORGANIZER',
-            turnOrder: 1,
-          },
-        ],
-        turnState: {
-          activePlayerId: 'user-1',
-          activePlayerEntryId: 'entry-1',
-          roundNumber: 4,
-        },
-      }),
-    );
-
-    await expect(
-      createService().service.reorderSeatOrder('1', 'user-1', {
-        seatEntryIds: ['entry-1'],
-        clearedSeatEntryIds: ['entry-1'],
-      }),
-    ).rejects.toBeInstanceOf(BadRequestException);
-    expect(prismaMock.$transaction).not.toHaveBeenCalled();
-  });
-
-  it('still rejects removing the only occupied seat', async () => {
-    prismaMock.game.findFirst.mockResolvedValue(
-      createGame({
-        playerCount: 1,
-        players: [
-          {
-            id: 'entry-1',
-            userId: 'user-1',
-            user: {
-              id: 'user-1',
-              displayName: 'Overlord',
-            },
-            role: 'ORGANIZER',
-            turnOrder: 1,
-          },
-        ],
-        turnState: {
-          activePlayerId: 'user-1',
-          activePlayerEntryId: 'entry-1',
-          roundNumber: 4,
-        },
-      }),
-    );
-
-    await expect(
-      createService().service.reorderSeatOrder('1', 'user-1', {
-        seatEntryIds: [],
-        removedSeatEntryIds: ['entry-1'],
-      }),
-    ).rejects.toBeInstanceOf(BadRequestException);
-    expect(prismaMock.$transaction).not.toHaveBeenCalled();
-  });
-
-  it('does not reset timing when the active seat stays selected', async () => {
-    const transaction = createTransaction();
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
-    );
-    const { service, turnRecords } = createService();
-
-    await service.reorderSeatOrder('1', 'user-1', {
-      seatEntryIds: ['entry-2', 'entry-1'],
-      activePlayerEntryId: 'entry-1',
-    });
-
-    expect(turnRecords.transitionTurn).not.toHaveBeenCalled();
-  });
-
-  it('transitions timing when the organizer selects another active seat', async () => {
-    const transaction = createTransaction();
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
-    );
-    const { service, turnRecords } = createService();
-
-    await service.reorderSeatOrder('1', 'user-1', {
-      seatEntryIds: ['entry-1', 'entry-2'],
-      activePlayerEntryId: 'entry-2',
-    });
-
-    expect(turnRecords.transitionTurn).toHaveBeenCalledWith(
-      transaction,
-      expect.objectContaining({
-        gameId: 'game-1',
-        completionReason: 'REASSIGNED',
-        expectedCurrent: {
-          gamePlayerId: 'entry-1',
-          userId: 'user-1',
-          roundNumber: 4,
-        },
-        next: expect.objectContaining({
-          gamePlayerId: 'entry-2',
-          userId: 'user-2',
-          seatNumber: 2,
-          playerDisplayName: 'Other',
-          roundNumber: 4,
-        }),
-        transitionedAt: expect.any(Date),
-      }),
-    );
-  });
-
-  it('rejects stale turn state before changing the roster', async () => {
-    const transaction = createTransaction();
-    transaction.turnState.findUnique.mockResolvedValue({
-      activePlayerId: 'user-2',
-      activePlayerEntryId: 'entry-2',
-      roundNumber: 4,
-    });
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
-    );
-
-    await expect(
-      createService().service.reorderSeatOrder('1', 'user-1', {
-        seatEntryIds: ['entry-1', 'entry-2'],
-        activePlayerEntryId: 'entry-2',
-      }),
-    ).rejects.toBeInstanceOf(ConflictException);
-
-    expect(transaction.gamePlayer.update).not.toHaveBeenCalled();
-    expect(transaction.turnState.update).not.toHaveBeenCalled();
-  });
-
-  it('rejects an unresolved active seat before changing the roster', async () => {
-    const unresolvedTurnState = {
-      activePlayerId: 'missing-user',
-      activePlayerEntryId: 'missing-entry',
-      roundNumber: 4,
+describe('GamesTurnService Seat Order compatibility', () => {
+  it('passes the existing request unchanged to the mutation owner and returns its response', async () => {
+    const input = {
+      seatEntryIds: ['seat-2', 'seat-1'],
+      clearedSeatEntryIds: ['seat-1'],
+      removedSeatEntryIds: ['seat-open'],
+      activePlayerEntryId: 'seat-2',
     };
-    prismaMock.game.findFirst.mockResolvedValue(
-      createGame({ turnState: unresolvedTurnState }),
+    const response = {
+      gameId: 'game-1',
+      slug: 'ashes',
+      name: 'Ashes',
+      activePlayerEntryId: 'seat-2',
+      players: [
+        { seatEntryId: 'seat-2', turnOrder: 1, displayName: 'Other' },
+        { seatEntryId: 'seat-1', turnOrder: 2, displayName: null },
+      ],
+    };
+    const mutations = { reorderSeatOrder: vi.fn(async () => response) };
+    const service = new GamesTurnService(mutations as never);
+    expect(await service.reorderSeatOrder('1', 'user-1', input)).toBe(response);
+    expect(mutations.reorderSeatOrder).toHaveBeenCalledExactlyOnceWith(
+      '1',
+      'user-1',
+      input,
     );
-    const transaction = createTransaction();
-    transaction.turnState.findUnique.mockResolvedValue(unresolvedTurnState);
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
-    );
+  });
 
-    await expect(
-      createService().service.reorderSeatOrder('1', 'user-1', {
-        seatEntryIds: ['entry-1', 'entry-2'],
-        activePlayerEntryId: 'entry-2',
+  it('preserves mutation errors without silently retrying the intent', async () => {
+    const conflict = new ConflictException('The roster changed.');
+    const mutations = {
+      reorderSeatOrder: vi.fn(async () => {
+        throw conflict;
       }),
-    ).rejects.toBeInstanceOf(ConflictException);
-
-    expect(transaction.gamePlayer.update).not.toHaveBeenCalled();
-    expect(transaction.turnState.update).not.toHaveBeenCalled();
+    };
+    const service = new GamesTurnService(mutations as never);
+    await expect(
+      service.reorderSeatOrder('1', 'user-1', { seatEntryIds: ['seat-1'] }),
+    ).rejects.toBe(conflict);
+    expect(mutations.reorderSeatOrder).toHaveBeenCalledTimes(1);
   });
 });

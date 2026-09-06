@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { GameRole, type Prisma } from '../../database';
+import { GameRole, type Prisma } from '@prisma/client';
 
 type SeatRecord = {
   id: string;

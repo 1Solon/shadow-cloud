@@ -1,18 +1,16 @@
 import {
-  BadRequestException,
-  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
-import { prisma, type Prisma } from '../database';
+import { prisma } from '../database';
 import { GamesQueryService } from './services/games-query.service';
 import { GamesFileService } from './services/games-file.service';
 import { GamesRegistrationService } from './services/games-registration.service';
 import { GamesTurnService } from './services/games-turn.service';
-import { TurnRecordsService } from './services/turn-records.service';
+import { TurnMutationsService } from './services/turn-mutations.service';
 import { FileStorageService } from './file-storage.service';
 import type { AuthorizeHostCommandDto } from './dto/authorize-host-command.dto';
 import type { CreateDiscordGameDto } from './dto/create-discord-game.dto';
@@ -24,18 +22,7 @@ import type { ResignDiscordPlayerDto } from './dto/resign-discord-player.dto';
 import type { SkipDiscordPlayerDto } from './dto/skip-discord-player.dto';
 import type { TransferHostDto } from './dto/transfer-host.dto';
 import type { UpdateGameMetadataDto } from './dto/update-game-metadata.dto';
-import {
-  buildCanonicalThreadName,
-  mapArmyCount,
-  mapDlcMode,
-  mapGameMode,
-  mapZoneCount,
-  metadataUpdatedAuditEventType,
-  normalizeGameNameInput,
-  normalizeNotesInput,
-} from './support/game-configuration.helpers';
 import { buildGameIdentifierWhere } from './support/game-lookup.helpers';
-import { syncGameSeatCount } from './support/seat-count.helpers';
 import type {
   GameDetailResponse,
   GameMetadataResponse,
@@ -54,7 +41,7 @@ export class GamesService {
     private readonly gamesTurn: GamesTurnService,
     private readonly fileStorage: FileStorageService,
     private readonly gamesFile: GamesFileService,
-    private readonly turnRecords: TurnRecordsService = new TurnRecordsService(),
+    private readonly turnMutations: TurnMutationsService,
   ) {}
 
   private async assertGameManagementAccess(input: {
@@ -88,314 +75,7 @@ export class GamesService {
     userId: string | undefined,
     input: UpdateGameMetadataDto,
   ): Promise<GameMetadataResponse> {
-    if (!userId) {
-      throw new UnauthorizedException(
-        'Authenticated user id is missing from the token.',
-      );
-    }
-
-    const game = await prisma.game.findFirst({
-      where: {
-        ...buildGameIdentifierWhere(gameId),
-      },
-      include: {
-        players: {
-          select: {
-            id: true,
-            turnOrder: true,
-            userId: true,
-          },
-        },
-        turnState: true,
-      },
-    });
-
-    if (!game) {
-      throw new NotFoundException(`Game ${gameId} was not found.`);
-    }
-
-    await this.assertGameManagementAccess({
-      organizerId: game.organizerId,
-      userId,
-      deniedMessage: 'Only the game organizer can edit game metadata.',
-    });
-
-    const previousMetadata = {
-      gameNumber: game.gameNumber,
-      name: game.name,
-      roundNumber: game.turnState?.roundNumber ?? 1,
-      playerCount: game.playerCount,
-      hasAiPlayers: game.hasAiPlayers,
-      dlcMode: game.dlcMode,
-      gameMode: game.gameMode,
-      techLevel: game.techLevel,
-      zoneCount: game.zoneCount,
-      armyCount: game.armyCount,
-      notes: (game as { notes?: string | null }).notes ?? null,
-      turnTargetHours: game.turnTargetHours,
-      turnReminderGraceHours: game.turnReminderGraceHours,
-      turnReminderRepeatHours: game.turnReminderRepeatHours,
-      turnRemindersEnabled: game.turnRemindersEnabled,
-    };
-    const nextName =
-      input.name === undefined
-        ? previousMetadata.name
-        : normalizeGameNameInput(input.name);
-
-    if (nextName == null) {
-      throw new BadRequestException('Game name cannot be empty.');
-    }
-
-    const occupiedSeatCount = game.players.filter(
-      (player) => player.userId != null,
-    ).length;
-    const nextMetadata = {
-      gameNumber: input.gameNumber ?? previousMetadata.gameNumber,
-      name: nextName,
-      roundNumber: input.roundNumber ?? previousMetadata.roundNumber,
-      playerCount: input.playerCount ?? previousMetadata.playerCount,
-      hasAiPlayers: input.hasAiPlayers ?? previousMetadata.hasAiPlayers,
-      dlcMode:
-        input.dlcMode == null
-          ? previousMetadata.dlcMode
-          : mapDlcMode(input.dlcMode),
-      gameMode:
-        input.gameMode == null
-          ? previousMetadata.gameMode
-          : mapGameMode(input.gameMode),
-      techLevel: input.techLevel ?? previousMetadata.techLevel,
-      zoneCount:
-        input.zoneCount == null
-          ? previousMetadata.zoneCount
-          : mapZoneCount(input.zoneCount),
-      armyCount:
-        input.armyCount == null
-          ? previousMetadata.armyCount
-          : mapArmyCount(input.armyCount),
-      notes:
-        input.notes === undefined
-          ? previousMetadata.notes
-          : normalizeNotesInput(input.notes),
-      turnTargetHours:
-        input.turnTargetHours ?? previousMetadata.turnTargetHours,
-      turnReminderGraceHours:
-        input.turnReminderGraceHours ?? previousMetadata.turnReminderGraceHours,
-      turnReminderRepeatHours:
-        input.turnReminderRepeatHours ??
-        previousMetadata.turnReminderRepeatHours,
-      turnRemindersEnabled:
-        input.turnRemindersEnabled ?? previousMetadata.turnRemindersEnabled,
-    };
-
-    if (
-      input.playerCount != null &&
-      nextMetadata.playerCount != null &&
-      nextMetadata.playerCount < occupiedSeatCount
-    ) {
-      throw new BadRequestException(
-        `Seat limit cannot be lower than the ${occupiedSeatCount} occupied seats in this game.`,
-      );
-    }
-
-    let committedMetadata = nextMetadata;
-
-    await prisma.$transaction(async (transaction) => {
-      if (
-        input.gameNumber != null &&
-        input.gameNumber !== previousMetadata.gameNumber
-      ) {
-        const existingGame = await transaction.game.findUnique({
-          where: { gameNumber: input.gameNumber },
-          select: { id: true },
-        });
-
-        if (existingGame && existingGame.id !== game.id) {
-          throw new ConflictException(
-            `Game number ${input.gameNumber} is already in use.`,
-          );
-        }
-      }
-
-      const currentPolicy = await transaction.game.findUnique({
-        where: { id: game.id },
-        select: {
-          turnTargetHours: true,
-          turnReminderGraceHours: true,
-          turnReminderRepeatHours: true,
-          turnRemindersEnabled: true,
-        },
-      });
-
-      if (!currentPolicy) {
-        throw new NotFoundException(`Game ${gameId} was not found.`);
-      }
-
-      const transactionNextMetadata = {
-        ...nextMetadata,
-        turnTargetHours: input.turnTargetHours ?? currentPolicy.turnTargetHours,
-        turnReminderGraceHours:
-          input.turnReminderGraceHours ?? currentPolicy.turnReminderGraceHours,
-        turnReminderRepeatHours:
-          input.turnReminderRepeatHours ??
-          currentPolicy.turnReminderRepeatHours,
-        turnRemindersEnabled:
-          input.turnRemindersEnabled ?? currentPolicy.turnRemindersEnabled,
-      };
-      const policyChanged =
-        transactionNextMetadata.turnTargetHours !==
-          currentPolicy.turnTargetHours ||
-        transactionNextMetadata.turnReminderGraceHours !==
-          currentPolicy.turnReminderGraceHours ||
-        transactionNextMetadata.turnReminderRepeatHours !==
-          currentPolicy.turnReminderRepeatHours ||
-        transactionNextMetadata.turnRemindersEnabled !==
-          currentPolicy.turnRemindersEnabled;
-
-      if (
-        input.roundNumber != null &&
-        nextMetadata.roundNumber !== previousMetadata.roundNumber
-      ) {
-        await transaction.turnState.update({
-          where: { gameId: game.id },
-          data: {
-            roundNumber: nextMetadata.roundNumber,
-          },
-        });
-
-        await this.turnRecords.synchronizeOpenRound(transaction, {
-          gameId: game.id,
-          expectedCurrent: {
-            gamePlayerId: game.turnState?.activePlayerEntryId ?? null,
-            userId: game.turnState!.activePlayerId,
-          },
-          roundNumber: nextMetadata.roundNumber,
-        });
-      }
-
-      if (input.playerCount != null && nextMetadata.playerCount != null) {
-        await syncGameSeatCount({
-          transaction,
-          gameId: game.id,
-          players: game.players,
-          targetPlayerCount: nextMetadata.playerCount,
-        });
-      }
-
-      const gameUpdateData: Prisma.GameUpdateInput = {};
-
-      if (input.gameNumber != null) {
-        gameUpdateData.gameNumber = transactionNextMetadata.gameNumber;
-      }
-
-      if (input.name !== undefined) {
-        gameUpdateData.name = transactionNextMetadata.name;
-      }
-
-      if (input.playerCount != null) {
-        gameUpdateData.playerCount = transactionNextMetadata.playerCount;
-      }
-
-      if (input.hasAiPlayers != null) {
-        gameUpdateData.hasAiPlayers = transactionNextMetadata.hasAiPlayers;
-      }
-
-      if (input.dlcMode != null) {
-        gameUpdateData.dlcMode = transactionNextMetadata.dlcMode;
-      }
-
-      if (input.gameMode != null) {
-        gameUpdateData.gameMode = transactionNextMetadata.gameMode;
-      }
-
-      if (input.techLevel != null) {
-        gameUpdateData.techLevel = transactionNextMetadata.techLevel;
-      }
-
-      if (input.zoneCount != null) {
-        gameUpdateData.zoneCount = transactionNextMetadata.zoneCount;
-      }
-
-      if (input.armyCount != null) {
-        gameUpdateData.armyCount = transactionNextMetadata.armyCount;
-      }
-
-      if (input.notes !== undefined) {
-        gameUpdateData.notes = transactionNextMetadata.notes;
-      }
-
-      if (input.turnTargetHours !== undefined) {
-        gameUpdateData.turnTargetHours =
-          transactionNextMetadata.turnTargetHours;
-      }
-
-      if (input.turnReminderGraceHours !== undefined) {
-        gameUpdateData.turnReminderGraceHours =
-          transactionNextMetadata.turnReminderGraceHours;
-      }
-
-      if (input.turnReminderRepeatHours !== undefined) {
-        gameUpdateData.turnReminderRepeatHours =
-          transactionNextMetadata.turnReminderRepeatHours;
-      }
-
-      if (input.turnRemindersEnabled !== undefined) {
-        gameUpdateData.turnRemindersEnabled =
-          transactionNextMetadata.turnRemindersEnabled;
-      }
-
-      if (Object.keys(gameUpdateData).length > 0) {
-        await transaction.game.update({
-          where: { id: game.id },
-          data: gameUpdateData,
-        });
-      }
-
-      if (policyChanged) {
-        await this.turnRecords.recalculateOpenReminder(transaction, {
-          gameId: game.id,
-        });
-      }
-
-      committedMetadata = transactionNextMetadata;
-
-      await transaction.auditEvent.create({
-        data: {
-          gameId: game.id,
-          actorId: userId,
-          eventType: metadataUpdatedAuditEventType,
-          payload: JSON.stringify({
-            previousMetadata: { ...previousMetadata, ...currentPolicy },
-            nextMetadata: committedMetadata,
-          }),
-        },
-      });
-    });
-
-    const nextThreadName = buildCanonicalThreadName({
-      gameNumber: committedMetadata.gameNumber,
-      name: committedMetadata.name,
-      playerCount: committedMetadata.playerCount,
-      gameMode: committedMetadata.gameMode,
-      techLevel: committedMetadata.techLevel,
-      zoneCount: committedMetadata.zoneCount,
-      armyCount: committedMetadata.armyCount,
-    });
-
-    if (game.discordThreadId) {
-      await this.gamesRegistration.notifyThreadRename({
-        id: game.id,
-        slug: game.slug,
-        name: committedMetadata.name,
-        threadName: nextThreadName,
-        discordThreadId: game.discordThreadId,
-      });
-    }
-
-    return {
-      id: game.id,
-      slug: game.slug,
-      ...committedMetadata,
-    };
+    return this.turnMutations.updateGameMetadata(gameId, userId, input);
   }
 
   async getGameStatus(gameId: string, userId?: string) {

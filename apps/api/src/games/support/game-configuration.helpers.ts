@@ -4,7 +4,7 @@ import {
   GameDlcMode,
   GameMode,
   ZoneCountPreset,
-} from '../../database';
+} from '@prisma/client';
 import {
   CreateDiscordGameArmyCount,
   CreateDiscordGameDlcMode,

@@ -61,6 +61,33 @@ export class FileStorageService {
     };
   }
 
+  async stageUpload(input: {
+    gameId: string;
+    gameNumber: number;
+    turn: number;
+    seat: number;
+    playerName: string;
+    originalName: string;
+    content: Buffer;
+  }) {
+    const gameDirectory = join(
+      this.rootDirectory,
+      sanitizeSegment(input.gameId),
+    );
+    const fileName = buildSaveFileName(input);
+    // Keep the canonical download name, but isolate bytes for each attempt so
+    // rollback can remove its file without touching another committed upload.
+    const storagePath = join(
+      gameDirectory,
+      `upload-${randomUUID()}-${fileName}`,
+    );
+
+    await mkdir(gameDirectory, { recursive: true });
+    await writeFile(storagePath, input.content, { flag: 'wx' });
+
+    return { storagePath, fileName };
+  }
+
   async stageReplacement(input: {
     gameId: string;
     canonicalName: string;

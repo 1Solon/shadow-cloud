@@ -1,254 +1,388 @@
 import { ForbiddenException } from '@nestjs/common';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TurnMutationsService } from '../src/games/services/turn-mutations.service';
+import { TurnRecordsService } from '../src/games/services/turn-records.service';
+import { createSqliteFixture } from './support/sqlite-fixture';
 
-const prismaMock = vi.hoisted(() => ({
-  game: { findFirst: vi.fn() },
-  $transaction: vi.fn(),
+// GamesService still imports transport services that use the application DB.
+// The mutation boundary below is injected with an independently migrated DB.
+vi.mock('../src/database', async () => ({
+  ...(await import('@prisma/client')),
+  prisma: {},
 }));
-
-vi.mock('../src/database', () => ({
-  prisma: prismaMock,
-  AuditEventType: { METADATA_UPDATED: 'METADATA_UPDATED' },
-  ArmyCountPreset: {},
-  GameDlcMode: {},
-  GameMode: {},
-  ZoneCountPreset: {},
-}));
-
 const { GamesService } = await import('../src/games/games.service');
-const { TurnRecordsService } =
-  await import('../src/games/services/turn-records.service');
 
 const startedAt = new Date('2026-07-10T00:00:00.000Z');
+let fixture: Awaited<ReturnType<typeof createSqliteFixture>>;
 
-function createGame(override = {}) {
-  return {
-    id: 'game-1',
-    slug: 'ashes',
-    gameNumber: 1,
-    name: 'Ashes',
-    organizerId: 'organizer-1',
-    playerCount: 2,
-    hasAiPlayers: false,
-    dlcMode: null,
-    gameMode: null,
-    techLevel: null,
-    zoneCount: null,
-    armyCount: null,
-    notes: null,
-    turnTargetHours: 24,
-    turnReminderGraceHours: 12,
-    turnReminderRepeatHours: 24,
-    turnRemindersEnabled: true,
-    players: [
-      { id: 'seat-1', userId: 'player-1', turnOrder: 1 },
-      { id: 'seat-2', userId: 'organizer-1', turnOrder: 2 },
+beforeEach(async () => {
+  fixture = await createSqliteFixture();
+  await fixture.db.user.createMany({
+    data: [
+      { id: 'owner', email: 'owner@example.com', displayName: 'Overlord' },
+      { id: 'shadow', email: 'shadow@example.com', displayName: 'Shadow' },
     ],
-    turnState: {
-      activePlayerId: 'player-1',
-      activePlayerEntryId: 'seat-1',
-      roundNumber: 4,
-    },
-    ...override,
-  };
-}
-
-function createTransaction(openRecord = {}, currentGame = createGame()) {
-  return {
-    game: {
-      findUnique: vi.fn(async () => currentGame),
-      update: vi.fn(async ({ data }) => Object.assign(currentGame, data)),
-    },
-    turnState: { update: vi.fn(async () => ({})) },
-    turnRecord: {
-      findMany: vi.fn(async () => [
-        {
-          id: 'turn-1',
-          gameId: 'game-1',
-          gamePlayerId: 'seat-1',
-          userId: 'player-1',
-          roundNumber: 4,
-          startedAt,
-          reminderCount: 0,
-          lastReminderAt: null,
-          ...openRecord,
+  });
+  await fixture.db.game.create({
+    data: {
+      id: 'game',
+      slug: 'ashes',
+      gameNumber: 1,
+      name: 'Ashes',
+      organizerId: 'owner',
+      discordThreadId: 'thread',
+      playerCount: 1,
+      players: {
+        create: {
+          id: 'seat',
+          userId: 'owner',
+          role: 'ORGANIZER',
+          turnOrder: 1,
         },
-      ]),
-      update: vi.fn(async () => ({})),
+      },
+      turnState: {
+        create: {
+          activePlayerId: 'owner',
+          activePlayerEntryId: 'seat',
+          roundNumber: 4,
+        },
+      },
+      turnRecords: {
+        create: {
+          id: 'turn',
+          gamePlayerId: 'seat',
+          userId: 'owner',
+          seatNumber: 1,
+          roundNumber: 4,
+          playerDisplayName: 'Overlord',
+          startedAt,
+          nextReminderAt: new Date('2026-07-11T12:00:00.000Z'),
+        },
+      },
     },
-    auditEvent: { create: vi.fn(async () => ({})) },
-  };
-}
+  });
+});
+afterEach(async () => {
+  await fixture?.close();
+});
 
-function createService(
-  shadowOverride = false,
-  turnRecords = new TurnRecordsService(),
-) {
-  return new GamesService(
-    { isUserShadowOverride: vi.fn(async () => shadowOverride) } as never,
-    {} as never,
-    {} as never,
-    {} as never,
-    {} as never,
-    {} as never,
-    turnRecords,
+function createMutations(shadowOverride = false) {
+  const notifyThreadRenamed = vi.fn(async () => undefined);
+  const mutations = new TurnMutationsService(
+    fixture.db,
+    new TurnRecordsService(),
+    {
+      authService: { isUserShadowOverride: async () => shadowOverride },
+      botNotifications: {
+        notifyThreadRenamed,
+        notifySaveUploaded: vi.fn(),
+        notifyGameInitialized: vi.fn(),
+      },
+    },
   );
+  return { mutations, notifyThreadRenamed };
 }
 
-describe('GamesService turn policy metadata', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    prismaMock.game.findFirst.mockResolvedValue(createGame());
-  });
-
+describe('turn policy through the mutation boundary', () => {
   it.each([
-    ['organizer-1', false],
-    ['shadow-1', true],
-  ])('allows %s to edit the turn policy', async (userId, shadowOverride) => {
-    const transaction = createTransaction();
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
-    );
+    ['owner', false],
+    ['shadow', true],
+  ] as const)(
+    'allows %s to edit policy without advancing revision',
+    async (userId, shadowOverride) => {
+      await createMutations(shadowOverride).mutations.updateGameMetadata(
+        'game',
+        userId,
+        { turnTargetHours: 48 },
+      );
+      expect(
+        await fixture.db.game.findUniqueOrThrow({ where: { id: 'game' } }),
+      ).toMatchObject({ turnTargetHours: 48, turnRevision: 0 });
+      expect(
+        await fixture.db.turnRecord.findUniqueOrThrow({
+          where: { id: 'turn' },
+        }),
+      ).toMatchObject({
+        startedAt,
+        nextReminderAt: new Date('2026-07-12T12:00:00.000Z'),
+      });
+      expect(await fixture.db.auditEvent.findFirstOrThrow()).toMatchObject({
+        actorId: userId,
+      });
+    },
+  );
 
-    await createService(shadowOverride).updateGameMetadata('game-1', userId, {
-      turnTargetHours: 48,
-    });
-
-    expect(transaction.game.update).toHaveBeenCalledWith({
-      where: { id: 'game-1' },
-      data: { turnTargetHours: 48 },
-    });
-    expect(transaction.turnRecord.update).toHaveBeenCalledWith({
-      where: { id: 'turn-1' },
-      data: { nextReminderAt: new Date('2026-07-12T12:00:00.000Z') },
-    });
-  });
-
-  it('rejects a policy edit by a user without organizer or Shadow access', async () => {
+  it('rejects an unauthorized policy edit without audit or notification', async () => {
+    const { mutations, notifyThreadRenamed } = createMutations();
     await expect(
-      createService().updateGameMetadata('game-1', 'player-1', {
-        turnTargetHours: 48,
-      }),
+      mutations.updateGameMetadata('game', 'shadow', { turnTargetHours: 48 }),
     ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(await fixture.db.auditEvent.count()).toBe(0);
+    expect(notifyThreadRenamed).not.toHaveBeenCalled();
   });
 
-  it('clears the open due time when reminders are disabled', async () => {
-    const transaction = createTransaction();
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
-    );
-
-    await createService().updateGameMetadata('game-1', 'organizer-1', {
+  it('clears due time and cancels only pending nudges when reminders are disabled', async () => {
+    for (const status of [
+      'PENDING',
+      'PROCESSING',
+      'DELIVERED',
+      'FAILED',
+    ] as const) {
+      await fixture.db.notificationDelivery.create({
+        data: {
+          id: status,
+          status,
+          event: 'TURN_NUDGE',
+          gameId: 'game',
+          gameSlug: 'ashes',
+          turnRecordId: 'turn',
+          payload: '{}',
+        },
+      });
+    }
+    await fixture.db.notificationDelivery.create({
+      data: {
+        id: 'save',
+        event: 'SAVE_UPLOADED',
+        gameId: 'game',
+        gameSlug: 'ashes',
+        turnRecordId: 'turn',
+        payload: '{}',
+      },
+    });
+    const others = await fixture.db.notificationDelivery.findMany({
+      where: { id: { not: 'PENDING' } },
+      orderBy: { id: 'asc' },
+    });
+    await createMutations().mutations.updateGameMetadata('game', 'owner', {
       turnRemindersEnabled: false,
     });
-
-    expect(transaction.turnRecord.update).toHaveBeenCalledWith({
-      where: { id: 'turn-1' },
-      data: { nextReminderAt: null },
-    });
-    const auditEvents = transaction.auditEvent.create.mock.calls as unknown as [
-      { data: { payload: string } },
-    ][];
-    const auditPayload = JSON.parse(auditEvents[0]![0].data.payload) as {
-      nextMetadata: { turnRemindersEnabled: boolean };
-    };
-    expect(auditPayload.nextMetadata.turnRemindersEnabled).toBe(false);
+    expect(
+      await fixture.db.turnRecord.findUniqueOrThrow({ where: { id: 'turn' } }),
+    ).toMatchObject({ startedAt, nextReminderAt: null });
+    expect(
+      await fixture.db.notificationDelivery.findUniqueOrThrow({
+        where: { id: 'PENDING' },
+      }),
+    ).toMatchObject({ status: 'CANCELLED' });
+    expect(
+      await fixture.db.notificationDelivery.findMany({
+        where: { id: { not: 'PENDING' } },
+        orderBy: { id: 'asc' },
+      }),
+    ).toEqual(others);
+    expect(
+      JSON.parse((await fixture.db.auditEvent.findFirstOrThrow()).payload),
+    ).toMatchObject({ nextMetadata: { turnRemindersEnabled: false } });
   });
 
   it('recalculates a reminded open turn from its latest reminder', async () => {
-    const transaction = createTransaction({
-      reminderCount: 1,
-      lastReminderAt: new Date('2026-07-12T08:00:00.000Z'),
+    const lastReminderAt = new Date('2026-07-12T08:00:00.000Z');
+    await fixture.db.turnRecord.update({
+      where: { id: 'turn' },
+      data: { reminderCount: 1, lastReminderAt },
     });
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
-    );
-
-    await createService().updateGameMetadata('game-1', 'organizer-1', {
+    await createMutations().mutations.updateGameMetadata('game', 'owner', {
       turnReminderRepeatHours: 6,
     });
-
-    expect(transaction.turnRecord.update).toHaveBeenCalledWith({
-      where: { id: 'turn-1' },
-      data: { nextReminderAt: new Date('2026-07-12T14:00:00.000Z') },
+    expect(
+      await fixture.db.turnRecord.findUniqueOrThrow({ where: { id: 'turn' } }),
+    ).toMatchObject({
+      startedAt,
+      lastReminderAt,
+      reminderCount: 1,
+      nextReminderAt: new Date('2026-07-12T14:00:00.000Z'),
     });
   });
 
   it('keeps an undelivered turn on its first-reminder schedule after a repeat edit', async () => {
-    const transaction = createTransaction({
-      reminderCount: 0,
-      lastReminderAt: null,
-    });
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
-    );
-
-    await createService().updateGameMetadata('game-1', 'organizer-1', {
+    await createMutations().mutations.updateGameMetadata('game', 'owner', {
       turnReminderRepeatHours: 6,
     });
-
-    expect(transaction.turnRecord.update).toHaveBeenCalledWith({
-      where: { id: 'turn-1' },
-      data: { nextReminderAt: new Date('2026-07-11T12:00:00.000Z') },
+    expect(
+      await fixture.db.turnRecord.findUniqueOrThrow({ where: { id: 'turn' } }),
+    ).toMatchObject({
+      startedAt,
+      lastReminderAt: null,
+      reminderCount: 0,
+      nextReminderAt: new Date('2026-07-11T12:00:00.000Z'),
     });
   });
 
-  it('merges a policy edit with transaction-local concurrent policy fields', async () => {
-    const transaction = createTransaction(
-      {},
-      createGame({ turnReminderGraceHours: 6 }),
+  it('merges current policy and excluded metadata instead of writing the pre-read values', async () => {
+    const other = fixture.connect();
+    const transact = fixture.db.$transaction.bind(fixture.db);
+    vi.spyOn(fixture.db, '$transaction').mockImplementationOnce(
+      async (...args) => {
+        await other.game.update({
+          where: { id: 'game' },
+          data: {
+            turnReminderGraceHours: 6,
+            name: 'Renamed',
+            notes: 'Concurrent notes',
+          },
+        });
+        return transact(...args);
+      },
     );
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
+    const response = await createMutations().mutations.updateGameMetadata(
+      'game',
+      'owner',
+      { turnTargetHours: 48, roundNumber: 5 },
     );
-
-    const response = await createService().updateGameMetadata('game-1', 'organizer-1', {
-      turnTargetHours: 48,
-    });
-
-    expect(transaction.turnRecord.update).toHaveBeenCalledWith({
-      where: { id: 'turn-1' },
-      data: { nextReminderAt: new Date('2026-07-12T06:00:00.000Z') },
-    });
     expect(response).toMatchObject({
       turnTargetHours: 48,
       turnReminderGraceHours: 6,
+      name: 'Renamed',
+      notes: 'Concurrent notes',
     });
-    const auditEvents = transaction.auditEvent.create.mock.calls as unknown as [
-      { data: { payload: string } },
-    ][];
-    const auditPayload = JSON.parse(auditEvents[0]![0].data.payload) as {
-      nextMetadata: {
-        turnTargetHours: number;
-        turnReminderGraceHours: number;
-      };
-    };
-    expect(auditPayload.nextMetadata).toMatchObject({
-      turnTargetHours: 48,
+    expect(
+      await fixture.db.game.findUniqueOrThrow({ where: { id: 'game' } }),
+    ).toMatchObject({
+      turnRevision: 1,
       turnReminderGraceHours: 6,
+      name: 'Renamed',
+      notes: 'Concurrent notes',
+    });
+    expect(
+      await fixture.db.turnRecord.findUniqueOrThrow({ where: { id: 'turn' } }),
+    ).toMatchObject({
+      startedAt,
+      nextReminderAt: new Date('2026-07-12T06:00:00.000Z'),
+    });
+    expect(
+      JSON.parse((await fixture.db.auditEvent.findFirstOrThrow()).payload),
+    ).toMatchObject({
+      previousMetadata: {
+        turnReminderGraceHours: 6,
+        name: 'Renamed',
+        notes: 'Concurrent notes',
+      },
+      nextMetadata: {
+        turnTargetHours: 48,
+        turnReminderGraceHours: 6,
+        name: 'Renamed',
+        notes: 'Concurrent notes',
+      },
     });
   });
 
-  it('synchronizes the open turn round without resetting its timing', async () => {
-    const transaction = createTransaction();
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
-    );
-    await createService(false, new TurnRecordsService()).updateGameMetadata(
-      'game-1',
-      'organizer-1',
-      {
-        roundNumber: 5,
+  it('does not recalculate or cancel pending consequences for an effective policy no-op', async () => {
+    await fixture.db.notificationDelivery.create({
+      data: {
+        id: 'pending',
+        event: 'TURN_NUDGE',
+        gameId: 'game',
+        gameSlug: 'ashes',
+        turnRecordId: 'turn',
+        payload: '{}',
       },
-    );
+    });
+    const before = await fixture.db.turnRecord.findMany();
+    const nudges = await fixture.db.notificationDelivery.findMany();
+    await createMutations().mutations.updateGameMetadata('game', 'owner', {
+      turnTargetHours: 24,
+      turnReminderGraceHours: 12,
+      turnReminderRepeatHours: 24,
+      turnRemindersEnabled: true,
+    });
+    expect(await fixture.db.turnRecord.findMany()).toEqual(before);
+    expect(await fixture.db.notificationDelivery.findMany()).toEqual(nudges);
+    expect(
+      await fixture.db.game.findUniqueOrThrow({ where: { id: 'game' } }),
+    ).toMatchObject({ turnRevision: 0 });
+  });
 
-    expect(transaction.turnState.update).toHaveBeenCalledWith({
-      where: { gameId: 'game-1' },
-      data: { roundNumber: 5 },
+  it('synchronizes only the open round and preserves its timer', async () => {
+    await createMutations().mutations.updateGameMetadata('game', 'owner', {
+      roundNumber: 5,
     });
-    expect(transaction.turnRecord.update).toHaveBeenCalledWith({
-      where: { id: 'turn-1' },
-      data: { roundNumber: 5 },
+    expect(
+      await fixture.db.turnState.findUniqueOrThrow({
+        where: { gameId: 'game' },
+      }),
+    ).toMatchObject({ roundNumber: 5 });
+    expect(await fixture.db.turnRecord.findMany()).toEqual([
+      expect.objectContaining({
+        id: 'turn',
+        roundNumber: 5,
+        startedAt,
+        endedAt: null,
+      }),
+    ]);
+  });
+
+  it('notifies only after the mixed transaction is externally visible', async () => {
+    const { mutations, notifyThreadRenamed } = createMutations();
+    notifyThreadRenamed.mockImplementationOnce(async () => {
+      const external = fixture.connect();
+      expect(
+        await external.game.findUniqueOrThrow({ where: { id: 'game' } }),
+      ).toMatchObject({ name: 'New Ashes', turnRevision: 1 });
+      expect(
+        await external.turnState.findUniqueOrThrow({
+          where: { gameId: 'game' },
+        }),
+      ).toMatchObject({ roundNumber: 5 });
+      expect(await external.auditEvent.count()).toBe(1);
     });
+    await mutations.updateGameMetadata('game', 'owner', {
+      name: 'New Ashes',
+      roundNumber: 5,
+      playerCount: 2,
+    });
+    expect(notifyThreadRenamed).toHaveBeenCalledWith({
+      game: {
+        id: 'game',
+        slug: 'ashes',
+        name: 'New Ashes',
+        discordThreadId: 'thread',
+        threadName: '\u{1f538}1 : New Ashes (2S)',
+      },
+    });
+  });
+
+  it('does not notify after rollback', async () => {
+    const { mutations, notifyThreadRenamed } = createMutations();
+    await fixture.db
+      .$executeRawUnsafe(`CREATE TRIGGER reject_metadata AFTER INSERT ON AuditEvent
+      BEGIN SELECT RAISE(ABORT, 'rejected'); END`);
+    await expect(
+      mutations.updateGameMetadata('game', 'owner', {
+        name: 'New Ashes',
+        roundNumber: 5,
+      }),
+    ).rejects.toThrow();
+    expect(notifyThreadRenamed).not.toHaveBeenCalled();
+  });
+
+  it('GamesService delegates the whole mixed submission to the injected mutation boundary', async () => {
+    const { mutations } = createMutations();
+    const service = new GamesService(
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      {} as never,
+      mutations,
+    );
+    expect(
+      await service.updateGameMetadata('game', 'owner', {
+        name: 'New Ashes',
+        roundNumber: 5,
+        playerCount: 2,
+        turnTargetHours: 48,
+      }),
+    ).toMatchObject({
+      name: 'New Ashes',
+      roundNumber: 5,
+      playerCount: 2,
+      turnTargetHours: 48,
+    });
+    expect(
+      await fixture.db.game.findUniqueOrThrow({ where: { id: 'game' } }),
+    ).toMatchObject({ turnRevision: 1 });
+    expect(await fixture.db.auditEvent.count()).toBe(1);
   });
 });

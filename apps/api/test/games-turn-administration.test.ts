@@ -3,359 +3,117 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { TurnMutationsService } from '../src/games/services/turn-mutations.service';
 
 const prismaMock = vi.hoisted(() => ({
-  game: {
-    findFirst: vi.fn(),
-    findUnique: vi.fn(),
-  },
-  authIdentity: {
-    findUnique: vi.fn(),
-  },
-  gamePlayer: {
-    findFirst: vi.fn(),
-  },
+  game: { findFirst: vi.fn(), findUnique: vi.fn() },
+  authIdentity: { findUnique: vi.fn() },
   $transaction: vi.fn(),
 }));
 
-const discordUserHelpersMock = vi.hoisted(() => ({
-  upsertDiscordUser: vi.fn(),
-}));
-
-vi.mock('../src/database', () => ({
-  AuditEventType: {
-    PLAYER_REPLACED: 'PLAYER_REPLACED',
-    PLAYER_RESIGNED: 'PLAYER_RESIGNED',
-    ROSTER_UPDATED: 'ROSTER_UPDATED',
-    TURN_SKIPPED: 'TURN_SKIPPED',
-  },
-  GameRole: {
-    ORGANIZER: 'ORGANIZER',
-    PLAYER: 'PLAYER',
-  },
-  TurnCompletionReason: {
-    REPLACED: 'REPLACED',
-    RESIGNED: 'RESIGNED',
-    SKIPPED: 'SKIPPED',
-  },
+vi.mock('../src/database', async () => ({
+  ...(await import('@prisma/client')),
   prisma: prismaMock,
-}));
-
-vi.mock('../src/games/support/discord-user.helpers', () => ({
-  getDiscordIdentity: vi.fn(),
-  upsertDiscordUser: discordUserHelpersMock.upsertDiscordUser,
 }));
 
 const { GamesTurnService } =
   await import('../src/games/services/games-turn.service');
 
-type GamesTurnServiceConstructor = new (
-  authService: never,
-  fileStorage: never,
-  botNotifications: never,
-  turnRecords: never,
-  turnMutations: never,
-) => InstanceType<typeof GamesTurnService>;
-
-function createGame(override = {}) {
-  const players = [
-    {
-      id: 'entry-1',
-      userId: 'user-1',
-      user: { id: 'user-1', displayName: 'Alpha', identities: [] },
-      role: 'PLAYER',
-      turnOrder: 1,
-    },
-    {
-      id: 'entry-2',
-      userId: 'user-2',
-      user: { id: 'user-2', displayName: 'Overlord', identities: [] },
-      role: 'ORGANIZER',
-      turnOrder: 2,
-    },
-  ];
-
-  return {
-    id: 'game-1',
-    gameNumber: 1,
-    slug: 'ashes',
-    name: 'Ashes',
-    organizerId: 'user-2',
-    playerCount: 2,
-    players,
-    turnState: {
-      activePlayerId: 'user-1',
-      activePlayerEntryId: 'entry-1',
-      roundNumber: 4,
-    },
-    turnTargetHours: 24,
-    turnReminderGraceHours: 12,
-    turnReminderRepeatHours: 24,
-    turnRemindersEnabled: true,
-    ...override,
-  };
-}
-
-function createTransaction() {
-  const game = createGame();
-
-  return {
-    gamePlayer: {
-      create: vi.fn(),
-      findMany: vi.fn(async () => game.players),
-      update: vi.fn(async ({ where, data }) => ({
-        id: where.id,
-        user: data.userId
-          ? { id: data.userId, displayName: 'Replacement' }
-          : null,
-      })),
-    },
-    game: {
-      update: vi.fn(async () => ({})),
-    },
-    turnState: {
-      findUnique: vi.fn(async () => game.turnState),
-      update: vi.fn(async () => ({})),
-    },
-    auditEvent: {
-      create: vi.fn(async () => ({})),
-    },
-  };
-}
-
 function createService() {
-  const turnRecords = {
-    transitionTurn: vi.fn(async () => ({})),
-  };
   const turnMutations = {
+    replacePlayerInSeat: vi.fn<TurnMutationsService['replacePlayerInSeat']>(),
+    resignPlayerFromDiscord:
+      vi.fn<TurnMutationsService['resignPlayerFromDiscord']>(),
     skipPlayerTurn: vi.fn<TurnMutationsService['skipPlayerTurn']>(),
+    transferHost: vi.fn<TurnMutationsService['transferHost']>(),
   };
-
   return {
-    service: new (GamesTurnService as unknown as GamesTurnServiceConstructor)(
-      { isUserShadowOverride: vi.fn(async () => false) } as never,
-      {} as never,
-      {} as never,
-      turnRecords as never,
-      turnMutations as never,
-    ),
-    turnRecords,
+    service: new GamesTurnService(turnMutations as never),
     turnMutations,
   };
 }
 
-describe('GamesTurnService administrative turn transitions', () => {
+describe('GamesTurnService administrative intention delegation', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    prismaMock.game.findUnique.mockResolvedValue(createGame());
-    prismaMock.game.findFirst.mockResolvedValue(createGame());
-    prismaMock.authIdentity.findUnique.mockResolvedValue({ userId: 'user-2' });
-    prismaMock.gamePlayer.findFirst.mockResolvedValue(null);
-    discordUserHelpersMock.upsertDiscordUser.mockResolvedValue({
-      id: 'user-3',
-      displayName: 'Replacement',
-    });
   });
 
-  it.each([
-    ['active occupied-seat replacement', 'REPLACED'],
-    ['active-player resignation', 'RESIGNED'],
-  ])('%s transitions timing with %s', async (name, reason) => {
-    const transaction = createTransaction();
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
-    );
-    const { service, turnRecords } = createService();
-
-    if (name === 'active occupied-seat replacement') {
-      prismaMock.authIdentity.findUnique
-        .mockResolvedValueOnce({ userId: 'user-2' })
-        .mockResolvedValueOnce(null);
-      await service.replacePlayerInSeat({
+  it.each(['result', 'error'])(
+    'delegates replacement unchanged and propagates the %s',
+    async (outcome) => {
+      const { service, turnMutations } = createService();
+      const input = Object.freeze({
         discordThreadId: 'thread-1',
         callerDiscordId: 'discord-2',
         seatNumber: 1,
         newPlayerDiscordId: 'discord-3',
         newPlayerDisplayName: 'Replacement',
       });
-    }
-
-    if (name === 'active-player resignation') {
-      prismaMock.authIdentity.findUnique.mockResolvedValue({
-        userId: 'user-1',
-      });
-      await service.resignPlayerFromDiscord({
-        discordThreadId: 'thread-1',
-        playerDiscordId: 'discord-1',
-      });
-    }
-
-    const expectedNext =
-      reason === 'REPLACED'
-        ? {
-            gamePlayerId: 'entry-1',
-            userId: 'user-3',
-            seatNumber: 1,
-            playerDisplayName: 'Replacement',
-            roundNumber: 4,
-          }
-        : {
-            gamePlayerId: 'entry-2',
-            userId: 'user-2',
-            seatNumber: 2,
-            playerDisplayName: 'Overlord',
-            roundNumber: 4,
-          };
-
-    expect(turnRecords.transitionTurn).toHaveBeenCalledWith(
-      transaction,
-      expect.objectContaining({
+      const result = {
         gameId: 'game-1',
-        completionReason: reason,
-        expectedCurrent: {
-          gamePlayerId: 'entry-1',
-          userId: 'user-1',
-          roundNumber: 4,
+        slug: 'ashes',
+        name: 'Ashes',
+        player: {
+          displayName: 'Replacement',
+          turnOrder: 1,
+          tookActiveTurn: true,
         },
-        next: expectedNext,
-        transitionedAt: expect.any(Date),
-      }),
-    );
+      };
+      const error = new ConflictException('The selected seat changed.');
+      if (outcome === 'result') {
+        turnMutations.replacePlayerInSeat.mockResolvedValue(result);
+        await expect(service.replacePlayerInSeat(input)).resolves.toBe(result);
+      } else {
+        turnMutations.replacePlayerInSeat.mockRejectedValue(error);
+        await expect(service.replacePlayerInSeat(input)).rejects.toBe(error);
+      }
+      expect(turnMutations.replacePlayerInSeat).toHaveBeenCalledExactlyOnceWith(
+        input,
+      );
+      expect(turnMutations.replacePlayerInSeat.mock.calls[0][0]).toBe(input);
+      expect(prismaMock.game.findUnique).not.toHaveBeenCalled();
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    },
+  );
 
-    if (reason === 'REPLACED') {
-      expect(transaction.turnState.update).toHaveBeenCalledWith({
-        where: { gameId: 'game-1' },
-        data: {
-          activePlayerId: 'user-3',
-          activePlayerEntryId: 'entry-1',
-        },
-      });
-    }
-  });
-
-  it('does not reset timing when an inactive occupied seat is replaced', async () => {
-    const transaction = createTransaction();
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
-    );
-    prismaMock.authIdentity.findUnique
-      .mockResolvedValueOnce({ userId: 'user-2' })
-      .mockResolvedValueOnce(null);
-    const { service, turnRecords } = createService();
-
-    await service.replacePlayerInSeat({
-      discordThreadId: 'thread-1',
-      callerDiscordId: 'discord-2',
-      seatNumber: 2,
-      newPlayerDiscordId: 'discord-3',
-      newPlayerDisplayName: 'Replacement',
-    });
-
-    expect(turnRecords.transitionTurn).not.toHaveBeenCalled();
-  });
-
-  it('does not reset timing when an inactive player resigns', async () => {
-    const transaction = createTransaction();
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
-    );
-    prismaMock.authIdentity.findUnique.mockResolvedValue({ userId: 'user-2' });
-    const { service, turnRecords } = createService();
-
-    await service.resignPlayerFromDiscord({
-      discordThreadId: 'thread-1',
-      playerDiscordId: 'discord-2',
-    });
-
-    expect(turnRecords.transitionTurn).not.toHaveBeenCalled();
-  });
-
-  it('does not reset timing when host control transfers', async () => {
-    const transaction = createTransaction();
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
-    );
-    const { service, turnRecords } = createService();
-
-    await service.transferHost('1', 'user-2', {
-      targetPlayerEntryId: 'entry-1',
-    });
-
-    expect(turnRecords.transitionTurn).not.toHaveBeenCalled();
-  });
-
-  it('rejects replacing a seat when the active turn changed', async () => {
-    const transaction = createTransaction();
-    transaction.turnState.findUnique.mockResolvedValue({
-      activePlayerId: 'user-2',
-      activePlayerEntryId: 'entry-2',
-      roundNumber: 4,
-    });
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
-    );
-    prismaMock.authIdentity.findUnique
-      .mockResolvedValueOnce({ userId: 'user-2' })
-      .mockResolvedValueOnce(null);
-
-    await expect(
-      createService().service.replacePlayerInSeat({
-        discordThreadId: 'thread-1',
-        callerDiscordId: 'discord-2',
-        seatNumber: 2,
-        newPlayerDiscordId: 'discord-3',
-        newPlayerDisplayName: 'Replacement',
-      }),
-    ).rejects.toBeInstanceOf(ConflictException);
-
-    expect(transaction.gamePlayer.update).not.toHaveBeenCalled();
-    expect(transaction.turnState.update).not.toHaveBeenCalled();
-  });
-
-  it('rejects resigning when the active turn changed', async () => {
-    const transaction = createTransaction();
-    transaction.turnState.findUnique.mockResolvedValue({
-      activePlayerId: 'user-2',
-      activePlayerEntryId: 'entry-2',
-      roundNumber: 4,
-    });
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
-    );
-    prismaMock.authIdentity.findUnique.mockResolvedValue({ userId: 'user-1' });
-
-    await expect(
-      createService().service.resignPlayerFromDiscord({
+  it.each(['result', 'error'])(
+    'delegates resignation unchanged and propagates the %s',
+    async (outcome) => {
+      const { service, turnMutations } = createService();
+      const input = Object.freeze({
         discordThreadId: 'thread-1',
         playerDiscordId: 'discord-1',
-      }),
-    ).rejects.toBeInstanceOf(ConflictException);
+      });
+      const result = {
+        gameId: 'game-1',
+        slug: 'ashes',
+        name: 'Ashes',
+        player: { displayName: 'Alpha', turnOrder: 1, wasOrganizer: false },
+      };
+      const error = new ConflictException('The resigning player changed.');
+      if (outcome === 'result') {
+        turnMutations.resignPlayerFromDiscord.mockResolvedValue(result);
+        await expect(service.resignPlayerFromDiscord(input)).resolves.toBe(
+          result,
+        );
+      } else {
+        turnMutations.resignPlayerFromDiscord.mockRejectedValue(error);
+        await expect(service.resignPlayerFromDiscord(input)).rejects.toBe(
+          error,
+        );
+      }
+      expect(
+        turnMutations.resignPlayerFromDiscord,
+      ).toHaveBeenCalledExactlyOnceWith(input);
+      expect(turnMutations.resignPlayerFromDiscord.mock.calls[0][0]).toBe(
+        input,
+      );
+      expect(prismaMock.game.findUnique).not.toHaveBeenCalled();
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    },
+  );
 
-    expect(transaction.gamePlayer.update).not.toHaveBeenCalled();
-    expect(transaction.turnState.update).not.toHaveBeenCalled();
-  });
-
-  it('retains the duplicate-user rejection before opening a transaction', async () => {
-    prismaMock.authIdentity.findUnique
-      .mockResolvedValueOnce({ userId: 'user-2' })
-      .mockResolvedValueOnce({ userId: 'user-1' });
-    prismaMock.gamePlayer.findFirst.mockResolvedValue({ id: 'entry-1' });
-
-    await expect(
-      createService().service.replacePlayerInSeat({
-        discordThreadId: 'thread-1',
-        callerDiscordId: 'discord-2',
-        seatNumber: 2,
-        newPlayerDiscordId: 'discord-1',
-        newPlayerDisplayName: 'Alpha',
-      }),
-    ).rejects.toBeInstanceOf(ConflictException);
-
-    expect(prismaMock.$transaction).not.toHaveBeenCalled();
-  });
-
-  it.each(['committed result', 'error'])(
-    'delegates skip unchanged and propagates the %s without caller-owned writes',
+  it.each(['result', 'error'])(
+    'delegates skip unchanged and propagates the %s',
     async (outcome) => {
-      const { service, turnRecords, turnMutations } = createService();
+      const { service, turnMutations } = createService();
       const input = Object.freeze({
         discordThreadId: 'thread-1',
         callerDiscordId: 'discord-2',
@@ -372,22 +130,54 @@ describe('GamesTurnService administrative turn transitions', () => {
         },
       };
       const error = new ConflictException('The active turn changed.');
-
-      if (outcome === 'committed result') {
+      if (outcome === 'result') {
         turnMutations.skipPlayerTurn.mockResolvedValue(result);
         await expect(service.skipPlayerTurn(input)).resolves.toBe(result);
       } else {
         turnMutations.skipPlayerTurn.mockRejectedValue(error);
         await expect(service.skipPlayerTurn(input)).rejects.toBe(error);
       }
-
       expect(turnMutations.skipPlayerTurn).toHaveBeenCalledExactlyOnceWith(
         input,
       );
       expect(turnMutations.skipPlayerTurn.mock.calls[0][0]).toBe(input);
       expect(prismaMock.$transaction).not.toHaveBeenCalled();
-      expect(turnRecords.transitionTurn).not.toHaveBeenCalled();
-      expect(discordUserHelpersMock.upsertDiscordUser).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['result', 'error'])(
+    'delegates Overlord transfer unchanged and propagates the %s without caller-owned writes',
+    async (outcome) => {
+      const { service, turnMutations } = createService();
+      const input = Object.freeze({ targetPlayerEntryId: 'seat-1' });
+      const result = {
+        gameId: 'game-1',
+        gameNumber: 1,
+        slug: 'ashes',
+        name: 'Ashes',
+        organizerId: 'user-1',
+        organizerDisplayName: 'Alpha',
+        player: { displayName: 'Alpha', turnOrder: 1 },
+      };
+      const error = new ConflictException('The target changed.');
+      if (outcome === 'result') {
+        turnMutations.transferHost.mockResolvedValue(result);
+        await expect(service.transferHost('1', 'user-2', input)).resolves.toBe(
+          result,
+        );
+      } else {
+        turnMutations.transferHost.mockRejectedValue(error);
+        await expect(service.transferHost('1', 'user-2', input)).rejects.toBe(
+          error,
+        );
+      }
+      expect(turnMutations.transferHost).toHaveBeenCalledExactlyOnceWith(
+        '1',
+        'user-2',
+        input,
+      );
+      expect(prismaMock.game.findFirst).not.toHaveBeenCalled();
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
     },
   );
 });

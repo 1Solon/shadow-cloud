@@ -1,473 +1,386 @@
-import { ConflictException } from '@nestjs/common';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { FileStorageService } from '../src/games/file-storage.service';
+import { TurnMutationsService } from '../src/games/services/turn-mutations.service';
+import { TurnRecordsService } from '../src/games/services/turn-records.service';
+import { createSqliteFixture } from './support/sqlite-fixture';
 
-const prismaMock = vi.hoisted(() => ({
-  game: {
-    findFirst: vi.fn(),
-  },
-  fileVersion: {
-    findFirst: vi.fn(),
-  },
-  $transaction: vi.fn(),
-}));
+const file = {
+  originalname: 'turn.se1',
+  buffer: Buffer.from([1, 2, 3]),
+  size: 3,
+};
+let fixture: Awaited<ReturnType<typeof createSqliteFixture>>;
+let storage: FileStorageService;
+let directory: string;
+let mutations: TurnMutationsService;
+let duringStorage: () => Promise<void>;
 
-vi.mock('../src/database', () => ({
-  AuditEventType: {
-    FILE_UPLOADED: 'FILE_UPLOADED',
-    TURN_ADVANCED: 'TURN_ADVANCED',
-  },
-  GameRole: {
-    ORGANIZER: 'ORGANIZER',
-    PLAYER: 'PLAYER',
-  },
-  TurnCompletionReason: {
-    SAVE_UPLOADED: 'SAVE_UPLOADED',
-  },
-  prisma: prismaMock,
-}));
-
-const { GamesTurnService } = await import(
-  '../src/games/services/games-turn.service'
-);
-
-type GamesTurnServiceConstructor = new (
-  authService: never,
-  fileStorage: never,
-  botNotifications: never,
-  turnRecords: never,
-) => InstanceType<typeof GamesTurnService>;
-
-function createGame(override = {}) {
-  const players = [
-    {
-      id: 'entry-1',
-      userId: 'user-1',
-      user: {
-        id: 'user-1',
-        displayName: 'Solon',
-        identities: [],
-      },
-      role: 'ORGANIZER',
-      turnOrder: 1,
-    },
-    {
-      id: 'entry-2',
-      userId: 'user-2',
-      user: {
-        id: 'user-2',
-        displayName: 'Other',
-        identities: [],
-      },
-      role: 'PLAYER',
-      turnOrder: 2,
-    },
-  ];
-
-  const game = {
-    id: 'game-1',
-    gameNumber: 1,
-    slug: 'ashes',
-    name: 'Ashes',
-    discordThreadId: null,
-    organizerId: 'user-1',
-    organizer: {
-      identities: [],
-    },
-    players,
-    turnState: {
-      activePlayerId: 'user-1',
-      activePlayerEntryId: 'entry-1',
-      roundNumber: 4,
-    },
-  };
-
-  return {
-    ...game,
-    ...override,
-  };
-}
-
-function gamePlayer(
-  id: string,
-  userId: string,
-  displayName: string,
-  turnOrder: number,
-) {
-  return {
-    id,
-    userId,
-    user: { id: userId, displayName, identities: [] },
-    role: 'PLAYER',
-    turnOrder,
-  };
-}
-
-function createService() {
-  const fileStorage = {
-    storeFile: vi.fn(async () => ({
-      storagePath: '/saves/game-1/turn.se1',
-      fileName: '1-T4-S2-Other.se1',
-    })),
-    removeFile: vi.fn(async () => undefined),
-  };
-  const botNotifications = {
-    notifySaveUploaded: vi.fn(async () => undefined),
-  };
-  const turnRecords = {
-    transitionTurn: vi.fn(async () => ({})),
-  };
-
-  return {
-    service: new (GamesTurnService as unknown as GamesTurnServiceConstructor)(
-      {} as never,
-      fileStorage as never,
-      botNotifications as never,
-      turnRecords as never,
-    ),
-    fileStorage,
-    botNotifications,
-    turnRecords,
-  };
-}
-
-describe('GamesTurnService upload safety', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    prismaMock.game.findFirst.mockResolvedValue(createGame());
+beforeEach(async () => {
+  fixture = await createSqliteFixture();
+  directory = await mkdtemp(join(tmpdir(), 'shadow-cloud-upload-'));
+  const previous = process.env.SHADOW_CLOUD_SAVE_DIR;
+  process.env.SHADOW_CLOUD_SAVE_DIR = directory;
+  storage = new FileStorageService();
+  if (previous === undefined) delete process.env.SHADOW_CLOUD_SAVE_DIR;
+  else process.env.SHADOW_CLOUD_SAVE_DIR = previous;
+  const { db } = fixture;
+  await db.user.create({
+    data: { id: 'user-1', email: 'alpha@example.com', displayName: 'Alpha' },
   });
-
-  it('returns the existing upload result for a repeated idempotency key without advancing turn again', async () => {
-    prismaMock.fileVersion.findFirst.mockResolvedValue({
-      id: 'file-version-1',
-      originalName: '1-T4-S2-Other.se1',
-      versionNumber: 7,
-      uploadedAt: new Date('2026-05-03T10:00:00.000Z'),
-    });
-    const { service, fileStorage, botNotifications } = createService();
-
-    const result = await service.uploadSave(
-      '1',
-      'user-1',
-      {
-        originalname: 'turn.se1',
-        buffer: Buffer.from([1, 2, 3]),
-      } as never,
-      {
-        contentHash: 'sha256:abc',
-        idempotencyKey: 'game-1:user-1:abc',
-        expectedActivePlayerEntryId: 'entry-1',
-        expectedActivePlayerUserId: 'user-1',
-        expectedRoundNumber: 4,
-        expectedLatestFileVersionId: null,
-      },
-    );
-
-    expect(result).toMatchObject({
-      fileVersionId: 'file-version-1',
-      versionNumber: 7,
-      originalName: '1-T4-S2-Other.se1',
-      idempotentReplay: true,
-    });
-    expect(fileStorage.storeFile).not.toHaveBeenCalled();
-    expect(prismaMock.$transaction).not.toHaveBeenCalled();
-    expect(botNotifications.notifySaveUploaded).not.toHaveBeenCalled();
+  await db.user.create({
+    data: {
+      id: 'user-2',
+      email: 'overlord@example.com',
+      displayName: 'Overlord',
+    },
   });
-
-  it('rejects stale expected turn state before storing the file', async () => {
-    prismaMock.fileVersion.findFirst.mockResolvedValue(null);
-    const { service, fileStorage } = createService();
-
-    await expect(
-      service.uploadSave(
-        '1',
-        'user-1',
-        {
-          originalname: 'turn.se1',
-          buffer: Buffer.from([1, 2, 3]),
-        } as never,
-        {
-          contentHash: 'sha256:abc',
-          idempotencyKey: 'game-1:user-1:abc',
-          expectedActivePlayerEntryId: 'entry-1',
-          expectedActivePlayerUserId: 'user-1',
-          expectedRoundNumber: 3,
-          expectedLatestFileVersionId: null,
-        },
-      ),
-    ).rejects.toBeInstanceOf(ConflictException);
-    expect(fileStorage.storeFile).not.toHaveBeenCalled();
-  });
-
-  it('stores a wraparound upload with the incremented round for seat one', async () => {
-    const game = createGame({
-      turnState: {
-        activePlayerId: 'user-2',
-        activePlayerEntryId: 'entry-2',
-        roundNumber: 4,
-      },
-    });
-    prismaMock.game.findFirst.mockResolvedValue(game);
-    prismaMock.fileVersion.findFirst.mockResolvedValue(null);
-    const transaction = {
-      fileVersion: {
-        findFirst: vi.fn(async () => null),
-        create: vi.fn(async () => ({
-          id: 'file-version-8',
-          originalName: '1-T5-S1-Solon.se1',
-          uploadedAt: new Date('2026-05-03T10:00:00.000Z'),
-        })),
-      },
-      auditEvent: {
-        create: vi.fn(async () => ({})),
-      },
-      gamePlayer: {
-        findMany: vi.fn(async () => game.players),
+  await db.game.create({
+    data: {
+      id: 'game-1',
+      gameNumber: 1,
+      slug: 'ashes',
+      name: 'Ashes',
+      organizerId: 'user-2',
+      players: {
+        create: [
+          { id: 'seat-1', userId: 'user-1', turnOrder: 1 },
+          { id: 'seat-open', turnOrder: 2 },
+          { id: 'seat-2', userId: 'user-2', turnOrder: 3, role: 'ORGANIZER' },
+        ],
       },
       turnState: {
-        findUnique: vi.fn(async () => game.turnState),
-        update: vi.fn(async () => ({
-          roundNumber: 5,
-        })),
-      },
-    };
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
-    );
-    const { service, fileStorage, turnRecords } = createService();
-
-    await service.uploadSave(
-      '1',
-      'user-2',
-      {
-        originalname: 'turn.se1',
-        buffer: Buffer.from([1, 2, 3]),
-      } as never,
-    );
-
-    expect(fileStorage.storeFile).toHaveBeenCalledWith(
-      expect.objectContaining({
-        turn: 5,
-        seat: 1,
-        playerName: 'Solon',
-      }),
-    );
-    expect(turnRecords.transitionTurn).toHaveBeenCalledWith(
-      transaction,
-      expect.objectContaining({
-        completionReason: 'SAVE_UPLOADED',
-        expectedCurrent: {
-          gamePlayerId: 'entry-2',
-          userId: 'user-2',
+        create: {
+          activePlayerId: 'user-2',
+          activePlayerEntryId: 'seat-2',
           roundNumber: 4,
         },
-        next: expect.objectContaining({
-          gamePlayerId: 'entry-1',
-          userId: 'user-1',
-          seatNumber: 1,
-          playerDisplayName: 'Solon',
-          roundNumber: 5,
-        }),
-        transitionedAt: expect.any(Date),
+      },
+      turnRecords: {
+        create: {
+          id: 'turn-1',
+          gamePlayerId: 'seat-2',
+          userId: 'user-2',
+          seatNumber: 3,
+          playerDisplayName: 'Overlord',
+          roundNumber: 4,
+          startedAt: new Date('2026-09-01T00:00:00Z'),
+        },
+      },
+    },
+  });
+  duringStorage = async () => {};
+  mutations = new TurnMutationsService(db, new TurnRecordsService(), {
+    fileStorage: {
+      async stageUpload(input) {
+        const result = await storage.stageUpload(input);
+        await duringStorage();
+        return result;
+      },
+      removeFile: (path) => storage.removeFile(path),
+    },
+  });
+});
+
+afterEach(async () => {
+  await fixture?.close();
+  if (directory) await rm(directory, { recursive: true, force: true });
+});
+
+async function persistedState(db = fixture.db) {
+  return {
+    games: await db.game.findMany({ orderBy: { id: 'asc' } }),
+    seats: await db.gamePlayer.findMany({ orderBy: { id: 'asc' } }),
+    turns: await db.turnState.findMany({ orderBy: { id: 'asc' } }),
+    history: await db.turnRecord.findMany({ orderBy: { id: 'asc' } }),
+    files: await db.fileVersion.findMany({ orderBy: { id: 'asc' } }),
+    reminders: await db.notificationDelivery.findMany({
+      orderBy: { id: 'asc' },
+    }),
+    audits: await db.auditEvent.findMany({ orderBy: { id: 'asc' } }),
+  };
+}
+
+async function seedDeliveries() {
+  for (const status of [
+    'PENDING',
+    'PROCESSING',
+    'DELIVERED',
+    'FAILED',
+  ] as const) {
+    await fixture.db.notificationDelivery.create({
+      data: {
+        id: status,
+        status,
+        event: 'TURN_NUDGE',
+        gameId: 'game-1',
+        gameSlug: 'ashes',
+        turnRecordId: 'turn-1',
+        payload: '{}',
+      },
+    });
+  }
+  await fixture.db.notificationDelivery.create({
+    data: {
+      id: 'other-event',
+      event: 'SAVE_UPLOADED',
+      gameId: 'game-1',
+      gameSlug: 'ashes',
+      turnRecordId: 'turn-1',
+      payload: '{}',
+    },
+  });
+  await fixture.db.turnRecord.create({
+    data: {
+      id: 'older-turn',
+      gameId: 'game-1',
+      roundNumber: 3,
+      playerDisplayName: 'Alpha',
+      startedAt: new Date('2026-08-01T00:00:00Z'),
+      endedAt: new Date('2026-08-02T00:00:00Z'),
+    },
+  });
+  await fixture.db.notificationDelivery.create({
+    data: {
+      id: 'other-turn',
+      event: 'TURN_NUDGE',
+      gameId: 'game-1',
+      gameSlug: 'ashes',
+      turnRecordId: 'older-turn',
+      payload: '{}',
+    },
+  });
+}
+
+describe('upload safety through the public mutation owner', () => {
+  it.each(['wraparound', 'single-player'])(
+    'completes a %s turn with incremented round, canonical naming, and exactly one revision',
+    async (scenario) => {
+      if (scenario === 'single-player')
+        await fixture.db.gamePlayer.update({
+          where: { id: 'seat-1' },
+          data: { userId: null },
+        });
+      const result = await mutations.uploadSave('ashes', 'user-2', file);
+      const seat = scenario === 'single-player' ? 'seat-2' : 'seat-1';
+      const user = scenario === 'single-player' ? 'user-2' : 'user-1';
+      const name =
+        scenario === 'single-player'
+          ? '1-T5-S3-Overlord.se1'
+          : '1-T5-S1-Alpha.se1';
+      expect(result).toMatchObject({
+        originalName: name,
+        roundNumber: 5,
+        roundAdvanced: true,
+        activePlayer: { id: seat, userId: user },
+      });
+      const state = await persistedState();
+      expect(state.games[0].turnRevision).toBe(1);
+      expect(state.turns[0]).toMatchObject({
+        activePlayerEntryId: seat,
+        activePlayerId: user,
+        roundNumber: 5,
+      });
+      expect(state.history).toHaveLength(2);
+      const open = state.history.filter((record) => record.endedAt === null);
+      expect(open).toHaveLength(1);
+      expect(open[0]).toMatchObject({
+        gamePlayerId: seat,
+        userId: user,
+        roundNumber: 5,
+      });
+      expect(open[0].id).not.toBe('turn-1');
+      expect(
+        state.history.find((record) => record.id === 'turn-1'),
+      ).toMatchObject({
+        endedAt: open[0].startedAt,
+        completionReason: 'SAVE_UPLOADED',
+      });
+      expect(state.files[0]).toMatchObject({
+        originalName: name,
+        uploadedAt: open[0].startedAt,
+      });
+      expect(dirname(state.files[0].storagePath)).toBe(
+        join(directory, 'saves', 'game-1'),
+      );
+      expect(await readFile(state.files[0].storagePath)).toEqual(file.buffer);
+      expect(state.audits).toHaveLength(2);
+    },
+  );
+
+  it('cancels only pending nudges for the completed turn and uses the current reminder policy', async () => {
+    await seedDeliveries();
+    const before = await fixture.db.notificationDelivery.findMany({
+      where: { id: { not: 'PENDING' } },
+      orderBy: { id: 'asc' },
+    });
+    duringStorage = async () => {
+      await fixture.connect().game.update({
+        where: { id: 'game-1' },
+        data: { turnRemindersEnabled: false },
+      });
+    };
+    await mutations.uploadSave('1', 'user-2', file);
+    expect(
+      await fixture.db.notificationDelivery.findUniqueOrThrow({
+        where: { id: 'PENDING' },
       }),
-    );
+    ).toMatchObject({ status: 'CANCELLED', processingStartedAt: null });
+    expect(
+      await fixture.db.notificationDelivery.findMany({
+        where: { id: { not: 'PENDING' } },
+        orderBy: { id: 'asc' },
+      }),
+    ).toEqual(before);
+    expect(
+      await fixture.db.turnRecord.findFirstOrThrow({
+        where: { endedAt: null },
+      }),
+    ).toMatchObject({ nextReminderAt: null });
   });
 
-  it('removes the stored file when timing transition aborts the upload transaction', async () => {
-    prismaMock.fileVersion.findFirst.mockResolvedValue(null);
-    const transaction = {
-      fileVersion: {
-        findFirst: vi.fn(async () => null),
-        create: vi.fn(async () => ({
-          id: 'file-version-8',
-          originalName: '1-T4-S2-Other.se1',
-          uploadedAt: new Date('2026-05-03T10:00:00.000Z'),
-        })),
+  it('rolls back file metadata, active state, history, nudges, both audits, and revision after a real late trigger failure', async () => {
+    await seedDeliveries();
+    const previous = await storage.storeFile({
+      gameId: 'game-1',
+      gameNumber: 1,
+      turn: 5,
+      seat: 1,
+      playerName: 'Alpha',
+      originalName: 'turn.se1',
+      content: Buffer.from('committed save'),
+    });
+    await fixture.db.fileVersion.create({
+      data: {
+        gameId: 'game-1',
+        uploadedById: 'user-2',
+        storagePath: previous.storagePath,
+        originalName: previous.fileName,
+        versionNumber: 1,
       },
-      auditEvent: {
-        create: vi.fn(async () => ({})),
-      },
-      gamePlayer: {
-        findMany: vi.fn(async () => createGame().players),
-      },
-      turnState: {
-        findUnique: vi.fn(async () => createGame().turnState),
-        update: vi.fn(async () => ({ roundNumber: 4 })),
-      },
-    };
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
-    );
-    const { service, fileStorage, turnRecords } = createService();
-    turnRecords.transitionTurn.mockRejectedValueOnce(new Error('turn conflict'));
-
+    });
+    await fixture.db
+      .$executeRawUnsafe(`CREATE TRIGGER fail_upload AFTER INSERT ON AuditEvent
+      WHEN NEW.eventType = 'TURN_ADVANCED'
+      AND (SELECT turnRevision FROM Game WHERE id = NEW.gameId) = 1
+      AND (SELECT activePlayerEntryId FROM TurnState WHERE gameId = NEW.gameId) = 'seat-1'
+      AND (SELECT status FROM NotificationDelivery WHERE id = 'PENDING') = 'CANCELLED'
+      AND (SELECT COUNT(*) FROM TurnRecord WHERE gameId = NEW.gameId) = 3
+      AND (SELECT COUNT(*) FROM AuditEvent WHERE gameId = NEW.gameId) = 2
+      AND (SELECT COUNT(*) FROM FileVersion WHERE gameId = NEW.gameId) = 2
+      AND EXISTS (SELECT 1 FROM FileVersion WHERE idempotencyKey = 'upload-1' AND contentHash = 'sha256:abc' AND clientFileSize = 3 AND clientOriginalName = 'turn.se1')
+      BEGIN SELECT RAISE(ABORT, 'injected failure after upload effects'); END`);
+    const before = await persistedState();
     await expect(
-      service.uploadSave(
-        '1',
-        'user-1',
-        {
-          originalname: 'turn.se1',
-          buffer: Buffer.from([1, 2, 3]),
-        } as never,
-      ),
-    ).rejects.toThrow('turn conflict');
-
-    expect(fileStorage.removeFile).toHaveBeenCalledWith('/saves/game-1/turn.se1');
-    expect(transaction.auditEvent.create).toHaveBeenCalledTimes(1);
+      mutations.uploadSave('1', 'user-2', file, {
+        contentHash: 'sha256:abc',
+        idempotencyKey: 'upload-1',
+      }),
+    ).rejects.toThrow();
+    expect(await persistedState(fixture.connect())).toEqual(before);
+    expect(await readFile(previous.storagePath)).toEqual(
+      Buffer.from('committed save'),
+    );
+    const files = (
+      await readdir(join(directory, 'saves'), { recursive: true })
+    ).filter((path) => path.endsWith('.se1'));
+    expect(files).toEqual([join('game-1', '1-T5-S1-Alpha.se1')]);
+    await fixture.db.$executeRawUnsafe('DROP TRIGGER fail_upload');
+    expect(await mutations.uploadSave('1', 'user-2', file)).toMatchObject({
+      versionNumber: 2,
+    });
+    expect((await persistedState()).games[0].turnRevision).toBe(1);
   });
 
-  it('removes the stored file and rejects a replaced next seat before advancing the turn', async () => {
-    prismaMock.fileVersion.findFirst.mockResolvedValue(null);
-    const game = createGame();
-    const transaction = {
-      fileVersion: {
-        findFirst: vi.fn(async () => null),
-        create: vi.fn(async () => ({
-          id: 'file-version-8',
-          originalName: '1-T4-S2-Other.se1',
-          uploadedAt: new Date('2026-05-03T10:00:00.000Z'),
-        })),
-      },
-      auditEvent: {
-        create: vi.fn(async () => ({})),
-      },
-      gamePlayer: {
-        findMany: vi.fn(async () => [
-          game.players[0],
-          {
-            ...game.players[1],
-            userId: 'user-3',
-            user: {
-              id: 'user-3',
-              displayName: 'Replacement',
-              identities: [],
-            },
-          },
-        ]),
-      },
-      turnState: {
-        findUnique: vi.fn(async () => game.turnState),
-        update: vi.fn(async () => ({ roundNumber: 4 })),
-      },
-    };
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
-    );
-    const { service, fileStorage, turnRecords } = createService();
+  it.each([undefined, 'outsider', 'user-1'])(
+    'rejects unauthorized caller %s before storage',
+    async (userId) => {
+      const before = await persistedState();
+      await expect(
+        mutations.uploadSave('1', userId, file),
+      ).rejects.toBeInstanceOf(
+        userId === undefined ? UnauthorizedException : ForbiddenException,
+      );
+      expect(await persistedState()).toEqual(before);
+      expect(await readdir(directory)).toEqual([]);
+    },
+  );
 
+  it.each(['membership', 'active player'])(
+    'revalidates local %s authorization after storage',
+    async (change) => {
+      let changed: Awaited<ReturnType<typeof persistedState>>;
+      duringStorage = async () => {
+        const db = fixture.connect();
+        if (change === 'membership') {
+          await db.game.update({
+            where: { id: 'game-1' },
+            data: { organizerId: 'user-1' },
+          });
+          await db.gamePlayer.update({
+            where: { id: 'seat-2' },
+            data: { userId: null },
+          });
+        } else {
+          await db.turnState.update({
+            where: { gameId: 'game-1' },
+            data: { activePlayerEntryId: 'seat-1', activePlayerId: 'user-1' },
+          });
+        }
+        changed = await persistedState(db);
+      };
+      await expect(
+        mutations.uploadSave('1', 'user-2', file),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+      expect(await persistedState()).toEqual(changed!);
+      expect(
+        (await readdir(join(directory, 'saves'), { recursive: true })).filter(
+          (path) => path.endsWith('.se1'),
+        ),
+      ).toEqual([]);
+    },
+  );
+
+  it('preserves missing game, uninitialized game, and unresolvable participant errors', async () => {
     await expect(
-      service.uploadSave(
-        '1',
-        'user-1',
-        {
-          originalname: 'turn.se1',
-          buffer: Buffer.from([1, 2, 3]),
-        } as never,
-      ),
+      mutations.uploadSave('missing', 'user-2', file),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    await fixture.db.turnState.update({
+      where: { gameId: 'game-1' },
+      data: { activePlayerEntryId: 'seat-open' },
+    });
+    await expect(
+      mutations.uploadSave('1', 'user-2', file),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    await fixture.db.turnState.deleteMany();
+    await expect(
+      mutations.uploadSave('1', 'user-2', file),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(await readdir(directory)).toEqual([]);
+  });
+
+  it('rolls back and removes staging when real open history does not match the participant', async () => {
+    await fixture.db.turnRecord.update({
+      where: { id: 'turn-1' },
+      data: { userId: 'user-1' },
+    });
+    const before = await persistedState();
+    await expect(
+      mutations.uploadSave('1', 'user-2', file),
     ).rejects.toBeInstanceOf(ConflictException);
-
-    expect(transaction.turnState.update).not.toHaveBeenCalled();
-    expect(turnRecords.transitionTurn).not.toHaveBeenCalled();
-    expect(fileStorage.removeFile).toHaveBeenCalledWith('/saves/game-1/turn.se1');
-  });
-
-  it('removes the stored file and rejects a reordered successor before advancing the turn', async () => {
-    const players = [
-      gamePlayer('entry-1', 'user-1', 'Solon', 1),
-      gamePlayer('entry-2', 'user-2', 'Other', 2),
-      gamePlayer('entry-3', 'user-3', 'Third', 3),
-    ];
-    const game = createGame({ players });
-    prismaMock.game.findFirst.mockResolvedValue(game);
-    prismaMock.fileVersion.findFirst.mockResolvedValue(null);
-    const transaction = {
-      fileVersion: {
-        findFirst: vi.fn(async () => null),
-        create: vi.fn(async () => ({
-          id: 'file-version-8',
-          originalName: '1-T4-S2-Other.se1',
-          uploadedAt: new Date('2026-05-03T10:00:00.000Z'),
-        })),
-      },
-      auditEvent: {
-        create: vi.fn(async () => ({})),
-      },
-      gamePlayer: {
-        findMany: vi.fn(async () => [
-          gamePlayer('entry-3', 'user-3', 'Third', 1),
-          gamePlayer('entry-2', 'user-2', 'Other', 2),
-          gamePlayer('entry-1', 'user-1', 'Solon', 3),
-        ]),
-      },
-      turnState: {
-        findUnique: vi.fn(async () => game.turnState),
-        update: vi.fn(async () => ({ roundNumber: 4 })),
-      },
-    };
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
-    );
-    const { service, fileStorage, turnRecords } = createService();
-
-    await expect(
-      service.uploadSave(
-        '1',
-        'user-1',
-        {
-          originalname: 'turn.se1',
-          buffer: Buffer.from([1, 2, 3]),
-        } as never,
+    expect(await persistedState()).toEqual(before);
+    expect(
+      (await readdir(join(directory, 'saves'), { recursive: true })).filter(
+        (path) => path.endsWith('.se1'),
       ),
-    ).rejects.toBeInstanceOf(ConflictException);
-
-    expect(transaction.turnState.update).not.toHaveBeenCalled();
-    expect(turnRecords.transitionTurn).not.toHaveBeenCalled();
-    expect(fileStorage.removeFile).toHaveBeenCalledWith('/saves/game-1/turn.se1');
-  });
-
-  it('removes the stored file and rejects a recreated next seat before advancing the turn', async () => {
-    const game = createGame();
-    prismaMock.fileVersion.findFirst.mockResolvedValue(null);
-    const transaction = {
-      fileVersion: {
-        findFirst: vi.fn(async () => null),
-        create: vi.fn(async () => ({
-          id: 'file-version-8',
-          originalName: '1-T4-S2-Other.se1',
-          uploadedAt: new Date('2026-05-03T10:00:00.000Z'),
-        })),
-      },
-      auditEvent: {
-        create: vi.fn(async () => ({})),
-      },
-      gamePlayer: {
-        findMany: vi.fn(async () => [
-          game.players[0],
-          gamePlayer('entry-2-recreated', 'user-2', 'Other', 2),
-        ]),
-      },
-      turnState: {
-        findUnique: vi.fn(async () => game.turnState),
-        update: vi.fn(async () => ({ roundNumber: 4 })),
-      },
-    };
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
-    );
-    const { service, fileStorage, turnRecords } = createService();
-
-    await expect(
-      service.uploadSave(
-        '1',
-        'user-1',
-        {
-          originalname: 'turn.se1',
-          buffer: Buffer.from([1, 2, 3]),
-        } as never,
-      ),
-    ).rejects.toBeInstanceOf(ConflictException);
-
-    expect(transaction.turnState.update).not.toHaveBeenCalled();
-    expect(turnRecords.transitionTurn).not.toHaveBeenCalled();
-    expect(fileStorage.removeFile).toHaveBeenCalledWith('/saves/game-1/turn.se1');
+    ).toEqual([]);
   });
 });

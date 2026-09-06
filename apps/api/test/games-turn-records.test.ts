@@ -1,5 +1,6 @@
 import { ConflictException } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { TurnMutationsService } from '../src/games/services/turn-mutations.service';
 
 const prismaMock = vi.hoisted(() => ({
   turnRecord: {
@@ -453,98 +454,72 @@ describe('TurnRecordsService', () => {
   });
 });
 
-describe('GamesRegistrationService turn record initialization', () => {
+describe('GamesRegistrationService initialization delegation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-07-10T09:00:00.000Z'));
-    prismaMock.game.findUnique.mockResolvedValue(null);
-    discordUserHelpersMock.upsertDiscordUser.mockResolvedValue({
-      id: 'user-1',
-      displayName: 'Alpha',
-    });
   });
 
-  it('passes custom timing policy overrides into a new game and its initial turn', async () => {
-    const transaction = {
-      game: {
-        create: vi.fn(async () => ({
-          id: 'game-1',
-          gameNumber: 42,
-          slug: 'ashes',
-          name: 'Ashes',
-          playerCount: 2,
-          hasAiPlayers: false,
-          dlcMode: null,
-          gameMode: null,
-          techLevel: null,
-          zoneCount: null,
-          armyCount: null,
-          discordThreadId: 'thread-1',
-        })),
-        findUnique: vi.fn(async () => null),
-      },
-      gamePlayer: {
-        create: vi.fn(async () => ({
-          id: 'seat-1',
-          userId: 'user-1',
-          turnOrder: 1,
-        })),
-        createMany: vi.fn(async () => ({ count: 1 })),
-      },
-      turnState: {
-        create: vi.fn(async () => ({})),
-      },
-      auditEvent: {
-        create: vi.fn(async () => ({})),
-      },
-    };
-    const turnRecords = {
-      createInitialTurn: vi.fn(async () => ({})),
-    };
-    const botNotifications = {
-      notifyGameInitialized: vi.fn(async () => ({})),
-    };
-    prismaMock.$transaction
-      .mockImplementationOnce(async (callback) => callback({}))
-      .mockImplementationOnce(async (callback) => callback(transaction));
-
-    await new GamesRegistrationService(
-      botNotifications as never,
-      turnRecords as never,
-    ).createGameFromDiscordInit({
-      gameNumber: 42,
-      name: 'Ashes',
-      playerCount: 2,
-      hasAiPlayers: false,
-      organizerDiscordId: 'discord-1',
-      organizerDisplayName: 'Alpha',
-      discordGuildId: 'guild-1',
-      discordChannelId: 'channel-1',
-      discordThreadId: 'thread-1',
-      turnTargetHours: 48,
-      turnReminderGraceHours: 6,
-      turnReminderRepeatHours: 12,
-    });
-
-    expect(transaction.game.create).toHaveBeenCalledWith({
-      data: expect.objectContaining({
+  it.each(['result', 'error'])(
+    'passes initialization and custom timing unchanged to the owner and propagates its %s',
+    async (outcome) => {
+      const turnMutations = {
+        createGameFromDiscordInit:
+          vi.fn<TurnMutationsService['createGameFromDiscordInit']>(),
+      };
+      const botNotifications = {
+        notifyGameInitialized: vi.fn(),
+      };
+      const service = new GamesRegistrationService(
+        botNotifications as never,
+        turnMutations as never,
+      );
+      const input = Object.freeze({
+        gameNumber: 42,
+        name: 'Ashes',
+        playerCount: 2,
+        hasAiPlayers: false,
+        organizerDiscordId: 'discord-1',
+        organizerDisplayName: 'Alpha',
+        discordGuildId: 'guild-1',
+        discordChannelId: 'channel-1',
+        discordThreadId: 'thread-1',
         turnTargetHours: 48,
         turnReminderGraceHours: 6,
         turnReminderRepeatHours: 12,
-        turnRemindersEnabled: true,
-      }),
-    });
-    expect(turnRecords.createInitialTurn).toHaveBeenCalledWith(transaction, {
-      gameId: 'game-1',
-      participant: {
-        gamePlayerId: 'seat-1',
-        userId: 'user-1',
-        seatNumber: 1,
-        playerDisplayName: 'Alpha',
-      },
-      roundNumber: 1,
-      startedAt: new Date('2026-07-10T09:00:00.000Z'),
-    });
-  });
+      });
+
+      const result = {
+        id: 'game-1',
+        gameNumber: 42,
+        slug: 'ashes',
+        name: 'Ashes',
+        organizerId: 'user-1',
+        discordThreadId: 'thread-1',
+      };
+      const error = new ConflictException(
+        'The campaign number is already in use.',
+      );
+      if (outcome === 'result') {
+        turnMutations.createGameFromDiscordInit.mockResolvedValue(result);
+        await expect(service.createGameFromDiscordInit(input)).resolves.toBe(
+          result,
+        );
+      } else {
+        turnMutations.createGameFromDiscordInit.mockRejectedValue(error);
+        await expect(service.createGameFromDiscordInit(input)).rejects.toBe(
+          error,
+        );
+      }
+      expect(
+        turnMutations.createGameFromDiscordInit,
+      ).toHaveBeenCalledExactlyOnceWith(input);
+      expect(turnMutations.createGameFromDiscordInit.mock.calls[0][0]).toBe(
+        input,
+      );
+      expect(prismaMock.game.findUnique).not.toHaveBeenCalled();
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+      expect(discordUserHelpersMock.upsertDiscordUser).not.toHaveBeenCalled();
+      expect(botNotifications.notifyGameInitialized).not.toHaveBeenCalled();
+    },
+  );
 });
