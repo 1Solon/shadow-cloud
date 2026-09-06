@@ -42,3 +42,9 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      - name: Install Chromium and system dependencies
+        run: pnpm --filter @shadow-cloud/web test:browser:install --with-deps
+
+      - name: Test authenticated campaign in Chromium
+        run: pnpm --filter @shadow-cloud/web test:browser

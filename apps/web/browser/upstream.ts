@@ -1,0 +1,187 @@
+import { createServer } from "node:http";
+import { jwtVerify } from "jose";
+import type { GameDetail } from "../src/lib/shadow-cloud-api";
+
+export type MutationOutcome =
+  | { kind: "success" }
+  | { kind: "confirmed-failure"; status?: number; message?: string }
+  | { kind: "ambiguous"; committed: boolean };
+
+export async function startUpstream(secret: string) {
+  const upstream: {
+    game: GameDetail;
+    metadata: MutationOutcome[];
+    transfer: MutationOutcome[];
+    requests: Array<{
+      method: string;
+      path: string;
+      subject?: string;
+      body?: unknown;
+    }>;
+  } = {
+    game: {
+      id: "browser-campaign",
+      gameNumber: 42,
+      slug: "browser-campaign",
+      name: "Browser Campaign",
+      organizerId: "browser-overlord",
+      organizerDisplayName: "Browser Overlord",
+      seatOrderBaseline: { campaignId: "browser-campaign", revision: 0 },
+      playerCount: 2,
+      hasAiPlayers: false,
+      dlcMode: "NONE",
+      gameMode: "MULTIPLAYER",
+      techLevel: 3,
+      zoneCount: "REGULAR",
+      armyCount: "REGULAR",
+      notes: "Initial browser campaign notes.",
+      roundNumber: 1,
+      activePlayerEntryId: "seat-overlord",
+      activePlayerUserId: "browser-overlord",
+      activePlayerDisplayName: "Browser Overlord",
+      turnTargetHours: 24,
+      turnReminderGraceHours: 2,
+      turnReminderRepeatHours: 4,
+      turnRemindersEnabled: false,
+      currentTurnStartedAt: null,
+      players: [
+        {
+          id: "seat-overlord",
+          userId: "browser-overlord",
+          displayName: "Browser Overlord",
+          turnOrder: 1,
+          isOrganizer: true,
+        },
+        {
+          id: "seat-successor",
+          userId: "browser-successor",
+          displayName: "Browser Successor",
+          turnOrder: 2,
+          isOrganizer: false,
+        },
+      ],
+      fileVersions: [],
+      openTurn: null,
+      recentCompletedTurns: [],
+    },
+    metadata: [],
+    transfer: [],
+    requests: [],
+  };
+  const server = createServer(async (request, response) => {
+    const path = request.url ?? "/";
+    const method = request.method ?? "GET";
+    const reply = (status: number, body: unknown) => {
+      response.writeHead(status, { "content-type": "application/json" });
+      response.end(JSON.stringify(body));
+    };
+    try {
+      const base = `/v1/games/${upstream.game.gameNumber}`;
+      if (method === "GET" && path === `${base}/detail`) {
+        upstream.requests.push({ method, path });
+        reply(200, upstream.game);
+        return;
+      }
+      const isMetadata = method === "PATCH" && path === `${base}/metadata`;
+      const isTransfer = method === "POST" && path === `${base}/transfer-host`;
+      if (!isMetadata && !isTransfer) {
+        reply(404, { message: "Unknown fixture campaign or route." });
+        return;
+      }
+      let subject: string | undefined;
+      try {
+        const { payload } = await jwtVerify(
+          (request.headers.authorization ?? "").replace(/^Bearer /, ""),
+          new TextEncoder().encode(secret),
+          { algorithms: ["HS256"], requiredClaims: ["sub", "iat", "exp"] },
+        );
+        subject = payload.sub;
+      } catch {
+        reply(401, { message: "Invalid fixture API token." });
+        return;
+      }
+      if (subject !== upstream.game.organizerId) {
+        reply(403, { message: "Only the Overlord can edit this campaign." });
+        return;
+      }
+      let raw = "";
+      for await (const chunk of request) raw += chunk;
+      const body = JSON.parse(raw);
+      upstream.requests.push({ method, path, subject, body });
+      const outcome = (isMetadata
+        ? upstream.metadata
+        : upstream.transfer
+      ).shift() ?? { kind: "success" };
+      if (outcome.kind === "confirmed-failure") {
+        reply(outcome.status ?? 409, {
+          message: outcome.message ?? "Fixture mutation rejected.",
+        });
+        return;
+      }
+      if (outcome.kind === "success" || outcome.committed) {
+        if (isMetadata) {
+          Object.assign(upstream.game, body);
+        } else {
+          const target = upstream.game.players.find(
+            (player) => player.id === body.targetPlayerEntryId,
+          );
+          if (!target?.userId) {
+            reply(400, { message: "Select an occupied seat." });
+            return;
+          }
+          if (target.userId === upstream.game.organizerId) {
+            reply(400, { message: "Select a different player." });
+            return;
+          }
+          upstream.game.organizerId = target.userId;
+          upstream.game.organizerDisplayName = target.displayName ?? "";
+          upstream.game.players.forEach((player) => {
+            player.isOrganizer = player.id === target.id;
+          });
+          upstream.game.seatOrderBaseline.revision += 1;
+        }
+      }
+      if (outcome.kind === "ambiguous") {
+        // Drop the response after the chosen commit decision, never auto-retry.
+        response.destroy();
+        return;
+      }
+      const game = upstream.game;
+      const overlord = game.players.find((player) => player.isOrganizer)!;
+      reply(
+        200,
+        isMetadata
+          ? game
+          : {
+              gameId: game.id,
+              gameNumber: game.gameNumber,
+              slug: game.slug,
+              name: game.name,
+              organizerId: game.organizerId,
+              organizerDisplayName: game.organizerDisplayName,
+              player: {
+                displayName: overlord.displayName,
+                turnOrder: overlord.turnOrder,
+              },
+            },
+      );
+    } catch (error) {
+      reply(500, { message: String(error) });
+    }
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  if (!address || typeof address === "string")
+    throw new Error("Missing fixture listener.");
+  return Object.assign(upstream, {
+    url: `http://127.0.0.1:${address.port}`,
+    close: () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+        server.closeAllConnections();
+      }),
+  });
+}

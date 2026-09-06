@@ -5,10 +5,12 @@
     "dev": "node ./scripts/dev.mjs",
     "build": "dotenv -e ../../.env -- next build",
     "start": "dotenv -e ../../.env -- next start",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"scripts/**/*.mjs\" \"*.{ts,mjs}\"",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"scripts/**/*.mjs\" \"browser/**/*.{ts,mjs}\" \"*.{ts,mjs}\"",
     "lint": "eslint .",
     "typecheck": "node ./scripts/typecheck.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:browser": "playwright test",
+    "test:browser:install": "playwright install chromium"
   },
   "dependencies": {
     "@dnd-kit/core": "6.3.1",
@@ -29,6 +31,7 @@
     "tailwind-merge": "3.6.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.58.2",
     "@tailwindcss/postcss": "4.3.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

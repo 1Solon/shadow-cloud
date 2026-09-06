@@ -2,6 +2,10 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+For isolated authenticated browser verification, see
+[Browser Tests](browser/README.md). It does not require the development stack,
+an `.env` file, a database, or a Discord account.
+
 First, run the development server:
 
 ```bash
