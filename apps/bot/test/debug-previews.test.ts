@@ -6,6 +6,10 @@ import {
   selectDebugPreviewNames,
 } from "../src/debug-previews.js";
 import { ACCENT_COLOR } from "../src/notifications.js";
+import {
+  previewControls,
+  registrationResponses,
+} from "./registration-fixtures.js";
 
 const context = {
   userId: "user-1",
@@ -121,12 +125,29 @@ describe("buildDebugPreviews", () => {
     }
   });
 
-  it("uses disabled buttons for the registration approval preview", () => {
-    const preview = buildDebugPreviews(["registration-approval"], context)[0];
-    const rendered = JSON.stringify(preview?.message);
+  it.each([
+    ["registration-approval", "pending"],
+    ["registration-approved", "approved"],
+    ["registration-rejected", "rejected"],
+  ] as const)("serializes the complete inert %s preview", (name, state) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-17T12:00:00.000Z"));
+    const preview = buildDebugPreviews([name], context)[0];
+    const live = registrationResponses[state];
 
-    expect(rendered).toContain("Approve");
-    expect(rendered).toContain('"disabled":true');
-    expect(rendered).toContain(`"type":${ComponentType.Button}`);
+    // Sample facts match the live fixture. Only safe controls and delivery differ.
+    expect(JSON.parse(JSON.stringify(preview?.message))).toEqual({
+      ...live,
+      flags: 32832,
+      components: [
+        {
+          ...live.components[0],
+          components: [
+            ...live.components[0].components.slice(0, -1),
+            previewControls,
+          ],
+        },
+      ],
+    });
   });
 });

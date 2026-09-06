@@ -8,8 +8,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ACCENT_COLOR,
-  buildApprovalNotificationMessage,
-  buildApprovalResultMessage,
+  buildRegistrationResponse,
   buildDiscordNotification,
   buildGameInitNotificationMessage,
   buildSaveNotificationMessage,
@@ -17,12 +16,17 @@ import {
   buildTurnNudgeNotificationMessage,
 } from "../src/notifications.js";
 import type { TurnNudgeNotificationPayload } from "../src/notifications.js";
+import {
+  previewControls,
+  registrationResponses,
+} from "./registration-fixtures.js";
 
-type IsExactly<Left, Right> = (<Value>() => Value extends Left ? 1 : 2) extends <
-  Value,
->() => Value extends Right ? 1 : 2
-  ? true
-  : false;
+type IsExactly<Left, Right> =
+  (<Value>() => Value extends Left ? 1 : 2) extends <
+    Value,
+  >() => Value extends Right ? 1 : 2
+    ? true
+    : false;
 type Assert<Condition extends true> = Condition;
 type TurnNudgeThreadIdIsRequired = Assert<
   IsExactly<TurnNudgeNotificationPayload["game"]["discordThreadId"], string>
@@ -223,6 +227,120 @@ describe("buildDiscordNotification", () => {
 });
 
 describe("production notification style", () => {
+  it("isolates live pending renders from previews and completed responses in either order", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-17T12:00:00.000Z"));
+    const fetchMock = vi.fn(() => {
+      throw new Error("Rendering must not call fetch");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const renders = [];
+      const snapshots = [];
+      for (const mode of ["preview", "live", "preview", "live"] as const) {
+        for (const state of [
+          "pending",
+          "approved",
+          "pending",
+          "rejected",
+          "pending",
+        ] as const) {
+          const message = buildRegistrationResponse({
+            mode,
+            requestId: "request-1",
+            state,
+            playerName: "Debug User",
+            gameName: "Debug World",
+            organizerDiscordId: "user-1",
+            gameUrl: "https://shadow.example/games/42",
+            turnOrder: 2,
+          });
+          const live = registrationResponses[state];
+          const expected =
+            mode === "live"
+              ? live
+              : {
+                  ...live,
+                  components: [
+                    {
+                      ...live.components[0],
+                      components: [
+                        ...live.components[0].components.slice(0, -1),
+                        previewControls,
+                      ],
+                    },
+                  ],
+                };
+          expect(JSON.parse(JSON.stringify(message))).toEqual(expected);
+          renders.push(message);
+          snapshots.push(JSON.stringify(message));
+          expect(renders.map((render) => JSON.stringify(render))).toEqual(
+            snapshots,
+          );
+        }
+      }
+
+      // The caller can mutate a returned builder without affecting any other render.
+      for (const [index, render] of renders.entries()) {
+        const row = render.components[0]?.components.at(-1);
+        expect(row).toBeInstanceOf(ActionRowBuilder);
+        if (row instanceof ActionRowBuilder) {
+          for (const button of row.components) {
+            button.setLabel("Changed by caller").setDisabled(false);
+          }
+        }
+        snapshots[index] = JSON.stringify(render);
+        expect(renders.map((other) => JSON.stringify(other))).toEqual(
+          snapshots,
+        );
+      }
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("serializes the complete live pending registration", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-17T12:00:00.000Z"));
+
+    const message = buildRegistrationResponse({
+      mode: "live",
+      requestId: "request-1",
+      state: "pending",
+      playerName: "Debug User",
+      gameName: "Debug World",
+      organizerDiscordId: "user-1",
+    });
+
+    expect(JSON.parse(JSON.stringify(message))).toEqual(
+      registrationResponses.pending,
+    );
+  });
+
+  it.each(["approved", "rejected"] as const)(
+    "serializes the complete live %s registration",
+    (state) => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date("2026-07-17T12:00:00.000Z"));
+
+      const message = buildRegistrationResponse({
+        mode: "live",
+        requestId: "request-1",
+        state,
+        playerName: "Debug User",
+        gameName: "Debug World",
+        gameUrl: "https://shadow.example/games/42",
+        turnOrder: 2,
+      });
+
+      expect(JSON.parse(JSON.stringify(message))).toEqual(
+        registrationResponses[state],
+      );
+    },
+  );
+
   it("renders initialized-game details as an aligned code-block table", () => {
     const message = buildGameInitNotificationMessage(
       {
@@ -325,24 +443,14 @@ describe("production notification style", () => {
   });
 
   it("uses an action footer for registration approval", () => {
-    const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId("approve")
-        .setLabel("Approve")
-        .setStyle(ButtonStyle.Success),
-      new ButtonBuilder()
-        .setCustomId("reject")
-        .setLabel("Reject")
-        .setStyle(ButtonStyle.Danger),
-    );
-    const [approveButton, rejectButton] = actionRow.components;
     const rendered = JSON.stringify(
-      buildApprovalNotificationMessage({
-        applicantName: "Applicant",
+      buildRegistrationResponse({
+        mode: "live",
+        requestId: "request-1",
+        state: "pending",
+        playerName: "Applicant",
         gameName: "The Game",
         organizerDiscordId: "discord-1",
-        approveButton,
-        rejectButton,
       }),
     );
 
@@ -355,8 +463,10 @@ describe("production notification style", () => {
 
   it("states approval results without redundant status emoji", () => {
     const rendered = JSON.stringify(
-      buildApprovalResultMessage({
-        approved: true,
+      buildRegistrationResponse({
+        mode: "live",
+        requestId: "request-1",
+        state: "approved",
         gameName: "The Game",
         gameUrl: "https://shadow.example/games/42",
         playerName: "Applicant",
@@ -415,20 +525,18 @@ describe("buildTurnNudgeNotificationMessage", () => {
   });
 
   it("uses only the required active-player mention for singular-hour nudges", () => {
-    const message = buildTurnNudgeNotificationMessage(
-      {
-        ...turnNudgePayload,
-        turnRecord: {
-          ...turnNudgePayload.turnRecord,
-          elapsedHours: 1,
-          targetHours: 1,
-          activePlayer: {
-            ...turnNudgePayload.turnRecord.activePlayer,
-            displayName: "@everyone @here",
-          },
+    const message = buildTurnNudgeNotificationMessage({
+      ...turnNudgePayload,
+      turnRecord: {
+        ...turnNudgePayload.turnRecord,
+        elapsedHours: 1,
+        targetHours: 1,
+        activePlayer: {
+          ...turnNudgePayload.turnRecord.activePlayer,
+          displayName: "@everyone @here",
         },
       },
-    );
+    });
     const rendered = JSON.stringify(message);
 
     expect(message.allowedMentions).toEqual({ users: ["discord-2"] });

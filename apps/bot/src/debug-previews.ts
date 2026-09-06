@@ -1,15 +1,11 @@
 import {
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
   MessageFlags,
   type InteractionEditReplyOptions,
   type InteractionReplyOptions,
   type MessageCreateOptions,
 } from "discord.js";
 import {
-  buildApprovalNotificationMessage,
-  buildApprovalResultMessage,
+  buildRegistrationResponse,
   buildGameInitNotificationMessage,
   buildSaveNotificationMessage,
   buildSaveReplacedNotificationMessage,
@@ -114,21 +110,6 @@ export function selectDebugPreviewNames(
   };
 }
 
-function buildDisabledApprovalRow() {
-  return new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder()
-      .setCustomId("debug_approve")
-      .setLabel("Approve")
-      .setStyle(ButtonStyle.Success)
-      .setDisabled(true),
-    new ButtonBuilder()
-      .setCustomId("debug_reject")
-      .setLabel("Reject")
-      .setStyle(ButtonStyle.Danger)
-      .setDisabled(true),
-  );
-}
-
 function buildDebugGame(context: DebugPreviewContext) {
   return {
     id: "debug-game",
@@ -227,52 +208,49 @@ const previewFactories: Record<DebugPreviewName, DebugPreviewFactory> = {
   },
   "turn-reminder": (context) => {
     const fixture = buildDebugGame(context);
-    return buildTurnNudgeNotificationMessage(
-      {
-        game: {
-          id: fixture.id,
-          gameNumber: fixture.gameNumber,
-          slug: fixture.slug,
-          name: fixture.name,
-          discordThreadId: fixture.discordThreadId,
-        },
-        turnRecord: {
-          id: "debug-turn",
-          roundNumber: 3,
-          startedAt: "2026-07-16T12:00:00.000Z",
-          elapsedHours: 25,
-          targetHours: 24,
-          activePlayer: fixture.activePlayer,
-        },
+    return buildTurnNudgeNotificationMessage({
+      game: {
+        id: fixture.id,
+        gameNumber: fixture.gameNumber,
+        slug: fixture.slug,
+        name: fixture.name,
+        discordThreadId: fixture.discordThreadId,
       },
-    );
+      turnRecord: {
+        id: "debug-turn",
+        roundNumber: 3,
+        startedAt: "2026-07-16T12:00:00.000Z",
+        elapsedHours: 25,
+        targetHours: 24,
+        activePlayer: fixture.activePlayer,
+      },
+    });
   },
   "registration-approval": (context) => {
-    const [approveButton, rejectButton] = buildDisabledApprovalRow().components;
-    return buildApprovalNotificationMessage({
-      applicantName: context.userDisplayName,
+    return buildRegistrationResponse({
+      mode: "preview",
+      state: "pending",
+      playerName: context.userDisplayName,
       gameName: "Debug World",
       organizerDiscordId: context.userId,
-      approveButton,
-      rejectButton,
     });
   },
   "registration-approved": (context) =>
-    buildApprovalResultMessage({
-      approved: true,
+    buildRegistrationResponse({
+      mode: "preview",
+      state: "approved",
       gameName: "Debug World",
       gameUrl: new URL("/games/42", context.webBaseUrl).toString(),
       playerName: context.userDisplayName,
       turnOrder: 2,
-      actionRow: buildDisabledApprovalRow(),
     }),
   "registration-rejected": (context) =>
-    buildApprovalResultMessage({
-      approved: false,
+    buildRegistrationResponse({
+      mode: "preview",
+      state: "rejected",
       gameName: "Debug World",
       gameUrl: new URL("/games/42", context.webBaseUrl).toString(),
       playerName: context.userDisplayName,
-      actionRow: buildDisabledApprovalRow(),
     }),
   "registration-submitted": () =>
     buildRegistrationSubmittedReply("Debug World"),

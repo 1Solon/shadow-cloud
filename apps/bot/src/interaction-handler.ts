@@ -1,7 +1,4 @@
 import {
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
   ChannelType,
   MessageFlags,
   type AnyThreadChannel,
@@ -23,8 +20,9 @@ import {
   type SupportedCommandName,
 } from "./commands.js";
 import {
-  buildApprovalNotificationMessage,
-  buildApprovalResultMessage,
+  APPROVE_PREFIX,
+  REJECT_PREFIX,
+  buildRegistrationResponse,
   buildDiscordEditReply,
   buildDiscordReply,
 } from "./notifications.js";
@@ -52,9 +50,6 @@ import {
   buildTurnAdvancedAnnouncement,
   buildWrongChannelReply,
 } from "./response-messages.js";
-
-const APPROVE_PREFIX = "sc_approve_";
-const REJECT_PREFIX = "sc_reject_";
 
 async function resolveThreadChannel(
   client: Client,
@@ -128,22 +123,14 @@ async function sendApprovalMessage(
   gameName: string,
   organizerDiscordId: string | null,
 ) {
-  const approveButton = new ButtonBuilder()
-    .setCustomId(`${APPROVE_PREFIX}${requestId}`)
-    .setLabel("Approve")
-    .setStyle(ButtonStyle.Success);
-  const rejectButton = new ButtonBuilder()
-    .setCustomId(`${REJECT_PREFIX}${requestId}`)
-    .setLabel("Reject")
-    .setStyle(ButtonStyle.Danger);
-
   await channel.send(
-    buildApprovalNotificationMessage({
-      applicantName,
+    buildRegistrationResponse({
+      mode: "live",
+      requestId,
+      state: "pending",
+      playerName: applicantName,
       gameName,
       organizerDiscordId,
-      approveButton,
-      rejectButton,
     }),
   );
 }
@@ -187,29 +174,15 @@ async function handleRegistrationButton(
             config.webBaseUrl,
           ).toString()
         : undefined;
-    const disabledApprove = new ButtonBuilder()
-      .setCustomId(`${APPROVE_PREFIX}${requestId}`)
-      .setLabel("Approve")
-      .setStyle(ButtonStyle.Success)
-      .setDisabled(true);
-    const disabledReject = new ButtonBuilder()
-      .setCustomId(`${REJECT_PREFIX}${requestId}`)
-      .setLabel("Reject")
-      .setStyle(ButtonStyle.Danger)
-      .setDisabled(true);
-    const disabledRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      disabledApprove,
-      disabledReject,
-    );
-
     await interaction.editReply(
-      buildApprovalResultMessage({
-        approved: action === "approve",
+      buildRegistrationResponse({
+        mode: "live",
+        requestId,
+        state: action === "approve" ? "approved" : "rejected",
         gameName,
         gameUrl,
         playerName,
         turnOrder: payload?.player?.turnOrder,
-        actionRow: disabledRow,
       }),
     );
   } catch (error) {

@@ -1,6 +1,7 @@
 import {
   ActionRowBuilder,
   ButtonBuilder,
+  ButtonStyle,
   ContainerBuilder,
   MessageFlags,
   SeparatorSpacingSize,
@@ -10,6 +11,9 @@ import {
 } from "discord.js";
 
 const ACCENT_COLOR = 0xffa500;
+
+export const APPROVE_PREFIX = "sc_approve_";
+export const REJECT_PREFIX = "sc_reject_";
 
 export type UploadNotificationPayload = {
   game: {
@@ -140,9 +144,7 @@ function buildDiscordResponseContainer({
     .addTextDisplayComponents((textDisplay) =>
       textDisplay.setContent(`## ${headline}`),
     )
-    .addTextDisplayComponents((textDisplay) =>
-      textDisplay.setContent(message),
-    );
+    .addTextDisplayComponents((textDisplay) => textDisplay.setContent(message));
 
   if (details.length > 0) {
     container.addTextDisplayComponents((textDisplay) =>
@@ -283,14 +285,9 @@ function buildGameDetailsTable(
         TWO_PER_ZONE: "2 Armies per Zone",
       }),
     ],
-    [
-      "AI",
-      game.hasAiPlayers == null ? null : game.hasAiPlayers ? "Yes" : "No",
-    ],
+    ["AI", game.hasAiPlayers == null ? null : game.hasAiPlayers ? "Yes" : "No"],
   ].filter((row): row is [string, string | number] => row[1] != null);
-  const labelWidth = Math.max(
-    ...rows.map(([label]) => `${label}:`.length),
-  );
+  const labelWidth = Math.max(...rows.map(([label]) => `${label}:`.length));
 
   return [
     "```",
@@ -393,56 +390,75 @@ export function buildTurnNudgeNotificationMessage(
   });
 }
 
-export function buildApprovalNotificationMessage({
-  applicantName,
-  gameName,
-  organizerDiscordId,
-  approveButton,
-  rejectButton,
-}: {
-  applicantName: string;
-  gameName: string;
-  organizerDiscordId: string | null;
-  approveButton: ButtonBuilder;
-  rejectButton: ButtonBuilder;
-}): MessageCreateOptions {
-  return buildDiscordNotification({
-    headline: `${formatDiscordActor("Overlord", organizerDiscordId)}, review this registration`,
-    message: `Approve or reject **${applicantName}**'s request to join **${gameName}**.`,
+export function buildRegistrationResponse(
+  registration: {
+    playerName: string;
+    gameName: string;
+  } & (
+    | { state: "pending"; organizerDiscordId: string | null }
+    | { state: "approved" | "rejected"; gameUrl?: string; turnOrder?: number }
+  ) &
+    ({ mode: "live"; requestId: string } | { mode: "preview" }),
+) {
+  const { playerName, gameName } = registration;
+  const approveButton = new ButtonBuilder()
+    .setCustomId(
+      registration.mode === "live"
+        ? `${APPROVE_PREFIX}${registration.requestId}`
+        : "debug_approve",
+    )
+    .setLabel("Approve")
+    .setStyle(ButtonStyle.Success);
+  const rejectButton = new ButtonBuilder()
+    .setCustomId(
+      registration.mode === "live"
+        ? `${REJECT_PREFIX}${registration.requestId}`
+        : "debug_reject",
+    )
+    .setLabel("Reject")
+    .setStyle(ButtonStyle.Danger);
+
+  if (registration.mode === "preview" || registration.state !== "pending") {
+    approveButton.setDisabled(true);
+    rejectButton.setDisabled(true);
+  }
+
+  const organizerDiscordId =
+    registration.state === "pending" ? registration.organizerDiscordId : null;
+  const presentation =
+    registration.state === "pending"
+      ? {
+          headline: `${formatDiscordActor("Overlord", organizerDiscordId)}, review this registration`,
+          message: `Approve or reject **${playerName}**'s request to join **${gameName}**.`,
+        }
+      : {
+          headline:
+            registration.state === "approved"
+              ? "Registration approved"
+              : "Registration rejected",
+          message: buildNotificationResultText({
+            approved: registration.state === "approved",
+            gameName,
+            playerName,
+            gameUrl: registration.gameUrl,
+            turnOrder: registration.turnOrder,
+          }),
+        };
+  const options = {
+    ...presentation,
     actionRow: new ActionRowBuilder<ButtonBuilder>().addComponents(
       approveButton,
       rejectButton,
     ),
-    mentionedUserIds: organizerDiscordId ? [organizerDiscordId] : [],
-  });
-}
+  };
 
-export function buildApprovalResultMessage({
-  approved,
-  gameName,
-  gameUrl,
-  playerName,
-  turnOrder,
-  actionRow,
-}: {
-  approved: boolean;
-  gameName: string;
-  gameUrl?: string;
-  playerName: string;
-  turnOrder?: number;
-  actionRow?: ActionRowBuilder<ButtonBuilder>;
-}): InteractionEditReplyOptions {
-  return buildDiscordEditReply({
-    headline: approved ? "Registration approved" : "Registration rejected",
-    message: buildNotificationResultText({
-      approved,
-      gameName,
-      gameUrl,
-      playerName,
-      turnOrder,
-    }),
-    actionRow,
-  });
+  return {
+    components: [buildDiscordResponseContainer(options)],
+    flags: MessageFlags.IsComponentsV2 as const,
+    allowedMentions: buildAllowedMentions(
+      organizerDiscordId ? [organizerDiscordId] : [],
+    ),
+  };
 }
 
 export function buildNotificationResultText({
