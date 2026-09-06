@@ -1,15 +1,21 @@
 # Triage Labels
 
-Map the five canonical triage roles to these `Status:` values in local issue files.
+The five canonical triage roles map directly to Linear issue labels.
 
-| Canonical role | Tracker status | Meaning |
+| Canonical role | Linear label | Meaning |
 | --- | --- | --- |
-| `needs-triage` | `needs-triage` | Maintainer needs to evaluate the issue |
-| `needs-info` | `needs-info` | Waiting on reporter for more information |
-| `ready-for-agent` | `ready-for-agent` | Fully specified, ready for an autonomous agent |
+| `needs-triage` | `needs-triage` | Maintainer evaluation needed |
+| `needs-info` | `needs-info` | More information needed |
+| `ready-for-agent` | `ready-for-agent` | Specified for autonomous implementation |
 | `ready-for-human` | `ready-for-human` | Requires human implementation |
 | `wontfix` | `wontfix` | Will not be actioned |
 
-When a skill says to apply a triage label, update the issue's `Status:` line using this mapping.
+Reuse matching labels; create missing labels in the configured team.
+Keep at most one canonical triage-role label on an issue, preserving
+unrelated labels.
 
-Edit the Tracker status column to change the vocabulary.
+These labels are distinct from Linear workflow status. `ready-for-agent`
+does not mean an issue is unblocked, unstarted, or incomplete; check its
+workflow state and blocking relationships too.
+
+Changing the triage role does not implicitly change workflow status.

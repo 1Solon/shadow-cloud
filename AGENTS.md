@@ -2,11 +2,13 @@
 
 ### Issue tracker
 
-Issues and specs live as local Markdown under `.scratch/`. See `docs/agents/issue-tracker.md`.
+Issues and specs live in Linear's shadow-cloud project. Before fetching,
+publishing, or updating work, read `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-Use the five default triage roles as issue status strings. See `docs/agents/triage-labels.md`.
+Use the five default triage roles as Linear labels, separate from workflow
+status. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
