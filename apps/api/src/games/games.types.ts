@@ -1,3 +1,20 @@
+export type SeatOrderBaseline = {
+  campaignId: string;
+  revision: number;
+};
+
+export type SeatOrderSnapshot = {
+  gameId: string;
+  slug: string;
+  name: string;
+  organizerId: string;
+  players: PlayerSummary[];
+  activePlayerEntryId: string | null;
+  activePlayerUserId: string | null;
+  roundNumber: number | null;
+  seatOrderBaseline: SeatOrderBaseline;
+};
+
 export type PlayerSummary = {
   id: string;
   userId: string | null;

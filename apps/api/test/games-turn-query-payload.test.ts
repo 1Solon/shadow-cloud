@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
+  $transaction: vi.fn(async (callback) => callback(prismaMock)),
   game: { findMany: vi.fn(), findFirst: vi.fn() },
   turnRecord: { findMany: vi.fn() },
 }));
@@ -27,6 +28,7 @@ const endedAt = new Date('2026-07-11T00:00:00.000Z');
 function createGame(override = {}) {
   return {
     id: 'game-1',
+    turnRevision: 0,
     slug: 'ashes',
     gameNumber: 1,
     name: 'Ashes',

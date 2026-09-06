@@ -13,6 +13,7 @@ import {
   TurnCompletionReason,
 } from '@prisma/client';
 import type { ReorderSeatOrderDto } from '../../dto/reorder-seat-order.dto';
+import type { SeatOrderSnapshot } from '../../games.types';
 import { buildGameIdentifierWhere } from '../../support/game-lookup.helpers';
 import type { TurnRecordsService } from '../turn-records.service';
 import type { TurnMutationDependencies } from './dependencies';
@@ -21,6 +22,75 @@ const include = {
   players: { include: { user: true }, orderBy: { turnOrder: 'asc' } },
   turnState: true,
 } satisfies Prisma.GameInclude;
+
+function snapshot(
+  game: Prisma.GameGetPayload<{ include: typeof include }>,
+): SeatOrderSnapshot {
+  const state = game.turnState;
+  const activeSeats = state
+    ? game.players.filter(
+        (seat) =>
+          seat.userId === state.activePlayerId &&
+          (state.activePlayerEntryId == null ||
+            seat.id === state.activePlayerEntryId),
+      )
+    : [];
+  const active = activeSeats.length === 1 ? activeSeats[0] : null;
+  return {
+    gameId: game.id,
+    slug: game.slug,
+    name: game.name,
+    organizerId: game.organizerId,
+    players: game.players.map((seat) => ({
+      id: seat.id,
+      userId: seat.userId,
+      displayName: seat.user?.displayName ?? null,
+      turnOrder: seat.turnOrder,
+      isOrganizer:
+        seat.role === GameRole.ORGANIZER || seat.userId === game.organizerId,
+    })),
+    activePlayerEntryId: active?.id ?? null,
+    activePlayerUserId: active?.userId ?? null,
+    roundNumber: state?.roundNumber ?? null,
+    seatOrderBaseline: { campaignId: game.id, revision: game.turnRevision },
+  };
+}
+
+export async function getSeatOrder(
+  database: PrismaClient,
+  dependencies: TurnMutationDependencies,
+  gameId: string,
+  userId: string | undefined,
+): Promise<SeatOrderSnapshot> {
+  if (!userId)
+    throw new UnauthorizedException(
+      'Authenticated user id is missing from the token.',
+    );
+  const observed = await database.game.findFirst({
+    where: buildGameIdentifierWhere(gameId),
+    select: { id: true, organizerId: true },
+  });
+  if (!observed) throw new NotFoundException(`Game ${gameId} was not found.`);
+  const shadowOverride =
+    observed.organizerId !== userId &&
+    (await dependencies.authService?.isUserShadowOverride(userId)) === true;
+  if (observed.organizerId !== userId && !shadowOverride)
+    throw new ForbiddenException(
+      'Only the game organizer can edit seat order.',
+    );
+  return database.$transaction(async (transaction) => {
+    const game = await transaction.game.findUnique({
+      where: { id: observed.id },
+      include,
+    });
+    if (!game) throw new NotFoundException(`Game ${gameId} was not found.`);
+    if (game.organizerId !== userId && !shadowOverride)
+      throw new ForbiddenException(
+        'Only the game organizer can edit seat order.',
+      );
+    return snapshot(game);
+  });
+}
 
 export async function reorderSeatOrder(
   database: PrismaClient,
@@ -48,12 +118,29 @@ export async function reorderSeatOrder(
     );
   }
 
+  const baseline = input?.baseline;
+  if (
+    baseline == null ||
+    typeof baseline !== 'object' ||
+    Array.isArray(baseline) ||
+    typeof baseline.campaignId !== 'string' ||
+    !baseline.campaignId.trim() ||
+    !Number.isSafeInteger(baseline.revision) ||
+    baseline.revision < 0
+  ) {
+    throw new BadRequestException({
+      code: 'SEAT_ORDER_BASELINE_REQUIRED',
+      message:
+        'A valid Seat Order baseline is required. Reload the latest roster before saving.',
+    });
+  }
+
   return database.$transaction(async (transaction) => {
     // Lock before reading the proof without changing revision or updatedAt for
     // no-ops. A failed proof aborts; never retry intent against a newer roster.
     const fenced = await transaction.$executeRaw`
       UPDATE "Game" SET "turnRevision" = "turnRevision"
-      WHERE "id" = ${observed.id} AND "turnRevision" = ${observed.turnRevision}
+      WHERE "id" = ${observed.id} AND "turnRevision" = ${baseline.revision}
     `;
     const game = await transaction.game.findUnique({
       where: { id: observed.id },
@@ -67,6 +154,8 @@ export async function reorderSeatOrder(
     }
     if (
       fenced !== 1 ||
+      baseline.campaignId !== game.id ||
+      game.turnRevision !== observed.turnRevision ||
       game.organizerId !== observed.organizerId ||
       game.playerCount !== observed.playerCount ||
       game.players.length !== observed.players.length ||
@@ -85,14 +174,38 @@ export async function reorderSeatOrder(
         observed.turnState?.activePlayerEntryId ||
       game.turnState?.roundNumber !== observed.turnState?.roundNumber
     )
-      throw new ConflictException(
-        'The roster or active turn changed before updating seat order.',
-      );
+      throw new ConflictException({
+        code: 'STALE_SEAT_ORDER',
+        message:
+          'This Seat Order draft is stale. Discard it and reload the latest roster before saving.',
+      });
 
     const currentSeatIds = new Set(game.players.map((seat) => seat.id));
     const requestedSeatIds = input.seatEntryIds;
     const clearedSeatIds = input.clearedSeatEntryIds ?? [];
     const removedSeatIds = input.removedSeatEntryIds ?? [];
+    for (const [ids, label] of [
+      [requestedSeatIds, 'Seat order'],
+      [clearedSeatIds, 'Seat removal'],
+      [removedSeatIds, 'Seat deletion'],
+    ] as const) {
+      if (
+        !Array.isArray(ids) ||
+        [...ids].some((id) => typeof id !== 'string')
+      ) {
+        throw new BadRequestException(
+          `${label} must be an array of seat entry IDs.`,
+        );
+      }
+    }
+    if (
+      input.activePlayerEntryId != null &&
+      typeof input.activePlayerEntryId !== 'string'
+    ) {
+      throw new BadRequestException(
+        'Active player selection must be a seat entry ID.',
+      );
+    }
     const requested = new Set(requestedSeatIds);
     const cleared = new Set(clearedSeatIds);
     const removed = new Set(removedSeatIds);
@@ -221,7 +334,8 @@ export async function reorderSeatOrder(
           seat.role !== current.role
         );
       });
-    if (!rosterChanged && !activeChanged) return response;
+    if (!rosterChanged && !activeChanged)
+      return { ...response, seatOrder: snapshot(game) };
     await transaction.game.update({
       where: { id: game.id },
       data: { turnRevision: { increment: 1 } },
@@ -306,6 +420,10 @@ export async function reorderSeatOrder(
         }),
       },
     });
-    return response;
+    const committed = await transaction.game.findUniqueOrThrow({
+      where: { id: game.id },
+      include,
+    });
+    return { ...response, seatOrder: snapshot(committed) };
   });
 }

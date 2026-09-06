@@ -96,6 +96,7 @@ const props = {
   activePlayerEntryId: "seat-2",
   armyCount: "ONE_PER_ZONE",
   canEdit: true,
+  seatOrderBaseline: { campaignId: "campaign-1", revision: 7 },
   dlcMode: "NONE",
   gameMode: "TEAMS",
   gameNumber: 42,
@@ -219,6 +220,8 @@ describe("CampaignDetailsWorkspace", () => {
       gameNumber: 42,
       players: props.players,
       presentation: "configuration",
+      seatOrderBaseline: props.seatOrderBaseline,
+      onSnapshotAccepted: expect.any(Function),
       onDirtyChange: mocks.dirtyCallbacks.at(-1),
     });
 

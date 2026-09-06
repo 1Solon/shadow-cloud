@@ -19,7 +19,7 @@ import type {
   UploadSaveSafetyMetadata,
 } from '../support/game-payload.types';
 import type { ReorderSeatOrderDto } from '../dto/reorder-seat-order.dto';
-import { reorderSeatOrder } from './turn-mutations/seat-order';
+import { getSeatOrder, reorderSeatOrder } from './turn-mutations/seat-order';
 import type { ReplaceDiscordPlayerDto } from '../dto/replace-discord-player.dto';
 import {
   replacePlayerInSeat,
@@ -129,6 +129,10 @@ export class TurnMutationsService {
 
   async resignPlayerFromDiscord(input: ResignDiscordPlayerDto) {
     return resignPlayerFromDiscord(this.database, this.turnRecords, input);
+  }
+
+  async getSeatOrder(gameId: string, userId: string | undefined) {
+    return getSeatOrder(this.database, this.dependencies, gameId, userId);
   }
 
   async reorderSeatOrder(

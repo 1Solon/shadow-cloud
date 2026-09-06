@@ -63,12 +63,30 @@ export type GameTurnRecord = {
   nextReminderAt: string | null;
 };
 
+export type SeatOrderBaseline = {
+  campaignId: string;
+  revision: number;
+};
+
+export type SeatOrderSnapshot = {
+  gameId: string;
+  slug: string;
+  name: string;
+  organizerId: string;
+  players: GameDetail["players"];
+  activePlayerEntryId: string | null;
+  activePlayerUserId: string | null;
+  roundNumber: number | null;
+  seatOrderBaseline: SeatOrderBaseline;
+};
+
 export type GameDetail = {
   id: string;
   gameNumber: number;
   slug: string;
   name: string;
   organizerId: string;
+  seatOrderBaseline: SeatOrderBaseline;
   organizerDisplayName: string;
   playerCount: number | null;
   hasAiPlayers: boolean | null;

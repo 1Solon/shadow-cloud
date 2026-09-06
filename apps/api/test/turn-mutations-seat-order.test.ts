@@ -21,7 +21,8 @@ const { GamesTurnService } =
   await import('../src/games/services/games-turn.service');
 
 const startedAt = new Date('2026-09-01T00:00:00.000Z');
-const intent = { seatEntryIds: ['seat-1', 'seat-2', 'seat-open'] };
+const baseline = { campaignId: 'game-1', revision: 0 };
+const intent = { seatEntryIds: ['seat-1', 'seat-2', 'seat-open'], baseline };
 let fixture: Awaited<ReturnType<typeof createSqliteFixture>>;
 let mutations: TurnMutationsService;
 
@@ -163,6 +164,7 @@ describe('Seat Order through real migrated SQLite', () => {
         }, options),
     );
     await mutations.reorderSeatOrder('1', 'user-1', {
+      baseline,
       seatEntryIds: ['seat-2', 'seat-1', 'seat-open'],
     });
     expect(attempted).toBe(true);
@@ -230,6 +232,7 @@ describe('Seat Order through real migrated SQLite', () => {
       }),
     ).rejects.toMatchObject({ code: 'P2002' });
     await mutations.reorderSeatOrder('1', 'user-1', {
+      baseline,
       seatEntryIds: ['seat-2', 'seat-open'],
       removedSeatEntryIds: ['seat-1'],
     });
@@ -314,9 +317,13 @@ describe('Seat Order through real migrated SQLite', () => {
         new TurnRecordsService(),
       );
       await competitor.reorderSeatOrder('1', 'user-1', {
+        baseline,
         seatEntryIds: ['seat-2', 'seat-1', 'seat-open'],
       });
-      await competitor.reorderSeatOrder('1', 'user-1', intent);
+      await competitor.reorderSeatOrder('1', 'user-1', {
+        ...intent,
+        baseline: { campaignId: 'game-1', revision: 1 },
+      });
       afterChange = await persistedState(other);
     });
     await expect(
@@ -356,6 +363,7 @@ describe('Seat Order through real migrated SQLite', () => {
       admitted = true;
     });
     await mutations.reorderSeatOrder('1', 'user-3', {
+      baseline,
       seatEntryIds: ['seat-2', 'seat-1', 'seat-open'],
     });
     expect(authService.isUserShadowOverride).toHaveBeenCalledExactlyOnceWith(
@@ -372,7 +380,10 @@ describe('Seat Order through real migrated SQLite', () => {
       afterChange = await persistedState(other);
     });
     await expect(
-      mutations.reorderSeatOrder('1', 'user-3', intent),
+      mutations.reorderSeatOrder('1', 'user-3', {
+        ...intent,
+        baseline: { campaignId: 'game-1', revision: 1 },
+      }),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(await persistedState()).toEqual(afterChange!);
   });
@@ -432,6 +443,7 @@ describe('Seat Order through real migrated SQLite', () => {
     await fixture.db.turnRecord.deleteMany();
     await fixture.db.turnState.deleteMany();
     await mutations.reorderSeatOrder('1', 'user-1', {
+      baseline,
       seatEntryIds: ['seat-2', 'seat-1', 'seat-open'],
       activePlayerEntryId: 'seat-2',
     });
@@ -440,6 +452,7 @@ describe('Seat Order through real migrated SQLite', () => {
     expect(after.history).toEqual([]);
     expect(after.games[0].turnRevision).toBe(1);
     await mutations.reorderSeatOrder('1', 'user-1', {
+      baseline: { campaignId: 'game-1', revision: 1 },
       seatEntryIds: ['seat-2', 'seat-1', 'seat-open'],
       activePlayerEntryId: 'seat-1',
     });
@@ -503,6 +516,7 @@ describe('Seat Order through real migrated SQLite', () => {
     });
     const before = await persistedState();
     await mutations.reorderSeatOrder('1', 'user-1', {
+      baseline,
       seatEntryIds: ['seat-2', 'seat-1', 'seat-open'],
     });
     const after = await persistedState();
@@ -517,6 +531,7 @@ describe('Seat Order through real migrated SQLite', () => {
       await seedDeliveries();
       const before = await persistedState();
       const result = await mutations.reorderSeatOrder('1', 'user-1', {
+        baseline,
         seatEntryIds:
           action === 'remove' ? ['seat-2', 'seat-open'] : intent.seatEntryIds,
         ...(action === 'clear' ? { clearedSeatEntryIds: ['seat-1'] } : {}),
@@ -591,6 +606,7 @@ describe('Seat Order through real migrated SQLite', () => {
       });
       // Campaign ownership is independent of having an occupied seat.
       await mutations.reorderSeatOrder('1', 'user-1', {
+        baseline: { campaignId: 'game-1', revision: 1 },
         seatEntryIds: result.players.map((seat) => seat.seatEntryId),
       });
       expect((await persistedState()).games[0].turnRevision).toBe(1);
@@ -603,6 +619,7 @@ describe('Seat Order through real migrated SQLite', () => {
       data: { userId: 'user-3' },
     });
     const result = await mutations.reorderSeatOrder('1', 'user-1', {
+      baseline,
       seatEntryIds: ['seat-open', 'seat-2'],
       clearedSeatEntryIds: ['seat-2'],
       removedSeatEntryIds: ['seat-1'],
@@ -637,6 +654,7 @@ describe('Seat Order through real migrated SQLite', () => {
       (await persistedState()).seats.find((seat) => seat.id === 'seat-2'),
     ).toMatchObject({ userId: null, turnOrder: 2 });
     await mutations.reorderSeatOrder('1', 'user-1', {
+      baseline: { campaignId: 'game-1', revision: 1 },
       seatEntryIds: ['seat-1', 'seat-open'],
       removedSeatEntryIds: ['seat-2'],
     });
@@ -668,6 +686,7 @@ describe('Seat Order through real migrated SQLite', () => {
       BEGIN SELECT RAISE(ABORT, 'injected late Seat Order failure'); END`);
     const before = await persistedState();
     const edit = {
+      baseline,
       seatEntryIds: ['seat-2', 'seat-open'],
       removedSeatEntryIds: ['seat-1'],
       clearedSeatEntryIds: ['seat-2'],
@@ -716,7 +735,7 @@ describe('Seat Order through real migrated SQLite', () => {
     async (edit) => {
       const before = await persistedState();
       await expect(
-        mutations.reorderSeatOrder('1', 'user-1', edit),
+        mutations.reorderSeatOrder('1', 'user-1', { ...edit, baseline }),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(await persistedState()).toEqual(before);
     },
@@ -766,6 +785,7 @@ describe('Seat Order through real migrated SQLite', () => {
       }
       const before = await persistedState();
       const result = await mutations.reorderSeatOrder('game-1', 'user-1', {
+        baseline,
         seatEntryIds: ['seat-2', 'seat-1', 'seat-open'],
         activePlayerEntryId: 'seat-1',
       });
@@ -801,6 +821,39 @@ describe('Seat Order through real migrated SQLite', () => {
       slug: 'ashes',
       name: 'Ashes',
       activePlayerEntryId: 'seat-1',
+      seatOrder: {
+        gameId: 'game-1',
+        slug: 'ashes',
+        name: 'Ashes',
+        organizerId: 'user-1',
+        players: [
+          {
+            id: 'seat-1',
+            userId: 'user-1',
+            displayName: 'Overlord',
+            turnOrder: 1,
+            isOrganizer: true,
+          },
+          {
+            id: 'seat-2',
+            userId: 'user-2',
+            displayName: 'Other',
+            turnOrder: 2,
+            isOrganizer: false,
+          },
+          {
+            id: 'seat-open',
+            userId: null,
+            displayName: null,
+            turnOrder: 3,
+            isOrganizer: false,
+          },
+        ],
+        activePlayerEntryId: 'seat-1',
+        activePlayerUserId: 'user-1',
+        roundNumber: 4,
+        seatOrderBaseline: baseline,
+      },
       players: [
         { seatEntryId: 'seat-1', turnOrder: 1, displayName: 'Overlord' },
         { seatEntryId: 'seat-2', turnOrder: 2, displayName: 'Other' },

@@ -99,6 +99,15 @@ export class GamesController {
     });
   }
 
+  @Get(':gameId/seat-order')
+  @UseGuards(AppAuthGuard)
+  getSeatOrder(
+    @Param('gameId') gameId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.gamesService.getSeatOrder(gameId, request.user?.sub);
+  }
+
   @Post(':gameId/seat-order')
   @UseGuards(AppAuthGuard)
   reorderSeatOrder(

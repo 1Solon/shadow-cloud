@@ -41,6 +41,10 @@ import {
   type TerminalActionConfirmationSpec,
 } from "@/components/terminal-action-confirmation-dialog";
 import { cn } from "@/lib/utils";
+import type {
+  SeatOrderBaseline,
+  SeatOrderSnapshot,
+} from "@/lib/shadow-cloud-api";
 
 type SeatOrderPlayer = {
   id: string;
@@ -54,9 +58,11 @@ type SeatOrderEditorProps = {
   gameNumber: number;
   players: SeatOrderPlayer[];
   activePlayerEntryId: string | null;
+  seatOrderBaseline: SeatOrderBaseline;
   canEdit: boolean;
   presentation?: "card" | "configuration";
   onDirtyChange?: (isDirty: boolean) => void;
+  onSnapshotAccepted?: (snapshot: SeatOrderSnapshot) => void;
 };
 
 type PendingSeatAction = {
@@ -379,26 +385,50 @@ function SortableSeatRow({
   );
 }
 
-export function SeatOrderEditor({
+export function SeatOrderEditor(props: SeatOrderEditorProps) {
+  return (
+    <CampaignSeatOrderEditor
+      key={props.seatOrderBaseline?.campaignId}
+      {...props}
+    />
+  );
+}
+
+function CampaignSeatOrderEditor({
   gameNumber,
   players,
   activePlayerEntryId,
-  canEdit,
+  seatOrderBaseline,
+  canEdit: hasEditPermission,
   presentation = "card",
   onDirtyChange,
+  onSnapshotAccepted,
 }: SeatOrderEditorProps) {
   const router = useRouter();
+  const [permissionLost, setPermissionLost] = useState(false);
+  const canEdit = hasEditPermission && !permissionLost;
+  const permissionVersionRef = useRef(0);
   const isConfiguration = presentation === "configuration";
   const [isCardEditing, setIsCardEditing] = useState(false);
-  const [draftPlayers, setDraftPlayers] = useState(players);
-  const [draftActivePlayerEntryId, setDraftActivePlayerEntryId] =
-    useState(activePlayerEntryId);
-  const [draftBaselinePlayers, setDraftBaselinePlayers] = useState(players);
-  const [
-    draftBaselineActivePlayerEntryId,
-    setDraftBaselineActivePlayerEntryId,
-  ] = useState(activePlayerEntryId);
+  const [acceptedSnapshot, setAcceptedSnapshot] = useState<
+    Pick<
+      SeatOrderSnapshot,
+      "players" | "activePlayerEntryId" | "seatOrderBaseline"
+    >
+  >({ players, activePlayerEntryId, seatOrderBaseline });
+  const [previousPlayers, setPreviousPlayers] = useState(players);
+  const [draft, setDraft] = useState<{
+    players: SeatOrderPlayer[];
+    activePlayerEntryId: string | null;
+    baseline: {
+      players: SeatOrderPlayer[];
+      activePlayerEntryId: string | null;
+      seatOrderBaseline: SeatOrderBaseline;
+    };
+  } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [requiresReload, setRequiresReload] = useState(false);
+  const reloadButtonRef = useRef<HTMLButtonElement | null>(null);
   const [confirmation, setConfirmation] =
     useState<TerminalConfirmationSpec | null>(null);
   const [pendingSeatAction, setPendingSeatAction] =
@@ -426,31 +456,44 @@ export function SeatOrderEditor({
       coordinateGetter: sortableKeyboardCoordinates,
     }),
   );
-  const isMutating = isPending;
-  const draftHasLocalChanges = !seatDraftsMatch(
-    draftPlayers,
-    draftActivePlayerEntryId,
-    draftBaselinePlayers,
-    draftBaselineActivePlayerEntryId,
-  );
-  const workingPlayers = draftHasLocalChanges ? draftPlayers : players;
-  const workingActivePlayerEntryId = draftHasLocalChanges
-    ? draftActivePlayerEntryId
-    : activePlayerEntryId;
+  const isMutating = isPending || requiresReload;
+  const incomingPlayersChanged = previousPlayers !== players;
+  if (incomingPlayersChanged) setPreviousPlayers(players);
+  // Keep authoritative state separate from a captured proposal, and never roll it back.
+  if (
+    seatOrderBaseline &&
+    seatOrderBaseline.campaignId ===
+      acceptedSnapshot.seatOrderBaseline?.campaignId &&
+    seatOrderBaseline.revision >= acceptedSnapshot.seatOrderBaseline.revision &&
+    (incomingPlayersChanged ||
+      seatOrderBaseline.revision !==
+        acceptedSnapshot.seatOrderBaseline.revision)
+  ) {
+    setAcceptedSnapshot({ players, activePlayerEntryId, seatOrderBaseline });
+  }
+  const latestRoster = acceptedSnapshot;
+  const draftBaseline = draft?.baseline ?? latestRoster;
+  const draftBaselinePlayers = draftBaseline.players;
+  const workingPlayers = draft?.players ?? draftBaselinePlayers;
+  const workingActivePlayerEntryId = draft
+    ? draft.activePlayerEntryId
+    : draftBaseline.activePlayerEntryId;
   const isDirty = !seatDraftsMatch(
     workingPlayers,
     workingActivePlayerEntryId,
-    players,
-    activePlayerEntryId,
+    draftBaselinePlayers,
+    draftBaseline.activePlayerEntryId,
   );
-  const isEditing = canEdit && (isConfiguration || isCardEditing || isDirty);
-  const reportedDirty = canEdit && isDirty;
+  const isEditing =
+    canEdit && (isConfiguration || isCardEditing || isDirty || requiresReload);
+  const reportedDirty = canEdit && (isDirty || requiresReload || isPending);
 
   useEffect(() => {
     onDirtyChange?.(reportedDirty);
   }, [onDirtyChange, reportedDirty]);
 
   useEffect(() => {
+    if (isPending) return;
     const focusTarget = pendingFocusTargetRef.current;
 
     if (focusTarget && document.contains(focusTarget)) {
@@ -469,14 +512,82 @@ export function SeatOrderEditor({
     }
   }, [canEdit, isConfiguration]);
 
+  useEffect(() => {
+    if (!canEdit) {
+      // A revoked editor cannot resume its previous draft if permission returns.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDraft(null);
+      setRequiresReload(false);
+      setIsCardEditing(false);
+      setConfirmation(null);
+      pendingFocusTargetRef.current = null;
+    }
+    return () => {
+      permissionVersionRef.current += 1;
+    };
+  }, [canEdit]);
+
   function updateDraft(
     nextPlayers: SeatOrderPlayer[],
     nextActivePlayerEntryId: string | null,
   ) {
-    setDraftPlayers(nextPlayers);
-    setDraftActivePlayerEntryId(nextActivePlayerEntryId);
-    setDraftBaselinePlayers(players);
-    setDraftBaselineActivePlayerEntryId(activePlayerEntryId);
+    setDraft({
+      players: nextPlayers,
+      activePlayerEntryId: nextActivePlayerEntryId,
+      baseline: draftBaseline,
+    });
+  }
+
+  function acceptSnapshot(snapshot: SeatOrderSnapshot | null | undefined) {
+    if (
+      !snapshot ||
+      !Array.isArray(snapshot.players) ||
+      !(
+        snapshot.activePlayerEntryId === null ||
+        typeof snapshot.activePlayerEntryId === "string"
+      ) ||
+      typeof snapshot.seatOrderBaseline?.campaignId !== "string" ||
+      snapshot.seatOrderBaseline.campaignId.trim().length === 0 ||
+      snapshot.seatOrderBaseline.campaignId !== snapshot.gameId ||
+      !Number.isSafeInteger(snapshot.seatOrderBaseline.revision) ||
+      snapshot.seatOrderBaseline.revision < 0
+    )
+      return "Loading the latest roster failed. Try again.";
+
+    if (snapshot.gameId !== seatOrderBaseline?.campaignId) {
+      return "The returned roster belongs to a different campaign. Open the original campaign from the campaign list before editing.";
+    }
+
+    setAcceptedSnapshot((current) =>
+      current.seatOrderBaseline &&
+      current.seatOrderBaseline.campaignId === snapshot.gameId &&
+      current.seatOrderBaseline.revision > snapshot.seatOrderBaseline.revision
+        ? current
+        : snapshot,
+    );
+    setDraft(null);
+    onSnapshotAccepted?.(snapshot);
+    return null;
+  }
+
+  function finishDraftGesture(
+    nextPlayers: SeatOrderPlayer[],
+    nextActivePlayerEntryId: string | null,
+  ) {
+    if (
+      isConfiguration &&
+      !requiresReload &&
+      seatDraftsMatch(
+        nextPlayers,
+        nextActivePlayerEntryId,
+        draftBaselinePlayers,
+        draftBaseline.activePlayerEntryId,
+      )
+    ) {
+      setDraft(null);
+    } else {
+      updateDraft(nextPlayers, nextActivePlayerEntryId);
+    }
   }
   const pendingSeatConfirmation: TerminalActionConfirmationSpec | null =
     pendingSeatAction
@@ -494,10 +605,8 @@ export function SeatOrderEditor({
         }
       : null;
 
-  function openSeatManagement(
-    seatEntryId: string,
-    trigger: HTMLButtonElement,
-  ) {
+  function openSeatManagement(seatEntryId: string, trigger: HTMLButtonElement) {
+    updateDraft(workingPlayers, workingActivePlayerEntryId);
     pendingFocusTargetRef.current = null;
     managementTriggerRef.current = trigger;
     setSelectedSeatEntryId(seatEntryId);
@@ -510,6 +619,7 @@ export function SeatOrderEditor({
     const { active, over } = event;
 
     if (!over || active.id === over.id) {
+      if (isConfiguration && !isDirty && !requiresReload) setDraft(null);
       return;
     }
 
@@ -524,7 +634,7 @@ export function SeatOrderEditor({
       return;
     }
 
-    updateDraft(
+    finishDraftGesture(
       movePlayerToSeat(workingPlayers, oldIndex, newIndex),
       workingActivePlayerEntryId,
     );
@@ -543,7 +653,7 @@ export function SeatOrderEditor({
       return;
     }
 
-    updateDraft(workingPlayers, selectedPlayer.id);
+    finishDraftGesture(workingPlayers, selectedPlayer.id);
     setErrorMessage(null);
     setConfirmation(null);
     setPendingSeatAction(null);
@@ -610,7 +720,7 @@ export function SeatOrderEditor({
     const selectedPlayer = workingPlayers.find(
       (player) => player.id === seatEntryId,
     );
-    const authoritativePlayer = players.find(
+    const authoritativePlayer = draftBaselinePlayers.find(
       (player) => player.id === seatEntryId,
     );
 
@@ -660,6 +770,7 @@ export function SeatOrderEditor({
       return;
     }
 
+    updateDraft(workingPlayers, workingActivePlayerEntryId);
     setPendingSeatAction(seatAction);
     setErrorMessage(null);
     setConfirmation(null);
@@ -673,7 +784,7 @@ export function SeatOrderEditor({
     }
 
     const selectedPlayer = workingPlayers[index];
-    const authoritativePlayer = players.find(
+    const authoritativePlayer = draftBaselinePlayers.find(
       (player) => player.id === selectedPlayer?.id,
     );
 
@@ -685,6 +796,7 @@ export function SeatOrderEditor({
       return;
     }
 
+    updateDraft(workingPlayers, workingActivePlayerEntryId);
     setPendingSeatAction(seatAction);
     setErrorMessage(null);
     setConfirmation(null);
@@ -704,7 +816,8 @@ export function SeatOrderEditor({
   }
 
   function cancelEdit() {
-    updateDraft(players, activePlayerEntryId);
+    if (isMutating) return;
+    setDraft(null);
     setIsCardEditing(false);
     setErrorMessage(null);
     setConfirmation(null);
@@ -713,13 +826,16 @@ export function SeatOrderEditor({
   }
 
   function saveSeatOrder() {
+    if (isMutating || !canEdit) return;
+    const permissionVersion = permissionVersionRef.current;
+    updateDraft(workingPlayers, workingActivePlayerEntryId);
     setErrorMessage(null);
     setConfirmation(null);
     setPendingSeatAction(null);
 
     startTransition(async () => {
       try {
-        const removedSeatEntryIds = players
+        const removedSeatEntryIds = draftBaselinePlayers
           .filter(
             (player) =>
               !workingPlayers.some(
@@ -728,7 +844,7 @@ export function SeatOrderEditor({
           )
           .map((player) => player.id);
         const removedSeatEntryIdSet = new Set(removedSeatEntryIds);
-        const clearedSeatEntryIds = players
+        const clearedSeatEntryIds = draftBaselinePlayers
           .filter(
             (player) =>
               player.userId != null && !removedSeatEntryIdSet.has(player.id),
@@ -751,6 +867,7 @@ export function SeatOrderEditor({
               clearedSeatEntryIds,
               removedSeatEntryIds,
               activePlayerEntryId: workingActivePlayerEntryId,
+              baseline: draftBaseline.seatOrderBaseline,
             }),
           },
         );
@@ -758,16 +875,38 @@ export function SeatOrderEditor({
         if (!response.ok) {
           const payload = (await response.json().catch(() => null)) as {
             error?: string;
+            code?: string;
           } | null;
+          if (permissionVersion !== permissionVersionRef.current) return;
+          if (response.status === 403) {
+            setPermissionLost(true);
+            router.refresh();
+          }
+          if (
+            payload?.code === "STALE_SEAT_ORDER" ||
+            payload?.code === "SEAT_ORDER_BASELINE_REQUIRED"
+          ) {
+            setRequiresReload(true);
+          }
           setErrorMessage(payload?.error ?? "The seat order update failed.");
           return;
         }
+        const payload = (await response.json().catch(() => null)) as {
+          seatOrder?: SeatOrderSnapshot;
+        } | null;
+        if (permissionVersion !== permissionVersionRef.current) return;
+        const snapshotError = acceptSnapshot(payload?.seatOrder);
+        if (snapshotError) {
+          setRequiresReload(true);
+          setErrorMessage(snapshotError);
+          return;
+        }
       } catch {
+        if (permissionVersion !== permissionVersionRef.current) return;
         setErrorMessage("The seat order update failed.");
         return;
       }
 
-      updateDraft(players, activePlayerEntryId);
       setSelectedSeatEntryId(null);
       onDirtyChange?.(false);
       setIsCardEditing(false);
@@ -784,7 +923,55 @@ export function SeatOrderEditor({
     });
   }
 
-  const visiblePlayers = isEditing ? workingPlayers : players;
+  function reloadSeatOrder() {
+    if (isPending || !canEdit) return;
+    const permissionVersion = permissionVersionRef.current;
+    startTransition(async () => {
+      try {
+        const response = await fetch(
+          `/api/games/${encodeURIComponent(String(gameNumber))}/seat-order`,
+          { method: "GET", cache: "no-store" },
+        );
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as {
+            error?: string;
+          } | null;
+          if (permissionVersion !== permissionVersionRef.current) return;
+          if (response.status === 403) {
+            setPermissionLost(true);
+            router.refresh();
+          }
+          setErrorMessage(
+            payload?.error ?? "Loading the latest roster failed. Try again.",
+          );
+          return;
+        }
+        const snapshot = (await response
+          .json()
+          .catch(() => null)) as SeatOrderSnapshot | null;
+        if (permissionVersion !== permissionVersionRef.current) return;
+        const snapshotError = acceptSnapshot(snapshot);
+        if (snapshotError) {
+          setErrorMessage(snapshotError);
+          return;
+        }
+        setRequiresReload(false);
+        setErrorMessage(null);
+        setSelectedSeatEntryId(null);
+        setPendingSeatAction(null);
+        pendingFocusTargetRef.current = saveOrderButtonRef.current;
+      } catch {
+        if (permissionVersion !== permissionVersionRef.current) return;
+        setErrorMessage("Loading the latest roster failed. Try again.");
+      }
+    });
+  }
+
+  useEffect(() => {
+    if (requiresReload && !isPending) reloadButtonRef.current?.focus();
+  }, [requiresReload, isPending]);
+
+  const visiblePlayers = isEditing ? workingPlayers : latestRoster.players;
   const selectedSeatIndex = workingPlayers.findIndex(
     (player) => player.id === selectedSeatEntryId,
   );
@@ -794,10 +981,7 @@ export function SeatOrderEditor({
     (player) => player.userId != null,
   ).length;
   const managedSeat: ManageSeatModalSeat | null =
-    isConfiguration &&
-    isEditing &&
-    !pendingSeatAction &&
-    selectedSeat != null
+    isConfiguration && isEditing && !pendingSeatAction && selectedSeat != null
       ? {
           id: selectedSeat.id,
           seatNumber: selectedSeatIndex + 1,
@@ -807,12 +991,12 @@ export function SeatOrderEditor({
           canClear: selectedSeat.userId != null && occupiedSeatCount > 1,
           canRemove:
             selectedSeat.userId == null &&
-            players.find((player) => player.id === selectedSeat.id)?.userId ==
-              null,
+            draftBaselinePlayers.find((player) => player.id === selectedSeat.id)
+              ?.userId == null,
           requiresSavedClearBeforeRemove:
             selectedSeat.userId == null &&
-            players.find((player) => player.id === selectedSeat.id)?.userId !=
-              null,
+            draftBaselinePlayers.find((player) => player.id === selectedSeat.id)
+              ?.userId != null,
         }
       : null;
 
@@ -835,6 +1019,7 @@ export function SeatOrderEditor({
         onClose={() => {
           pendingFocusTargetRef.current = managementTriggerRef.current;
           setSelectedSeatEntryId(null);
+          if (!isDirty && !requiresReload) setDraft(null);
         }}
         onMakeActive={() => {
           if (selectedSeatIndex >= 0) {
@@ -868,10 +1053,31 @@ export function SeatOrderEditor({
           role="alert"
         >
           {errorMessage}
+          {requiresReload
+            ? " Your attempted draft is unchanged. Discard it and load latest roster before saving again."
+            : null}
         </div>
+      ) : null}
+      {requiresReload && canEdit ? (
+        <Button
+          ref={reloadButtonRef}
+          className="h-auto whitespace-normal text-left"
+          disabled={isPending}
+          type="button"
+          variant="secondary"
+          onClick={reloadSeatOrder}
+        >
+          Discard draft and load latest roster
+        </Button>
       ) : null}
       <DndContext
         collisionDetection={closestCenter}
+        onDragStart={() =>
+          updateDraft(workingPlayers, workingActivePlayerEntryId)
+        }
+        onDragCancel={() => {
+          if (isConfiguration && !isDirty && !requiresReload) setDraft(null);
+        }}
         onDragEnd={handleDragEnd}
         sensors={sensors}
       >
@@ -883,7 +1089,9 @@ export function SeatOrderEditor({
             <SortableSeatRow
               key={player.id}
               activePlayerEntryId={
-                isEditing ? workingActivePlayerEntryId : activePlayerEntryId
+                isEditing
+                  ? workingActivePlayerEntryId
+                  : latestRoster.activePlayerEntryId
               }
               canClearPlayer={
                 visiblePlayers.filter(
@@ -892,7 +1100,7 @@ export function SeatOrderEditor({
               }
               canRemoveSeat={
                 player.userId == null &&
-                players.find(
+                draftBaselinePlayers.find(
                   (authoritativePlayer) => authoritativePlayer.id === player.id,
                 )?.userId == null
               }
@@ -968,6 +1176,7 @@ export function SeatOrderEditor({
                 Cancel
               </Button>
               <Button
+                ref={saveOrderButtonRef}
                 disabled={isMutating}
                 type="button"
                 onClick={saveSeatOrder}
@@ -981,7 +1190,11 @@ export function SeatOrderEditor({
               type="button"
               variant="secondary"
               onClick={() => {
-                updateDraft(players, activePlayerEntryId);
+                setDraft({
+                  players: latestRoster.players,
+                  activePlayerEntryId: latestRoster.activePlayerEntryId,
+                  baseline: latestRoster,
+                });
                 setIsCardEditing(true);
                 setErrorMessage(null);
                 setConfirmation(null);

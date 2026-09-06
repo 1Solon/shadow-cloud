@@ -2,6 +2,36 @@ import { createApiAccessToken, getServerAuthSession } from "@/auth";
 
 const apiBaseUrl = process.env.SHADOW_CLOUD_API_URL ?? "http://localhost:3001";
 
+export async function GET(
+  _request: Request,
+  context: { params: Promise<{ gameNumber: string }> },
+) {
+  const { gameNumber } = await context.params;
+  const session = await getServerAuthSession();
+  if (!session?.user?.id) {
+    return Response.json(
+      { error: "Sign in to edit seat order." },
+      { status: 401 },
+    );
+  }
+  const token = await createApiAccessToken(session).catch(() => null);
+  if (!token) {
+    return Response.json(
+      { error: "API authentication is unavailable." },
+      { status: 500 },
+    );
+  }
+  const response = await fetch(
+    `${apiBaseUrl}/v1/games/${encodeURIComponent(gameNumber)}/seat-order`,
+    {
+      method: "GET",
+      headers: { authorization: `Bearer ${token}` },
+      cache: "no-store",
+    },
+  );
+  return seatOrderResponse(response);
+}
+
 export async function POST(
   request: Request,
   context: { params: Promise<{ gameNumber: string }> },
@@ -30,72 +60,32 @@ export async function POST(
     clearedSeatEntryIds?: unknown;
     removedSeatEntryIds?: unknown;
     activePlayerEntryId?: unknown;
+    baseline?: unknown;
   } | null;
 
-  if (!Array.isArray(payload?.seatEntryIds)) {
-    return Response.json(
-      { error: "Seat order payload is invalid." },
-      { status: 400 },
-    );
-  }
-
-  if (payload.seatEntryIds.some((entryId) => typeof entryId !== "string")) {
-    return Response.json(
-      { error: "Seat order payload is invalid." },
-      { status: 400 },
-    );
-  }
-
+  const baseline = payload?.baseline;
   if (
-    payload.clearedSeatEntryIds != null &&
-    !Array.isArray(payload.clearedSeatEntryIds)
+    baseline == null ||
+    typeof baseline !== "object" ||
+    Array.isArray(baseline) ||
+    !("campaignId" in baseline) ||
+    typeof baseline.campaignId !== "string" ||
+    baseline.campaignId.trim().length === 0 ||
+    !("revision" in baseline) ||
+    typeof baseline.revision !== "number" ||
+    !Number.isSafeInteger(baseline.revision) ||
+    baseline.revision < 0
   ) {
     return Response.json(
-      { error: "Cleared seat payload is invalid." },
+      {
+        error: "Reload the latest roster before saving seat order.",
+        code: "SEAT_ORDER_BASELINE_REQUIRED",
+      },
       { status: 400 },
     );
   }
 
-  if (
-    payload.removedSeatEntryIds != null &&
-    !Array.isArray(payload.removedSeatEntryIds)
-  ) {
-    return Response.json(
-      { error: "Removed seat payload is invalid." },
-      { status: 400 },
-    );
-  }
-
-  if (
-    Array.isArray(payload.clearedSeatEntryIds) &&
-    payload.clearedSeatEntryIds.some((entryId) => typeof entryId !== "string")
-  ) {
-    return Response.json(
-      { error: "Cleared seat payload is invalid." },
-      { status: 400 },
-    );
-  }
-
-  if (
-    Array.isArray(payload.removedSeatEntryIds) &&
-    payload.removedSeatEntryIds.some((entryId) => typeof entryId !== "string")
-  ) {
-    return Response.json(
-      { error: "Removed seat payload is invalid." },
-      { status: 400 },
-    );
-  }
-
-  if (
-    payload.activePlayerEntryId != null &&
-    typeof payload.activePlayerEntryId !== "string"
-  ) {
-    return Response.json(
-      { error: "Active player payload is invalid." },
-      { status: 400 },
-    );
-  }
-
+  // The invariant owner checks authority and freshness before validating intent.
   const response = await fetch(
     `${apiBaseUrl}/v1/games/${encodeURIComponent(gameNumber)}/seat-order`,
     {
@@ -105,19 +95,25 @@ export async function POST(
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        seatEntryIds: payload.seatEntryIds,
-        clearedSeatEntryIds: payload.clearedSeatEntryIds,
-        removedSeatEntryIds: payload.removedSeatEntryIds,
-        activePlayerEntryId: payload.activePlayerEntryId,
+        seatEntryIds: payload?.seatEntryIds,
+        clearedSeatEntryIds: payload?.clearedSeatEntryIds,
+        removedSeatEntryIds: payload?.removedSeatEntryIds,
+        activePlayerEntryId: payload?.activePlayerEntryId,
+        baseline,
       }),
       cache: "no-store",
     },
   );
 
+  return seatOrderResponse(response);
+}
+
+async function seatOrderResponse(response: Response) {
   if (!response.ok) {
     const errorPayload = (await response.json().catch(() => null)) as {
       message?: string | string[];
       error?: string;
+      code?: string;
     } | null;
     const message = Array.isArray(errorPayload?.message)
       ? errorPayload.message.join(", ")
@@ -126,7 +122,7 @@ export async function POST(
         "The seat order update failed.");
 
     return Response.json(
-      { error: message },
+      { error: message, code: errorPayload?.code },
       { status: response.status || 500 },
     );
   }

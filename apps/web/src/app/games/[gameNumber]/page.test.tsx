@@ -84,6 +84,7 @@ function createGame(overrides: Partial<GameDetail> = {}): GameDetail {
     slug: "campaign-42",
     name: "Campaign 42",
     organizerId: "organizer-1",
+    seatOrderBaseline: { campaignId: "game-1", revision: 7 },
     organizerDisplayName: "Overlord",
     playerCount: 2,
     hasAiPlayers: false,
@@ -279,6 +280,7 @@ describe("GameDetailPage workspace composition", () => {
     );
 
     expect(details?.props).toEqual({
+      seatOrderBaseline: { campaignId: "game-1", revision: 7 },
       activePlayerEntryId: "seat-2",
       armyCount: "ONE_PER_ZONE",
       canEdit: false,

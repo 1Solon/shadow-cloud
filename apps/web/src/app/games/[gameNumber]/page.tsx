@@ -146,6 +146,7 @@ export default async function GameDetailPage({
             organizerDisplayName={game.organizerDisplayName}
             playerCount={game.playerCount}
             players={game.players}
+            seatOrderBaseline={game.seatOrderBaseline}
             roundNumber={game.roundNumber}
             techLevel={game.techLevel}
             turnReminderGraceHours={game.turnReminderGraceHours}

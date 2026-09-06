@@ -167,6 +167,10 @@ export class GamesService {
     };
   }
 
+  async getSeatOrder(gameId: string, userId: string | undefined) {
+    return this.turnMutations.getSeatOrder(gameId, userId);
+  }
+
   async reorderSeatOrder(
     gameId: string,
     userId: string | undefined,

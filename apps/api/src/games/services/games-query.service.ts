@@ -175,69 +175,74 @@ export class GamesQueryService {
   }
 
   async getGameDetail(gameId: string): Promise<GameDetailResponse> {
-    const game = await prisma.game.findFirst({
-      where: {
-        ...buildGameIdentifierWhere(gameId),
-      },
-      include: {
-        organizer: true,
-        players: {
-          include: {
-            user: true,
+    const { game, openTurns, recentCompletedTurns } = await prisma.$transaction(
+      async (transaction) => {
+        const game = await transaction.game.findFirst({
+          where: {
+            ...buildGameIdentifierWhere(gameId),
           },
-          orderBy: {
-            turnOrder: 'asc',
-          },
-        },
-        turnState: {
           include: {
-            activePlayerEntry: {
+            organizer: true,
+            players: {
               include: {
                 user: true,
               },
+              orderBy: {
+                turnOrder: 'asc',
+              },
+            },
+            turnState: {
+              include: {
+                activePlayerEntry: {
+                  include: {
+                    user: true,
+                  },
+                },
+              },
+            },
+            fileVersions: {
+              include: {
+                uploadedBy: true,
+                replacedBy: true,
+              },
+              orderBy: {
+                versionNumber: 'desc',
+              },
+              take: 8,
+            },
+            auditEvents: {
+              where: {
+                eventType: {
+                  in: [
+                    AuditEventType.PLAYER_RESIGNED,
+                    AuditEventType.TURN_REASSIGNED,
+                  ],
+                },
+              },
+              orderBy: {
+                createdAt: 'desc',
+              },
             },
           },
-        },
-        fileVersions: {
-          include: {
-            uploadedBy: true,
-            replacedBy: true,
-          },
-          orderBy: {
-            versionNumber: 'desc',
-          },
-          take: 8,
-        },
-        auditEvents: {
-          where: {
-            eventType: {
-              in: [
-                AuditEventType.PLAYER_RESIGNED,
-                AuditEventType.TURN_REASSIGNED,
-              ],
-            },
-          },
-          orderBy: {
-            createdAt: 'desc',
-          },
-        },
+        });
+
+        if (!game) {
+          throw new NotFoundException(`Game ${gameId} was not found.`);
+        }
+
+        const [openTurns, recentCompletedTurns] = await Promise.all([
+          transaction.turnRecord.findMany({
+            where: { gameId: game.id, endedAt: null },
+          }),
+          transaction.turnRecord.findMany({
+            where: { gameId: game.id, endedAt: { not: null } },
+            orderBy: { endedAt: 'desc' },
+            take: 25,
+          }),
+        ]);
+        return { game, openTurns, recentCompletedTurns };
       },
-    });
-
-    if (!game) {
-      throw new NotFoundException(`Game ${gameId} was not found.`);
-    }
-
-    const [openTurns, recentCompletedTurns] = await Promise.all([
-      prisma.turnRecord.findMany({
-        where: { gameId: game.id, endedAt: null },
-      }),
-      prisma.turnRecord.findMany({
-        where: { gameId: game.id, endedAt: { not: null } },
-        orderBy: { endedAt: 'desc' },
-        take: 25,
-      }),
-    ]);
+    );
     const openTurn = openTurns[0] ? mapTurnRecord(openTurns[0]) : null;
 
     const activePlayerEntry = game.turnState
@@ -304,6 +309,7 @@ export class GamesQueryService {
       name: game.name,
       organizerId: game.organizerId,
       organizerDisplayName: game.organizer.displayName,
+      seatOrderBaseline: { campaignId: game.id, revision: game.turnRevision },
       playerCount: game.playerCount,
       hasAiPlayers: game.hasAiPlayers,
       dlcMode: game.dlcMode,

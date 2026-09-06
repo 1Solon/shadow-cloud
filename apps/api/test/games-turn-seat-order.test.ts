@@ -12,6 +12,7 @@ const { GamesTurnService } =
 describe('GamesTurnService Seat Order compatibility', () => {
   it('passes the existing request unchanged to the mutation owner and returns its response', async () => {
     const input = {
+      baseline: { campaignId: 'game-1', revision: 0 },
       seatEntryIds: ['seat-2', 'seat-1'],
       clearedSeatEntryIds: ['seat-1'],
       removedSeatEntryIds: ['seat-open'],
@@ -46,7 +47,10 @@ describe('GamesTurnService Seat Order compatibility', () => {
     };
     const service = new GamesTurnService(mutations as never);
     await expect(
-      service.reorderSeatOrder('1', 'user-1', { seatEntryIds: ['seat-1'] }),
+      service.reorderSeatOrder('1', 'user-1', {
+        seatEntryIds: ['seat-1'],
+        baseline: { campaignId: 'game-1', revision: 0 },
+      }),
     ).rejects.toBe(conflict);
     expect(mutations.reorderSeatOrder).toHaveBeenCalledTimes(1);
   });

@@ -13,9 +13,11 @@ import {
 import { CampaignNotesEditor } from "@/components/campaign-notes-editor";
 import { CampaignSettingsEditor } from "@/components/campaign-settings-editor";
 import { SeatOrderEditor } from "@/components/seat-order-editor";
+import type { SeatOrderBaseline } from "@/lib/shadow-cloud-api";
 
 type CampaignDetailsWorkspaceProps = Omit<CampaignBriefingProps, "notes"> & {
   canEdit: boolean;
+  seatOrderBaseline: SeatOrderBaseline;
   gameNumber: number;
   notes: string | null;
   roundNumber: number;
@@ -25,7 +27,38 @@ type CampaignDetailsWorkspaceProps = Omit<CampaignBriefingProps, "notes"> & {
 };
 
 export function CampaignDetailsWorkspace(props: CampaignDetailsWorkspaceProps) {
+  return (
+    <CampaignDetailsWorkspaceContent
+      key={props.seatOrderBaseline.campaignId}
+      {...props}
+    />
+  );
+}
+
+function CampaignDetailsWorkspaceContent(props: CampaignDetailsWorkspaceProps) {
   const [mode, setMode] = useState<"briefing" | "configuration">("briefing");
+  const [seatOrder, setSeatOrder] = useState({
+    players: props.players,
+    activePlayerEntryId: props.activePlayerEntryId,
+    seatOrderBaseline: props.seatOrderBaseline,
+  });
+  const [previousPlayers, setPreviousPlayers] = useState(props.players);
+  const incomingPlayersChanged = previousPlayers !== props.players;
+  if (incomingPlayersChanged) setPreviousPlayers(props.players);
+
+  if (
+    props.seatOrderBaseline.campaignId ===
+      seatOrder.seatOrderBaseline.campaignId &&
+    props.seatOrderBaseline.revision >= seatOrder.seatOrderBaseline.revision &&
+    (incomingPlayersChanged ||
+      props.seatOrderBaseline.revision !== seatOrder.seatOrderBaseline.revision)
+  ) {
+    setSeatOrder({
+      players: props.players,
+      activePlayerEntryId: props.activePlayerEntryId,
+      seatOrderBaseline: props.seatOrderBaseline,
+    });
+  }
 
   if (!props.canEdit && mode === "configuration") {
     setMode("briefing");
@@ -40,10 +73,20 @@ export function CampaignDetailsWorkspace(props: CampaignDetailsWorkspaceProps) {
     if (section === "seat-order") {
       return (
         <SeatOrderEditor
-          activePlayerEntryId={props.activePlayerEntryId}
+          activePlayerEntryId={seatOrder.activePlayerEntryId}
           canEdit={props.canEdit}
           gameNumber={props.gameNumber}
-          players={props.players}
+          players={seatOrder.players}
+          seatOrderBaseline={seatOrder.seatOrderBaseline}
+          onSnapshotAccepted={(snapshot) => {
+            setSeatOrder((current) =>
+              snapshot.gameId === current.seatOrderBaseline.campaignId &&
+              snapshot.seatOrderBaseline.revision >=
+                current.seatOrderBaseline.revision
+                ? snapshot
+                : current,
+            );
+          }}
           presentation="configuration"
           {...editorStateProps}
         />
@@ -94,10 +137,7 @@ export function CampaignDetailsWorkspace(props: CampaignDetailsWorkspaceProps) {
   }
 
   return (
-    <div
-      className="min-w-0 font-mono"
-      data-testid="campaign-details-workspace"
-    >
+    <div className="min-w-0 font-mono" data-testid="campaign-details-workspace">
       <CampaignBriefing
         activePlayerEntryId={props.activePlayerEntryId}
         headerAction={

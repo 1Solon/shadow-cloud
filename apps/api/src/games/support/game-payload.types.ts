@@ -5,6 +5,7 @@ import type {
   ZoneCountPreset,
   TurnCompletionReason,
 } from '../../database';
+import type { SeatOrderBaseline } from '../games.types';
 
 export type TurnRecordResponse = {
   id: string;
@@ -30,6 +31,7 @@ export type TurnTimingPolicyResponse = {
 };
 
 export type GameDetailResponse = TurnTimingPolicyResponse & {
+  seatOrderBaseline: SeatOrderBaseline;
   id: string;
   gameNumber: number;
   slug: string;

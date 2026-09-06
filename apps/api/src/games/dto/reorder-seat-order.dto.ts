@@ -1,22 +1,21 @@
-import { ArrayMinSize, IsArray, IsOptional, IsString } from 'class-validator';
+import { Allow } from 'class-validator';
+import type { SeatOrderBaseline } from '../games.types';
 
 export class ReorderSeatOrderDto {
-  @IsArray()
-  @ArrayMinSize(1)
-  @IsString({ each: true })
+  // Whitelist only: the owner checks authorization and baseline before intent,
+  // so malformed intent cannot hide a stale draft or lost permissions.
+  @Allow()
+  baseline!: SeatOrderBaseline;
+
+  @Allow()
   seatEntryIds!: string[];
 
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
+  @Allow()
   clearedSeatEntryIds?: string[];
 
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
+  @Allow()
   removedSeatEntryIds?: string[];
 
-  @IsOptional()
-  @IsString()
+  @Allow()
   activePlayerEntryId?: string;
 }

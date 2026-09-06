@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
+  $transaction: vi.fn(async (callback) => callback(prismaMock)),
   game: {
     findFirst: vi.fn(),
   },
@@ -41,6 +42,7 @@ function createService() {
 function createGameWithClearedSeat() {
   return {
     id: 'game-1',
+    turnRevision: 0,
     gameNumber: 7,
     slug: 'ashes',
     name: 'Ashes',
