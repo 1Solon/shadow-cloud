@@ -3,6 +3,7 @@
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   useTransition,
@@ -18,6 +19,11 @@ import {
   type TerminalConfirmationSpec,
 } from "@/components/terminal-confirmation-modal";
 import { Button } from "@/components/ui/button";
+import {
+  transferOutcomeMessage,
+  isKnownRejectionStatus,
+  type TransferOutcome,
+} from "@/lib/transfer-outcome";
 
 const dlcOptions = [
   { label: "None", value: "NONE" },
@@ -62,6 +68,8 @@ type CampaignPlayer = {
 };
 
 type CampaignSettingsEditorProps = CampaignEditorStateProps & {
+  campaignId: string;
+  identityReadId: string;
   section: CampaignSettingsSection;
   gameNumber: number;
   name: string;
@@ -121,6 +129,8 @@ type AuthoritativeSnapshot = {
 };
 
 type PendingHostTransfer = {
+  userId: string;
+  metadataCommitted: boolean;
   seatEntryId: string;
   seatNumber: number;
   displayName: string;
@@ -420,18 +430,19 @@ function HostTransferConfirmationDialog({
         event.target instanceof Node &&
         !dialogRef.current?.contains(event.target)
       ) {
-        cancelButtonRef.current?.focus();
+        (isPending ? dialogRef.current : cancelButtonRef.current)?.focus();
       }
     }
 
     const returnFocusElement = returnFocusRef.current;
-    cancelButtonRef.current?.focus();
+    // Disabled buttons lose focus in real browsers while the request is pending.
+    (isPending ? dialogRef.current : cancelButtonRef.current)?.focus();
     document.addEventListener("focusin", containFocus);
     return () => {
       document.removeEventListener("focusin", containFocus);
       returnFocusElement?.focus();
     };
-  }, [returnFocusRef, target]);
+  }, [isPending, returnFocusRef, target]);
 
   if (!target) {
     return null;
@@ -475,6 +486,7 @@ function HostTransferConfirmationDialog({
       <div
         ref={dialogRef}
         role="dialog"
+        tabIndex={-1}
         aria-labelledby={titleId}
         aria-modal="true"
         className="relative w-full max-w-md overflow-hidden rounded-2xl border border-orange-400/30 bg-[#0a0711] shadow-2xl shadow-orange-950/40"
@@ -530,6 +542,19 @@ function HostTransferConfirmationDialog({
 
 export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
   const router = useRouter();
+  const operationGenerationRef = useRef(0);
+  useLayoutEffect(() => {
+    operationGenerationRef.current += 1;
+    // The workspace unmounts this editor on permission loss or campaign change.
+    // Invalidate synchronously at commit, before an awaited response can resume.
+    return () => {
+      operationGenerationRef.current += 1;
+    };
+  }, [props.campaignId]);
+
+  function isCurrentOperation(generation: number) {
+    return generation === operationGenerationRef.current;
+  }
   const turnDescriptionIdPrefix = useId();
   const turnTargetHoursDescriptionId = `${turnDescriptionIdPrefix}-turn-target-hours-description`;
   const turnReminderGraceHoursDescriptionId = `${turnDescriptionIdPrefix}-turn-reminder-grace-hours-description`;
@@ -546,6 +571,13 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
     useState<TerminalConfirmationSpec | null>(null);
   const [pendingTransfer, setPendingTransfer] =
     useState<PendingHostTransfer | null>(null);
+  const [recovery, setRecovery] = useState<{
+    readId: string;
+    campaignId: string;
+    gameNumber: number;
+    outcome: TransferOutcome;
+  } | null>(null);
+  const [metadataUnconfirmed, setMetadataUnconfirmed] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [isTransferPending, startTransferTransition] = useTransition();
   const organizerOptions = props.players.filter(
@@ -561,6 +593,8 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
     currentOrganizerEntryId,
   );
   const organizerSelectRef = useRef<HTMLSelectElement>(null);
+  const recoveryMessageRef = useRef<HTMLParagraphElement>(null);
+  const recoveredFocusRef = useRef(false);
   const latestAuthoritativeDraftRef = useRef(initialDraft);
   const latestAuthoritativeOrganizerRef = useRef(initialOrganizerEntryId);
   const authoritativeSnapshotJson = JSON.stringify(
@@ -568,6 +602,16 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
   );
   const lastAuthoritativeSnapshotJsonRef = useRef(authoritativeSnapshotJson);
   const needsAuthoritativeSyncRef = useRef(false);
+
+  function acceptSnapshot(snapshot: AuthoritativeSnapshot) {
+    latestAuthoritativeDraftRef.current = snapshot.draft;
+    latestAuthoritativeOrganizerRef.current = snapshot.organizerEntryId;
+    needsAuthoritativeSyncRef.current = false;
+    setInitialDraft(snapshot.draft);
+    setDraft(snapshot.draft);
+    setInitialOrganizerEntryId(snapshot.organizerEntryId);
+    setOrganizerEntryId(snapshot.organizerEntryId);
+  }
   const isDirty = isSectionDirty(
     props.section,
     draft,
@@ -576,13 +620,44 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
     initialOrganizerEntryId,
   );
   const isMutating = isPending || isTransferPending;
-  const isEditorDisabled = isMutating || pendingTransfer != null;
+  const isEditorDisabled =
+    isMutating ||
+    pendingTransfer != null ||
+    recovery != null ||
+    metadataUnconfirmed;
 
   useEffect(() => {
-    onDirtyChange(isDirty);
-  }, [isDirty, onDirtyChange]);
+    onDirtyChange(isDirty || recovery != null || metadataUnconfirmed);
+  }, [isDirty, recovery, metadataUnconfirmed, onDirtyChange]);
 
   useEffect(() => {
+    if (recovery || metadataUnconfirmed) recoveryMessageRef.current?.focus();
+    else if (recoveredFocusRef.current && !isMutating) {
+      recoveredFocusRef.current = false;
+      organizerSelectRef.current?.focus();
+    }
+  }, [recovery, metadataUnconfirmed, isMutating]);
+
+  useEffect(() => {
+    // Only the read requested for this recovery can unlock the editor. An
+    // unrelated or older in-flight read may contain pre-transfer ownership.
+    if (
+      recovery &&
+      props.identityReadId === recovery.readId &&
+      props.campaignId === recovery.campaignId &&
+      props.gameNumber === recovery.gameNumber
+    ) {
+      const snapshot = JSON.parse(
+        authoritativeSnapshotJson,
+      ) as AuthoritativeSnapshot;
+      lastAuthoritativeSnapshotJsonRef.current = authoritativeSnapshotJson;
+      recoveredFocusRef.current = true;
+      // Accept the completed server read before unlocking the existing editor.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      acceptSnapshot(snapshot);
+      setRecovery(null);
+      return;
+    }
     if (
       authoritativeSnapshotJson !== lastAuthoritativeSnapshotJsonRef.current
     ) {
@@ -597,6 +672,8 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
 
     if (
       !needsAuthoritativeSyncRef.current ||
+      recovery ||
+      metadataUnconfirmed ||
       isDirty ||
       pendingTransfer ||
       isMutating
@@ -604,15 +681,22 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
       return;
     }
 
-    needsAuthoritativeSyncRef.current = false;
-    const nextDraft = latestAuthoritativeDraftRef.current;
-    const nextOrganizerEntryId = latestAuthoritativeOrganizerRef.current;
-    setInitialDraft(nextDraft);
-    setDraft(nextDraft);
-    setInitialOrganizerEntryId(nextOrganizerEntryId);
-    setOrganizerEntryId(nextOrganizerEntryId);
+    acceptSnapshot({
+      draft: latestAuthoritativeDraftRef.current,
+      organizerEntryId: latestAuthoritativeOrganizerRef.current,
+    });
     setErrorMessage(null);
-  }, [authoritativeSnapshotJson, isDirty, isMutating, pendingTransfer]);
+  }, [
+    authoritativeSnapshotJson,
+    isDirty,
+    isMutating,
+    pendingTransfer,
+    recovery,
+    metadataUnconfirmed,
+    props.identityReadId,
+    props.campaignId,
+    props.gameNumber,
+  ]);
 
   function updateDraft<Key extends keyof MetadataDraft>(
     key: Key,
@@ -623,9 +707,11 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
 
   async function applyMetadataUpdate(
     payload: MetadataPayload,
+    generation: number,
     gameNumber = props.gameNumber,
     onError: (message: string) => void = setErrorMessage,
   ) {
+    if (!isCurrentOperation(generation)) return null;
     if (Object.keys(payload).length === 0) {
       return gameNumber;
     }
@@ -637,30 +723,38 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       },
-    );
-
-    if (!response.ok) {
-      const body = (await response.json().catch(() => null)) as {
-        error?: string;
-      } | null;
-      onError(body?.error ?? "The game metadata update failed.");
+    ).catch(() => null);
+    if (!isCurrentOperation(generation)) return null;
+    const body = await response?.json().catch(() => null);
+    if (!isCurrentOperation(generation)) return null;
+    if (
+      response &&
+      isKnownRejectionStatus(response.status) &&
+      typeof body?.error === "string"
+    ) {
+      onError(body.error);
       return null;
     }
-
-    const body = (await response.json().catch(() => null)) as {
-      gameNumber?: number;
-    } | null;
-    return body?.gameNumber ?? gameNumber;
+    if (
+      response?.ok &&
+      typeof body?.gameNumber === "number" &&
+      Number.isSafeInteger(body?.gameNumber) &&
+      body.gameNumber > 0
+    )
+      return body.gameNumber;
+    // Without a valid committed number, neither transfer nor metadata replay
+    // is safe. A deliberate document reload is required (the old URL may 404).
+    setMetadataUnconfirmed(true);
+    setPendingTransfer(null);
+    setOrganizerEntryId(initialOrganizerEntryId);
+    return null;
   }
 
   function cancelEditing() {
-    const nextInitialDraft = latestAuthoritativeDraftRef.current;
-    const nextOrganizerEntryId = latestAuthoritativeOrganizerRef.current;
-    needsAuthoritativeSyncRef.current = false;
-    setInitialDraft(nextInitialDraft);
-    setDraft(nextInitialDraft);
-    setInitialOrganizerEntryId(nextOrganizerEntryId);
-    setOrganizerEntryId(nextOrganizerEntryId);
+    acceptSnapshot({
+      draft: latestAuthoritativeDraftRef.current,
+      organizerEntryId: latestAuthoritativeOrganizerRef.current,
+    });
     setErrorMessage(null);
     setTransferErrorMessage(null);
     setConfirmation(null);
@@ -668,6 +762,7 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
   }
 
   function saveMetadata() {
+    if (recovery || metadataUnconfirmed) return;
     const result = buildMetadataPayload(props.section, draft, initialDraft);
     if (!result.ok) {
       setErrorMessage(result.message);
@@ -697,6 +792,8 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
       setTransferErrorMessage(null);
       setConfirmation(null);
       setPendingTransfer({
+        userId: selectedOrganizer.userId,
+        metadataCommitted: false,
         seatEntryId: selectedOrganizer.id,
         seatNumber: selectedOrganizer.turnOrder,
         displayName:
@@ -711,8 +808,10 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
     setErrorMessage(null);
     setConfirmation(null);
     setPendingTransfer(null);
+    const generation = operationGenerationRef.current;
     startTransition(async () => {
-      const nextGameNumber = await applyMetadataUpdate(payload);
+      const nextGameNumber = await applyMetadataUpdate(payload, generation);
+      if (!isCurrentOperation(generation)) return;
       if (nextGameNumber == null) {
         return;
       }
@@ -745,18 +844,21 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
   }
 
   function confirmTransfer() {
-    if (!pendingTransfer) {
+    if (!pendingTransfer || recovery || metadataUnconfirmed) {
       return;
     }
 
     const transfer = pendingTransfer;
+    const generation = operationGenerationRef.current;
     setTransferErrorMessage(null);
     startTransferTransition(async () => {
       const nextGameNumber = await applyMetadataUpdate(
         transfer.metadataPayload,
+        generation,
         transfer.gameNumber,
         setTransferErrorMessage,
       );
+      if (!isCurrentOperation(generation)) return;
       if (nextGameNumber == null) {
         return;
       }
@@ -775,6 +877,7 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
           currentTransfer
             ? {
                 ...currentTransfer,
+                metadataCommitted: true,
                 metadataPayload: {},
                 gameNumber: nextGameNumber,
               }
@@ -791,13 +894,43 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
             targetPlayerEntryId: transfer.seatEntryId,
           }),
         },
-      );
+      ).catch(() => null);
+      if (!isCurrentOperation(generation)) return;
 
-      if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as {
-          error?: string;
-        } | null;
-        setTransferErrorMessage(body?.error ?? "The Overlord transfer failed.");
+      const body = await response?.json().catch(() => null);
+      if (!isCurrentOperation(generation)) return;
+      const metadataCommitted =
+        transfer.metadataCommitted ||
+        Object.keys(transfer.metadataPayload).length > 0;
+      const rejected =
+        response &&
+        isKnownRejectionStatus(response.status) &&
+        body?.outcome === "rejected" &&
+        typeof body.error === "string";
+      if (rejected && nextGameNumber === props.gameNumber) {
+        setTransferErrorMessage(
+          `${metadataCommitted ? "Campaign details saved; Overlord transfer failed. " : ""}${body.error}`,
+        );
+        // Publish committed metadata to future section mounts, without retrying
+        // it or destroying the active dialog's transfer-only retry.
+        router.refresh();
+        return;
+      }
+      const succeeded =
+        response?.ok &&
+        body?.gameNumber === nextGameNumber &&
+        body.gameId === props.campaignId &&
+        body.organizerId === transfer.userId;
+      if (!succeeded) {
+        const outcome: TransferOutcome = rejected
+          ? "metadata-saved-transfer-failed"
+          : metadataCommitted
+            ? "metadata-saved-transfer-unconfirmed"
+            : "transfer-unconfirmed";
+        setPendingTransfer(null);
+        setOrganizerEntryId(initialOrganizerEntryId);
+        setTransferErrorMessage(null);
+        reconcileTransfer({ gameNumber: nextGameNumber, outcome });
         return;
       }
 
@@ -825,8 +958,51 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
     });
   }
 
+  function reconcileTransfer(
+    input: Pick<NonNullable<typeof recovery>, "gameNumber" | "outcome">,
+  ) {
+    const nextRecovery = {
+      ...input,
+      campaignId: props.campaignId,
+      readId: crypto.randomUUID(),
+    };
+    setRecovery(nextRecovery);
+    router.replace(
+      `/games/${nextRecovery.gameNumber}?transferOutcome=${nextRecovery.outcome}&transferRecovery=${nextRecovery.readId}`,
+    );
+  }
+
   return (
     <div data-testid="campaign-settings-editor">
+      {metadataUnconfirmed ? (
+        <div className="mb-4 border border-orange-400/30 px-4 py-3 text-sm font-mono text-orange-200">
+          <p ref={recoveryMessageRef} role="alert" tabIndex={-1}>
+            Campaign details could not be confirmed. Transfer was not attempted.
+            Reload the campaign before editing again; its number may have
+            changed.
+          </p>
+          <a href={`/games/${props.gameNumber}`} className="underline">
+            Reload campaign
+          </a>
+        </div>
+      ) : null}
+      {recovery ? (
+        <div className="mb-4 border border-orange-400/30 px-4 py-3 text-sm font-mono text-orange-200">
+          <p ref={recoveryMessageRef} role="alert" tabIndex={-1}>
+            {transferOutcomeMessage(recovery.outcome, "unavailable")} Reload
+            current ownership before another attempt. Editing remains
+            unavailable until the campaign is reloaded.
+          </p>
+          <Button
+            disabled={isMutating}
+            onClick={() =>
+              startTransferTransition(() => reconcileTransfer(recovery))
+            }
+          >
+            Reload campaign
+          </Button>
+        </div>
+      ) : null}
       <TerminalConfirmationModal
         confirmation={confirmation}
         onClose={() => setConfirmation(null)}

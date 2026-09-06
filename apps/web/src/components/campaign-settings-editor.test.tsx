@@ -2,6 +2,7 @@
 
 import "@testing-library/jest-dom/vitest";
 import {
+  act,
   cleanup,
   render,
   screen,
@@ -17,6 +18,7 @@ import {
 } from "@/components/campaign-settings-editor";
 
 const router = {
+  replace: vi.fn(),
   push: vi.fn(),
   refresh: vi.fn(),
 };
@@ -30,6 +32,8 @@ vi.mock("@/components/terminal-confirmation-modal", () => ({
 }));
 
 const baseProps = {
+  campaignId: "campaign",
+  identityReadId: "read-1",
   armyCount: "ONE_PER_ZONE",
   dlcMode: "NONE",
   gameMode: "TEAMS",
@@ -91,6 +95,7 @@ function renderEditor(
 
 describe("CampaignSettingsEditor", () => {
   beforeEach(() => {
+    router.replace.mockReset();
     router.push.mockReset();
     router.refresh.mockReset();
     vi.restoreAllMocks();
@@ -431,9 +436,15 @@ describe("CampaignSettingsEditor", () => {
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ gameNumber: 37 }), { status: 200 }),
+        new Response(JSON.stringify({ gameNumber: 38 }), { status: 200 }),
       )
-      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+      .mockResolvedValueOnce(
+        Response.json({
+          gameId: "campaign",
+          gameNumber: 38,
+          organizerId: "player-2",
+        }),
+      );
     renderEditor("identity");
 
     await user.clear(screen.getByLabelText("Campaign number"));
@@ -448,22 +459,25 @@ describe("CampaignSettingsEditor", () => {
       expect.objectContaining({ body: JSON.stringify({ gameNumber: 37 }) }),
     ]);
     expect(fetchSpy.mock.calls[1]).toEqual([
-      "/api/games/37/transfer-host",
+      "/api/games/38/transfer-host",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({ targetPlayerEntryId: "seat-2" }),
       }),
     ]);
-    expect(router.push).toHaveBeenCalledWith("/games/37");
+    expect(router.push).toHaveBeenCalledWith("/games/38");
   });
 
   it("keeps a transfer failure inline and the editor dirty", async () => {
     const user = userEvent.setup();
     const { onDirtyChange } = renderEditor("identity");
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ error: "Transfer rejected." }), {
-        status: 403,
-      }),
+      new Response(
+        JSON.stringify({ error: "Transfer rejected.", outcome: "rejected" }),
+        {
+          status: 403,
+        },
+      ),
     );
 
     await user.selectOptions(screen.getByLabelText("Overlord"), "seat-2");
@@ -477,23 +491,32 @@ describe("CampaignSettingsEditor", () => {
     expect(onDirtyChange).toHaveBeenLastCalledWith(true);
   });
 
-  it("retries only the transfer against the committed game number after partial success", async () => {
+  it("retries only the transfer after same-number metadata success", async () => {
     const user = userEvent.setup();
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ gameNumber: 37 }), { status: 200 }),
+        new Response(JSON.stringify({ gameNumber: 22 }), { status: 200 }),
       )
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ error: "Transfer rejected." }), {
-          status: 503,
-        }),
+        new Response(
+          JSON.stringify({ error: "Transfer rejected.", outcome: "rejected" }),
+          {
+            status: 409,
+          },
+        ),
       )
-      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+      .mockResolvedValueOnce(
+        Response.json({
+          gameId: "campaign",
+          gameNumber: 22,
+          organizerId: "player-2",
+        }),
+      );
     renderEditor("identity");
 
-    await user.clear(screen.getByLabelText("Campaign number"));
-    await user.type(screen.getByLabelText("Campaign number"), "37");
+    await user.clear(screen.getByLabelText("Campaign name"));
+    await user.type(screen.getByLabelText("Campaign name"), "Committed name");
     await user.selectOptions(screen.getByLabelText("Overlord"), "seat-2");
     await user.click(screen.getByRole("button", { name: "Save" }));
     await user.click(screen.getByRole("button", { name: "Confirm" }));
@@ -508,24 +531,27 @@ describe("CampaignSettingsEditor", () => {
     expect(
       fetchSpy.mock.calls.filter(([url]) => String(url).endsWith("/metadata")),
     ).toHaveLength(1);
-    expect(fetchSpy.mock.calls[2]?.[0]).toBe("/api/games/37/transfer-host");
+    expect(fetchSpy.mock.calls[2]?.[0]).toBe("/api/games/22/transfer-host");
   });
 
   it("keeps committed metadata when cancelling after a transfer failure", async () => {
     const user = userEvent.setup();
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ gameNumber: 37 }), { status: 200 }),
+        new Response(JSON.stringify({ gameNumber: 22 }), { status: 200 }),
       )
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ error: "Transfer rejected." }), {
-          status: 503,
-        }),
+        new Response(
+          JSON.stringify({ error: "Transfer rejected.", outcome: "rejected" }),
+          {
+            status: 409,
+          },
+        ),
       );
     renderEditor("identity");
 
-    await user.clear(screen.getByLabelText("Campaign number"));
-    await user.type(screen.getByLabelText("Campaign number"), "37");
+    await user.clear(screen.getByLabelText("Campaign name"));
+    await user.type(screen.getByLabelText("Campaign name"), "Committed name");
     await user.selectOptions(screen.getByLabelText("Overlord"), "seat-2");
     await user.click(screen.getByRole("button", { name: "Save" }));
     await user.click(screen.getByRole("button", { name: "Confirm" }));
@@ -535,12 +561,15 @@ describe("CampaignSettingsEditor", () => {
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
-    expect(screen.getByLabelText("Campaign number")).toHaveValue(37);
+    expect(screen.getByLabelText("Campaign name")).toHaveValue(
+      "Committed name",
+    );
+    expect(screen.getByLabelText("Overlord")).toHaveValue("seat-1");
   });
 
   it("shows metadata-step failures inside the active transfer dialog", async () => {
     const user = userEvent.setup();
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ error: "Metadata rejected." }), {
         status: 400,
       }),
@@ -558,14 +587,19 @@ describe("CampaignSettingsEditor", () => {
       "Metadata rejected.",
     );
     expect(dialog).toBeVisible();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe("/api/games/22/metadata");
   });
 
   it("shows transfer-step failures inside the active transfer dialog", async () => {
     const user = userEvent.setup();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ error: "Transfer rejected." }), {
-        status: 403,
-      }),
+      new Response(
+        JSON.stringify({ error: "Transfer rejected.", outcome: "rejected" }),
+        {
+          status: 403,
+        },
+      ),
     );
     renderEditor("identity");
 
@@ -671,7 +705,11 @@ describe("CampaignSettingsEditor", () => {
   it("refreshes after a successful host-only transfer", async () => {
     const user = userEvent.setup();
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(null, { status: 204 }),
+      Response.json({
+        gameId: "campaign",
+        gameNumber: 22,
+        organizerId: "player-2",
+      }),
     );
     renderEditor("identity");
 
@@ -680,6 +718,213 @@ describe("CampaignSettingsEditor", () => {
     await user.click(screen.getByRole("button", { name: "Confirm" }));
 
     await waitFor(() => expect(router.refresh).toHaveBeenCalledOnce());
+  });
+
+  it.each([
+    () =>
+      Response.json(
+        { error: "Untrusted server failure", outcome: "rejected" },
+        { status: 503 },
+      ),
+    () => new Response("broken", { status: 409 }),
+    () => Response.json({ ok: true }),
+    () => new Response(null, { status: 204 }),
+    () =>
+      Response.json({
+        gameId: "campaign",
+        gameNumber: 99,
+        organizerId: "player-2",
+      }),
+    () =>
+      Response.json({
+        gameId: "campaign",
+        gameNumber: 22,
+        organizerId: "another-user",
+      }),
+    () =>
+      Response.json({
+        gameId: "other-campaign",
+        gameNumber: 22,
+        organizerId: "player-2",
+      }),
+    () => {
+      throw new TypeError("connection lost");
+    },
+  ])(
+    "requires a fresh authoritative read after an uncertain transfer, even if ownership is unchanged",
+    async (response) => {
+      const user = userEvent.setup();
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockImplementation(async () => response());
+      const { rerender, onDirtyChange } = renderEditor("identity");
+      await user.selectOptions(screen.getByLabelText("Overlord"), "seat-2");
+      await user.click(screen.getByRole("button", { name: "Save" }));
+      await user.click(screen.getByRole("button", { name: "Confirm" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "could not be confirmed",
+      );
+      expect(screen.getByRole("alert")).not.toHaveTextContent(
+        "Untrusted server failure",
+      );
+      expect(screen.getByRole("alert")).toHaveFocus();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(screen.getByLabelText("Overlord")).toHaveValue("seat-1");
+      expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+      expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+      const firstDestination = new URL(
+        router.replace.mock.lastCall![0],
+        "http://web.test",
+      );
+      expect(firstDestination.pathname).toBe("/games/22");
+      expect(firstDestination.searchParams.get("transferOutcome")).toBe(
+        "transfer-unconfirmed",
+      );
+      const firstNonce = firstDestination.searchParams.get("transferRecovery");
+      expect(firstNonce).toMatch(/^[0-9a-f-]{36}$/);
+      // A failed read (no new server props), and dismissing/retrying the read,
+      // must not turn the old snapshot into permission to retry the transfer.
+      await user.click(screen.getByRole("button", { name: "Reload campaign" }));
+      const nonce = new URL(
+        router.replace.mock.lastCall![0],
+        "http://web.test",
+      ).searchParams.get("transferRecovery")!;
+      expect(nonce).not.toBe(firstNonce);
+      rerender(
+        <CampaignSettingsEditor
+          {...baseProps}
+          section="identity"
+          onDirtyChange={onDirtyChange}
+        />,
+      );
+      expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      rerender(
+        <CampaignSettingsEditor
+          {...baseProps}
+          identityReadId={firstNonce!}
+          section="identity"
+          onDirtyChange={onDirtyChange}
+        />,
+      );
+      expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+      rerender(
+        <CampaignSettingsEditor
+          {...baseProps}
+          campaignId="other-campaign"
+          identityReadId={nonce}
+          section="identity"
+          onDirtyChange={onDirtyChange}
+        />,
+      );
+      expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+      rerender(
+        <CampaignSettingsEditor
+          {...baseProps}
+          identityReadId={nonce}
+          section="identity"
+          onDirtyChange={onDirtyChange}
+        />,
+      );
+      await waitFor(() =>
+        expect(screen.getByRole("button", { name: "Save" })).toBeEnabled(),
+      );
+      expect(screen.getByLabelText("Overlord")).toHaveValue("seat-1");
+      await waitFor(() =>
+        expect(screen.getByLabelText("Overlord")).toHaveFocus(),
+      );
+      await user.click(screen.getByRole("button", { name: "Save" }));
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Change at least one detail",
+      );
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each(["before", "after"])(
+    "does not accept a background read delivered %s the uncertain outcome",
+    async (delivery) => {
+      const user = userEvent.setup();
+      const pending = Promise.withResolvers<Response>();
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockReturnValue(pending.promise);
+      const { rerender, onDirtyChange } = renderEditor("identity");
+      await user.selectOptions(screen.getByLabelText("Overlord"), "seat-2");
+      await user.click(screen.getByRole("button", { name: "Save" }));
+      await user.click(screen.getByRole("button", { name: "Confirm" }));
+      const deliverBackgroundRead = () =>
+        rerender(
+          <CampaignSettingsEditor
+            {...baseProps}
+            identityReadId="ba7c7821-8da8-4ae3-b914-059d6b20a8d6"
+            section="identity"
+            onDirtyChange={onDirtyChange}
+          />,
+        );
+      if (delivery === "before") deliverBackgroundRead();
+      await act(async () =>
+        pending.resolve(
+          Response.json({ outcome: "unconfirmed" }, { status: 502 }),
+        ),
+      );
+      if (delivery === "after") deliverBackgroundRead();
+      // The recovery-triggered read never resolves. Neither delivery schedule
+      // of the older read is permission to edit or retry the transfer.
+      expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+      expect(screen.getByLabelText("Overlord")).toBeDisabled();
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "could not be confirmed",
+      );
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([
+    () => Response.json({ ok: true }),
+    () => Response.json({ gameNumber: "37" }),
+    () => Response.json({ gameNumber: -1 }),
+    () => Response.json({ error: "possibly committed" }, { status: 503 }),
+    () => {
+      throw new TypeError("connection lost");
+    },
+  ])(
+    "does not transfer or replay metadata when the metadata result is unconfirmed",
+    async (response) => {
+      const user = userEvent.setup();
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockImplementation(async () => response());
+      renderEditor("identity");
+      await user.clear(screen.getByLabelText("Campaign number"));
+      await user.type(screen.getByLabelText("Campaign number"), "37");
+      await user.selectOptions(screen.getByLabelText("Overlord"), "seat-2");
+      await user.click(screen.getByRole("button", { name: "Save" }));
+      await user.click(screen.getByRole("button", { name: "Confirm" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "Campaign details could not be confirmed",
+      );
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("preserves a sibling settings draft across an identity read marker change", async () => {
+    const user = userEvent.setup();
+    const { rerender, onDirtyChange } = renderEditor("world");
+    await user.selectOptions(screen.getByLabelText("DLC"), "BOTH");
+    rerender(
+      <CampaignSettingsEditor
+        {...baseProps}
+        identityReadId="read-2"
+        name="Server metadata"
+        section="world"
+        onDirtyChange={onDirtyChange}
+      />,
+    );
+    expect(screen.getByLabelText("DLC")).toHaveValue("BOTH");
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
   });
 
   it("does not loop dirty notifications when rerendered", () => {

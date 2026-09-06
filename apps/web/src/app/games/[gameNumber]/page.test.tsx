@@ -192,7 +192,13 @@ async function renderPage({
   game?: GameDetail;
   session?: { user: { id: string; isShadowOverride: boolean } } | null;
   shadowOverrideEnabled?: boolean;
-  searchParams?: { metadata?: string; upload?: string; message?: string };
+  searchParams?: {
+    metadata?: string;
+    upload?: string;
+    message?: string;
+    transferOutcome?: string | string[];
+    transferRecovery?: string | string[];
+  };
 } = {}) {
   mocks.getGameDetail.mockResolvedValue(game);
   mocks.getServerAuthSession.mockResolvedValue(session);
@@ -208,6 +214,127 @@ describe("GameDetailPage workspace composition", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useRealTimers();
+  });
+
+  it.each([
+    [
+      "metadata-saved-transfer-failed",
+      "Campaign details saved; Overlord transfer failed.",
+    ],
+    [
+      "metadata-saved-transfer-unconfirmed",
+      "Campaign details saved; Overlord transfer could not be confirmed. Current ownership has been reloaded. Choose a transfer target afresh if needed.",
+    ],
+    [
+      "transfer-unconfirmed",
+      "Overlord transfer could not be confirmed. Current ownership has been reloaded. Choose a transfer target afresh if needed.",
+    ],
+  ])(
+    "renders only the fixed notice for %s alongside authoritative data",
+    async (transferOutcome, message) => {
+      const page = await renderPage({
+        searchParams: { transferOutcome, message: "arbitrary upstream text" },
+        game: createGame({
+          gameNumber: 43,
+          organizerDisplayName: "Current Overlord",
+        }),
+      });
+      const notice = elementChildren(page).find(
+        (element) => element.props.role === "status",
+      );
+      expect(notice?.type).toBe("p");
+      expect(notice?.props.children).toBe(message);
+      const workspace = findElementByType(
+        page,
+        CampaignWorkspaceTabs,
+      ) as ReactElement<ComponentProps<typeof CampaignWorkspaceTabs>>;
+      expect(
+        findElementByType(workspace.props.campaign, CampaignDetailsWorkspace)
+          ?.props,
+      ).toMatchObject({
+        gameNumber: 43,
+        organizerDisplayName: "Current Overlord",
+        seatOrderBaseline: { campaignId: "game-1", revision: 7 },
+      });
+      expect(mocks.getGameDetail).toHaveBeenCalledWith("42");
+    },
+  );
+
+  it.each([
+    "<script>alert(1)</script>",
+    "__proto__",
+    "constructor",
+    "transfer-success",
+    ["transfer-unconfirmed", "metadata-saved-transfer-failed"],
+  ])(
+    "ignores unknown or multiple outcome values: %s",
+    async (transferOutcome) => {
+      const page = await renderPage({ searchParams: { transferOutcome } });
+      expect(
+        elementChildren(page).find(
+          (element) => element.props.role === "status",
+        ),
+      ).toBeUndefined();
+    },
+  );
+
+  it("echoes the requested recovery nonce only after an authoritative campaign read", async () => {
+    const nonce = "afbdd8e2-e569-4ca5-837d-d0116e55fb6c";
+    const pending = Promise.withResolvers<GameDetail>();
+    mocks.getGameDetail.mockReturnValueOnce(pending.promise);
+    const completed = vi.fn();
+    const pagePromise = renderPage({
+      searchParams: { transferRecovery: nonce },
+    }).then(completed);
+    await Promise.resolve();
+    expect(completed).not.toHaveBeenCalled();
+    pending.resolve(createGame());
+    await pagePromise;
+    const workspace = findElementByType(
+      completed.mock.calls[0][0],
+      CampaignWorkspaceTabs,
+    ) as ReactElement<ComponentProps<typeof CampaignWorkspaceTabs>>;
+    expect(
+      findElementByType(workspace.props.campaign, CampaignDetailsWorkspace)!
+        .props,
+    ).toMatchObject({
+      identityReadId: nonce,
+      seatOrderBaseline: { campaignId: "game-1", revision: 7 },
+    });
+  });
+
+  it.each([
+    undefined,
+    "old-read",
+    "<script>bad</script>",
+    [
+      "afbdd8e2-e569-4ca5-837d-d0116e55fb6c",
+      "afbdd8e2-e569-4ca5-837d-d0116e55fb6c",
+    ],
+  ])(
+    "does not invent a recovery marker for missing, malformed or multiple query values: %s",
+    async (transferRecovery) => {
+      const page = await renderPage({ searchParams: { transferRecovery } });
+      const workspace = findElementByType(
+        page,
+        CampaignWorkspaceTabs,
+      ) as ReactElement<ComponentProps<typeof CampaignWorkspaceTabs>>;
+      expect(
+        findElementByType(workspace.props.campaign, CampaignDetailsWorkspace)!
+          .props.identityReadId,
+      ).toBe("");
+    },
+  );
+
+  it("does not deliver recovery props when the requested authoritative read fails", async () => {
+    mocks.getGameDetail.mockRejectedValueOnce(new Error("Read unavailable"));
+    await expect(
+      renderPage({
+        searchParams: {
+          transferRecovery: "afbdd8e2-e569-4ca5-837d-d0116e55fb6c",
+        },
+      }),
+    ).rejects.toThrow("Read unavailable");
   });
 
   it("derives the command center from the active turn", async () => {
@@ -280,6 +407,7 @@ describe("GameDetailPage workspace composition", () => {
     );
 
     expect(details?.props).toEqual({
+      identityReadId: expect.any(String),
       seatOrderBaseline: { campaignId: "game-1", revision: 7 },
       activePlayerEntryId: "seat-2",
       armyCount: "ONE_PER_ZONE",

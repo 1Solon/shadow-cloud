@@ -12,6 +12,7 @@ export async function startUpstream(secret: string) {
     game: GameDetail;
     metadata: MutationOutcome[];
     transfer: MutationOutcome[];
+    detailFailure: boolean;
     requests: Array<{
       method: string;
       path: string;
@@ -66,6 +67,7 @@ export async function startUpstream(secret: string) {
     },
     metadata: [],
     transfer: [],
+    detailFailure: false,
     requests: [],
   };
   const server = createServer(async (request, response) => {
@@ -79,6 +81,10 @@ export async function startUpstream(secret: string) {
       const base = `/v1/games/${upstream.game.gameNumber}`;
       if (method === "GET" && path === `${base}/detail`) {
         upstream.requests.push({ method, path });
+        if (upstream.detailFailure) {
+          reply(503, { message: "Fixture detail read unavailable." });
+          return;
+        }
         reply(200, upstream.game);
         return;
       }

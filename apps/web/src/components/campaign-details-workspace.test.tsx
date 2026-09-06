@@ -93,6 +93,7 @@ vi.mock("@/components/campaign-notes-editor", () => ({
 }));
 
 const props = {
+  identityReadId: "read-1",
   activePlayerEntryId: "seat-2",
   armyCount: "ONE_PER_ZONE",
   canEdit: true,
@@ -187,6 +188,8 @@ describe("CampaignDetailsWorkspace", () => {
       expect(screen.queryByTestId("seat-order-editor")).not.toBeInTheDocument();
       expect(screen.queryByTestId("notes-editor")).not.toBeInTheDocument();
       expect(mocks.settings).toHaveBeenLastCalledWith({
+        campaignId: props.seatOrderBaseline.campaignId,
+        identityReadId: props.identityReadId,
         armyCount: props.armyCount,
         dlcMode: props.dlcMode,
         gameMode: props.gameMode,

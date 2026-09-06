@@ -9,6 +9,7 @@ import { TurnTimingHistoryCard } from "@/components/turn-timing-history-card";
 import { WorldStateHistoryCard } from "@/components/world-state-history-card";
 import { getShadowOverrideEnabled } from "@/lib/shadow-override";
 import { getGameDetail } from "@/lib/shadow-cloud-api";
+import { transferOutcomeMessage } from "@/lib/transfer-outcome";
 
 type GamePageProps = {
   params: Promise<{
@@ -18,6 +19,8 @@ type GamePageProps = {
     metadata?: string;
     upload?: string;
     message?: string;
+    transferOutcome?: string | string[];
+    transferRecovery?: string | string[];
   }>;
 };
 
@@ -57,9 +60,27 @@ export default async function GameDetailPage({
   );
   const currentTurnStartedAt =
     game.currentTurnStartedAt ?? game.openTurn?.startedAt ?? null;
+  const transferNotice = transferOutcomeMessage(query.transferOutcome);
+  // Echo only a well-formed correlation nonce after the authoritative read.
+  // It carries no ownership, permissions or instruction to retry a mutation.
+  const identityReadId =
+    typeof query.transferRecovery === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+      query.transferRecovery,
+    )
+      ? query.transferRecovery
+      : "";
 
   return (
     <div className="flex flex-col gap-8 pb-6">
+      {transferNotice ? (
+        <p
+          role="status"
+          className="border border-orange-400/30 bg-orange-400/10 px-4 py-3 text-sm font-mono text-orange-200"
+        >
+          {transferNotice}
+        </p>
+      ) : null}
       <TerminalConfirmationModal
         confirmation={
           query.metadata === "success"
@@ -134,6 +155,7 @@ export default async function GameDetailPage({
         }
         campaign={
           <CampaignDetailsWorkspace
+            identityReadId={identityReadId}
             activePlayerEntryId={game.activePlayerEntryId}
             armyCount={game.armyCount}
             canEdit={canEditSeatOrder}

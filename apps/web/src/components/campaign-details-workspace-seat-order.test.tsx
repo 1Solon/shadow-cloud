@@ -15,10 +15,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { CampaignDetailsWorkspace } from "@/components/campaign-details-workspace";
 import type { SeatOrderSnapshot } from "@/lib/shadow-cloud-api";
 
-const router = { refresh: vi.fn() };
+const router = { refresh: vi.fn(), push: vi.fn(), replace: vi.fn() };
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
 const props: ComponentProps<typeof CampaignDetailsWorkspace> = {
+  identityReadId: "read-1",
   activePlayerEntryId: "seat-1",
   armyCount: "ONE_PER_ZONE",
   canEdit: true,
@@ -76,7 +77,83 @@ describe("CampaignDetailsWorkspace Seat Order lifecycle", () => {
     cleanup();
     vi.restoreAllMocks();
     router.refresh.mockReset();
+    router.push.mockReset();
+    router.replace.mockReset();
   });
+
+  for (const invalidation of ["permission loss", "campaign switch"]) {
+    it.each([
+      "metadata headers",
+      "metadata body",
+      "transfer headers",
+      "transfer body",
+      "metadata-only headers",
+      "metadata-only body",
+    ])(`does not continue pending %s after ${invalidation}`, async (stage) => {
+      const user = userEvent.setup();
+      const pending = Promise.withResolvers<Response>();
+      const pendingBody = Promise.withResolvers<unknown>();
+      const isTransfer = stage.startsWith("transfer");
+      const metadataOnly = stage.startsWith("metadata-only");
+      const bodyPending = stage.endsWith("body");
+      const body = isTransfer
+        ? { gameId: "campaign-1", gameNumber: 43, organizerId: "player-2" }
+        : { gameNumber: 43 };
+      const response = Response.json(body);
+      const readBody = vi.spyOn(response, "json");
+      if (bodyPending) readBody.mockReturnValue(pendingBody.promise);
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+      if (isTransfer)
+        fetchSpy.mockResolvedValueOnce(Response.json({ gameNumber: 43 }));
+      fetchSpy
+        .mockReturnValueOnce(
+          bodyPending ? Promise.resolve(response) : pending.promise,
+        )
+        .mockResolvedValue(
+          Response.json({
+            gameId: "campaign-1",
+            gameNumber: 43,
+            organizerId: "player-2",
+          }),
+        );
+      const { rerender } = render(<CampaignDetailsWorkspace {...props} />);
+      await user.click(
+        screen.getByRole("button", { name: "Configure campaign" }),
+      );
+      await user.clear(screen.getByLabelText("Campaign number"));
+      await user.type(screen.getByLabelText("Campaign number"), "43");
+      if (!metadataOnly)
+        await user.selectOptions(screen.getByLabelText("Overlord"), "seat-2");
+      await user.click(screen.getByRole("button", { name: "Save" }));
+      if (!metadataOnly)
+        await user.click(screen.getByRole("button", { name: "Confirm" }));
+      const expectedRequests = isTransfer ? 2 : 1;
+      await waitFor(() =>
+        expect(fetchSpy).toHaveBeenCalledTimes(expectedRequests),
+      );
+      if (bodyPending)
+        await waitFor(() => expect(readBody).toHaveBeenCalledOnce());
+      if (invalidation === "permission loss")
+        rerender(<CampaignDetailsWorkspace {...props} canEdit={false} />);
+      else
+        rerender(
+          <CampaignDetailsWorkspace
+            {...props}
+            seatOrderBaseline={{ campaignId: "other-campaign", revision: 0 }}
+            gameNumber={99}
+          />,
+        );
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      await act(async () => {
+        if (bodyPending) pendingBody.resolve(body);
+        else pending.resolve(response);
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(expectedRequests);
+      expect(router.push).not.toHaveBeenCalled();
+      expect(router.replace).not.toHaveBeenCalled();
+      expect(router.refresh).not.toHaveBeenCalled();
+    });
+  }
 
   it.each(["reload", "save"])(
     "retains the accepted %s roster across real section unmounts and renumbering",

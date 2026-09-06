@@ -2,6 +2,8 @@
 
 For the implementation's executed commands and results, see
 [SOL-9 verification](VERIFICATION.md).
+For the recovery implementation and executed browser matrix, see
+[SOL-10 verification](TRANSFER-RECOVERY.md).
 
 ## Fresh Checkout
 
@@ -93,6 +95,13 @@ Failures retain a trace, screenshot and Next log in the ignored
 
 ## SOL-10 Adapter Use
 
+Recovery URLs carry the fixed `transferOutcome` notice and a fresh UUID in
+`transferRecovery`. The latter is only a passive read-correlation nonce, not a
+secret, permission or transfer instruction. The page echoes it as `identityReadId`
+after its authoritative read; the waiting editor accepts only its expected nonce
+for the same stable campaign and number. Each recovery/read retry gets a new nonce,
+so older in-flight reads cannot unlock a later attempt.
+
 Import `test` and `expect` from `./fixture`, then configure the per-test
 `campaign.upstream` before navigating or taking an action:
 
@@ -127,9 +136,16 @@ not advance the seat baseline. `requests` records HTTP method/path and verified
 mutation subject/body (never tokens), for checking obsolete-number writes or
 accidental retries alongside visible browser behavior.
 
+Set `campaign.upstream.detailFailure = true` after loading a campaign to make
+subsequent authoritative detail reads return 503. Set it back to `false` before
+an explicit user reload. This is a per-test in-process control, not an HTTP
+failure-injection endpoint. Recovery tests cover both same-route page failures
+and renumbered layout/page failures, with no transfer replay during read retries.
+
 The adapter intentionally implements only campaign detail, metadata and
 transfer HTTP endpoints. It has no remotely accessible fixture-control route,
 database, production failure-injection hook or generic scenario framework.
 It models only what these browser cases need, not all API validation or turn
-rules. It is **not proof of Prisma/SQLite behavior**, and SOL-9 does not
-implement SOL-10 recovery or change SOL-17 editor semantics.
+rules. It is **not proof of Prisma/SQLite behavior**. SOL-10 uses it to verify
+transfer recovery; neither ticket changes SOL-17's stable campaign identity or
+Seat Order baseline semantics.

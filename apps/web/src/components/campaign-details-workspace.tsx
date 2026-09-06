@@ -16,6 +16,7 @@ import { SeatOrderEditor } from "@/components/seat-order-editor";
 import type { SeatOrderBaseline } from "@/lib/shadow-cloud-api";
 
 type CampaignDetailsWorkspaceProps = Omit<CampaignBriefingProps, "notes"> & {
+  identityReadId: string;
   canEdit: boolean;
   seatOrderBaseline: SeatOrderBaseline;
   gameNumber: number;
@@ -105,6 +106,8 @@ function CampaignDetailsWorkspaceContent(props: CampaignDetailsWorkspaceProps) {
 
     return (
       <CampaignSettingsEditor
+        campaignId={props.seatOrderBaseline.campaignId}
+        identityReadId={props.identityReadId}
         armyCount={props.armyCount}
         dlcMode={props.dlcMode}
         gameMode={props.gameMode}

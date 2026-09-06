@@ -1,4 +1,5 @@
 import { createApiAccessToken, getServerAuthSession } from "@/auth";
+import { isKnownRejectionStatus } from "@/lib/transfer-outcome";
 
 const apiBaseUrl = process.env.SHADOW_CLOUD_API_URL ?? "http://localhost:3001";
 
@@ -11,7 +12,7 @@ export async function POST(
 
   if (!session?.user?.id) {
     return Response.json(
-      { error: "Sign in to transfer campaign control." },
+      { error: "Sign in to transfer campaign control.", outcome: "rejected" },
       { status: 401 },
     );
   }
@@ -31,7 +32,7 @@ export async function POST(
 
   if (typeof payload?.targetPlayerEntryId !== "string") {
     return Response.json(
-      { error: "Host transfer payload is invalid." },
+      { error: "Host transfer payload is invalid.", outcome: "rejected" },
       { status: 400 },
     );
   }
@@ -40,7 +41,10 @@ export async function POST(
 
   if (targetPlayerEntryId.length === 0) {
     return Response.json(
-      { error: "Select a player to receive campaign control." },
+      {
+        error: "Select a player to receive campaign control.",
+        outcome: "rejected",
+      },
       { status: 400 },
     );
   }
@@ -56,24 +60,42 @@ export async function POST(
       body: JSON.stringify({ targetPlayerEntryId }),
       cache: "no-store",
     },
-  );
+  ).catch(() => null);
 
-  if (!response.ok) {
-    const errorPayload = (await response.json().catch(() => null)) as {
-      message?: string | string[];
-      error?: string;
-    } | null;
-    const message = Array.isArray(errorPayload?.message)
-      ? errorPayload.message.join(", ")
-      : (errorPayload?.message ??
-        errorPayload?.error ??
-        "The host transfer failed.");
-
-    return Response.json(
-      { error: message },
-      { status: response.status || 500 },
-    );
+  const body = await response?.json().catch(() => null);
+  if (response && !response.ok && isKnownRejectionStatus(response.status)) {
+    const error = body?.message ?? body?.error;
+    const message =
+      Array.isArray(error) &&
+      error.length > 0 &&
+      error.every((item) => typeof item === "string")
+        ? error.join(", ")
+        : error;
+    if (typeof message === "string" && message.trim()) {
+      return Response.json(
+        { error: message, outcome: "rejected" },
+        { status: response.status },
+      );
+    }
   }
 
-  return Response.json(await response.json().catch(() => ({ ok: true })));
+  if (
+    response?.ok &&
+    typeof body?.gameId === "string" &&
+    body.gameId.length > 0 &&
+    Number.isSafeInteger(body.gameNumber) &&
+    body.gameNumber > 0 &&
+    typeof body.organizerId === "string" &&
+    body.organizerId.length > 0
+  ) {
+    return Response.json(body);
+  }
+  // A lost/malformed response or unknown server error is not evidence of rollback.
+  return Response.json(
+    {
+      error: "The Overlord transfer could not be confirmed.",
+      outcome: "unconfirmed",
+    },
+    { status: 502 },
+  );
 }
