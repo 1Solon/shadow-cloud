@@ -160,8 +160,9 @@ git diff --no-index --check /dev/null docs/password-reset-acceptance.md
 
 Targeted rerun: **59/59 tests, 1/1 file passed**. Post-fix API typecheck, Prettier
 and diff checks passed.
-The full suite was not rerun after this test-only correction; do not describe its
-original result as all-green. No remaining automated failure was observed.
+At this validation checkpoint the full suite had not been rerun after the
+test-only correction; its original result was not all-green. The required commit
+hook subsequently reran the repository test task, as recorded below.
 Expected injected transport/JSON/configuration logs appeared in passing tests;
 Playwright also emitted Node's `module.register()` deprecation warning.
 
@@ -170,4 +171,17 @@ workflow and desktop conflict suites passed in the full run. Actual connected
 game/API/bot/desktop acceptance, playable artifact preparation, real-save byte
 checks and every human matrix observation remain release blockers. No campaign
 saves, credentials or archive key were read into new artifacts or published. No
-commit, deployment, production migration or human acceptance was performed.
+deployment, production migration or human acceptance was performed.
+
+### Commit-hook verification
+
+Implementation commit `4cdb688` passed the existing pre-commit lint and test
+hooks. The first commit attempt stopped because `pnpm` was absent from PATH;
+retrying through `npm exec --yes --package=pnpm@11.11.0 -- git commit ...`
+supplied the pinned tool without bypassing hooks.
+
+The hook's repository test task passed all four packages: API reran uncached
+with **570/570 tests in 35 files passing**; unchanged web, bot and desktop tasks
+reused the successful results above. Final aggregate: **1,153/1,153 tests in
+93 files passing**, with three package cache hits. Lint passed all three tasks
+(API uncached, web/bot cached). Human acceptance remains pending.
