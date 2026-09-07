@@ -85,7 +85,7 @@ beforeEach(async () => {
         await duringStorage();
         return result;
       },
-      removeFile: (path) => storage.removeFile(path),
+      removeFileOrThrow: (path) => storage.removeFileOrThrow(path),
     },
   });
 });
@@ -276,7 +276,7 @@ describe('upload safety through the public mutation owner', () => {
       AND (SELECT COUNT(*) FROM TurnRecord WHERE gameId = NEW.gameId) = 3
       AND (SELECT COUNT(*) FROM AuditEvent WHERE gameId = NEW.gameId) = 2
       AND (SELECT COUNT(*) FROM FileVersion WHERE gameId = NEW.gameId) = 2
-      AND EXISTS (SELECT 1 FROM FileVersion WHERE idempotencyKey = 'upload-1' AND contentHash = 'sha256:abc' AND clientFileSize = 3 AND clientOriginalName = 'turn.se1')
+      AND EXISTS (SELECT 1 FROM FileVersion WHERE idempotencyKey = 'upload-1' AND contentHash IS NOT NULL AND clientFileSize = 3 AND clientOriginalName = 'turn.se1')
       BEGIN SELECT RAISE(ABORT, 'injected failure after upload effects'); END`);
     const before = await persistedState();
     await expect(

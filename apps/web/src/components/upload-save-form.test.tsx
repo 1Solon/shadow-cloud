@@ -203,7 +203,13 @@ describe("UploadSaveForm", () => {
     fetchMock.mockResolvedValue(
       mockResponse(true, { redirectTo: "/games/42/turn/9" }),
     );
-    render(<UploadSaveForm gameNumber={42} presentation="compact" />);
+    render(
+      <UploadSaveForm
+        gameNumber={42}
+        saveBaseline="campaign:2:3"
+        presentation="compact"
+      />,
+    );
     const file = new File(["save-data"], "turn.se1");
 
     await user.upload(screen.getByLabelText("Save file"), file);
@@ -216,6 +222,9 @@ describe("UploadSaveForm", () => {
     expect(url).toBe("/api/games/42/files");
     expect(init.method).toBe("POST");
     expect(init.body).toBeInstanceOf(FormData);
+    expect((init.body as FormData).get("expectedSaveBaseline")).toBe(
+      "campaign:2:3",
+    );
     const uploadedFile = (init.body as FormData).get("file") as File;
     expect(uploadedFile.name).toBe(file.name);
     expect(await uploadedFile.text()).toBe("save-data");
@@ -225,6 +234,38 @@ describe("UploadSaveForm", () => {
       });
       expect(mockRouter.refresh).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it("keeps the selected file's baseline after a conflict and a background refresh", async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValue(
+      mockResponse(false, {
+        error: "The save changed. Refresh and review it.",
+      }),
+    );
+    const view = render(
+      <UploadSaveForm gameNumber={42} saveBaseline="campaign:1:2" />,
+    );
+    await user.upload(
+      screen.getByLabelText("Save file"),
+      new File(["save"], "turn.se1"),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Upload save and advance turn" }),
+    );
+    expect(
+      await screen.findByText("The save changed. Refresh and review it."),
+    ).toBeInTheDocument();
+    view.rerender(
+      <UploadSaveForm gameNumber={42} saveBaseline="campaign:1:3" />,
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Upload save and advance turn" }),
+    );
+    expect(fetchMock.mock.calls[1][1].body.get("expectedSaveBaseline")).toBe(
+      "campaign:1:2",
+    );
+    expect(mockRouter.refresh).not.toHaveBeenCalled();
   });
 
   it("prevents duplicate submissions while the upload is pending", async () => {

@@ -7,6 +7,7 @@ import { UploadSaveForm } from "@/components/upload-save-form";
 import { formatTurnDuration, getTurnDurationMs } from "@/lib/turn-timing";
 
 export type TurnCommandCenterProps = {
+  saveBaseline?: string;
   activePlayerDisplayName: string;
   activeSeatNumber: number | null;
   currentTurnStartedAt: string | null;
@@ -39,6 +40,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 export function TurnCommandCenter({
+  saveBaseline,
   activePlayerDisplayName,
   activeSeatNumber,
   currentTurnStartedAt,
@@ -167,7 +169,11 @@ export function TurnCommandCenter({
               </div>
             ) : null}
             <div className="min-h-0 flex-1">
-              <UploadSaveForm gameNumber={gameNumber} presentation="compact" />
+              <UploadSaveForm
+                gameNumber={gameNumber}
+                saveBaseline={saveBaseline}
+                presentation="compact"
+              />
             </div>
           </div>
         ) : null}

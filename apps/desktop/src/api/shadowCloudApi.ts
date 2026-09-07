@@ -94,7 +94,10 @@ function createFetchJson(apiBaseUrl: string) {
 
     if (!response.ok) {
       const payload = await response.json().catch(() => null);
-      throw new Error(getApiErrorMessage(payload, fallbackMessage));
+      throw Object.assign(
+        new Error(getApiErrorMessage(payload, fallbackMessage)),
+        { status: response.status },
+      );
     }
 
     return response.json() as Promise<T>;
@@ -135,6 +138,7 @@ export function createShadowCloudApiClient(
         expectedActivePlayerUserId: string | null;
         expectedRoundNumber: number;
         expectedLatestFileVersionId: string | null;
+        expectedSaveBaseline?: string;
       },
     ) {
       const formData = new FormData();
@@ -146,6 +150,7 @@ export function createShadowCloudApiClient(
         }),
       );
       formData.set("contentHash", upload.contentHash);
+      formData.set("expectedSaveBaseline", upload.expectedSaveBaseline ?? "");
       formData.set("idempotencyKey", upload.idempotencyKey);
       if (upload.expectedActivePlayerEntryId) {
         formData.set(

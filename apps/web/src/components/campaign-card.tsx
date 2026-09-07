@@ -281,6 +281,7 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
               X
             </button>
             <SaveUploadCard
+              saveBaseline={game.saveBaseline}
               activePlayerDisplayName={game.activePlayerDisplayName}
               gameNumber={game.gameNumber}
               isActivePlayer={isUsersTurn}

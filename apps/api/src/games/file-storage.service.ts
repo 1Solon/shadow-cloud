@@ -69,6 +69,7 @@ export class FileStorageService {
     playerName: string;
     originalName: string;
     content: Buffer;
+    prepare?: (storagePath: string) => Promise<void>;
   }) {
     const gameDirectory = join(
       this.rootDirectory,
@@ -82,8 +83,9 @@ export class FileStorageService {
       `upload-${randomUUID()}-${fileName}`,
     );
 
+    await input.prepare?.(storagePath);
     await mkdir(gameDirectory, { recursive: true });
-    await writeFile(storagePath, input.content, { flag: 'wx' });
+    await this.writeStagedFile(storagePath, input.content);
 
     return { storagePath, fileName };
   }
@@ -92,6 +94,7 @@ export class FileStorageService {
     gameId: string;
     canonicalName: string;
     content: Buffer;
+    prepare?: (storagePath: string) => Promise<void>;
   }) {
     const gameDirectory = join(
       this.rootDirectory,
@@ -105,10 +108,24 @@ export class FileStorageService {
       `${baseName}-replacement-${randomUUID()}${extension}`,
     );
 
+    await input.prepare?.(storagePath);
     await mkdir(gameDirectory, { recursive: true });
-    await writeFile(storagePath, input.content, { flag: 'wx' });
+    await this.writeStagedFile(storagePath, input.content);
 
     return { storagePath };
+  }
+
+  private async writeStagedFile(storagePath: string, content: Buffer) {
+    try {
+      await writeFile(storagePath, content, { flag: 'wx' });
+    } catch (error) {
+      // An exclusive-create collision belongs to someone else. Other write
+      // failures can leave our partial file behind before the caller gets a path.
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+        await this.removeFile(storagePath);
+      }
+      throw error;
+    }
   }
 
   async openDownload(storagePath: string): Promise<{

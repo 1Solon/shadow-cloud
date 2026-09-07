@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { TerminalActionConfirmationDialog } from "@/components/terminal-action-confirmation-dialog";
 
 type ReplaceSaveFileActionProps = {
+  saveBaseline?: string;
   gameNumber: number;
   fileVersionId: string;
   canonicalFileName: string;
@@ -12,6 +13,7 @@ type ReplaceSaveFileActionProps = {
 };
 
 export function ReplaceSaveFileAction({
+  saveBaseline,
   gameNumber,
   fileVersionId,
   canonicalFileName,
@@ -19,6 +21,8 @@ export function ReplaceSaveFileAction({
 }: ReplaceSaveFileActionProps) {
   const router = useRouter();
   const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [confirmationBaseline, setConfirmationBaseline] =
+    useState(saveBaseline);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -30,6 +34,7 @@ export function ReplaceSaveFileAction({
   }
 
   function openConfirmation() {
+    setConfirmationBaseline(saveBaseline);
     setSelectedFile(null);
     setErrorMessage(null);
     setConfirmationOpen(true);
@@ -42,6 +47,7 @@ export function ReplaceSaveFileAction({
 
     const formData = new FormData();
     formData.set("file", selectedFile, selectedFile.name);
+    formData.set("expectedSaveBaseline", confirmationBaseline ?? "");
 
     startTransition(async () => {
       const response = await fetch(

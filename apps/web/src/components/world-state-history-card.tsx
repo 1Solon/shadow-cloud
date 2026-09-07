@@ -11,6 +11,7 @@ import { canReplaceSaveFile } from "@/lib/save-file-replacement";
 import type { GameDetailFileVersion } from "@/lib/shadow-cloud-api";
 
 type WorldStateHistoryCardProps = {
+  saveBaseline?: string;
   currentUserId: string | null;
   fileVersions: GameDetailFileVersion[];
   gameNumber: number;
@@ -26,6 +27,7 @@ function formatTimestamp(timestamp: string) {
 }
 
 export function WorldStateHistoryCard({
+  saveBaseline,
   currentUserId,
   fileVersions,
   gameNumber,
@@ -130,6 +132,7 @@ export function WorldStateHistoryCard({
                           />
                           {canReplace ? (
                             <ReplaceSaveFileAction
+                              saveBaseline={saveBaseline}
                               canonicalFileName={fileVersion.originalName}
                               fileVersionId={fileVersion.id}
                               gameNumber={gameNumber}

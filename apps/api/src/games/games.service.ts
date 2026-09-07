@@ -107,6 +107,30 @@ export class GamesService {
     );
   }
 
+  inspectLatestSave(gameId: string, userId: string | undefined) {
+    return this.gamesFile.inspectLatestSave(gameId, userId);
+  }
+
+  resetPassword(
+    gameId: string,
+    userId: string | undefined,
+    input: Parameters<GamesFileService['resetPassword']>[2],
+  ) {
+    return this.gamesFile.resetPassword(gameId, userId, input);
+  }
+
+  getPasswordResetRecovery(gameId: string, userId: string | undefined) {
+    return this.gamesFile.getPasswordResetRecovery(gameId, userId);
+  }
+
+  undoPasswordReset(
+    gameId: string,
+    userId: string | undefined,
+    input: Parameters<GamesFileService['undoPasswordReset']>[2],
+  ) {
+    return this.gamesFile.undoPasswordReset(gameId, userId, input);
+  }
+
   async downloadSave(gameId: string, fileVersionId: string) {
     return this.gamesQuery.downloadSave(gameId, fileVersionId);
   }

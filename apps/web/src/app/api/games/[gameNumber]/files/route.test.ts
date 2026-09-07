@@ -39,6 +39,7 @@ describe("POST /api/games/[gameNumber]/files", () => {
     );
 
     const formData = new FormData();
+    formData.set("expectedSaveBaseline", "campaign:1:2");
     formData.set(
       "file",
       new File(["shadow save"], "turn-22.se1", {
@@ -76,5 +77,8 @@ describe("POST /api/games/[gameNumber]/files", () => {
         cache: "no-store",
       }),
     );
+    expect(
+      (fetchSpy.mock.calls[0][1]?.body as FormData).get("expectedSaveBaseline"),
+    ).toBe("campaign:1:2");
   });
 });

@@ -31,6 +31,7 @@ export type TurnTimingPolicyResponse = {
 };
 
 export type GameDetailResponse = TurnTimingPolicyResponse & {
+  saveBaseline: string;
   seatOrderBaseline: SeatOrderBaseline;
   id: string;
   gameNumber: number;
@@ -64,6 +65,7 @@ export type GameDetailResponse = TurnTimingPolicyResponse & {
     uploadedById: string;
     uploadedByDisplayName: string;
     contentHash: string | null;
+    contentRevision: number;
     idempotencyKey: string | null;
     replacedAt: string | null;
     replacedByDisplayName: string | null;
@@ -99,6 +101,7 @@ export type UploadedSaveFile = {
 };
 
 export type UploadSaveSafetyMetadata = {
+  expectedSaveBaseline?: string;
   contentHash?: string;
   idempotencyKey?: string;
   expectedActivePlayerEntryId?: string | null;
@@ -108,6 +111,7 @@ export type UploadSaveSafetyMetadata = {
 };
 
 export type ReplaceSaveMetadata = {
+  expectedSaveBaseline?: string;
   contentHash?: string;
   shadowOverrideEnabled?: boolean;
 };

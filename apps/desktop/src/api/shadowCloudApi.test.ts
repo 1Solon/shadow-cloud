@@ -2,6 +2,42 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createShadowCloudApiClient, listGames } from "./shadowCloudApi";
 
 describe("Shadow-Cloud API client", () => {
+  it("carries the save baseline and exposes conflicts without retrying", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+      Response.json(
+        { message: "Refresh and review the latest save." },
+        { status: 409 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetch);
+    const client = createShadowCloudApiClient();
+    await expect(
+      client.uploadSave("token", 1, {
+        file: {
+          name: "turn.se1",
+          path: "turn.se1",
+          modifiedAt: 1,
+          size: 3,
+          bytes: new Uint8Array([1, 2, 3]),
+        },
+        contentHash: "sha256:client",
+        idempotencyKey: "upload-1",
+        expectedActivePlayerEntryId: "seat",
+        expectedActivePlayerUserId: "user",
+        expectedRoundNumber: 1,
+        expectedLatestFileVersionId: "version",
+        expectedSaveBaseline: "campaign:1:2",
+      }),
+    ).rejects.toMatchObject({
+      status: 409,
+      message: "Refresh and review the latest save.",
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const init = vi.mocked(fetch).mock.calls[0][1] as RequestInit;
+    expect((init.body as FormData).get("expectedSaveBaseline")).toBe(
+      "campaign:1:2",
+    );
+  });
   afterEach(() => {
     vi.unstubAllGlobals();
   });

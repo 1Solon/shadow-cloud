@@ -5,7 +5,7 @@ import type { FileStorageService } from '../../file-storage.service';
 /** External effects used by the mutation module, never inside its transactions. */
 export type TurnMutationDependencies = {
   authService?: Pick<AuthService, 'isUserShadowOverride'>;
-  fileStorage?: Pick<FileStorageService, 'stageUpload' | 'removeFile'>;
+  fileStorage?: Pick<FileStorageService, 'stageUpload' | 'removeFileOrThrow'>;
   botNotifications?: Pick<
     BotNotificationsService,
     'notifySaveUploaded' | 'notifyGameInitialized' | 'notifyThreadRenamed'

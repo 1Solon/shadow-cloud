@@ -1,4 +1,5 @@
 import { ConflictException, Injectable } from '@nestjs/common';
+import { closeSaveRecovery } from '../support/save-recovery';
 import {
   type Prisma,
   type TurnRecord,
@@ -116,6 +117,8 @@ export class TurnRecordsService {
         'The active turn changed before it could close.',
       );
     }
+
+    await closeSaveRecovery(transaction, input.gameId);
 
     await transaction.notificationDelivery.updateMany({
       where: {

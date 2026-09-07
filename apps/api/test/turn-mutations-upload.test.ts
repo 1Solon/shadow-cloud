@@ -72,11 +72,12 @@ beforeEach(async () => {
       async stageUpload(input) {
         const fileName = `${input.gameNumber}-T${input.turn}-S${input.seat}-${input.playerName}.se1`;
         const storagePath = `/saves/${input.gameId}/upload-${++uploadAttempt}-${fileName}`;
+        await input.prepare?.(storagePath);
         stored.set(storagePath, input.content);
         await duringStorage();
         return { fileName, storagePath };
       },
-      async removeFile(path) {
+      async removeFileOrThrow(path) {
         stored.delete(path);
       },
     },
@@ -218,7 +219,9 @@ describe('atomic upload through real SQLite', () => {
     expect(state.history).toHaveLength(1);
     expect(state.audits).toHaveLength(0);
     expect(state.files).toHaveLength(0);
-    expect(stored.size).toBe(0);
+    // Cleanup cannot acquire its safety lock either; the durable lease expires
+    // rather than deleting bytes without a protected canonical-reference check.
+    expect(stored.size).toBe(1);
   });
 
   it('accepts matching optional expectations, including an explicit empty latest-save baseline', async () => {
@@ -509,6 +512,8 @@ describe('atomic upload through real SQLite', () => {
       originalName: result.originalName,
       versionNumber: 1,
       ...metadata,
+      contentHash:
+        'sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81',
       clientOriginalName: 'turn.se1',
       clientFileSize: 3,
     });

@@ -7,6 +7,7 @@ import { TerminalConfirmationModal } from "@/components/terminal-confirmation-mo
 import { TurnCommandCenter } from "@/components/turn-command-center";
 import { TurnTimingHistoryCard } from "@/components/turn-timing-history-card";
 import { WorldStateHistoryCard } from "@/components/world-state-history-card";
+import { SaveRegimeInspection } from "@/components/save-regime-inspection";
 import { getShadowOverrideEnabled } from "@/lib/shadow-override";
 import { getGameDetail } from "@/lib/shadow-cloud-api";
 import { transferOutcomeMessage } from "@/lib/transfer-outcome";
@@ -111,6 +112,7 @@ export default async function GameDetailPage({
       ) : null}
 
       <TurnCommandCenter
+        saveBaseline={game.saveBaseline}
         activePlayerDisplayName={game.activePlayerDisplayName}
         activeSeatNumber={
           activePlayer?.turnOrder ?? game.openTurn?.seatNumber ?? null
@@ -129,13 +131,25 @@ export default async function GameDetailPage({
 
       <CampaignWorkspaceTabs
         saves={
-          <WorldStateHistoryCard
-            currentUserId={session?.user?.id ?? null}
-            fileVersions={game.fileVersions}
-            gameNumber={game.gameNumber}
-            isShadowOverrideUser={session?.user?.isShadowOverride === true}
-            shadowOverrideEnabled={shadowOverrideEnabled}
-          />
+          <div className="space-y-6">
+            <SaveRegimeInspection
+              key={game.id}
+              saveRevision={`${game.fileVersions[0]?.id}:${game.fileVersions[0]?.contentRevision}`}
+              gameNumber={game.gameNumber}
+              isOverlord={Boolean(
+                session?.user?.id && session.user.id === game.organizerId,
+              )}
+              hasSave={game.fileVersions.length > 0}
+            />
+            <WorldStateHistoryCard
+              saveBaseline={game.saveBaseline}
+              currentUserId={session?.user?.id ?? null}
+              fileVersions={game.fileVersions}
+              gameNumber={game.gameNumber}
+              isShadowOverrideUser={session?.user?.isShadowOverride === true}
+              shadowOverrideEnabled={shadowOverrideEnabled}
+            />
+          </div>
         }
         timing={
           <TurnTimingHistoryCard
