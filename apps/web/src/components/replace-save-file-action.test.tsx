@@ -37,6 +37,7 @@ function renderAction() {
       canonicalFileName="42-T4-S2-Other.se1"
       fileVersionId="version-7"
       gameNumber={42}
+      saveBaseline="campaign:2:3"
       isMostRecent={false}
     />,
   );
@@ -89,6 +90,9 @@ describe("ReplaceSaveFileAction", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/games/42/files/version-7",
       expect.objectContaining({ method: "PUT", body: expect.any(FormData) }),
+    );
+    expect(fetchMock.mock.calls[0][1].body.get("expectedSaveBaseline")).toBe(
+      "campaign:2:3",
     );
   });
 
@@ -148,7 +152,7 @@ describe("ReplaceSaveFileAction", () => {
     fetchMock.mockResolvedValue(
       mockResponse(false, { error: "The file version has changed." }, 409),
     );
-    renderAction();
+    const view = renderAction();
 
     await openAndSelectReplacement(user);
     await user.click(screen.getByRole("button", { name: "Replace file" }));
@@ -162,6 +166,20 @@ describe("ReplaceSaveFileAction", () => {
       ).toBeEnabled();
     });
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+    view.rerender(
+      <ReplaceSaveFileAction
+        gameNumber={42}
+        fileVersionId="version-7"
+        canonicalFileName="42-T4-S2-Other.se1"
+        isMostRecent={false}
+        saveBaseline="campaign:2:4"
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Replace file" }));
+    expect(fetchMock.mock.calls[1][1].body.get("expectedSaveBaseline")).toBe(
+      "campaign:2:3",
+    );
+    expect(mockRouter.refresh).not.toHaveBeenCalled();
   });
 
   it("prevents duplicate replacement requests while one is pending", async () => {

@@ -7,9 +7,9 @@ export function LoginButton() {
     <button
       onClick={() => signIn("discord")}
       type="button"
-      className="inline-flex h-8 items-center rounded-md border border-orange-400/60 bg-transparent px-3 text-xs font-mono uppercase tracking-[0.18em] text-orange-400/80 transition-colors hover:bg-orange-400 hover:text-black"
+      className="inline-flex min-h-11 shrink-0 items-center rounded-md border border-orange-400/60 bg-transparent px-3 text-xs font-mono text-orange-200 transition-colors hover:bg-orange-400 hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      Connect
+      Sign in with Discord
     </button>
   );
 }

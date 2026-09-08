@@ -53,18 +53,18 @@ export default async function GameLayout({
 
   return (
     <main
-      className={`h-screen overflow-hidden bg-black font-mono p-2 sm:p-4 flex flex-col ${shellTextClassName}`}
+      className={`min-h-dvh md:h-dvh md:overflow-hidden bg-black font-mono p-2 sm:p-4 flex flex-col ${shellTextClassName}`}
     >
       <div
-        className={`flex-1 min-h-0 flex flex-col rounded-lg border p-3 sm:p-6 bg-black/90 shadow-2xl overflow-hidden ${shellFrameClassName}`}
+        className={`flex-1 min-h-0 flex flex-col rounded-lg border p-3 sm:p-6 bg-black/90 shadow-2xl md:overflow-hidden ${shellFrameClassName}`}
       >
         {/* Terminal header bar */}
         <div
-          className={`flex flex-wrap items-center justify-between gap-3 border-b pb-4 mb-6 shrink-0 ${shellHeaderClassName}`}
+          className={`flex flex-wrap items-center justify-between gap-3 border-b pb-3 mb-4 shrink-0 ${shellHeaderClassName}`}
         >
           <div className="flex min-w-0 flex-1 basis-full items-center gap-3 sm:basis-0 sm:gap-4">
             <Link
-              className={`inline-flex h-9 items-center rounded-md border px-3 text-sm font-mono transition-colors hover:text-black ${shellLinkClassName}`}
+              className={`inline-flex h-11 shrink-0 items-center rounded-md border px-3 text-sm font-mono transition-colors hover:text-black ${shellLinkClassName}`}
               href="/"
             >
               &lt; BACK
@@ -74,33 +74,40 @@ export default async function GameLayout({
             >{`> ${game.gameNumber} : ${game.name}`}</div>
           </div>
           <div className="flex w-full max-w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:gap-4">
-            <UserBadge
-              name={
-                session?.user?.name ?? session?.user?.email ?? "Guest overlord"
-              }
-              image={session?.user?.image}
-              isSignedIn={Boolean(session?.user)}
-            />
+            <div className={session?.user ? "min-w-0" : "hidden sm:block"}>
+              <UserBadge
+                name={
+                  session?.user?.name ??
+                  session?.user?.email ??
+                  "Guest overlord"
+                }
+                image={session?.user?.image}
+                isSignedIn={Boolean(session?.user)}
+              />
+            </div>
             {session?.user ? <SignOutButton /> : <LoginButton />}
             {session?.user?.isShadowOverride ? (
               <ShadowOverrideButton enabled={shadowOverrideEnabled} />
             ) : null}
-            <TerminalClock
-              initialTime={formatTerminalClock(initialClockTime)}
-            />
+            <div className="hidden xl:block">
+              <TerminalClock
+                initialTime={formatTerminalClock(initialClockTime)}
+              />
+            </div>
           </div>
         </div>
 
         {/* Page content */}
-        <div className="flex-1 min-h-0 overflow-y-auto pr-2">{children}</div>
+        <div className="flex-1 min-h-0 md:overflow-y-auto md:pr-2">
+          {children}
+        </div>
 
         {/* Status bar */}
         <div
-          className={`mt-auto pt-4 border-t flex flex-wrap justify-between gap-2 text-xs text-orange-300/70 shrink-0 ${shellStatusClassName}`}
+          className={`mt-4 pt-3 border-t flex flex-wrap justify-between gap-2 text-xs shrink-0 ${shellStatusClassName}`}
         >
           <div>{componentVersionStatus}</div>
-          <div>WORLD: {`#${game.gameNumber}`} MONITORED</div>
-          <div>ENCRYPTION: QUANTUM-256</div>
+          <div>CAMPAIGN: {`#${game.gameNumber}`}</div>
         </div>
       </div>
     </main>

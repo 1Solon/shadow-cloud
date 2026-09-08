@@ -49,38 +49,42 @@ export default async function Home() {
 
   return (
     <main
-      className={`h-screen overflow-hidden bg-black font-mono p-4 flex flex-col ${shellTextClassName}`}
+      className={`min-h-dvh md:h-dvh md:overflow-hidden bg-black font-mono p-2 sm:p-4 flex flex-col ${shellTextClassName}`}
     >
       <div
-        className={`flex-1 min-h-0 w-full rounded-lg border p-6 bg-black/90 shadow-2xl flex flex-col overflow-hidden ${shellFrameClassName}`}
+        className={`flex-1 min-h-0 w-full rounded-lg border p-3 sm:p-6 bg-black/90 shadow-2xl flex flex-col md:overflow-hidden ${shellFrameClassName}`}
       >
         {/* Terminal header bar */}
         <div
-          className={`flex items-center justify-between border-b pb-4 mb-6 ${shellHeaderClassName}`}
+          className={`flex flex-wrap items-center justify-between gap-3 border-b pb-3 mb-4 shrink-0 ${shellHeaderClassName}`}
         >
           <div
-            className={`terminal-title-effect text-xl font-mono ${shellTitleClassName}`}
+            className={`terminal-title-effect whitespace-nowrap text-base sm:text-xl font-mono ${shellTitleClassName}`}
           >
             <span>{`> SHADOW-CLOUD`}</span>
             <span aria-hidden="true" className="terminal-title-cursor" />
           </div>
-          <div className="flex items-center gap-6">
-            <UserBadge
-              name={signedInIdentity}
-              image={session?.user?.image}
-              isSignedIn={Boolean(session?.user)}
-            />
+          <div className="flex max-w-full flex-wrap items-center gap-3">
+            <div className={session?.user ? "min-w-0" : "hidden sm:block"}>
+              <UserBadge
+                name={signedInIdentity}
+                image={session?.user?.image}
+                isSignedIn={Boolean(session?.user)}
+              />
+            </div>
             {session?.user ? <SignOutButton /> : <LoginButton />}
             {session?.user?.isShadowOverride ? (
               <ShadowOverrideButton enabled={shadowOverrideEnabled} />
             ) : null}
-            <TerminalClock
-              initialTime={formatTerminalClock(initialClockTime)}
-            />
+            <div className="hidden xl:block">
+              <TerminalClock
+                initialTime={formatTerminalClock(initialClockTime)}
+              />
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-col gap-8 flex-1 min-h-0 overflow-y-auto pr-2">
+        <div className="flex flex-col gap-6 flex-1 min-h-0 md:overflow-y-auto md:pr-2">
           {session?.user ? (
             <CampaignList
               campaigns={yourCampaigns}
@@ -107,11 +111,10 @@ export default async function Home() {
         </div>
         {/* Status bar */}
         <div
-          className={`mt-6 pt-4 border-t flex justify-between text-xs ${shellStatusClassName}`}
+          className={`mt-4 pt-3 border-t flex flex-wrap justify-between gap-2 text-xs shrink-0 ${shellStatusClassName}`}
         >
           <div>{componentVersionStatus}</div>
           <div>CAMPAIGNS: {games.length} MONITORED</div>
-          <div>ENCRYPTION: QUANTUM-256</div>
         </div>
       </div>
     </main>

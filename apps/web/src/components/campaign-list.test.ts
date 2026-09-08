@@ -1,10 +1,22 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment jsdom
+
+import "@testing-library/jest-dom/vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { createElement } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  CampaignList,
   sortAndFilterCampaigns,
   type CampaignSortOption,
   type CampaignTurnFilter,
 } from "@/components/campaign-list";
 import type { GameListItem } from "@/lib/shadow-cloud-api";
+
+vi.mock("@/components/campaign-card", () => ({
+  CampaignCard: ({ game }: { game: { name: string } }) =>
+    createElement("div", null, game.name),
+}));
 
 function createGame(
   id: string,
@@ -44,14 +56,20 @@ const campaigns = [
 function campaignIds(
   sortOption: CampaignSortOption,
   turnFilter: CampaignTurnFilter = "all",
+  searchQuery = "",
 ) {
   return sortAndFilterCampaigns(
     campaigns,
     "user-1",
     sortOption,
     turnFilter,
+    searchQuery,
   ).map((campaign) => campaign.id);
 }
+
+afterEach(() => {
+  cleanup();
+});
 
 describe("campaign list sorting and filtering", () => {
   it("sorts campaigns by newest or oldest update time", () => {
@@ -67,5 +85,113 @@ describe("campaign list sorting and filtering", () => {
   it("filters campaigns by whether it is the current user's turn", () => {
     expect(campaignIds("updated-desc", "your-turn")).toEqual(["bravo", "zulu"]);
     expect(campaignIds("updated-desc", "waiting")).toEqual(["alpha"]);
+  });
+
+  it("searches by campaign number or name without case sensitivity", () => {
+    expect(campaignIds("updated-desc", "all", "2")).toEqual(["bravo"]);
+    expect(campaignIds("updated-desc", "all", "ALP")).toEqual(["alpha"]);
+  });
+
+  it("exposes a labeled search field and filters cards as it changes", async () => {
+    const user = userEvent.setup();
+    render(
+      createElement(CampaignList, {
+        campaigns,
+        title: "YOUR CAMPAIGNS",
+        emptyTitle: "No campaigns",
+        emptyDescription: "No campaigns are available.",
+        currentUserId: "user-1",
+        hasSortingOptions: true,
+      }),
+    );
+
+    const search = screen.getByRole("searchbox", {
+      name: "Search your campaigns by campaign number or name",
+    });
+    expect(search).toHaveAttribute("placeholder", "Number or name");
+
+    await user.type(search, "ALP");
+
+    expect(screen.getByText("Alpha")).toBeInTheDocument();
+    expect(screen.queryByText("Bravo")).not.toBeInTheDocument();
+    expect(screen.queryByText("Zulu")).not.toBeInTheDocument();
+  });
+
+  it("does not offer an open seats checkbox on your campaigns", () => {
+    const campaignsWithOpenSeats = campaigns.map((campaign) =>
+      campaign.id === "alpha" ? { ...campaign, filledSeatCount: 2 } : campaign,
+    );
+    render(
+      createElement(CampaignList, {
+        campaigns: campaignsWithOpenSeats,
+        title: "YOUR CAMPAIGNS",
+        emptyTitle: "No campaigns",
+        emptyDescription: "No campaigns are available.",
+        currentUserId: "user-1",
+        hasSortingOptions: true,
+      }),
+    );
+
+    expect(
+      screen.queryByRole("checkbox", {
+        name: "Filter your campaigns by seat availability",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not offer the seat filter when seat counts are unreliable", () => {
+    render(
+      createElement(CampaignList, {
+        campaigns: [{ ...campaigns[0], filledSeatCount: 4 }],
+        title: "YOUR CAMPAIGNS",
+        emptyTitle: "No campaigns",
+        emptyDescription: "No campaigns are available.",
+        currentUserId: "user-1",
+        hasSortingOptions: true,
+      }),
+    );
+
+    expect(
+      screen.queryByRole("checkbox", {
+        name: "Filter your campaigns by seat availability",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("preserves active campaign search without an open seats checkbox", async () => {
+    const user = userEvent.setup();
+    const campaignsWithOpenSeats = campaigns.map((campaign) =>
+      campaign.id === "alpha" ? { ...campaign, filledSeatCount: 2 } : campaign,
+    );
+    render(
+      createElement(CampaignList, {
+        campaigns: campaignsWithOpenSeats,
+        title: "ACTIVE CAMPAIGNS",
+        emptyTitle: "No campaigns",
+        emptyDescription: "No campaigns are available.",
+        currentUserId: "user-1",
+      }),
+    );
+
+    const search = screen.getByRole("searchbox", {
+      name: "Search active campaigns by campaign number or name",
+    });
+    expect(
+      screen.queryByRole("checkbox", {
+        name: "Filter active campaigns by seat availability",
+      }),
+    ).not.toBeInTheDocument();
+
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+
+    await user.type(search, "ALP");
+    expect(screen.getByText("Alpha")).toBeInTheDocument();
+    expect(screen.queryByText("Bravo")).not.toBeInTheDocument();
+    expect(screen.queryByText("Zulu")).not.toBeInTheDocument();
+
+    await user.clear(search);
+    expect(screen.getByText("Alpha")).toBeInTheDocument();
+    expect(screen.getByText("Bravo")).toBeInTheDocument();
+    expect(screen.getByText("Zulu")).toBeInTheDocument();
   });
 });

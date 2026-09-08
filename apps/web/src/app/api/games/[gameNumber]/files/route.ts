@@ -42,6 +42,10 @@ export async function POST(
 
   const apiFormData = new FormData();
   apiFormData.set("file", file, file.name);
+  apiFormData.set(
+    "expectedSaveBaseline",
+    String(formData.get("expectedSaveBaseline") ?? ""),
+  );
 
   const response = await fetch(
     `${apiBaseUrl}/v1/games/${encodeURIComponent(gameNumber)}/files`,

@@ -10,16 +10,21 @@ function StatefulCampaign() {
   return <input aria-label="Notes draft" defaultValue="" />;
 }
 
+function StatefulRegimes() {
+  return <input aria-label="Regime draft" defaultValue="" />;
+}
+
 function controlledPanel(tab: HTMLElement) {
   return document.getElementById(tab.getAttribute("aria-controls")!)!;
 }
 
-function renderWorkspace({ administration = false } = {}) {
+function renderWorkspace({ administration = false, regimes = false } = {}) {
   return render(
     <CampaignWorkspaceTabs
       saves={<p>Saves content</p>}
       timing={<p>Timing content</p>}
       campaign={<StatefulCampaign />}
+      regimes={regimes ? <StatefulRegimes /> : undefined}
       administration={
         administration ? <p>Administration content</p> : undefined
       }
@@ -68,6 +73,73 @@ describe("CampaignWorkspaceTabs", () => {
     expect(campaignTab).toHaveAttribute("aria-selected", "true");
     expect(savesTab).toHaveAttribute("aria-selected", "false");
     expect(screen.getByLabelText("Notes draft")).toHaveValue("preserved draft");
+  });
+
+  it("places the optional Regimes tab after Campaign and before Administration", () => {
+    renderWorkspace({ administration: true, regimes: true });
+
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+      "Saves",
+      "Timing",
+      "Campaign",
+      "Regimes",
+      "Administration",
+    ]);
+    expect(screen.getAllByRole("tabpanel", { hidden: true })).toHaveLength(5);
+  });
+
+  it("navigates through the optional Regimes tab with arrow keys", async () => {
+    const user = userEvent.setup();
+    renderWorkspace({ administration: true, regimes: true });
+    const savesTab = screen.getByRole("tab", { name: "Saves" });
+    const timingTab = screen.getByRole("tab", { name: "Timing" });
+    const campaignTab = screen.getByRole("tab", { name: "Campaign" });
+    const regimesTab = screen.getByRole("tab", { name: "Regimes" });
+    const administrationTab = screen.getByRole("tab", {
+      name: "Administration",
+    });
+
+    savesTab.focus();
+    await user.keyboard("[ArrowRight]");
+    await user.keyboard("[ArrowRight]");
+    expect(campaignTab).toHaveFocus();
+    await user.keyboard("[ArrowRight]");
+    expect(regimesTab).toHaveFocus();
+    await user.keyboard("[ArrowRight]");
+    expect(administrationTab).toHaveFocus();
+    await user.keyboard("[ArrowLeft]");
+    expect(regimesTab).toHaveFocus();
+    expect(timingTab).not.toHaveFocus();
+  });
+
+  it("preserves the mounted Regimes panel state while switching tabs", async () => {
+    const user = userEvent.setup();
+    renderWorkspace({ regimes: true });
+    const regimesTab = screen.getByRole("tab", { name: "Regimes" });
+    const savesTab = screen.getByRole("tab", { name: "Saves" });
+
+    expect(screen.queryByLabelText("Regime draft")).not.toBeInTheDocument();
+    await user.click(regimesTab);
+    await user.type(screen.getByLabelText("Regime draft"), "preserved draft");
+    await user.click(savesTab);
+    expect(controlledPanel(regimesTab)).not.toBeVisible();
+    await user.click(regimesTab);
+
+    expect(screen.getByLabelText("Regime draft")).toHaveValue(
+      "preserved draft",
+    );
+  });
+
+  it("mounts Regimes when keyboard navigation activates it", async () => {
+    const user = userEvent.setup();
+    renderWorkspace({ regimes: true });
+    const savesTab = screen.getByRole("tab", { name: "Saves" });
+
+    expect(screen.queryByLabelText("Regime draft")).not.toBeInTheDocument();
+    savesTab.focus();
+    await user.keyboard("[End]");
+
+    expect(screen.getByLabelText("Regime draft")).toBeVisible();
   });
 
   it("selects and focuses tabs with arrow keys", async () => {
@@ -162,6 +234,25 @@ describe("CampaignWorkspaceTabs", () => {
     expect(controlledPanel(savesTab)).toBeVisible();
   });
 
+  it("returns to Saves when the selected Regimes tab is removed", async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderWorkspace({ regimes: true });
+    await user.click(screen.getByRole("tab", { name: "Regimes" }));
+
+    rerender(
+      <CampaignWorkspaceTabs
+        saves="Saves content"
+        timing="Timing content"
+        campaign="Campaign content"
+      />,
+    );
+
+    const savesTab = screen.getByRole("tab", { name: "Saves" });
+    expect(screen.queryByRole("tab", { name: "Regimes" })).toBeNull();
+    expect(savesTab).toHaveAttribute("aria-selected", "true");
+    expect(controlledPanel(savesTab)).toBeVisible();
+  });
+
   it("links every tab to a uniquely identified labelled panel", () => {
     renderWorkspace({ administration: true });
     const tabs = screen.getAllByRole("tab");
@@ -221,11 +312,11 @@ describe("CampaignWorkspaceTabs", () => {
     );
     expect(tablist).toHaveClass("flex", "min-w-max", "px-1", "pt-1");
     expect(savesTab).toHaveClass(
-      "h-11",
+      "h-10",
       "border-b-2",
       "border-orange-400",
-      "bg-orange-400",
-      "text-black",
+      "bg-orange-400/10",
+      "text-orange-100",
     );
     expect(timingTab).toHaveClass(
       "border-transparent",
@@ -235,7 +326,7 @@ describe("CampaignWorkspaceTabs", () => {
     for (const panel of screen.getAllByRole("tabpanel", { hidden: true })) {
       expect(panel).toHaveClass(
         "min-w-0",
-        "pt-6",
+        "pt-4",
         "focus-visible:outline-none",
         "focus-visible:ring-2",
       );

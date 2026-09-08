@@ -135,6 +135,28 @@ describe("CampaignConfigurationShell", () => {
     ).not.toHaveAttribute("aria-current");
   });
 
+  it("uses a compact accessible section select below the sidebar breakpoint", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    const sectionSelect = screen.getByRole("combobox", {
+      name: "Configuration section",
+    });
+    const nav = screen.getByRole("navigation", {
+      name: "Campaign configuration sections",
+    });
+
+    expect(sectionSelect).toHaveClass("md:hidden");
+    expect(nav).toHaveClass("hidden", "md:block");
+    await user.selectOptions(sectionSelect, "notes");
+
+    expect(sectionSelect).toHaveValue("notes");
+    expect(screen.getByText("editor:notes")).toBeVisible();
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Notes" }),
+    ).toHaveFocus();
+  });
+
   it("does not move focus to the editor heading on initial mount", () => {
     render(<Harness />);
 
@@ -182,6 +204,9 @@ describe("CampaignConfigurationShell", () => {
     for (const command of commands.slice(1)) {
       expect(command).toBeDisabled();
     }
+    expect(
+      screen.getByRole("combobox", { name: "Configuration section" }),
+    ).toBeDisabled();
     expect(
       screen.getByRole("button", { name: "Exit configuration" }),
     ).toBeDisabled();
@@ -283,7 +308,7 @@ describe("CampaignConfigurationShell", () => {
     expect(layout).toHaveClass(
       "grid",
       "min-w-0",
-      "lg:grid-cols-[minmax(10rem,0.35fr)_minmax(0,1fr)]",
+      "md:grid-cols-[minmax(11rem,0.35fr)_minmax(0,1fr)]",
     );
     expect(screen.getByTestId("campaign-configuration-status")).toHaveClass(
       "border-t",
@@ -293,10 +318,7 @@ describe("CampaignConfigurationShell", () => {
       name: "Exit configuration",
     });
     expect(exitButton).toHaveClass("h-full");
-    expect(exitButton.parentElement).toHaveClass(
-      "shrink-0",
-      "sm:self-stretch",
-    );
+    expect(exitButton.parentElement).toHaveClass("shrink-0", "sm:self-stretch");
     expect(
       screen.getByRole("heading", {
         level: 3,

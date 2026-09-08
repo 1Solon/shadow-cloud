@@ -89,7 +89,7 @@ describe("GameLayout", () => {
     mocks.getShadowOverrideEnabled.mockResolvedValue(false);
   });
 
-  it("contains the campaign shell within the viewport on small screens", async () => {
+  it("uses compact mobile framing and a viewport-contained desktop shell", async () => {
     const child = <section>Campaign workspace</section>;
     const layout = await GameLayout({
       children: child,
@@ -97,8 +97,11 @@ describe("GameLayout", () => {
     });
     const elements = elementsIn(layout);
 
-    const main = elementWithClasses(elements, "h-screen");
-    expect(main?.props.className).toContain("overflow-hidden");
+    const main = elementWithClasses(elements, "min-h-dvh");
+    expect(main?.props.className?.split(/\s+/)).toContain("md:overflow-hidden");
+    expect(main?.props.className?.split(/\s+/)).not.toContain(
+      "overflow-hidden",
+    );
     expect(main?.props.className).toContain("p-2");
     expect(main?.props.className).toContain("sm:p-4");
 
@@ -107,7 +110,7 @@ describe("GameLayout", () => {
     expect(frame?.props.className).toContain("sm:p-6");
     expect(frame?.props.className).toContain("overflow-hidden");
 
-    const header = elementWithClasses(elements, "border-b", "pb-4", "mb-6");
+    const header = elementWithClasses(elements, "border-b", "pb-3", "mb-4");
     expect(header?.props.className).toContain("flex-wrap");
     expect(header?.props.className).toContain("gap-3");
 
@@ -132,12 +135,12 @@ describe("GameLayout", () => {
     expect(accountGroup?.props.className).toContain("max-w-full");
     expect(accountGroup?.props.className).toContain("sm:w-auto");
 
-    const status = elementWithClasses(elements, "mt-auto", "border-t");
+    const status = elementWithClasses(elements, "mt-4", "border-t");
     expect(status?.props.className).toContain("flex-wrap");
     expect(status?.props.className).toContain("gap-2");
   });
 
-  it("keeps vertical scrolling on page content only", async () => {
+  it("restricts inner scrolling to desktop page content", async () => {
     const child = <section>Campaign workspace</section>;
     const layout = await GameLayout({
       children: child,
@@ -145,9 +148,9 @@ describe("GameLayout", () => {
     });
     const elements = elementsIn(layout);
     const scrollClasses = [
-      "overflow-y-auto",
-      "overflow-auto",
-      "overflow-scroll",
+      "md:overflow-y-auto",
+      "md:overflow-auto",
+      "md:overflow-scroll",
     ];
     const scrollers = elements.filter((element) => {
       const classNames = element.props.className?.split(/\s+/) ?? [];
@@ -157,12 +160,20 @@ describe("GameLayout", () => {
     expect(scrollers).toHaveLength(1);
     expect(scrollers[0]?.props.children).toBe(child);
     expect(scrollers[0]?.props.className?.split(/\s+/)).toEqual(
-      expect.arrayContaining(["flex-1", "min-h-0", "overflow-y-auto", "pr-2"]),
+      expect.arrayContaining([
+        "flex-1",
+        "min-h-0",
+        "md:overflow-y-auto",
+        "md:pr-2",
+      ]),
     );
     expect(scrollers[0]?.props.className).not.toContain("overflow-x-auto");
 
-    const header = elementWithClasses(elements, "border-b", "pb-4", "mb-6");
-    const status = elementWithClasses(elements, "mt-auto", "border-t");
+    expect(scrollers[0]?.props.className?.split(/\s+/)).not.toContain(
+      "overflow-y-auto",
+    );
+    const header = elementWithClasses(elements, "border-b", "pb-3", "mb-4");
+    const status = elementWithClasses(elements, "mt-4", "border-t");
     expect(header?.props.className).not.toContain("overflow-y-auto");
     expect(status?.props.className).not.toContain("overflow-y-auto");
   });

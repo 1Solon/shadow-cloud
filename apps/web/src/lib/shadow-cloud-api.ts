@@ -10,6 +10,7 @@ type ApiErrorPayload = {
 };
 
 export type GameListItem = {
+  saveBaseline?: string;
   id: string;
   slug: string;
   gameNumber: number;
@@ -34,6 +35,7 @@ export type GameListItem = {
 };
 
 export type GameDetailFileVersion = {
+  contentRevision?: number;
   id: string;
   originalName: string;
   uploadedAt: string;
@@ -81,6 +83,7 @@ export type SeatOrderSnapshot = {
 };
 
 export type GameDetail = {
+  saveBaseline?: string;
   id: string;
   gameNumber: number;
   slug: string;

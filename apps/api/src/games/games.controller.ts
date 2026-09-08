@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   Param,
   Patch,
   Post,
@@ -34,6 +35,10 @@ import { ApproveRegistrationRequestDto } from './dto/approve-registration-reques
 import { GamesService, type UploadedSaveFile } from './games.service';
 import { SaveFileUploadExceptionFilter } from './support/save-file-upload-exception.filter';
 import { getMaxSaveFileSizeBytes } from './support/save-file-validation';
+import type {
+  ResetPasswordInput,
+  UndoPasswordResetInput,
+} from './services/games-file.service';
 
 @Controller('games')
 export class GamesController {
@@ -85,6 +90,7 @@ export class GamesController {
         : Number(body.expectedRoundNumber);
 
     return this.gamesService.uploadSave(gameId, request.user?.sub, file, {
+      expectedSaveBaseline: body?.expectedSaveBaseline ?? '',
       contentHash: body?.contentHash,
       idempotencyKey: body?.idempotencyKey,
       expectedActivePlayerEntryId: body?.expectedActivePlayerEntryId,
@@ -106,6 +112,66 @@ export class GamesController {
     @Req() request: AuthenticatedRequest,
   ) {
     return this.gamesService.getSeatOrder(gameId, request.user?.sub);
+  }
+
+  @Get(':gameId/save-inspection')
+  @UseGuards(AppAuthGuard)
+  @Header('Cache-Control', 'no-store')
+  inspectLatestSave(
+    @Param('gameId') gameId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.gamesService.inspectLatestSave(
+      gameId,
+      request.user?.sub,
+      request.user?.shadowOverrideEnabled === true,
+    );
+  }
+
+  @Post(':gameId/password-reset')
+  @UseGuards(AppAuthGuard)
+  @Header('Cache-Control', 'no-store')
+  resetPassword(
+    @Param('gameId') gameId: string,
+    @Req() request: AuthenticatedRequest,
+    @Body() input: ResetPasswordInput,
+  ) {
+    return this.gamesService.resetPassword(
+      gameId,
+      request.user?.sub,
+      input,
+      request.user?.shadowOverrideEnabled === true,
+    );
+  }
+
+  @Get(':gameId/password-reset')
+  @UseGuards(AppAuthGuard)
+  @Header('Cache-Control', 'no-store')
+  getPasswordResetRecovery(
+    @Param('gameId') gameId: string,
+    @Req() request: AuthenticatedRequest,
+  ) {
+    return this.gamesService.getPasswordResetRecovery(
+      gameId,
+      request.user?.sub,
+      request.user?.shadowOverrideEnabled === true,
+    );
+  }
+
+  @Post(':gameId/password-reset/undo')
+  @UseGuards(AppAuthGuard)
+  @Header('Cache-Control', 'no-store')
+  undoPasswordReset(
+    @Param('gameId') gameId: string,
+    @Req() request: AuthenticatedRequest,
+    @Body() input: UndoPasswordResetInput,
+  ) {
+    return this.gamesService.undoPasswordReset(
+      gameId,
+      request.user?.sub,
+      input,
+      request.user?.shadowOverrideEnabled === true,
+    );
   }
 
   @Post(':gameId/seat-order')
@@ -198,6 +264,7 @@ export class GamesController {
       request.user?.sub,
       file,
       {
+        expectedSaveBaseline: body?.expectedSaveBaseline ?? '',
         contentHash: body?.contentHash,
         shadowOverrideEnabled: request.user?.shadowOverrideEnabled === true,
       },

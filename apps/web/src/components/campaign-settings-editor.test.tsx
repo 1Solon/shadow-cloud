@@ -135,6 +135,27 @@ describe("CampaignSettingsEditor", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("separates ordinary metadata from the consequential Overlord transfer", () => {
+    renderEditor("identity");
+
+    const metadata = screen.getByRole("region", {
+      name: "Campaign metadata",
+    });
+    const transfer = screen.getByRole("region", {
+      name: "Overlord transfer",
+    });
+
+    expect(metadata).toContainElement(screen.getByLabelText("Campaign name"));
+    expect(metadata).toContainElement(screen.getByLabelText("Round"));
+    expect(metadata).not.toContainElement(screen.getByLabelText("Overlord"));
+    expect(transfer).toContainElement(screen.getByLabelText("Overlord"));
+    expect(transfer).toHaveClass("border-orange-300/50", "bg-orange-400/5");
+    expect(transfer).toHaveTextContent(
+      "The selected occupied seat becomes the new Overlord and receives organizer-only controls.",
+    );
+    expect(transfer).toHaveTextContent("A confirmation is required");
+  });
+
   it("renders only turn reminder fields", () => {
     renderEditor("turn-protocol");
 

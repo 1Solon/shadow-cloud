@@ -19,11 +19,34 @@ type CampaignCardProps = {
   game: GameListItem;
 };
 
-function formatTimestamp(timestamp: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(timestamp));
+export function formatRelativeTimestamp(timestamp: string, now: number) {
+  const updatedAt = Date.parse(timestamp);
+  if (!Number.isFinite(updatedAt)) {
+    return "unknown time";
+  }
+
+  const differenceInSeconds = Math.round((updatedAt - now) / 1000);
+  const absoluteDifferenceInSeconds = Math.abs(differenceInSeconds);
+  if (absoluteDifferenceInSeconds < 60) {
+    return "just now";
+  }
+
+  const units = [
+    ["year", 31_536_000],
+    ["month", 2_592_000],
+    ["week", 604_800],
+    ["day", 86_400],
+    ["hour", 3_600],
+    ["minute", 60],
+  ] as const;
+  const [unit, secondsPerUnit] = units.find(
+    ([, seconds]) => absoluteDifferenceInSeconds >= seconds,
+  ) ?? ["second", 1];
+
+  return new Intl.RelativeTimeFormat("en-US", { numeric: "auto" }).format(
+    Math.round(differenceInSeconds / secondsPerUnit),
+    unit,
+  );
 }
 
 export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
@@ -31,12 +54,26 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isUploadButtonHighlighted, setIsUploadButtonHighlighted] =
     useState(false);
+  const [relativeUpdatedAt, setRelativeUpdatedAt] = useState(game.updatedAt);
   const isUsersTurn = Boolean(
     currentUserId && game.activePlayerUserId === currentUserId,
   );
   const cardHighlightClassName = isUploadButtonHighlighted
     ? null
     : "group-hover:bg-orange-400/10 group-hover:shadow-lg group-hover:shadow-orange-400/10";
+
+  useEffect(() => {
+    function updateRelativeTimestamp() {
+      setRelativeUpdatedAt(formatRelativeTimestamp(game.updatedAt, Date.now()));
+    }
+
+    updateRelativeTimestamp();
+    const intervalId = window.setInterval(updateRelativeTimestamp, 60_000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [game.updatedAt]);
 
   useEffect(() => {
     if (!isUploadModalOpen) {
@@ -87,10 +124,10 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
             cardHighlightClassName,
           )}
         >
-          <CardContent className="grid gap-6 pt-6 md:grid-cols-2">
+          <CardContent className="grid gap-4 p-4 sm:p-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)] md:items-center">
             <div
               className={cn(
-                "flex flex-col gap-1 border-b border-orange-400/20 pb-4 group-focus-visible:border-black/20 md:border-b-0 md:border-r md:pb-0 md:pr-6",
+                "flex min-w-0 flex-col gap-1 border-b border-orange-400/20 pb-3 group-focus-visible:border-black/20 md:border-b-0 md:border-r md:pb-0 md:pr-5",
                 !isUploadButtonHighlighted
                   ? "group-hover:border-orange-300/30"
                   : null,
@@ -108,71 +145,60 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
               </div>
               <div
                 className={cn(
-                  "text-xs text-orange-300/60 group-focus-visible:text-black/70",
+                  "mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground group-focus-visible:text-black/70",
                   !isUploadButtonHighlighted
                     ? "group-hover:text-orange-200/70"
                     : null,
                 )}
               >
-                Overlord {game.organizerDisplayName}
-              </div>
-              <div
-                className={cn(
-                  "mt-1 text-xs uppercase tracking-[0.18em] text-orange-300/50 group-focus-visible:text-black/60",
-                  !isUploadButtonHighlighted
-                    ? "group-hover:text-orange-200/60"
-                    : null,
-                )}
-              >
-                Turn {game.roundNumber}
-              </div>
-              <div
-                className={cn(
-                  "mt-1 text-xs uppercase tracking-[0.18em] text-orange-300/40 group-focus-visible:text-black/55",
-                  !isUploadButtonHighlighted
-                    ? "group-hover:text-orange-200/55"
-                    : null,
-                )}
-              >
-                Updated {formatTimestamp(game.updatedAt)}
+                <span className="text-muted-foreground group-focus-visible:text-black/70">
+                  Turn {game.roundNumber}
+                </span>
+                <time
+                  dateTime={game.updatedAt}
+                  title={`Updated ${game.updatedAt}`}
+                  className="text-muted-foreground group-focus-visible:text-black/70"
+                >
+                  Updated {relativeUpdatedAt}
+                </time>
               </div>
             </div>
 
-            <div className="flex flex-col gap-1 md:pl-2">
-              <div className="flex items-center gap-4 px-1 py-1">
-                <div
+            <dl className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 md:grid-cols-3 md:gap-x-4 md:pl-1">
+              <div className="min-w-0 px-1">
+                <dt
                   className={cn(
-                    "w-32 shrink-0 text-xs uppercase tracking-[0.2em] text-orange-300/70 group-focus-visible:text-black/70",
+                    "text-xs uppercase tracking-[0.16em] text-orange-300/70 group-focus-visible:text-black/70",
                     !isUploadButtonHighlighted
                       ? "group-hover:text-orange-200/70"
                       : null,
                   )}
                 >
                   Active lord
-                </div>
-                <div
+                </dt>
+                <dd
                   className={cn(
-                    "text-sm font-medium text-orange-300 transition-all group-focus-visible:text-black",
+                    "truncate text-sm font-medium text-orange-300 transition-all group-focus-visible:text-black",
                     !isUploadButtonHighlighted
                       ? "group-hover:text-orange-200"
                       : null,
                   )}
                 >
                   {game.activePlayerDisplayName}
-                </div>
+                </dd>
               </div>
-              <div className="flex items-center gap-4 px-1 py-1">
-                <div
+              <div className="min-w-0 px-1">
+                <dt
                   className={cn(
-                    "w-32 shrink-0 text-xs uppercase tracking-[0.2em] text-orange-300/70 group-focus-visible:text-black/70",
+                    "text-xs uppercase tracking-[0.16em] text-orange-300/70 group-focus-visible:text-black/70",
                     !isUploadButtonHighlighted
                       ? "group-hover:text-orange-200/70"
                       : null,
                   )}
                 >
                   Overlord
-                </div>
-                <div
+                </dt>
+                <dd
                   className={cn(
                     "text-sm font-medium text-orange-300 group-focus-visible:text-black",
                     !isUploadButtonHighlighted
@@ -181,20 +207,20 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
                   )}
                 >
                   {game.organizerDisplayName}
-                </div>
+                </dd>
               </div>
-              <div className="flex items-center gap-4 px-1 py-1">
-                <div
+              <div className="min-w-0 px-1">
+                <dt
                   className={cn(
-                    "w-32 shrink-0 text-xs uppercase tracking-[0.2em] text-orange-300/70 group-focus-visible:text-black/70",
+                    "text-xs uppercase tracking-[0.16em] text-orange-300/70 group-focus-visible:text-black/70",
                     !isUploadButtonHighlighted
                       ? "group-hover:text-orange-200/70"
                       : null,
                   )}
                 >
                   Seats
-                </div>
-                <div
+                </dt>
+                <dd
                   className={cn(
                     "text-sm font-medium text-orange-300 group-focus-visible:text-black",
                     !isUploadButtonHighlighted
@@ -203,13 +229,13 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
                   )}
                 >
                   {`${game.filledSeatCount} / ${game.playerCount}`}
-                </div>
+                </dd>
               </div>
-            </div>
+            </dl>
 
             {isUsersTurn ? (
               <div
-                className="relative z-10 grid w-full grid-cols-2 gap-3 md:col-span-2"
+                className="relative z-10 grid w-full grid-cols-2 gap-2 md:col-span-2"
                 onClick={(event) => {
                   event.stopPropagation();
                 }}
@@ -221,19 +247,23 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
                   <DownloadSaveButton
                     className={cn(
                       buttonVariants({ variant: "outline" }),
-                      "w-full",
+                      "h-9 w-full px-2 text-xs sm:px-4 sm:text-sm",
                     )}
                     fileName={game.latestSave.originalName}
                     href={`/api/games/${game.gameNumber}/files/${game.latestSave.id}`}
                     label="Download latest turn"
                   />
                 ) : (
-                  <Button className="w-full" disabled variant="outline">
+                  <Button
+                    className="h-9 w-full px-2 text-xs sm:px-4 sm:text-sm"
+                    disabled
+                    variant="outline"
+                  >
                     Download latest turn
                   </Button>
                 )}
                 <Button
-                  className="w-full"
+                  className="h-9 w-full px-2 text-xs sm:px-4 sm:text-sm"
                   type="button"
                   onBlur={() => {
                     setIsUploadButtonHighlighted(false);
@@ -281,6 +311,7 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
               X
             </button>
             <SaveUploadCard
+              saveBaseline={game.saveBaseline}
               activePlayerDisplayName={game.activePlayerDisplayName}
               gameNumber={game.gameNumber}
               isActivePlayer={isUsersTurn}

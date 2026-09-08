@@ -346,6 +346,100 @@ describe("CampaignDetailsWorkspace Seat Order lifecycle", () => {
     expect(screen.getByText("New lord")).toBeVisible();
   });
 
+  it("keeps a captured draft while a newer Roster arrives, then retains the newer Roster after a slower save", async () => {
+    const user = userEvent.setup();
+    const pending = Promise.withResolvers<Response>();
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockReturnValueOnce(pending.promise);
+    const { rerender } = render(<CampaignDetailsWorkspace {...props} />);
+    await user.click(
+      screen.getByRole("button", { name: "Configure campaign" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Seat Order" }));
+    await user.click(screen.getByRole("button", { name: "Manage seat 2" }));
+    await user.click(screen.getByRole("button", { name: "Make active" }));
+
+    rerender(
+      <CampaignDetailsWorkspace
+        {...props}
+        players={latest.players}
+        activePlayerEntryId="seat-1"
+        seatOrderBaseline={{ campaignId: "campaign-1", revision: 10 }}
+      />,
+    );
+    expect(screen.getByText("Rhea")).toBeVisible();
+    expect(screen.getByText("Seat 2 · Active")).toBeVisible();
+    expect(screen.queryByText("New lord")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Save order" }));
+    expect(JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body))).toMatchObject(
+      {
+        baseline: { campaignId: "campaign-1", revision: 7 },
+        activePlayerEntryId: "seat-2",
+      },
+    );
+    await act(async () =>
+      pending.resolve(Response.json({ seatOrder: latest })),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Notes" })).toBeEnabled(),
+    );
+    expect(screen.getByText("New lord")).toBeVisible();
+    expect(screen.getByText("Seat 1 · Overlord · Active")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Notes" }));
+    await user.click(screen.getByRole("button", { name: "Seat Order" }));
+    expect(screen.getByText("New lord")).toBeVisible();
+    fetchSpy.mockResolvedValueOnce(
+      Response.json({ code: "STALE_SEAT_ORDER" }, { status: 409 }),
+    );
+    await user.click(screen.getByRole("button", { name: "Save order" }));
+    expect(JSON.parse(String(fetchSpy.mock.calls[1]?.[1]?.body))).toMatchObject(
+      {
+        baseline: { campaignId: "campaign-1", revision: 10 },
+        activePlayerEntryId: "seat-1",
+      },
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Save order" })).toBeDisabled(),
+    );
+  });
+
+  it("does not feed the Accepted Roster into Settings or Briefing", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      Response.json({ seatOrder: latest }),
+    );
+    render(<CampaignDetailsWorkspace {...props} />);
+    await user.click(
+      screen.getByRole("button", { name: "Configure campaign" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Seat Order" }));
+    await user.click(screen.getByRole("button", { name: "Save order" }));
+    expect(await screen.findByText("New lord")).toBeVisible();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Identity & Progress" }),
+      ).toBeEnabled(),
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Identity & Progress" }),
+    );
+    expect(screen.getByLabelText("Overlord")).toHaveTextContent("Rhea");
+    expect(screen.getByLabelText("Overlord")).not.toHaveTextContent("New lord");
+    await user.click(
+      screen.getByRole("button", { name: "Exit configuration" }),
+    );
+    await user.click(screen.getByRole("button", { name: /SEAT ORDER ·/ }));
+    expect(screen.getByText("Rhea")).toBeVisible();
+    expect(screen.queryByText("New lord")).not.toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "Configure campaign" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Seat Order" }));
+    expect(screen.getByText("New lord")).toBeVisible();
+  });
+
   it("retains an authoritative no-op save snapshot when its revision matches the original props", async () => {
     const user = userEvent.setup();
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(

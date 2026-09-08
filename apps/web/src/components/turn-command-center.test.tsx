@@ -2,6 +2,7 @@
 
 import "@testing-library/jest-dom/vitest";
 import { act, cleanup, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/components/download-save-button", () => ({
@@ -13,7 +14,11 @@ vi.mock("@/components/download-save-button", () => ({
     fileName: string;
     href: string;
   }) => (
-    <button data-file-name={fileName} data-href={href} data-testid="quick-download">
+    <button
+      data-file-name={fileName}
+      data-href={href}
+      data-testid="quick-download"
+    >
       Download
     </button>
   ),
@@ -102,7 +107,7 @@ describe("TurnCommandCenter", () => {
     expect(screen.getByTestId("upload-save-form")).toBeVisible();
   });
 
-  it("shows a signed-in non-active player the waiting state without actions", () => {
+  it("shows a waiting player the latest download but no upload action", () => {
     renderCommandCenter({ isActivePlayer: false });
 
     expect(screen.getByText("WAITING")).toBeVisible();
@@ -112,9 +117,10 @@ describe("TurnCommandCenter", () => {
     expect(screen.getByText("western").tagName).toBe("STRONG");
     expect(screen.queryByText(/waiting for rhea/i)).not.toBeInTheDocument();
     expect(screen.queryByTestId("upload-save-form")).not.toBeInTheDocument();
+    expect(screen.getByTestId("quick-download")).toBeVisible();
   });
 
-  it("shows visitors the waiting state without actions", () => {
+  it("shows visitors the latest download without granting upload access", () => {
     renderCommandCenter({ isSignedIn: false });
 
     expect(screen.getByText("WAITING")).toBeVisible();
@@ -126,6 +132,7 @@ describe("TurnCommandCenter", () => {
       ),
     ).not.toBeInTheDocument();
     expect(screen.queryByTestId("upload-save-form")).not.toBeInTheDocument();
+    expect(screen.getByTestId("quick-download")).toBeVisible();
   });
 
   it("shows the campaign notes empty state for whitespace-only notes", () => {
@@ -133,6 +140,26 @@ describe("TurnCommandCenter", () => {
 
     expect(screen.getByText("Campaign notes")).toBeVisible();
     expect(screen.getByText("No campaign notes recorded.")).toBeVisible();
+  });
+
+  it("collapses lengthy campaign notes in a native details disclosure", async () => {
+    const user = userEvent.setup();
+    renderCommandCenter({
+      notes: `Hold the western pass. ${"Review the eastern approach. ".repeat(10)}`,
+    });
+
+    const details = screen.getByTestId("campaign-notes");
+    const summary = within(details).getByText("Campaign notes");
+
+    expect(details).not.toHaveAttribute("open");
+    expect(summary).toBeVisible();
+
+    await user.click(summary);
+
+    expect(details).toHaveAttribute("open");
+    expect(
+      within(details).getByText("Hold the western pass.", { exact: false }),
+    ).toBeVisible();
   });
 
   it("renders nullable seat and start values without throwing", () => {
@@ -210,7 +237,7 @@ describe("TurnCommandCenter", () => {
     expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("uses a two-column action layout only for the active player", () => {
+  it("uses a two-column layout when there are actions and full width otherwise", () => {
     const { container, rerender } = renderCommandCenter();
     const panel = container.firstElementChild;
     const body = within(panel as HTMLElement).getByTestId(
@@ -228,7 +255,13 @@ describe("TurnCommandCenter", () => {
       "lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]",
     );
 
-    rerender(<TurnCommandCenter {...defaultProps} isActivePlayer={false} />);
+    rerender(
+      <TurnCommandCenter
+        {...defaultProps}
+        isActivePlayer={false}
+        latestSave={null}
+      />,
+    );
 
     expect(body).not.toHaveClass(
       "grid",

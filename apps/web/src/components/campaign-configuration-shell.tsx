@@ -116,10 +116,41 @@ export function CampaignConfigurationShell({
 
       <div
         data-testid="campaign-configuration-layout"
-        className="grid min-w-0 lg:grid-cols-[minmax(10rem,0.35fr)_minmax(0,1fr)]"
+        className="grid min-w-0 md:grid-cols-[minmax(11rem,0.35fr)_minmax(0,1fr)]"
       >
-        <div className="min-w-0 border-b border-orange-400/25 p-3 lg:border-r lg:border-b-0">
-          <nav aria-label="Campaign configuration sections">
+        <div className="min-w-0 border-b border-orange-400/25 p-3 md:border-r md:border-b-0">
+          <div className="md:hidden">
+            <label
+              htmlFor="campaign-configuration-section"
+              className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-orange-300/75"
+            >
+              Configuration section
+            </label>
+            <select
+              id="campaign-configuration-section"
+              aria-label="Configuration section"
+              className="h-10 w-full border border-orange-400/30 bg-black px-3 text-sm font-mono text-orange-200 outline-none transition focus:border-orange-300 disabled:cursor-not-allowed disabled:opacity-40 md:hidden"
+              disabled={isDirty}
+              value={activeSection}
+              onChange={(event) => {
+                const nextSection = sections.find(
+                  (section) => section.id === event.target.value,
+                );
+                if (nextSection) selectSection(nextSection.id);
+              }}
+            >
+              {sections.map((section) => (
+                <option key={section.id} value={section.id}>
+                  {section.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <nav
+            aria-label="Campaign configuration sections"
+            className="hidden md:block"
+          >
             <ul className="flex flex-col gap-1">
               {sections.map((section) => {
                 const isActive = section.id === activeSection;

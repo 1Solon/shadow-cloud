@@ -14,6 +14,13 @@ const prismaMock = vi.hoisted(() => ({
   user: {
     findUnique: vi.fn(),
   },
+  passwordReset: { findMany: vi.fn().mockResolvedValue([]) },
+  saveCleanup: {
+    create: vi.fn(),
+    upsert: vi.fn(),
+    findMany: vi.fn(),
+    updateMany: vi.fn(),
+  },
   $transaction: vi.fn(),
 }));
 
@@ -43,6 +50,7 @@ function createFileVersion() {
     clientOriginalName: 'original-client.se1',
     clientFileSize: 2,
     contentHash: 'previous-hash',
+    contentRevision: 0,
   };
 }
 
@@ -62,7 +70,11 @@ function createService() {
     isUserShadowOverride: vi.fn(),
   };
   const fileStorage = {
-    stageReplacement: vi.fn(),
+    stageReplacement: vi.fn(async (input) => {
+      const storagePath = '/saves/game-1/replacement.se1';
+      await input.prepare?.(storagePath);
+      return { storagePath };
+    }),
     removeFileOrThrow: vi.fn(),
   };
   const botNotifications = {
@@ -82,9 +94,22 @@ function createService() {
 }
 
 describe('GamesFileService replaceSave', () => {
-  let warning: ReturnType<typeof vi.spyOn>;
   let transaction: {
+    passwordReset: {
+      findMany: ReturnType<typeof vi.fn>;
+      findFirst: ReturnType<typeof vi.fn>;
+      updateMany: ReturnType<typeof vi.fn>;
+    };
+    saveCleanup: {
+      upsert: ReturnType<typeof vi.fn>;
+      delete: ReturnType<typeof vi.fn>;
+      updateMany: ReturnType<typeof vi.fn>;
+    };
+    game: { updateMany: ReturnType<typeof vi.fn> };
+    user: { findUnique: ReturnType<typeof vi.fn> };
     fileVersion: {
+      findUnique: ReturnType<typeof vi.fn>;
+      findFirst: ReturnType<typeof vi.fn>;
       updateMany: ReturnType<typeof vi.fn>;
       create?: undefined;
     };
@@ -99,11 +124,45 @@ describe('GamesFileService replaceSave', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    warning = vi
+    vi
       .spyOn(Logger.prototype, 'warn')
       .mockImplementation(() => undefined);
+    const pending = new Map<string, { id: string; storagePath: string }>();
+    const queue = async ({
+      where,
+      data,
+    }: {
+      where?: { storagePath: string };
+      data?: { storagePath: string };
+    }) => {
+      const storagePath = where?.storagePath ?? data!.storagePath;
+      pending.set(storagePath, { id: storagePath, storagePath });
+    };
+    prismaMock.saveCleanup.create.mockImplementation(queue);
+    prismaMock.saveCleanup.upsert.mockImplementation(queue);
+    prismaMock.saveCleanup.findMany.mockImplementation(async () => [
+      ...pending.values(),
+    ]);
     transaction = {
+      passwordReset: {
+        findMany: vi.fn().mockResolvedValue([]),
+        findFirst: vi.fn().mockResolvedValue(null),
+        updateMany: vi.fn(),
+      },
+      saveCleanup: {
+        upsert: vi.fn(queue),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+        delete: vi.fn(async ({ where }) => {
+          pending.delete(where.storagePath ?? where.id);
+        }),
+      },
+      game: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      user: { findUnique: vi.fn().mockResolvedValue({ id: 'owner-1' }) },
       fileVersion: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        findUnique: vi
+          .fn()
+          .mockResolvedValue({ ...createFileVersion(), gameId: 'game-1' }),
         updateMany: vi.fn().mockResolvedValue({ count: 1 }),
       },
       auditEvent: {
@@ -136,9 +195,6 @@ describe('GamesFileService replaceSave', () => {
   it('allows the original uploader to replace a historical save without active membership', async () => {
     const { service, authService, fileStorage, botNotifications } =
       createService();
-    fileStorage.stageReplacement.mockResolvedValue({
-      storagePath: '/saves/game-1/replacement.se1',
-    });
 
     const result = await service.replaceSave(
       '42',
@@ -156,6 +212,7 @@ describe('GamesFileService replaceSave', () => {
       gameId: 'game-1',
       canonicalName: 'original.se1',
       content: replacementFile.buffer,
+      prepare: expect.any(Function),
     });
     expect(transaction.fileVersion.create).toBeUndefined();
     expect(transaction.turnState).toBeUndefined();
@@ -169,7 +226,8 @@ describe('GamesFileService replaceSave', () => {
         storagePath: '/saves/game-1/replacement.se1',
         clientOriginalName: 'corrected.se1',
         clientFileSize: replacementFile.buffer.byteLength,
-        contentHash: null,
+        contentHash:
+          'sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472',
         replacedById: 'owner-1',
       }),
     });
@@ -196,7 +254,8 @@ describe('GamesFileService replaceSave', () => {
             storagePath: '/saves/game-1/replacement.se1',
             clientOriginalName: 'corrected.se1',
             clientFileSize: replacementFile.buffer.byteLength,
-            contentHash: null,
+            contentHash:
+              'sha256:787c798e39a5bc1910355bae6d0cd87a36b2e10fd0202a83e3bb6b005da83472',
           },
         }),
       },
@@ -228,6 +287,7 @@ describe('GamesFileService replaceSave', () => {
       '/saves/game-1/original.se1',
     );
     expect(result).toEqual({
+      contentRevision: 1,
       fileVersionId: 'version-7',
       versionNumber: 7,
       originalName: 'original.se1',
@@ -312,9 +372,6 @@ describe('GamesFileService replaceSave', () => {
       displayName: 'Shadow Admin',
       identities: [],
     });
-    fileStorage.stageReplacement.mockResolvedValue({
-      storagePath: '/saves/game-1/replacement.se1',
-    });
 
     await service.replaceSave('42', 'version-7', 'shadow-1', replacementFile, {
       shadowOverrideEnabled: true,
@@ -335,9 +392,6 @@ describe('GamesFileService replaceSave', () => {
   it('rejects an authenticated actor that no longer exists', async () => {
     const { service, fileStorage } = createService();
     prismaMock.user.findUnique.mockResolvedValue(null);
-    fileStorage.stageReplacement.mockResolvedValue({
-      storagePath: '/saves/game-1/replacement.se1',
-    });
 
     await expect(
       service.replaceSave('42', 'version-7', 'owner-1', replacementFile),
@@ -348,9 +402,6 @@ describe('GamesFileService replaceSave', () => {
 
   it('removes the staged replacement and rejects when the compare-and-swap loses', async () => {
     const { service, fileStorage } = createService();
-    fileStorage.stageReplacement.mockResolvedValue({
-      storagePath: '/saves/game-1/replacement.se1',
-    });
     transaction.fileVersion.updateMany.mockResolvedValue({ count: 0 });
 
     await expect(
@@ -366,10 +417,7 @@ describe('GamesFileService replaceSave', () => {
   it('removes only the staged replacement when the transaction fails', async () => {
     const { service, fileStorage } = createService();
     const transactionError = new Error('transaction failed');
-    fileStorage.stageReplacement.mockResolvedValue({
-      storagePath: '/saves/game-1/replacement.se1',
-    });
-    prismaMock.$transaction.mockRejectedValue(transactionError);
+    prismaMock.$transaction.mockRejectedValueOnce(transactionError);
 
     await expect(
       service.replaceSave('42', 'version-7', 'owner-1', replacementFile),
@@ -383,9 +431,6 @@ describe('GamesFileService replaceSave', () => {
   it('preserves the transaction error when staged-file rollback cleanup also fails', async () => {
     const { service, fileStorage } = createService();
     const transactionError = new Error('transaction failed');
-    fileStorage.stageReplacement.mockResolvedValue({
-      storagePath: '/saves/game-1/replacement.se1',
-    });
     fileStorage.removeFileOrThrow.mockRejectedValue(
       new Error('cleanup failed'),
     );
@@ -398,9 +443,6 @@ describe('GamesFileService replaceSave', () => {
 
   it('keeps the replacement successful when old-file cleanup fails after commit', async () => {
     const { service, fileStorage } = createService();
-    fileStorage.stageReplacement.mockResolvedValue({
-      storagePath: '/saves/game-1/replacement.se1',
-    });
     fileStorage.removeFileOrThrow.mockRejectedValue(
       new Error('cleanup failed'),
     );
@@ -413,10 +455,6 @@ describe('GamesFileService replaceSave', () => {
     });
     expect(fileStorage.removeFileOrThrow).toHaveBeenCalledWith(
       '/saves/game-1/original.se1',
-    );
-    expect(warning).toHaveBeenCalledWith(
-      expect.stringContaining('Unable to remove previous save'),
-      expect.any(String),
     );
     expect(transaction.fileVersion.create).toBeUndefined();
     expect(transaction.turnState).toBeUndefined();
