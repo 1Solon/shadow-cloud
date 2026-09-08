@@ -39,9 +39,15 @@ it.each([true, false])(
     vi.mocked(getShadowOverrideEnabled).mockResolvedValue(
       shadowOverrideEnabled,
     );
-    const fetch = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(Response.json({ regimes: [] }));
+    const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      Response.json({
+        fileVersionId: "file",
+        contentRevision: 0,
+        sourceId: "source",
+        expectedSaveBaseline: "baseline",
+        regimes: [],
+      }),
+    );
     const response = await GET(
       new Request("http://localhost/api/games/1/save-inspection", {
         headers: { shadowOverrideEnabled: String(!shadowOverrideEnabled) },
@@ -87,7 +93,9 @@ it("forwards authorization without caching and returns only allowlisted metadata
   const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(
     Response.json({
       fileVersionId: "file",
+      contentRevision: 3,
       sourceId: "source",
+      expectedSaveBaseline: "baseline",
       serializedObject: "excluded",
       regimes: [
         {
@@ -106,7 +114,9 @@ it("forwards authorization without caching and returns only allowlisted metadata
   expect(response.headers.get("cache-control")).toBe("no-store");
   expect(await response.json()).toEqual({
     fileVersionId: "file",
+    contentRevision: 3,
     sourceId: "source",
+    expectedSaveBaseline: "baseline",
     regimes: [
       {
         id: "target",

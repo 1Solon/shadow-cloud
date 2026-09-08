@@ -119,6 +119,15 @@ it('resets a non-current regime as an observable replacement, retaining immediat
     contentRevision: 1,
     replacedById: 'overlord',
   });
+  const updatedInspection = await service.inspectLatestSave('1', 'overlord');
+  expect(updatedInspection).toMatchObject({
+    fileVersionId: 'latest',
+    contentRevision: 1,
+    sourceId: after.fileVersions[0].contentHash,
+  });
+  expect(updatedInspection.expectedSaveBaseline).not.toBe(
+    inspection.expectedSaveBaseline,
+  );
   const download = await new GamesQueryService(storage).downloadSave(
     '1',
     'latest',
@@ -431,7 +440,7 @@ it('after two resets undo restores only the second source, with password-free au
   expect(notifications).toContain('undo');
 });
 
-it.each(['missing', 'stage', 'commit'])(
+it.each(['missing', 'stage', 'integrity', 'commit'])(
   'failed undo (%s) leaves canonical untouched and does not consume recovery',
   async (failure) => {
     await seed();
@@ -449,6 +458,16 @@ it.each(['missing', 'stage', 'commit'])(
       vi.spyOn(storage, 'stageReplacement').mockRejectedValueOnce(
         new Error('storage unavailable'),
       );
+    if (failure === 'integrity') {
+      const stage = storage.stageReplacement.bind(storage);
+      vi.spyOn(storage, 'stageReplacement').mockImplementationOnce(
+        async (request) => {
+          const staged = await stage(request);
+          await writeFile(staged.storagePath, 'corrupted');
+          return staged;
+        },
+      );
+    }
     if (failure === 'commit')
       await fixture.db.$executeRawUnsafe(
         "CREATE TRIGGER reject_undo BEFORE INSERT ON AuditEvent BEGIN SELECT RAISE(ABORT, 'simulated failure'); END",
@@ -725,6 +744,57 @@ it('a byte-identical generic replacement still invalidates undo', async () => {
   ).rejects.toMatchObject({ status: 409 });
 });
 
+it.each(['reset', 'undo', 'replace'] as const)(
+  'rolls back %s when durable notification enqueue fails, preserving recovery and downloaded bytes',
+  async (operation) => {
+    await seed();
+    await service.resetPassword('1', 'overlord', await resetInput());
+    const input = await resetInput();
+    const recovery = await service.getPasswordResetRecovery('1', 'overlord');
+    const query = new GamesQueryService(storage);
+    const before = await query.getGameDetail('1');
+    const download = async () => {
+      const result = await query.downloadSave('1', 'latest');
+      const chunks: Buffer[] = [];
+      for await (const chunk of result.stream) chunks.push(Buffer.from(chunk));
+      return Buffer.concat(chunks);
+    };
+    const bytes = await download();
+    const files = await readdir(join(directory, 'saves', 'campaign'));
+    const notifications = await fixture.db.notificationDelivery.findMany();
+    const audit = await fixture.db.auditEvent.findMany();
+    await fixture.db.$executeRawUnsafe(
+      "CREATE TRIGGER reject_notification BEFORE INSERT ON NotificationDelivery BEGIN SELECT RAISE(ABORT, 'enqueue unavailable'); END",
+    );
+
+    await expect(
+      operation === 'reset'
+        ? service.resetPassword('1', 'overlord', input)
+        : operation === 'undo'
+          ? service.undoPasswordReset('1', 'overlord', {
+              ...recovery.undo!,
+              confirmed: true,
+            })
+          : service.replaceSave('1', 'latest', 'player', {
+              buffer: Buffer.from('replacement'),
+              originalname: 'replacement.se1',
+              size: 11,
+            }),
+    ).rejects.toThrow();
+
+    expect(await query.getGameDetail('1')).toEqual(before);
+    expect(await fixture.db.auditEvent.findMany()).toEqual(audit);
+    expect(await download()).toEqual(bytes);
+    expect(await service.getPasswordResetRecovery('1', 'overlord')).toEqual(
+      recovery,
+    );
+    expect(await fixture.db.notificationDelivery.findMany()).toEqual(
+      notifications,
+    );
+    expect(await readdir(join(directory, 'saves', 'campaign'))).toEqual(files);
+  },
+);
+
 it('startup cleanup removes expired abandoned staging without touching canonical bytes', async () => {
   const file = await seed();
   const source = await readFile(file.storagePath);
@@ -848,6 +918,7 @@ it('inspects actual latest storage bytes for the Overlord without mutating the s
   const result = await service.inspectLatestSave('1', 'overlord');
   expect(result).toMatchObject({
     fileVersionId: 'latest',
+    contentRevision: 0,
     sourceId: expect.stringMatching(/^sha256:/),
     regimes: [
       { name: 'North Reach', eligible: true, current: false },
@@ -905,7 +976,7 @@ it('returns password-free format and storage failures', async () => {
   );
 });
 
-it.each(['transfer', 'replacement'])(
+it.each(['transfer', 'replacement', 'revision'])(
   'rejects a %s while the storage read is in flight',
   async (change) => {
     await seed();
@@ -916,6 +987,11 @@ it.each(['transfer', 'replacement'])(
         await fixture.db.game.update({
           where: { id: 'campaign' },
           data: { organizerId: 'player' },
+        });
+      } else if (change === 'revision') {
+        await fixture.db.fileVersion.update({
+          where: { id: 'latest' },
+          data: { contentRevision: { increment: 1 } },
         });
       } else {
         const staged = await storage.stageReplacement({

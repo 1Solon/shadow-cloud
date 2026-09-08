@@ -154,6 +154,7 @@ export async function startUpstream(secret: string) {
           isInspection
             ? {
                 fileVersionId: upstream.game.fileVersions[0]?.id,
+                contentRevision: upstream.game.fileVersions[0]?.contentRevision,
                 sourceId: "synthetic-source",
                 expectedSaveBaseline: "synthetic-baseline",
                 regimes: [

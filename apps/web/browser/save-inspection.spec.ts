@@ -1,5 +1,117 @@
 import { test, expect } from "./fixture";
 
+for (const action of ["reset", "undo"] as const) {
+  test(`${action} keeps an uncertain outcome visible after fresh read-only recovery, without replay`, async ({
+    page,
+    campaign,
+  }) => {
+    campaign.upstream.game.fileVersions = [
+      {
+        id: "synthetic",
+        originalName: "synthetic.se1",
+        uploadedAt: "2026-09-01T00:00:00Z",
+        uploadedById: "browser-overlord",
+        uploadedByDisplayName: "Browser Overlord",
+        contentHash: null,
+        contentRevision: 1,
+        idempotencyKey: null,
+        replacedAt: null,
+        replacedByDisplayName: null,
+      },
+    ];
+    let inspections = 0;
+    let recoveryReads = 0;
+    let posts = 0;
+    await page.route("**/api/games/42/save-inspection", (route) => {
+      inspections += 1;
+      return route.fulfill({
+        json: {
+          fileVersionId: "synthetic",
+          contentRevision: 1,
+          sourceId: "source",
+          expectedSaveBaseline: `inspection-${inspections}`,
+          regimes: [
+            {
+              id: "north",
+              name: "North Reach",
+              current: true,
+              eligible: true,
+              reason: null,
+            },
+          ],
+        },
+      });
+    });
+    await page.route("**/api/games/42/password-reset{,/undo}", (route) => {
+      if (route.request().method() === "GET") {
+        recoveryReads += 1;
+        return route.fulfill({
+          json: {
+            undo:
+              action === "undo" || posts > 0
+                ? {
+                    resetId: "reset",
+                    outputId: "output",
+                    outputRevision: 1,
+                    expectedSaveBaseline: `recovery-${recoveryReads}`,
+                    regimeName: "North Reach",
+                  }
+                : null,
+          },
+        });
+      }
+      posts += 1;
+      return action === "reset"
+        ? route.fulfill({ json: { regimeName: "North Reach" } })
+        : route.abort("connectionreset");
+    });
+    await page.goto(`${campaign.url}/games/42`);
+    await page.getByRole("tab", { name: "Regimes", exact: true }).click();
+    const workflow = page.getByRole("region", {
+      name: "In-game regime inspection",
+    });
+    if (action === "reset") {
+      await workflow.getByRole("button", { name: "Edit Password" }).click();
+      await workflow
+        .getByLabel("Replacement password", { exact: true })
+        .fill("SyntheticSecret");
+      await workflow
+        .getByLabel(
+          "Reset the password for North Reach. I have read the restart warning.",
+        )
+        .check();
+      await workflow
+        .getByRole("button", { name: "Reset password", exact: true })
+        .click();
+    } else {
+      await workflow
+        .getByLabel("Restore the previous password for North Reach.")
+        .check();
+      await workflow
+        .getByRole("button", { name: "Undo password reset", exact: true })
+        .click();
+    }
+    await expect(workflow.getByRole("alert")).toContainText("Outcome unknown");
+    await expect.poll(() => inspections).toBe(2);
+    await expect.poll(() => recoveryReads).toBe(2);
+    await expect(workflow.getByRole("status")).toHaveCount(0);
+    await expect(
+      workflow.getByRole("button", { name: "Undo password reset" }),
+    ).toBeDisabled();
+    await expect(
+      workflow.getByLabel("Restore the previous password for North Reach."),
+    ).not.toBeChecked();
+    await workflow.getByRole("button", { name: "Edit Password" }).click();
+    await expect(
+      workflow.getByLabel("Replacement password", { exact: true }),
+    ).toHaveValue("");
+    await expect(
+      workflow.getByRole("button", { name: "Reset password", exact: true }),
+    ).toBeDisabled();
+    expect(posts).toBe(1);
+  });
+}
+
 test("reset and undo feedback survives revision-changing campaign refreshes", async ({
   page,
   campaign,
@@ -25,6 +137,7 @@ test("reset and undo feedback survives revision-changing campaign refreshes", as
     return route.fulfill({
       json: {
         fileVersionId: file.id,
+        contentRevision: file.contentRevision,
         sourceId: "synthetic-source",
         expectedSaveBaseline: `baseline-${file.contentRevision}`,
         regimes: [
@@ -62,7 +175,15 @@ test("reset and undo feedback survives revision-changing campaign refreshes", as
     file.replacedAt = `2026-09-07T10:0${file.contentRevision}:00Z`;
     file.replacedByDisplayName = "Browser Overlord";
     undoAvailable = route.request().url().endsWith("/password-reset");
-    return route.fulfill({ json: { regimeName: "North Reach" } });
+    return route.fulfill({
+      json: {
+        resetId: "reset",
+        fileVersionId: file.id,
+        contentRevision: file.contentRevision,
+        regimeName: "North Reach",
+        replacedAt: file.replacedAt,
+      },
+    });
   });
   await page.goto(`${campaign.url}/games/42`);
   expect(inspectionRequests).toBe(0);
@@ -147,6 +268,7 @@ test("Overlord regime inspection renders on desktop and mobile without changing 
       uploadedById: "browser-overlord",
       uploadedByDisplayName: "Browser Overlord",
       contentHash: null,
+      contentRevision: 0,
       idempotencyKey: null,
       replacedAt: null,
       replacedByDisplayName: null,
@@ -158,6 +280,7 @@ test("Overlord regime inspection renders on desktop and mobile without changing 
     route.fulfill({
       json: {
         fileVersionId: "synthetic",
+        contentRevision: 0,
         sourceId: "synthetic-source",
         expectedSaveBaseline: "baseline",
         regimes: [
@@ -202,7 +325,15 @@ test("Overlord regime inspection renders on desktop and mobile without changing 
               : null,
           },
         })
-      : route.fulfill({ json: { regimeName: "North Reach" } }),
+      : route.fulfill({
+          json: {
+            resetId: "reset",
+            fileVersionId: "synthetic",
+            contentRevision: 1,
+            regimeName: "North Reach",
+            replacedAt: "2026-09-08T10:00:00Z",
+          },
+        }),
   );
   for (const width of [1280, 390]) {
     undoAvailable = false;

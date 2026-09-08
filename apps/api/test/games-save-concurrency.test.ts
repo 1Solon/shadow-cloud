@@ -532,6 +532,36 @@ it('retries old-file deletion after successful replacement and preserves the pub
   expect(Buffer.concat(chunks).toString()).toBe('published');
 });
 
+it('publishes ordinary replacement without requiring storage reads', async () => {
+  const initial = await uploads.uploadSave(
+    'campaign',
+    'player',
+    file('original'),
+  );
+  const open = vi
+    .spyOn(storage, 'openDownload')
+    .mockRejectedValue(new Error('reads unavailable'));
+  try {
+    await expect(
+      replacements.replaceSave(
+        'campaign',
+        initial.fileVersionId,
+        'player',
+        file('published'),
+      ),
+    ).resolves.toMatchObject({ contentRevision: 1 });
+  } finally {
+    open.mockRestore();
+  }
+  const download = await new GamesQueryService(storage).downloadSave(
+    'campaign',
+    initial.fileVersionId,
+  );
+  const chunks = [];
+  for await (const chunk of download.stream) chunks.push(chunk);
+  expect(Buffer.concat(chunks).toString()).toBe('published');
+});
+
 it('allows only one simultaneous save mutation from the same client baseline across SQLite connections', async () => {
   const initial = await uploads.uploadSave(
     'campaign',

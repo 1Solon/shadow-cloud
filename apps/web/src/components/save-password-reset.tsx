@@ -1,73 +1,32 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import type { SaveInspection } from "@/lib/save-inspection";
 
 export function SavePasswordReset({
-  gameNumber,
-  inspection,
   regime,
   onCancel,
-  onSuccess,
+  onReset,
+  pending,
 }: {
-  gameNumber: number;
-  inspection: SaveInspection;
   regime: SaveInspection["regimes"][number];
   onCancel: () => void;
-  onSuccess: (name: string) => void;
+  onReset: (password: string) => Promise<void>;
+  pending: boolean;
 }) {
-  const router = useRouter();
   const [password, setPassword] = useState("");
   const [reveal, setReveal] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
   return (
     <form
       className="space-y-4 border border-orange-400/40 p-4"
       onSubmit={(event) => {
         event.preventDefault();
         if (!confirmed || pending) return;
-        setError(null);
-        startTransition(async () => {
-          try {
-            const response = await fetch(
-              `/api/games/${gameNumber}/password-reset`,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                cache: "no-store",
-                body: JSON.stringify({
-                  fileVersionId: inspection.fileVersionId,
-                  sourceId: inspection.sourceId,
-                  expectedSaveBaseline: inspection.expectedSaveBaseline,
-                  regimeId: regime.id,
-                  password,
-                  confirmed: true,
-                }),
-              },
-            );
-            const payload = await response.json();
-            if (!response.ok) {
-              setError(
-                payload.error ??
-                  "Password reset failed. Inspect the latest save and try again.",
-              );
-              return;
-            }
-            onSuccess(regime.name);
-            router.refresh();
-          } catch {
-            setError(
-              "The request could not be confirmed. Refresh the campaign before trying again.",
-            );
-          } finally {
-            setPassword("");
-            setReveal(false);
-            setConfirmed(false);
-          }
-        });
+        void onReset(password);
+        setPassword("");
+        setReveal(false);
+        setConfirmed(false);
       }}
     >
       <h3 className="font-bold">Reset password for {regime.name}</h3>
@@ -122,7 +81,6 @@ export function SavePasswordReset({
         />
         Reset the password for {regime.name}. I have read the restart warning.
       </label>
-      {error ? <p role="alert">{error}</p> : null}
       <div className="flex flex-wrap gap-3">
         <button
           className="border border-orange-400 px-3 py-2 disabled:opacity-50"

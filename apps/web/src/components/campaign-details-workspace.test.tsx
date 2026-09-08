@@ -242,13 +242,17 @@ describe("CampaignDetailsWorkspace", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Open seat-order" }));
     expect(mocks.seatOrder).toHaveBeenLastCalledWith({
-      activePlayerEntryId: props.activePlayerEntryId,
       canEdit: true,
       gameNumber: 42,
-      players: props.players,
       presentation: "configuration",
-      seatOrderBaseline: props.seatOrderBaseline,
-      onSnapshotAccepted: expect.any(Function),
+      roster: {
+        current: {
+          activePlayerEntryId: props.activePlayerEntryId,
+          players: props.players,
+          seatOrderBaseline: props.seatOrderBaseline,
+        },
+        accept: expect.any(Function),
+      },
       onDirtyChange: mocks.dirtyCallbacks.at(-1),
     });
 

@@ -1,5 +1,9 @@
 import { createApiAccessToken, getServerAuthSession } from "@/auth";
 import { getShadowOverrideEnabled } from "@/lib/shadow-override";
+import { isPasswordReceipt, isPasswordRecovery } from "@/lib/save-inspection";
+
+const unknownOutcome =
+  "Outcome unknown. The request could not be confirmed. Check fresh inspection and recovery before another action.";
 
 export async function GET(
   _request: Request,
@@ -29,7 +33,10 @@ export async function GET(
           : "Recovery is unavailable. Refresh the campaign and try again.",
         response.status,
       );
-    const { undo } = await response.json();
+    const payload: unknown = await response.json();
+    if (!isPasswordRecovery(payload))
+      return fail("Recovery is unavailable. Retry recovery.", 502);
+    const { undo } = payload;
     return Response.json(
       {
         undo: undo
@@ -105,14 +112,21 @@ export async function POST(
     );
     if (!response.ok)
       return fail(
-        response.status === 409
-          ? "The campaign or latest save changed. Inspect it again before resetting."
-          : response.status === 403
-            ? "Only the current Overlord or an enabled Shadow Override can reset passwords."
-            : "Password reset failed. Inspect the latest save and try again.",
+        response.status >= 500
+          ? unknownOutcome
+          : response.status === 409
+            ? "The campaign or latest save changed. Inspect it again before resetting."
+            : response.status === 403
+              ? "Only the current Overlord or an enabled Shadow Override can reset passwords."
+              : "Password reset failed. Inspect the latest save and try again.",
         response.status,
       );
     const result = await response.json();
+    if (
+      !isPasswordReceipt(result) ||
+      result.fileVersionId !== body.fileVersionId
+    )
+      return fail(unknownOutcome, 502);
     return Response.json(
       {
         resetId: result.resetId,
@@ -124,9 +138,6 @@ export async function POST(
       { headers },
     );
   } catch {
-    return fail(
-      "The request could not be confirmed. Refresh the campaign before trying again.",
-      502,
-    );
+    return fail(unknownOutcome, 502);
   }
 }

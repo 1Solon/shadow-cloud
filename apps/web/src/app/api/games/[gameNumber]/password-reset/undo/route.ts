@@ -1,5 +1,9 @@
 import { createApiAccessToken, getServerAuthSession } from "@/auth";
 import { getShadowOverrideEnabled } from "@/lib/shadow-override";
+import { isPasswordReceipt } from "@/lib/save-inspection";
+
+const unknownOutcome =
+  "Outcome unknown. The request could not be confirmed. Check fresh inspection and recovery before another action.";
 
 export async function POST(
   request: Request,
@@ -46,14 +50,22 @@ export async function POST(
     );
     if (!response.ok)
       return fail(
-        response.status === 409
-          ? "This reset can no longer be undone. Refresh the campaign and download the latest save."
-          : response.status === 403
-            ? "Only the current Overlord or an enabled Shadow Override can manage password recovery."
-            : "Undo failed. Refresh the campaign and try again.",
+        response.status >= 500
+          ? unknownOutcome
+          : response.status === 409
+            ? "This reset can no longer be undone. Refresh the campaign and download the latest save."
+            : response.status === 403
+              ? "Only the current Overlord or an enabled Shadow Override can manage password recovery."
+              : "Undo failed. Refresh the campaign and try again.",
         response.status,
       );
     const result = await response.json();
+    if (
+      !isPasswordReceipt(result) ||
+      result.resetId !== body.resetId ||
+      result.contentRevision !== body.outputRevision + 1
+    )
+      return fail(unknownOutcome, 502);
     return Response.json(
       {
         resetId: result.resetId,
@@ -65,9 +77,6 @@ export async function POST(
       { headers },
     );
   } catch {
-    return fail(
-      "The request could not be confirmed. Refresh the campaign before trying again.",
-      502,
-    );
+    return fail(unknownOutcome, 502);
   }
 }

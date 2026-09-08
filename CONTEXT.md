@@ -16,6 +16,9 @@ A position in a campaign's turn order that can be occupied by a player or left o
 **Roster**:
 A campaign's seats, their order, and their occupants.
 
+**Accepted Roster**:
+The authoritative account of a campaign's roster and active seat currently accepted for Seat Order editing. It can become newer than an existing Seat Order draft without changing that draft's captured baseline.
+
 **Regime**:
 A nation inside a Shadow Empire game, controlled by a human or the game AI. A regime is distinct from a Shadow Cloud seat and the player occupying that seat.
 

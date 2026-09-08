@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
-import type { SaveInspection } from "@/lib/save-inspection";
+import {
+  useSavePasswordWorkflow,
+  type PasswordWorkflowIdentity,
+} from "./save-password-workflow";
 import {
   Card,
   CardContent,
@@ -12,22 +14,17 @@ import {
 import { SavePasswordReset } from "./save-password-reset";
 import { SavePasswordUndo } from "./save-password-undo";
 
-export function SaveRegimeInspection({
-  gameNumber,
-  canManagePasswords,
-  hasSave,
-  saveRevision,
-}: {
-  gameNumber: number;
-  canManagePasswords: boolean;
-  hasSave: boolean;
-  saveRevision?: string;
-}) {
-  const [success, setSuccess] = useState<{
-    name: string;
-    action: "reset" | "undo";
-  } | null>(null);
-  const clearSuccess = useCallback(() => setSuccess(null), []);
+export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
+  const { canManagePasswords, hasSave } = props;
+  const workflow = useSavePasswordWorkflow(props);
+  const {
+    success,
+    inspection,
+    inspectionError: error,
+    selected,
+    inspecting,
+  } = workflow;
+  const pending = workflow.pending !== null;
   if (!canManagePasswords) return null;
   return (
     <Card
@@ -35,114 +32,6 @@ export function SaveRegimeInspection({
       role="region"
       aria-label="In-game regime inspection"
     >
-      <InspectionDraft
-        key={saveRevision}
-        gameNumber={gameNumber}
-        hasSave={hasSave}
-        onInspect={clearSuccess}
-        onSuccess={(name, action) => setSuccess({ name, action })}
-      />
-      {success ? (
-        <CardContent>
-          <p role="status">
-            {success.action === "reset"
-              ? `The in-game password for ${success.name} was reset.`
-              : `The previous password for ${success.name} was restored.`}{" "}
-            The latest save has been replaced; the turn has not advanced.
-            Download the updated save before continuing. If you already started
-            from the previous copy, restart from the updated save.
-            {success.action === "reset"
-              ? " Share the replacement password privately."
-              : null}
-          </p>
-        </CardContent>
-      ) : null}
-    </Card>
-  );
-}
-
-function InspectionDraft({
-  gameNumber,
-  hasSave,
-  onInspect,
-  onSuccess,
-}: {
-  gameNumber: number;
-  hasSave: boolean;
-  onInspect: () => void;
-  onSuccess: (name: string, action: "reset" | "undo") => void;
-}) {
-  const [inspection, setInspection] = useState<SaveInspection | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [recoveryVersion, setRecoveryVersion] = useState(0);
-  const [inspectionState, setInspectionState] = useState<
-    "idle" | "loading" | "loaded" | "error"
-  >("idle");
-  const [pending, startTransition] = useTransition();
-  const inspectionControllerRef = useRef<AbortController | null>(null);
-  const inspectionRequestRef = useRef(0);
-
-  const inspect = useCallback(
-    (clearSuccess = true) => {
-      inspectionControllerRef.current?.abort();
-      const controller = new AbortController();
-      const requestId = inspectionRequestRef.current + 1;
-      inspectionRequestRef.current = requestId;
-      setInspection(null);
-      setError(null);
-      setSelected(null);
-      setInspectionState("loading");
-      if (clearSuccess) onInspect();
-      startTransition(async () => {
-        try {
-          const response = await fetch(
-            `/api/games/${encodeURIComponent(String(gameNumber))}/save-inspection`,
-            { cache: "no-store", signal: controller.signal },
-          );
-          const payload = await response.json();
-          if (
-            controller.signal.aborted ||
-            requestId !== inspectionRequestRef.current
-          )
-            return;
-          if (!response.ok) {
-            setError(payload.error ?? "Save inspection failed.");
-            setInspectionState("error");
-            return;
-          }
-          setInspection(payload);
-          setInspectionState("loaded");
-        } catch {
-          if (
-            controller.signal.aborted ||
-            requestId !== inspectionRequestRef.current
-          )
-            return;
-          setError("The save inspection request failed. Try again.");
-          setInspectionState("error");
-        } finally {
-          if (inspectionControllerRef.current === controller) {
-            inspectionControllerRef.current = null;
-          }
-        }
-      });
-    },
-    [gameNumber, onInspect, startTransition],
-  );
-
-  useEffect(() => {
-    if (!hasSave) return;
-    const timeoutId = window.setTimeout(() => inspect(false));
-    return () => {
-      window.clearTimeout(timeoutId);
-      inspectionControllerRef.current?.abort();
-      inspectionRequestRef.current += 1;
-    };
-  }, [hasSave, inspect]);
-
-  return (
-    <>
       <CardHeader>
         <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-1.5">
@@ -151,16 +40,19 @@ function InspectionDraft({
               Reset/Change passwords in the latest save
             </CardDescription>
           </div>
-          {hasSave && inspectionState !== "idle" ? (
+          {hasSave ? (
             <button
               className="inline-flex min-h-11 shrink-0 self-start items-center justify-center border border-orange-400/50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-orange-300 transition-colors hover:bg-orange-400/10 hover:text-orange-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
               type="button"
-              disabled={pending || selected !== null}
-              onClick={() => inspect()}
+              disabled={pending || inspecting || selected !== null}
+              onClick={() => {
+                void workflow.inspect();
+                void workflow.readRecovery();
+              }}
             >
-              {pending
+              {inspecting
                 ? "Inspecting save..."
-                : inspectionState === "error"
+                : error
                   ? "Retry inspection"
                   : "Refresh"}
             </button>
@@ -169,6 +61,7 @@ function InspectionDraft({
       </CardHeader>
       <CardContent className="space-y-4">
         {!hasSave ? <p>This campaign has no save to inspect.</p> : null}
+        {workflow.message ? <p role="alert">{workflow.message}</p> : null}
         {hasSave && error ? (
           <p role="alert" className="border border-red-400/30 p-3 text-red-300">
             {error}
@@ -201,24 +94,18 @@ function InspectionDraft({
                       <button
                         className="max-w-full border border-orange-400 px-3 py-2 text-left"
                         type="button"
-                        disabled={selected !== null}
-                        onClick={() => setSelected(regime.id)}
+                        disabled={pending || selected !== null}
+                        onClick={() => workflow.selectRegime(regime.id)}
                       >
                         Edit Password
                       </button>
                     ) : null}
                     {selected === regime.id ? (
                       <SavePasswordReset
-                        gameNumber={gameNumber}
-                        inspection={inspection}
                         regime={regime}
-                        onCancel={() => setSelected(null)}
-                        onSuccess={(name) => {
-                          onSuccess(name, "reset");
-                          setInspection(null);
-                          setSelected(null);
-                          setRecoveryVersion((value) => value + 1);
-                        }}
+                        pending={pending}
+                        onCancel={workflow.cancelReset}
+                        onReset={workflow.resetPassword}
                       />
                     ) : null}
                   </li>
@@ -230,18 +117,43 @@ function InspectionDraft({
             </p>
           </div>
         ) : null}
-        {hasSave && selected === null ? (
+        {hasSave && selected === null && workflow.recovery ? (
           <SavePasswordUndo
-            key={recoveryVersion}
-            gameNumber={gameNumber}
-            onSuccess={(name) => {
-              setInspection(null);
-              setSelected(null);
-              onSuccess(name, "undo");
-            }}
+            undo={workflow.recovery}
+            pending={pending}
+            onUndo={workflow.undoPasswordReset}
+            onCancel={workflow.cancelUndo}
           />
         ) : null}
+        {workflow.recoveryError && selected === null ? (
+          <div>
+            <p role="alert">{workflow.recoveryError}</p>
+            <button
+              type="button"
+              className="border border-orange-400 px-3 py-2"
+              disabled={pending || workflow.recovering}
+              onClick={() => void workflow.readRecovery()}
+            >
+              Retry recovery
+            </button>
+          </div>
+        ) : null}
       </CardContent>
-    </>
+      {success ? (
+        <CardContent>
+          <p role="status">
+            {success.action === "reset"
+              ? `The in-game password for ${success.regimeName} was reset.`
+              : `The previous password for ${success.regimeName} was restored.`}{" "}
+            The latest save has been replaced; the turn has not advanced.
+            Download the updated save before continuing. If you already started
+            from the previous copy, restart from the updated save.
+            {success.action === "reset"
+              ? " Share the replacement password privately."
+              : null}
+          </p>
+        </CardContent>
+      ) : null}
+    </Card>
   );
 }

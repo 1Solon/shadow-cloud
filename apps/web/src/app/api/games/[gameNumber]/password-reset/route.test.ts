@@ -22,6 +22,39 @@ const body = {
   password: "LocalSecret",
   confirmed: true,
 };
+const receipt = {
+  resetId: "reset",
+  fileVersionId: "file",
+  contentRevision: 2,
+  regimeName: "North Reach",
+  replacedAt: "2026-09-08T10:00:00Z",
+};
+
+it.each([POST, UNDO])(
+  "reports malformed upstream success as outcome unknown without leaking its body",
+  async (handler) => {
+    vi.mocked(getServerAuthSession).mockResolvedValue({
+      user: { id: "actor" },
+      expires: "2099-01-01",
+    });
+    vi.mocked(createApiAccessToken).mockResolvedValue("token");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      Response.json({ regimeName: "North Reach", password: "excluded" }),
+    );
+    const response = await handler(
+      new Request("http://localhost/api/games/1/password-reset", {
+        method: "POST",
+        body: JSON.stringify({ ...body, resetId: "reset", outputRevision: 1 }),
+      }),
+      { params: Promise.resolve({ gameNumber: "1" }) },
+    );
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({
+      error:
+        "Outcome unknown. The request could not be confirmed. Check fresh inspection and recovery before another action.",
+    });
+  },
+);
 const request = () =>
   POST(
     new Request("http://localhost/api/games/1/password-reset", {
@@ -30,6 +63,23 @@ const request = () =>
     }),
     { params: Promise.resolve({ gameNumber: "1" }) },
   );
+it.each([{}, { undo: false }, { undo: { resetId: "reset" } }])(
+  "does not turn malformed recovery into authoritative unavailability (%#)",
+  async (payload) => {
+    vi.mocked(getServerAuthSession).mockResolvedValue({
+      user: { id: "actor" },
+      expires: "2099-01-01",
+    });
+    vi.mocked(createApiAccessToken).mockResolvedValue("token");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json(payload));
+    const response = await GET(
+      new Request("http://localhost/api/games/1/password-reset"),
+      { params: Promise.resolve({ gameNumber: "1" }) },
+    );
+    expect(response.status).toBe(502);
+    expect(await response.json()).not.toHaveProperty("undo");
+  },
+);
 for (const [name, handler, method, path, payload] of [
   ["recovery availability", GET, "GET", "password-reset", undefined],
   ["password reset", POST, "POST", "password-reset", body],
@@ -38,7 +88,13 @@ for (const [name, handler, method, path, payload] of [
     UNDO,
     "POST",
     "password-reset/undo",
-    { resetId: "reset", confirmed: true },
+    {
+      resetId: "reset",
+      outputId: "output",
+      outputRevision: 1,
+      expectedSaveBaseline: "baseline",
+      confirmed: true,
+    },
   ],
 ] as const) {
   const invoke = (override = true) =>
@@ -72,7 +128,7 @@ for (const [name, handler, method, path, payload] of [
       const fetch = vi
         .spyOn(globalThis, "fetch")
         .mockResolvedValue(
-          Response.json({ undo: null, resetId: "reset", password: "excluded" }),
+          Response.json({ undo: null, ...receipt, password: "excluded" }),
         );
       const response = await invoke(!shadowOverrideEnabled);
       expect(response.status).toBe(200);
@@ -142,15 +198,13 @@ it("uses authenticated request bodies and drops unexpected response/error fields
   vi.mocked(createApiAccessToken).mockResolvedValue("token");
   const fetch = vi
     .spyOn(globalThis, "fetch")
-    .mockResolvedValueOnce(
-      Response.json({ resetId: "reset", password: "excluded" }),
-    )
+    .mockResolvedValueOnce(Response.json({ ...receipt, password: "excluded" }))
     .mockResolvedValueOnce(
       Response.json({ message: body.password }, { status: 409 }),
     );
   const response = await request();
   expect(response.headers.get("cache-control")).toBe("no-store");
-  expect(await response.json()).toEqual({ resetId: "reset" });
+  expect(await response.json()).toEqual(receipt);
   expect(fetch).toHaveBeenCalledWith(
     "http://localhost:3001/v1/games/1/password-reset",
     expect.objectContaining({
@@ -181,9 +235,7 @@ it("allowlists recovery availability and binds undo to its specific output, neve
     .mockResolvedValueOnce(
       Response.json({ undo: { ...undo, password: "excluded" } }),
     )
-    .mockResolvedValueOnce(
-      Response.json({ resetId: "reset", password: "excluded" }),
-    );
+    .mockResolvedValueOnce(Response.json({ ...receipt, password: "excluded" }));
   const context = { params: Promise.resolve({ gameNumber: "1" }) };
   const response = await GET(
     new Request("http://localhost/api/games/1/password-reset"),
@@ -198,7 +250,7 @@ it("allowlists recovery availability and binds undo to its specific output, neve
     }),
     context,
   );
-  expect(await result.json()).toEqual({ resetId: "reset" });
+  expect(await result.json()).toEqual(receipt);
   expect(fetch).toHaveBeenLastCalledWith(
     "http://localhost:3001/v1/games/1/password-reset/undo",
     expect.objectContaining({

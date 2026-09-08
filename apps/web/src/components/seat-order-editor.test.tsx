@@ -12,7 +12,11 @@ import {
 import type { ComponentProps } from "react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SeatOrderEditor } from "@/components/seat-order-editor";
+import { SeatOrderEditor as RosterEditor } from "@/components/seat-order-editor";
+import {
+  useAcceptedRoster,
+  type AcceptedRoster,
+} from "@/components/accepted-roster";
 import type { SeatOrderSnapshot } from "@/lib/shadow-cloud-api";
 
 const router = { refresh: vi.fn() };
@@ -51,6 +55,21 @@ const players = [
 ];
 
 const baseline = { campaignId: "campaign-1", revision: 7 };
+
+type EditorProps = Omit<ComponentProps<typeof RosterEditor>, "roster"> &
+  AcceptedRoster;
+
+// Exercise the real owner/editor seam in both card and configuration presentations.
+function SeatOrderEditor(props: EditorProps) {
+  return (
+    <CampaignEditor key={props.seatOrderBaseline?.campaignId} {...props} />
+  );
+}
+
+function CampaignEditor(props: EditorProps) {
+  const roster = useAcceptedRoster(props);
+  return <RosterEditor {...props} roster={roster} />;
+}
 
 function snapshot(
   overrides: Partial<SeatOrderSnapshot> = {},
@@ -220,7 +239,6 @@ describe("SeatOrderEditor", () => {
     "rejects a %s snapshot for another campaign without changing the mounted draft",
     async (method) => {
       const user = userEvent.setup();
-      const onSnapshotAccepted = vi.fn();
       const onDirtyChange = vi.fn();
       const otherCampaign = snapshot({
         gameId: "campaign-B",
@@ -241,7 +259,7 @@ describe("SeatOrderEditor", () => {
           method === "GET" ? otherCampaign : { seatOrder: otherCampaign },
         ),
       );
-      renderEditor({ onSnapshotAccepted, onDirtyChange });
+      renderEditor({ onDirtyChange });
       await user.click(screen.getByRole("button", { name: "Manage seat 2" }));
       await user.click(screen.getByRole("button", { name: "Make active" }));
       await user.click(screen.getByRole("button", { name: "Save order" }));
@@ -277,7 +295,6 @@ describe("SeatOrderEditor", () => {
       expect(screen.getByText("Seat 2 · Active")).toBeVisible();
       expect(screen.queryByText("Other campaign lord")).toBeNull();
       expect(screen.queryByTestId("save-confirmation")).toBeNull();
-      expect(onSnapshotAccepted).not.toHaveBeenCalled();
       expect(onDirtyChange).toHaveBeenLastCalledWith(true);
       expect(router.refresh).not.toHaveBeenCalled();
       expect(
@@ -1343,7 +1360,6 @@ describe("SeatOrderEditor", () => {
     async (operation) => {
       const user = userEvent.setup();
       let resolveRequest!: (response: Response) => void;
-      const onSnapshotAccepted = vi.fn();
       const fetchSpy = vi.spyOn(globalThis, "fetch");
       if (operation === "reload")
         fetchSpy.mockResolvedValueOnce(
@@ -1355,7 +1371,7 @@ describe("SeatOrderEditor", () => {
             resolveRequest = resolve;
           }),
       );
-      const { rerender } = renderEditor({ onSnapshotAccepted });
+      const { rerender } = renderEditor();
       await user.click(screen.getByRole("button", { name: "Manage seat 2" }));
       await user.click(screen.getByRole("button", { name: "Make active" }));
       await user.click(screen.getByRole("button", { name: "Save order" }));
@@ -1383,7 +1399,6 @@ describe("SeatOrderEditor", () => {
           activePlayerEntryId="new-seat"
           seatOrderBaseline={{ campaignId: "campaign-2", revision: 1 }}
           presentation="configuration"
-          onSnapshotAccepted={onSnapshotAccepted}
         />,
       );
       expect(screen.getByText("Different lord")).toBeVisible();
@@ -1395,7 +1410,6 @@ describe("SeatOrderEditor", () => {
           ),
         ),
       );
-      expect(onSnapshotAccepted).not.toHaveBeenCalled();
       expect(router.refresh).not.toHaveBeenCalled();
       expect(screen.queryByTestId("save-confirmation")).toBeNull();
       expect(

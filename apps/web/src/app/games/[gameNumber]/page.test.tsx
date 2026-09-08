@@ -418,6 +418,7 @@ describe("GameDetailPage workspace composition", () => {
 
     expect(regimes?.key).toBe("game-1");
     expect(regimes?.props).toMatchObject({
+      campaignId: "game-1",
       gameNumber: 42,
       canManagePasswords: true,
       hasSave: true,

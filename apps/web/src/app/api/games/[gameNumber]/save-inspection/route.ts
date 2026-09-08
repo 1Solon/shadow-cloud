@@ -51,6 +51,7 @@ export async function GET(
       );
     const inspection: SaveInspection = {
       fileVersionId: payload.fileVersionId,
+      contentRevision: payload.contentRevision,
       sourceId: payload.sourceId,
       expectedSaveBaseline: payload.expectedSaveBaseline,
       regimes: payload.regimes.map(

@@ -182,6 +182,7 @@ export default async function GameDetailPage({
           canManagePasswords ? (
             <SaveRegimeInspection
               key={game.id}
+              campaignId={game.id}
               saveRevision={`${game.fileVersions[0]?.id}:${game.fileVersions[0]?.contentRevision}`}
               gameNumber={game.gameNumber}
               canManagePasswords={canManagePasswords}

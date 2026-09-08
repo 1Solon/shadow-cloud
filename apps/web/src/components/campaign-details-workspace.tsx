@@ -13,6 +13,7 @@ import {
 import { CampaignNotesEditor } from "@/components/campaign-notes-editor";
 import { CampaignSettingsEditor } from "@/components/campaign-settings-editor";
 import { SeatOrderEditor } from "@/components/seat-order-editor";
+import { useAcceptedRoster } from "@/components/accepted-roster";
 import type { SeatOrderBaseline } from "@/lib/shadow-cloud-api";
 
 type CampaignDetailsWorkspaceProps = Omit<CampaignBriefingProps, "notes"> & {
@@ -39,29 +40,11 @@ export function CampaignDetailsWorkspace(props: CampaignDetailsWorkspaceProps) {
 function CampaignDetailsWorkspaceContent(props: CampaignDetailsWorkspaceProps) {
   const [mode, setMode] = useState<"briefing" | "configuration">("briefing");
   const configurationEntryRef = useRef<HTMLDivElement>(null);
-  const [seatOrder, setSeatOrder] = useState({
+  const roster = useAcceptedRoster({
     players: props.players,
     activePlayerEntryId: props.activePlayerEntryId,
     seatOrderBaseline: props.seatOrderBaseline,
   });
-  const [previousPlayers, setPreviousPlayers] = useState(props.players);
-  const incomingPlayersChanged = previousPlayers !== props.players;
-  if (incomingPlayersChanged) setPreviousPlayers(props.players);
-
-  if (
-    props.seatOrderBaseline.campaignId ===
-      seatOrder.seatOrderBaseline.campaignId &&
-    props.seatOrderBaseline.revision >= seatOrder.seatOrderBaseline.revision &&
-    (incomingPlayersChanged ||
-      props.seatOrderBaseline.revision !== seatOrder.seatOrderBaseline.revision)
-  ) {
-    setSeatOrder({
-      players: props.players,
-      activePlayerEntryId: props.activePlayerEntryId,
-      seatOrderBaseline: props.seatOrderBaseline,
-    });
-  }
-
   if (!props.canEdit && mode === "configuration") {
     setMode("briefing");
   }
@@ -83,20 +66,9 @@ function CampaignDetailsWorkspaceContent(props: CampaignDetailsWorkspaceProps) {
     if (section === "seat-order") {
       return (
         <SeatOrderEditor
-          activePlayerEntryId={seatOrder.activePlayerEntryId}
+          roster={roster}
           canEdit={props.canEdit}
           gameNumber={props.gameNumber}
-          players={seatOrder.players}
-          seatOrderBaseline={seatOrder.seatOrderBaseline}
-          onSnapshotAccepted={(snapshot) => {
-            setSeatOrder((current) =>
-              snapshot.gameId === current.seatOrderBaseline.campaignId &&
-              snapshot.seatOrderBaseline.revision >=
-                current.seatOrderBaseline.revision
-                ? snapshot
-                : current,
-            );
-          }}
           presentation="configuration"
           {...editorStateProps}
         />
