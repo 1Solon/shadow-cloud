@@ -2,7 +2,13 @@
 
 import "@testing-library/jest-dom/vitest";
 import { type ReactNode, useState } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CampaignDetailsWorkspace } from "@/components/campaign-details-workspace";
 
@@ -173,6 +179,24 @@ describe("CampaignDetailsWorkspace", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Exit mock shell" }));
     expect(screen.getByTestId("briefing")).toBeInTheDocument();
+  });
+
+  it("brings the configuration editor into view when entered", async () => {
+    const scrollIntoView = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+      configurable: true,
+      value: scrollIntoView,
+    });
+    render(<CampaignDetailsWorkspace {...props} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Configure campaign" }));
+
+    await waitFor(() =>
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: "start" }),
+    );
+    expect(screen.getByTestId("campaign-configuration-entry")).toContainElement(
+      screen.getByTestId("configuration-shell"),
+    );
   });
 
   it.each(["identity", "world", "turn-protocol"] as const)(

@@ -136,7 +136,7 @@ export function ReplaceSaveFileAction({
         </div>
       </TerminalActionConfirmationDialog>
       <button
-        className={`inline-flex h-9 items-center rounded-md border px-3 text-xs font-medium uppercase tracking-[0.18em] font-mono transition-colors ${isMostRecent ? "border-black bg-black/10 text-black hover:bg-black hover:text-orange-400" : "border-orange-400 bg-orange-400/10 text-orange-300 hover:bg-orange-400 hover:text-black"}`}
+        className={`inline-flex min-h-11 items-center rounded-md border px-3 text-xs font-medium uppercase tracking-[0.14em] font-mono text-orange-200 transition-colors hover:bg-orange-400 hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isMostRecent ? "border-orange-400 bg-orange-400/10" : "border-orange-400/60 bg-transparent"}`}
         type="button"
         onClick={openConfirmation}
       >

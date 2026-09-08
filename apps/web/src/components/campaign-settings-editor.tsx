@@ -560,6 +560,9 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
   const turnReminderGraceHoursDescriptionId = `${turnDescriptionIdPrefix}-turn-reminder-grace-hours-description`;
   const turnReminderRepeatHoursDescriptionId = `${turnDescriptionIdPrefix}-turn-reminder-repeat-hours-description`;
   const turnRemindersEnabledDescriptionId = `${turnDescriptionIdPrefix}-turn-reminders-enabled-description`;
+  const transferDescriptionId = `${turnDescriptionIdPrefix}-overlord-transfer-description`;
+  const identityMetadataHeadingId = `${turnDescriptionIdPrefix}-identity-metadata-heading`;
+  const transferHeadingId = `${turnDescriptionIdPrefix}-overlord-transfer-heading`;
   const { onDirtyChange } = props;
   const [draft, setDraft] = useState(() => createDraft(props));
   const [initialDraft, setInitialDraft] = useState(() => createDraft(props));
@@ -1030,78 +1033,123 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
         ) : null}
 
         {props.section === "identity" ? (
-          <div className="border-t border-orange-400/15">
-            <FieldRow label="Campaign number">
-              <input
-                className={controlClassName}
-                disabled={isEditorDisabled}
-                min={1}
-                step={1}
-                type="number"
-                value={draft.gameNumber}
-                onChange={(event) =>
-                  updateDraft("gameNumber", event.target.value)
-                }
-              />
-            </FieldRow>
-            <FieldRow label="Campaign name">
-              <input
-                className={controlClassName}
-                disabled={isEditorDisabled}
-                maxLength={100}
-                type="text"
-                value={draft.name}
-                onChange={(event) => updateDraft("name", event.target.value)}
-              />
-            </FieldRow>
-            <FieldRow label="Overlord">
-              <select
-                ref={organizerSelectRef}
-                className={controlClassName}
-                disabled={isEditorDisabled || organizerOptions.length === 0}
-                value={organizerEntryId}
-                onChange={(event) => {
-                  setOrganizerEntryId(event.target.value);
-                  setErrorMessage(null);
-                  setTransferErrorMessage(null);
-                  setConfirmation(null);
-                  setPendingTransfer(null);
-                }}
+          <div>
+            <section
+              aria-labelledby={identityMetadataHeadingId}
+              className="border-t border-orange-400/15"
+            >
+              <h4
+                id={identityMetadataHeadingId}
+                className="pt-3 text-xs font-semibold uppercase tracking-[0.16em] text-orange-300"
               >
-                {organizerOptions.map((player) => (
-                  <option key={player.id} value={player.id}>
-                    {`Seat ${player.turnOrder}: ${player.displayName ?? "Unknown player"}`}
-                  </option>
-                ))}
-              </select>
-            </FieldRow>
-            <FieldRow label="Round">
-              <input
-                className={controlClassName}
-                disabled={isEditorDisabled}
-                min={1}
-                step={1}
-                type="number"
-                value={draft.roundNumber}
-                onChange={(event) =>
-                  updateDraft("roundNumber", event.target.value)
-                }
-              />
-            </FieldRow>
-            <FieldRow label="Player count">
-              <input
-                className={controlClassName}
-                disabled={isEditorDisabled}
-                max={100}
-                min={1}
-                step={1}
-                type="number"
-                value={draft.playerCount}
-                onChange={(event) =>
-                  updateDraft("playerCount", event.target.value)
-                }
-              />
-            </FieldRow>
+                Campaign metadata
+              </h4>
+              <p className="mt-1 text-sm leading-relaxed text-orange-200/60">
+                Routine details that identify the campaign and its current
+                progress.
+              </p>
+              <FieldRow label="Campaign number">
+                <input
+                  className={controlClassName}
+                  disabled={isEditorDisabled}
+                  min={1}
+                  step={1}
+                  type="number"
+                  value={draft.gameNumber}
+                  onChange={(event) =>
+                    updateDraft("gameNumber", event.target.value)
+                  }
+                />
+              </FieldRow>
+              <FieldRow label="Campaign name">
+                <input
+                  className={controlClassName}
+                  disabled={isEditorDisabled}
+                  maxLength={100}
+                  type="text"
+                  value={draft.name}
+                  onChange={(event) => updateDraft("name", event.target.value)}
+                />
+              </FieldRow>
+              <FieldRow label="Round">
+                <input
+                  className={controlClassName}
+                  disabled={isEditorDisabled}
+                  min={1}
+                  step={1}
+                  type="number"
+                  value={draft.roundNumber}
+                  onChange={(event) =>
+                    updateDraft("roundNumber", event.target.value)
+                  }
+                />
+              </FieldRow>
+              <FieldRow label="Player count">
+                <input
+                  className={controlClassName}
+                  disabled={isEditorDisabled}
+                  max={100}
+                  min={1}
+                  step={1}
+                  type="number"
+                  value={draft.playerCount}
+                  onChange={(event) =>
+                    updateDraft("playerCount", event.target.value)
+                  }
+                />
+              </FieldRow>
+            </section>
+
+            <section
+              aria-labelledby={transferHeadingId}
+              className="mt-6 border border-orange-300/50 bg-orange-400/5 px-4 py-3"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-orange-300">
+                Consequential action
+              </p>
+              <h4
+                id={transferHeadingId}
+                className="mt-1 text-sm font-semibold uppercase tracking-[0.16em] text-orange-100"
+              >
+                Overlord transfer
+              </h4>
+              <p
+                id={transferDescriptionId}
+                className="mt-2 text-sm leading-relaxed text-orange-200/75"
+              >
+                This changes campaign control, not just campaign metadata. The
+                selected occupied seat becomes the new Overlord and receives
+                organizer-only controls. A confirmation is required before the
+                transfer is sent.
+              </p>
+              <div className="mt-2">
+                <p className="text-xs uppercase tracking-[0.14em] text-orange-300/60">
+                  Current Overlord: {props.organizerDisplayName}
+                </p>
+                <FieldRow label="Overlord">
+                  <select
+                    ref={organizerSelectRef}
+                    aria-describedby={transferDescriptionId}
+                    className={controlClassName}
+                    disabled={isEditorDisabled || organizerOptions.length === 0}
+                    value={organizerEntryId}
+                    onChange={(event) => {
+                      setOrganizerEntryId(event.target.value);
+                      setErrorMessage(null);
+                      setTransferErrorMessage(null);
+                      setConfirmation(null);
+                      setPendingTransfer(null);
+                    }}
+                  >
+                    {organizerOptions.map((player) => (
+                      <option key={player.id} value={player.id}>
+                        {`Seat ${player.turnOrder}: ${player.displayName ?? "Unknown player"}`}
+                      </option>
+                    ))}
+                  </select>
+                </FieldRow>
+              </div>
+            </section>
           </div>
         ) : null}
 

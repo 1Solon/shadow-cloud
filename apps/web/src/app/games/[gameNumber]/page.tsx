@@ -44,6 +44,9 @@ export default async function GameDetailPage({
   const isActivePlayer = Boolean(
     session?.user?.id && game.activePlayerUserId === session.user.id,
   );
+  const isOverlord = Boolean(
+    session?.user?.id && session.user.id === game.organizerId,
+  );
   const canEditSeatOrder = Boolean(
     session?.user?.id &&
     (session.user.id === game.organizerId ||
@@ -131,25 +134,14 @@ export default async function GameDetailPage({
 
       <CampaignWorkspaceTabs
         saves={
-          <div className="space-y-6">
-            <SaveRegimeInspection
-              key={game.id}
-              saveRevision={`${game.fileVersions[0]?.id}:${game.fileVersions[0]?.contentRevision}`}
-              gameNumber={game.gameNumber}
-              isOverlord={Boolean(
-                session?.user?.id && session.user.id === game.organizerId,
-              )}
-              hasSave={game.fileVersions.length > 0}
-            />
-            <WorldStateHistoryCard
-              saveBaseline={game.saveBaseline}
-              currentUserId={session?.user?.id ?? null}
-              fileVersions={game.fileVersions}
-              gameNumber={game.gameNumber}
-              isShadowOverrideUser={session?.user?.isShadowOverride === true}
-              shadowOverrideEnabled={shadowOverrideEnabled}
-            />
-          </div>
+          <WorldStateHistoryCard
+            saveBaseline={game.saveBaseline}
+            currentUserId={session?.user?.id ?? null}
+            fileVersions={game.fileVersions}
+            gameNumber={game.gameNumber}
+            isShadowOverrideUser={session?.user?.isShadowOverride === true}
+            shadowOverrideEnabled={shadowOverrideEnabled}
+          />
         }
         timing={
           <TurnTimingHistoryCard
@@ -158,14 +150,6 @@ export default async function GameDetailPage({
             openTurn={game.openTurn}
             recentCompletedTurns={game.recentCompletedTurns}
           />
-        }
-        administration={
-          canDeleteGame ? (
-            <AdministratorActionsCard
-              gameName={game.name}
-              gameNumber={game.gameNumber}
-            />
-          ) : undefined
         }
         campaign={
           <CampaignDetailsWorkspace
@@ -191,6 +175,25 @@ export default async function GameDetailPage({
             turnTargetHours={game.turnTargetHours}
             zoneCount={game.zoneCount}
           />
+        }
+        regimes={
+          isOverlord ? (
+            <SaveRegimeInspection
+              key={game.id}
+              saveRevision={`${game.fileVersions[0]?.id}:${game.fileVersions[0]?.contentRevision}`}
+              gameNumber={game.gameNumber}
+              isOverlord={isOverlord}
+              hasSave={game.fileVersions.length > 0}
+            />
+          ) : undefined
+        }
+        administration={
+          canDeleteGame ? (
+            <AdministratorActionsCard
+              gameName={game.name}
+              gameNumber={game.gameNumber}
+            />
+          ) : undefined
         }
       />
     </div>

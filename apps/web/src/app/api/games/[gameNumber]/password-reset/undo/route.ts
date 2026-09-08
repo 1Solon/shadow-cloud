@@ -46,7 +46,7 @@ export async function POST(
           ? "This reset can no longer be undone. Refresh the campaign and download the latest save."
           : response.status === 403
             ? "Only the current Overlord can manage password recovery."
-            : "Undo failed. Refresh the campaign and check recovery before trying again.",
+            : "Undo failed. Refresh the campaign and try again.",
         response.status,
       );
     const result = await response.json();

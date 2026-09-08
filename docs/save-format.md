@@ -200,8 +200,9 @@ is consumed and source/old-output deletion is queued in that same transaction.
 The restored staged path is never a cleanup target. A second reset's undo
 restores only its immediate source; there is no reactivation of older records.
 
-The campaign's Saves panel provides Check undo availability, the previous-password
-warning, explicit confirmation, Cancel, success and retryable error/conflict states.
+The campaign's Saves panel checks availability automatically, then provides the
+previous-password warning, explicit confirmation, Cancel, success and retryable
+error/conflict states.
 The audit operation is `password-reset-undo`; replacement notifications use
 `passwordRecovery.operation: undo`. Responses and messages contain no passwords.
 

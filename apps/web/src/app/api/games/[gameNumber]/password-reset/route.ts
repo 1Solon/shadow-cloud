@@ -41,7 +41,10 @@ export async function GET(
       { headers },
     );
   } catch {
-    return fail("Recovery could not be checked. Try again.", 502);
+    return fail(
+      "Recovery is unavailable. Refresh the campaign and try again.",
+      502,
+    );
   }
 }
 

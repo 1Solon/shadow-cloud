@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { jwtVerify } from "jose";
-import type { GameDetail } from "../src/lib/shadow-cloud-api";
+import type { GameDetail, GameListItem } from "../src/lib/shadow-cloud-api";
 
 export type MutationOutcome =
   | { kind: "success" }
@@ -79,6 +79,26 @@ export async function startUpstream(secret: string) {
     };
     try {
       const base = `/v1/games/${upstream.game.gameNumber}`;
+      if (method === "GET" && path === "/v1/games") {
+        const game = upstream.game;
+        const latest = game.fileVersions[0];
+        const item: GameListItem = {
+          ...game,
+          playerCount: game.playerCount ?? game.players.length,
+          filledSeatCount: game.players.filter(
+            (player) => player.userId !== null,
+          ).length,
+          participantUserIds: game.players.flatMap((player) =>
+            player.userId ? [player.userId] : [],
+          ),
+          updatedAt: latest?.uploadedAt ?? "2026-07-11T12:00:00.000Z",
+          latestSave: latest
+            ? { id: latest.id, originalName: latest.originalName }
+            : null,
+        };
+        reply(200, [item]);
+        return;
+      }
       if (method === "GET" && path === `${base}/detail`) {
         upstream.requests.push({ method, path });
         if (upstream.detailFailure) {

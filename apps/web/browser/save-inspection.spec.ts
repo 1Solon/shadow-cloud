@@ -17,8 +17,12 @@ test("reset and undo feedback survives revision-changing campaign refreshes", as
     replacedByDisplayName: null as string | null,
   };
   campaign.upstream.game.fileVersions = [file];
-  await page.route("**/api/games/42/save-inspection", (route) =>
-    route.fulfill({
+  let inspectionRequests = 0;
+  let availabilityRequests = 0;
+  let undoAvailable = false;
+  await page.route("**/api/games/42/save-inspection", (route) => {
+    inspectionRequests += 1;
+    return route.fulfill({
       json: {
         fileVersionId: file.id,
         sourceId: "synthetic-source",
@@ -33,38 +37,51 @@ test("reset and undo feedback survives revision-changing campaign refreshes", as
           },
         ],
       },
-    }),
-  );
+    });
+  });
   // Mutations are synthetic at the HTTP boundary; refresh uses the real Next
   // campaign page and reads the changed revision from the upstream fixture.
   await page.route("**/api/games/42/password-reset{,/undo}", (route) => {
-    if (route.request().method() === "GET")
+    if (route.request().method() === "GET") {
+      availabilityRequests += 1;
       return route.fulfill({
         json: {
-          undo: {
-            resetId: "reset",
-            outputId: "output",
-            outputRevision: file.contentRevision,
-            expectedSaveBaseline: `baseline-${file.contentRevision}`,
-            regimeName: "North Reach",
-          },
+          undo: undoAvailable
+            ? {
+                resetId: "reset",
+                outputId: "output",
+                outputRevision: file.contentRevision,
+                expectedSaveBaseline: `baseline-${file.contentRevision}`,
+                regimeName: "North Reach",
+              }
+            : null,
         },
       });
+    }
     file.contentRevision += 1;
     file.replacedAt = `2026-09-07T10:0${file.contentRevision}:00Z`;
     file.replacedByDisplayName = "Browser Overlord";
+    undoAvailable = route.request().url().endsWith("/password-reset");
     return route.fulfill({ json: { regimeName: "North Reach" } });
   });
   await page.goto(`${campaign.url}/games/42`);
-  await page.getByRole("tab", { name: "Saves", exact: true }).click();
+  expect(inspectionRequests).toBe(0);
+  expect(availabilityRequests).toBe(0);
+  await page.getByRole("tab", { name: "Regimes", exact: true }).click();
   const inspection = page.getByRole("region", {
     name: "In-game regime inspection",
   });
-  await inspection.getByRole("button", { name: "Inspect regimes" }).click();
-  await inspection.getByRole("button", { name: "Choose North Reach" }).click();
+  await expect.poll(() => inspectionRequests).toBe(1);
+  await expect.poll(() => availabilityRequests).toBeGreaterThan(0);
+  await inspection.getByRole("button", { name: "Edit Password" }).click();
   await inspection
     .getByLabel("Replacement password", { exact: true })
     .fill("SyntheticReplacement");
+  await page.getByRole("tab", { name: "Saves", exact: true }).click();
+  await page.getByRole("tab", { name: "Regimes", exact: true }).click();
+  await expect(
+    inspection.getByLabel("Replacement password", { exact: true }),
+  ).toHaveValue("SyntheticReplacement");
   await inspection
     .getByLabel(
       "Reset the password for North Reach. I have read the restart warning.",
@@ -73,10 +90,13 @@ test("reset and undo feedback survives revision-changing campaign refreshes", as
   await inspection
     .getByRole("button", { name: "Reset password", exact: true })
     .click();
+  await expect.poll(() => file.contentRevision).toBe(1);
   const history = page.getByRole("region", { name: "Save history table" });
+  await page.getByRole("tab", { name: "Saves", exact: true }).click();
   await expect(
     history.locator('time[datetime="2026-09-07T10:01:00Z"]'),
   ).toBeVisible();
+  await page.getByRole("tab", { name: "Regimes", exact: true }).click();
   await expect(inspection.getByRole("status")).toContainText(
     "The in-game password for North Reach was reset.",
   );
@@ -87,20 +107,19 @@ test("reset and undo feedback survives revision-changing campaign refreshes", as
     inspection.getByLabel("Replacement password", { exact: true }),
   ).toHaveCount(0);
   await expect(
-    inspection.getByRole("button", { name: "Choose North Reach" }),
-  ).toHaveCount(0);
-  await inspection
-    .getByRole("button", { name: "Check undo availability" })
-    .click();
+    inspection.getByRole("button", { name: "Edit Password" }),
+  ).toBeVisible();
   await inspection
     .getByLabel("Restore the previous password for North Reach.")
     .check();
   await inspection
     .getByRole("button", { name: "Undo password reset", exact: true })
     .click();
+  await page.getByRole("tab", { name: "Saves", exact: true }).click();
   await expect(
     history.locator('time[datetime="2026-09-07T10:02:00Z"]'),
   ).toBeVisible();
+  await page.getByRole("tab", { name: "Regimes", exact: true }).click();
   await expect(inspection.getByRole("status")).toContainText(
     "The previous password for North Reach was restored.",
   );
@@ -167,24 +186,29 @@ test("Overlord regime inspection renders on desktop and mobile without changing 
       },
     }),
   );
+  let undoAvailable = false;
   await page.route("**/api/games/42/password-reset", (route) =>
-    route.fulfill({
-      json: {
-        undo: {
-          resetId: "reset",
-          outputId: "output",
-          outputRevision: 1,
-          expectedSaveBaseline: "baseline",
-          regimeName: "North Reach",
-        },
-      },
-    }),
+    route.request().method() === "GET"
+      ? route.fulfill({
+          json: {
+            undo: undoAvailable
+              ? {
+                  resetId: "reset",
+                  outputId: "output",
+                  outputRevision: 1,
+                  expectedSaveBaseline: "baseline",
+                  regimeName: "North Reach",
+                }
+              : null,
+          },
+        })
+      : route.fulfill({ json: { regimeName: "North Reach" } }),
   );
   for (const width of [1280, 390]) {
+    undoAvailable = false;
     await page.setViewportSize({ width, height: 900 });
     expect((await page.goto(`${campaign.url}/games/42`))?.status()).toBe(200);
-    await page.getByRole("tab", { name: "Saves", exact: true }).click();
-    await page.getByRole("button", { name: "Inspect regimes" }).click();
+    await page.getByRole("tab", { name: "Regimes", exact: true }).click();
     const inspection = page.getByRole("region", {
       name: "In-game regime inspection",
     });
@@ -205,7 +229,9 @@ test("Overlord regime inspection renders on desktop and mobile without changing 
     ).toBe(true);
     await expect(inspection.locator("input")).toHaveCount(0);
     await inspection
-      .getByRole("button", { name: "Choose North Reach", exact: true })
+      .getByRole("listitem")
+      .filter({ has: page.getByText("North Reach", { exact: true }) })
+      .getByRole("button", { name: "Edit Password", exact: true })
       .click();
     await expect(
       inspection.getByText("Players must use the updated save"),
@@ -222,11 +248,9 @@ test("Overlord regime inspection renders on desktop and mobile without changing 
         (element) => element.scrollWidth <= element.clientWidth,
       ),
     ).toBe(true);
+    undoAvailable = true;
     await inspection
       .getByRole("button", { name: "Cancel", exact: true })
-      .click();
-    await inspection
-      .getByRole("button", { name: "Check undo availability" })
       .click();
     await expect(
       inspection.getByText(
@@ -259,9 +283,11 @@ test("Overlord regime inspection renders on desktop and mobile without changing 
   }
   await page.context().clearCookies();
   await page.reload();
-  await page.getByRole("tab", { name: "Saves", exact: true }).click();
   await expect(
-    page.getByRole("button", { name: "Inspect regimes" }),
+    page.getByRole("tab", { name: "Regimes", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Refresh", exact: true }),
   ).toHaveCount(0);
   expect(
     campaign.upstream.requests.every((request) => request.method === "GET"),

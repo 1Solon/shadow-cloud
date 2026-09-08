@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AdministratorActionsCard } from "@/components/administrator-actions-card";
 import { CampaignDetailsWorkspace } from "@/components/campaign-details-workspace";
 import { CampaignWorkspaceTabs } from "@/components/campaign-workspace-tabs";
+import { SaveRegimeInspection } from "@/components/save-regime-inspection";
 import { TerminalConfirmationModal } from "@/components/terminal-confirmation-modal";
 import { TurnCommandCenter } from "@/components/turn-command-center";
 import { TurnTimingHistoryCard } from "@/components/turn-timing-history-card";
@@ -64,6 +65,7 @@ function createFileVersion(
   overrides: Partial<GameDetailFileVersion> = {},
 ): GameDetailFileVersion {
   return {
+    contentRevision: 3,
     id: "file-newest",
     originalName: "round-4-newest.Civ6Save",
     uploadedAt: "2026-07-10T11:00:00.000Z",
@@ -393,6 +395,56 @@ describe("GameDetailPage workspace composition", () => {
         expect.objectContaining({ id: "turn-1" }),
       ]),
     });
+  });
+
+  it("puts Overlord regime inspection in the optional Regimes tab", async () => {
+    const page = await renderPage({
+      session: { user: { id: "organizer-1", isShadowOverride: false } },
+    });
+    const workspace = findElementByType(
+      page,
+      CampaignWorkspaceTabs,
+    ) as ReactElement<ComponentProps<typeof CampaignWorkspaceTabs>>;
+    expect(
+      findElementByType(workspace.props.saves, WorldStateHistoryCard),
+    ).not.toBeNull();
+    expect(
+      findElementByType(workspace.props.saves, SaveRegimeInspection),
+    ).toBeNull();
+    const regimes = findElementByType(
+      workspace.props.regimes,
+      SaveRegimeInspection,
+    );
+
+    expect(regimes?.key).toBe("game-1");
+    expect(regimes?.props).toMatchObject({
+      gameNumber: 42,
+      isOverlord: true,
+      hasSave: true,
+      saveRevision: "file-newest:3",
+    });
+  });
+
+  it("only authorizes the Regimes tab for the campaign Overlord", async () => {
+    const overlordPage = await renderPage({
+      session: { user: { id: "organizer-1", isShadowOverride: false } },
+    });
+    const overlordWorkspace = findElementByType(
+      overlordPage,
+      CampaignWorkspaceTabs,
+    ) as ReactElement<ComponentProps<typeof CampaignWorkspaceTabs>>;
+    expect(
+      findElementByType(overlordWorkspace.props.regimes, SaveRegimeInspection),
+    ).not.toBeNull();
+
+    const playerPage = await renderPage({
+      session: { user: { id: "player-2", isShadowOverride: false } },
+    });
+    const playerWorkspace = findElementByType(
+      playerPage,
+      CampaignWorkspaceTabs,
+    ) as ReactElement<ComponentProps<typeof CampaignWorkspaceTabs>>;
+    expect(playerWorkspace.props.regimes).toBeUndefined();
   });
 
   it("composes the complete campaign data into one details workspace", async () => {

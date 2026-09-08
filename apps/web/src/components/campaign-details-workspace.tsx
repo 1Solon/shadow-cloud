@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CampaignBriefing,
   type CampaignBriefingProps,
@@ -38,6 +38,7 @@ export function CampaignDetailsWorkspace(props: CampaignDetailsWorkspaceProps) {
 
 function CampaignDetailsWorkspaceContent(props: CampaignDetailsWorkspaceProps) {
   const [mode, setMode] = useState<"briefing" | "configuration">("briefing");
+  const configurationEntryRef = useRef<HTMLDivElement>(null);
   const [seatOrder, setSeatOrder] = useState({
     players: props.players,
     activePlayerEntryId: props.activePlayerEntryId,
@@ -66,6 +67,14 @@ function CampaignDetailsWorkspaceContent(props: CampaignDetailsWorkspaceProps) {
   }
 
   const isConfiguring = mode === "configuration" && props.canEdit;
+
+  useEffect(() => {
+    if (!isConfiguring) {
+      return;
+    }
+
+    configurationEntryRef.current?.scrollIntoView?.({ block: "start" });
+  }, [isConfiguring]);
 
   function renderSection(
     section: CampaignConfigurationSection,
@@ -132,10 +141,16 @@ function CampaignDetailsWorkspaceContent(props: CampaignDetailsWorkspaceProps) {
 
   if (isConfiguring) {
     return (
-      <CampaignConfigurationShell
-        onExit={() => setMode("briefing")}
-        renderSection={renderSection}
-      />
+      <div
+        ref={configurationEntryRef}
+        className="min-w-0 scroll-mt-4"
+        data-testid="campaign-configuration-entry"
+      >
+        <CampaignConfigurationShell
+          onExit={() => setMode("briefing")}
+          renderSection={renderSection}
+        />
+      </div>
     );
   }
 

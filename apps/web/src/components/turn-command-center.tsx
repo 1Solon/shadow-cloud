@@ -25,11 +25,12 @@ export type TurnCommandCenterProps = {
 };
 
 const refreshIntervalMs = 60 * 1000;
+const lengthyNotesCharacterCount = 240;
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <dt className="text-[0.65rem] uppercase tracking-[0.18em] text-orange-300/60">
+      <dt className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </dt>
       <dd className="mt-1 truncate text-sm font-semibold text-orange-100 sm:text-base">
@@ -55,6 +56,9 @@ export function TurnCommandCenter({
 }: TurnCommandCenterProps) {
   const headingId = useId();
   const [now, setNow] = useState(() => new Date(initialNow));
+  const [notesOpen, setNotesOpen] = useState(
+    notes.trim().length <= lengthyNotesCharacterCount,
+  );
   const hasValidTurnStart =
     currentTurnStartedAt !== null &&
     !Number.isNaN(new Date(currentTurnStartedAt).getTime());
@@ -99,8 +103,8 @@ export function TurnCommandCenter({
       <div
         className={
           canUpload
-            ? "border-b border-orange-400 bg-orange-400 px-4 py-2 text-xs font-bold tracking-[0.2em] text-black"
-            : "border-b border-orange-400/40 bg-orange-400/10 px-4 py-2 text-xs font-bold tracking-[0.2em] text-orange-300"
+            ? "border-b border-orange-400 bg-orange-400 px-3 py-1.5 text-xs font-bold tracking-[0.2em] text-black"
+            : "border-b border-orange-400/40 bg-orange-400/10 px-3 py-1.5 text-xs font-bold tracking-[0.2em] text-orange-300"
         }
       >
         {canUpload ? "YOUR TURN" : "WAITING"}
@@ -108,14 +112,16 @@ export function TurnCommandCenter({
 
       <div
         className={
-          canUpload
-            ? "grid gap-6 p-4 sm:p-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]"
-            : "p-4 sm:p-5"
+          canUpload || latestSave
+            ? "grid gap-4 p-3 sm:p-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]"
+            : "p-3 sm:p-4"
         }
         data-testid="command-center-body"
       >
-        <div className="flex flex-col gap-5">
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-5 sm:grid-cols-4 lg:grid-cols-2">
+        <div className="flex min-w-0 flex-col gap-4">
+          <dl
+            className={`grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4 ${canUpload || latestSave ? "lg:grid-cols-2" : ""}`}
+          >
             <Metric label="Active lord" value={activePlayerDisplayName} />
             <Metric
               label="Seat"
@@ -129,27 +135,37 @@ export function TurnCommandCenter({
             <Metric label="Elapsed / target" value={`${elapsed} / ${target}`} />
           </dl>
 
-          <div>
-            <p className="text-[0.65rem] uppercase tracking-[0.18em] text-orange-300/60">
-              Campaign notes
-            </p>
-            {hasNotes ? (
-              <GameNotesMarkdown
-                content={notes}
-                className="mt-2 rounded-none border-0 bg-transparent px-0 py-0"
-              />
-            ) : (
-              <p className="mt-2 text-sm leading-6 text-orange-200/60">
-                No campaign notes recorded.
-              </p>
-            )}
-          </div>
+          <details
+            className="group border-t border-orange-400/20 pt-1"
+            data-testid="campaign-notes"
+            open={notesOpen}
+            onToggle={(event) => setNotesOpen(event.currentTarget.open)}
+          >
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-2 text-[0.65rem] uppercase tracking-[0.18em] text-orange-300/70 transition-colors hover:text-orange-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+              <span>Campaign notes</span>
+              <span className="shrink-0 text-muted-foreground">
+                {notesOpen ? "Hide −" : "Show +"}
+              </span>
+            </summary>
+            <div className="pb-1">
+              {hasNotes ? (
+                <GameNotesMarkdown
+                  content={notes}
+                  className="rounded-none border-0 bg-transparent px-0 py-0"
+                />
+              ) : (
+                <p className="text-sm leading-6 text-orange-200/60">
+                  No campaign notes recorded.
+                </p>
+              )}
+            </div>
+          </details>
         </div>
 
-        {canUpload ? (
-          <div className="flex min-h-0 flex-col border-t border-orange-400/20 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+        {canUpload || latestSave ? (
+          <div className="flex min-h-0 flex-col border-t border-orange-400/20 pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
             {latestSave ? (
-              <div className="mb-4 flex min-w-0 items-center justify-between gap-4 rounded-lg border border-orange-400/30 bg-orange-400/10 px-4 py-3">
+              <div className="mb-3 flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-orange-400/30 bg-orange-400/5 px-3 py-2.5">
                 <div className="min-w-0">
                   <p className="text-[0.65rem] uppercase tracking-[0.18em] text-orange-300/60">
                     Latest save
@@ -162,19 +178,22 @@ export function TurnCommandCenter({
                   </p>
                 </div>
                 <DownloadSaveButton
-                  className="inline-flex h-9 shrink-0 items-center rounded-md border border-orange-400 bg-orange-400/10 px-3 text-xs font-medium uppercase tracking-[0.18em] text-orange-300 transition-colors hover:bg-orange-400 hover:text-black"
+                  className="inline-flex min-h-11 shrink-0 items-center rounded-md border border-orange-400/70 bg-orange-400 px-3 text-xs font-medium text-black transition-colors hover:bg-orange-300"
                   fileName={latestSave.originalName}
                   href={`/api/games/${gameNumber}/files/${latestSave.id}`}
+                  label="Download latest save"
                 />
               </div>
             ) : null}
-            <div className="min-h-0 flex-1">
-              <UploadSaveForm
-                gameNumber={gameNumber}
-                saveBaseline={saveBaseline}
-                presentation="compact"
-              />
-            </div>
+            {canUpload ? (
+              <div className="min-h-0 flex-1">
+                <UploadSaveForm
+                  gameNumber={gameNumber}
+                  saveBaseline={saveBaseline}
+                  presentation="compact"
+                />
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
