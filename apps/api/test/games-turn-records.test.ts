@@ -65,12 +65,10 @@ vi.mock('../src/games/support/discord-user.helpers', () => ({
 }));
 
 const { TurnCompletionReason } = await import('../src/database');
-const { TurnRecordsService } = await import(
-  '../src/games/services/turn-records.service'
-);
-const { GamesRegistrationService } = await import(
-  '../src/games/services/games-registration.service'
-);
+const { TurnRecordsService } =
+  await import('../src/games/services/turn-records.service');
+const { GamesRegistrationService } =
+  await import('../src/games/services/games-registration.service');
 
 const policy = {
   turnTargetHours: 24,
@@ -99,6 +97,7 @@ function createOpenRecord(override = {}) {
 
 function createTransaction() {
   return {
+    passwordReset: { findMany: vi.fn(async () => []) },
     game: {
       findUnique: vi.fn(async () => policy),
     },
@@ -366,9 +365,12 @@ describe('TurnRecordsService', () => {
       turnTargetHours: 48,
     });
 
-    await new TurnRecordsService().recalculateOpenReminder(transaction as never, {
-      gameId: 'game-1',
-    });
+    await new TurnRecordsService().recalculateOpenReminder(
+      transaction as never,
+      {
+        gameId: 'game-1',
+      },
+    );
 
     expect(transaction.turnRecord.update).toHaveBeenCalledWith({
       where: { id: 'turn-1' },
@@ -387,9 +389,12 @@ describe('TurnRecordsService', () => {
       turnReminderGraceHours: 6,
     });
 
-    await new TurnRecordsService().recalculateOpenReminder(transaction as never, {
-      gameId: 'game-1',
-    });
+    await new TurnRecordsService().recalculateOpenReminder(
+      transaction as never,
+      {
+        gameId: 'game-1',
+      },
+    );
 
     expect(transaction.turnRecord.update).toHaveBeenCalledWith({
       where: { id: 'turn-1' },
@@ -408,9 +413,12 @@ describe('TurnRecordsService', () => {
       createOpenRecord({ reminderCount: 1, lastReminderAt }),
     ]);
 
-    await new TurnRecordsService().recalculateOpenReminder(transaction as never, {
-      gameId: 'game-1',
-    });
+    await new TurnRecordsService().recalculateOpenReminder(
+      transaction as never,
+      {
+        gameId: 'game-1',
+      },
+    );
 
     expect(transaction.turnRecord.update).toHaveBeenCalledWith({
       where: { id: 'turn-1' },
@@ -425,9 +433,12 @@ describe('TurnRecordsService', () => {
       turnRemindersEnabled: false,
     });
 
-    await new TurnRecordsService().recalculateOpenReminder(transaction as never, {
-      gameId: 'game-1',
-    });
+    await new TurnRecordsService().recalculateOpenReminder(
+      transaction as never,
+      {
+        gameId: 'game-1',
+      },
+    );
 
     expect(transaction.turnRecord.update).toHaveBeenCalledWith({
       where: { id: 'turn-1' },

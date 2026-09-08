@@ -484,6 +484,46 @@ describe("production notification style", () => {
 });
 
 describe("buildSaveReplacedNotificationMessage", () => {
+  it("explains undo restoration and unchanged turn", () => {
+    const rendered = JSON.stringify(
+      buildSaveReplacedNotificationMessage(
+        {
+          ...saveReplacedPayload,
+          replacement: {
+            ...saveReplacedPayload.replacement,
+            passwordRecovery: { operation: "undo", regimeName: "North Reach" },
+          },
+        },
+        "https://example.test",
+      ),
+    );
+    expect(rendered).toContain("restored the previous password");
+    expect(rendered).toContain("for **North Reach**");
+    expect(rendered).toContain("the turn has not advanced");
+    expect(rendered).toContain("Download [the updated save]");
+  });
+  it("explains password-reset replacement, fresh download and replay without secret delivery", () => {
+    const rendered = JSON.stringify(
+      buildSaveReplacedNotificationMessage(
+        {
+          ...saveReplacedPayload,
+          replacement: {
+            ...saveReplacedPayload.replacement,
+            passwordRecovery: { operation: "reset", regimeName: "North Reach" },
+          },
+        },
+        "https://example.test",
+      ),
+    );
+    expect(rendered).toContain(
+      "reset the in-game password for **North Reach**",
+    );
+    expect(rendered).toContain("the turn has not advanced");
+    expect(rendered).toContain("Download [the updated save]");
+    expect(rendered).toContain(
+      "If you already started from the previous copy, restart from the updated save.",
+    );
+  });
   it("builds a correction message without turn instructions", () => {
     const message = JSON.stringify(
       buildSaveReplacedNotificationMessage(

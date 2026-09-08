@@ -1,7 +1,4 @@
-import {
-  BadRequestException,
-  PayloadTooLargeException,
-} from '@nestjs/common';
+import { BadRequestException, PayloadTooLargeException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { GamesController } from '../src/games/games.controller';
 import { SaveFileUploadExceptionFilter } from '../src/games/support/save-file-upload-exception.filter';
@@ -30,7 +27,7 @@ describe('GamesController replaceSave', () => {
         'version-7',
         { user: { sub: 'user-1', shadowOverrideEnabled: true } } as never,
         replacementFile,
-        { contentHash: 'sha256:new' },
+        { contentHash: 'sha256:new', expectedSaveBaseline: 'campaign:1:2' },
       ),
     ).resolves.toEqual({ replaced: true });
 
@@ -39,7 +36,11 @@ describe('GamesController replaceSave', () => {
       'version-7',
       'user-1',
       replacementFile,
-      { contentHash: 'sha256:new', shadowOverrideEnabled: true },
+      {
+        contentHash: 'sha256:new',
+        expectedSaveBaseline: 'campaign:1:2',
+        shadowOverrideEnabled: true,
+      },
     );
   });
 

@@ -41,7 +41,7 @@ export function UserBadge({ name, image, isSignedIn }: UserBadgeProps) {
       <div className="flex flex-col leading-none">
         {isSignedIn ? (
           <>
-            <span className="text-[10px] uppercase tracking-[0.2em] text-orange-400/50 font-mono">
+            <span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-mono">
               Connected as
             </span>
             <span className="text-sm font-mono text-orange-300 truncate max-w-[160px]">
@@ -50,7 +50,7 @@ export function UserBadge({ name, image, isSignedIn }: UserBadgeProps) {
           </>
         ) : (
           <>
-            <span className="text-[10px] uppercase tracking-[0.2em] text-orange-400/50 font-mono">
+            <span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-mono">
               Identity
             </span>
             <span className="text-sm font-mono text-orange-400/60 tracking-widest">

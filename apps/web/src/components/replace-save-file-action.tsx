@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { TerminalActionConfirmationDialog } from "@/components/terminal-action-confirmation-dialog";
 
 type ReplaceSaveFileActionProps = {
+  saveBaseline?: string;
   gameNumber: number;
   fileVersionId: string;
   canonicalFileName: string;
@@ -12,6 +13,7 @@ type ReplaceSaveFileActionProps = {
 };
 
 export function ReplaceSaveFileAction({
+  saveBaseline,
   gameNumber,
   fileVersionId,
   canonicalFileName,
@@ -19,6 +21,8 @@ export function ReplaceSaveFileAction({
 }: ReplaceSaveFileActionProps) {
   const router = useRouter();
   const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [confirmationBaseline, setConfirmationBaseline] =
+    useState(saveBaseline);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -30,6 +34,7 @@ export function ReplaceSaveFileAction({
   }
 
   function openConfirmation() {
+    setConfirmationBaseline(saveBaseline);
     setSelectedFile(null);
     setErrorMessage(null);
     setConfirmationOpen(true);
@@ -42,6 +47,7 @@ export function ReplaceSaveFileAction({
 
     const formData = new FormData();
     formData.set("file", selectedFile, selectedFile.name);
+    formData.set("expectedSaveBaseline", confirmationBaseline ?? "");
 
     startTransition(async () => {
       const response = await fetch(
@@ -130,7 +136,7 @@ export function ReplaceSaveFileAction({
         </div>
       </TerminalActionConfirmationDialog>
       <button
-        className={`inline-flex h-9 items-center rounded-md border px-3 text-xs font-medium uppercase tracking-[0.18em] font-mono transition-colors ${isMostRecent ? "border-black bg-black/10 text-black hover:bg-black hover:text-orange-400" : "border-orange-400 bg-orange-400/10 text-orange-300 hover:bg-orange-400 hover:text-black"}`}
+        className={`inline-flex min-h-11 items-center rounded-md border px-3 text-xs font-medium uppercase tracking-[0.14em] font-mono text-orange-200 transition-colors hover:bg-orange-400 hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isMostRecent ? "border-orange-400 bg-orange-400/10" : "border-orange-400/60 bg-transparent"}`}
         type="button"
         onClick={openConfirmation}
       >

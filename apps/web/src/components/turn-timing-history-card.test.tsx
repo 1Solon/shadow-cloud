@@ -63,12 +63,24 @@ describe("TurnTimingHistoryCard", () => {
       ],
     });
 
-    const rows = within(screen.getByRole("table")).getAllByRole("row");
-    expect(rows[1]).toHaveClass("h-16");
+    const table = screen.getByRole("table");
+    const rows = within(table).getAllByRole("row");
+    const rowGroups = within(table).getAllByRole("rowgroup");
+    expect(rowGroups).toHaveLength(2);
+    expect(rowGroups[0]).toBe(table.querySelector("thead"));
+    expect(rowGroups[1]).toBe(table.querySelector("tbody"));
+    expect(within(rows[0]).getAllByRole("columnheader")).toHaveLength(6);
+    expect(within(rows[1]).getAllByRole("cell")).toHaveLength(6);
+    expect(within(rows[2]).getAllByRole("cell")).toHaveLength(6);
+    expect(rows[1]).toHaveClass(
+      "h-16",
+      "border-l-2",
+      "border-l-orange-400",
+      "bg-orange-400/10",
+      "text-orange-100",
+    );
     expect(rows[2]).toHaveClass("h-16");
-    expect(
-      within(rows[1]).getByText("Current turn: In progress"),
-    ).toBeVisible();
+    expect(within(rows[1]).getByText("Current turn")).toBeVisible();
     expect(within(rows[1]).getByText("1m")).toBeVisible();
     expect(within(rows[2]).getByText("30m")).toBeVisible();
 
@@ -249,15 +261,73 @@ describe("TurnTimingHistoryCard", () => {
 
     expect(region).toHaveAttribute("tabindex", "0");
     expect(region).toHaveClass("overflow-x-auto");
-    expect(table).toHaveClass("min-w-[64rem]");
+    expect(table).toHaveAttribute("role", "table");
+    expect(table.querySelector("thead")).toHaveAttribute("role", "rowgroup");
+    expect(table.querySelector("tbody")).toHaveAttribute("role", "rowgroup");
+    expect(table.querySelector("thead")).not.toHaveAttribute("aria-hidden");
+    expect(table.querySelector("thead")).not.toHaveAttribute("hidden");
+    expect(
+      Array.from(table.querySelectorAll("tr"), (row) =>
+        row.getAttribute("role"),
+      ),
+    ).toEqual(["row", "row", "row"]);
+    expect(
+      Array.from(table.querySelectorAll("thead th"), (header) =>
+        header.getAttribute("role"),
+      ),
+    ).toEqual([
+      "columnheader",
+      "columnheader",
+      "columnheader",
+      "columnheader",
+      "columnheader",
+      "columnheader",
+    ]);
+    expect(
+      Array.from(table.querySelectorAll("thead th"), (header) =>
+        header.getAttribute("scope"),
+      ).every((scope) => scope === "col"),
+    ).toBe(true);
     expect(within(table).getByText("Recent turn timing history")).toBe(
       table.querySelector("caption"),
     );
-    const roundHeader = within(table).getByRole("columnheader", {
-      name: "Round",
+    expect(table).toHaveClass(
+      "history-table",
+      "history-table--stacked",
+      "sm:min-w-[38rem]",
+    );
+    expect(
+      Array.from(table.querySelectorAll("tbody td"), (cell) =>
+        cell.getAttribute("data-label"),
+      ),
+    ).toEqual([
+      "Turn",
+      "Player",
+      "Timeline",
+      "Duration",
+      "Result",
+      "Reminders",
+      "Turn",
+      "Player",
+      "Timeline",
+      "Duration",
+      "Result",
+      "Reminders",
+    ]);
+    expect(
+      within(table).queryByRole("columnheader", { name: "Completed" }),
+    ).toBe(null);
+    const turnHeader = within(table).getByRole("columnheader", {
+      name: "Turn",
     });
-    expect(roundHeader).toHaveAttribute("scope", "col");
-    expect(roundHeader.closest("tr")).toHaveClass("h-12");
+    expect(turnHeader).toHaveAttribute("role", "columnheader");
+    expect(turnHeader).toHaveAttribute("scope", "col");
+    expect(turnHeader.closest("tr")).toHaveClass("h-10");
+    expect(
+      within(table)
+        .getAllByRole("cell")
+        .every((cell) => cell.hasAttribute("role")),
+    ).toBe(true);
 
     expect(
       table.querySelector('time[datetime="2026-07-10T10:00:00.000Z"]'),

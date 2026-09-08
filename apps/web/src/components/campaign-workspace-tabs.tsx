@@ -8,30 +8,35 @@ import {
   type ReactNode,
 } from "react";
 
-type WorkspaceTabId = "saves" | "timing" | "campaign" | "administration";
+type WorkspaceTabId =
+  "saves" | "timing" | "campaign" | "regimes" | "administration";
 
 export type CampaignWorkspaceTabsProps = {
   saves: ReactNode;
   timing: ReactNode;
   campaign: ReactNode;
+  regimes?: ReactNode;
   administration?: ReactNode;
 };
 
 const tabButtonClassName =
-  "h-11 shrink-0 whitespace-nowrap border-b-2 px-4 font-mono text-sm font-semibold uppercase tracking-[0.16em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset";
+  "h-10 shrink-0 whitespace-nowrap border-b-2 px-3 font-mono text-xs font-semibold uppercase tracking-[0.16em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:h-11 sm:px-4 sm:text-sm";
 
 export function CampaignWorkspaceTabs({
   saves,
   timing,
   campaign,
+  regimes,
   administration,
 }: CampaignWorkspaceTabsProps) {
   const baseId = useId();
   const [selectedTabId, setSelectedTabId] = useState<WorkspaceTabId>("saves");
+  const [mountedRegimes, setMountedRegimes] = useState(false);
   const tabRefs = useRef<Record<WorkspaceTabId, HTMLButtonElement | null>>({
     saves: null,
     timing: null,
     campaign: null,
+    regimes: null,
     administration: null,
   });
   const tabs: Array<{
@@ -42,6 +47,9 @@ export function CampaignWorkspaceTabs({
     { id: "saves", label: "Saves", content: saves },
     { id: "timing", label: "Timing", content: timing },
     { id: "campaign", label: "Campaign", content: campaign },
+    ...(regimes != null
+      ? [{ id: "regimes" as const, label: "Regimes", content: regimes }]
+      : []),
     ...(administration != null
       ? [
           {
@@ -59,8 +67,13 @@ export function CampaignWorkspaceTabs({
     setSelectedTabId("saves");
   }
 
-  function selectAndFocus(tabId: WorkspaceTabId) {
+  function selectTab(tabId: WorkspaceTabId) {
+    if (tabId === "regimes") setMountedRegimes(true);
     setSelectedTabId(tabId);
+  }
+
+  function selectAndFocus(tabId: WorkspaceTabId) {
+    selectTab(tabId);
     tabRefs.current[tabId]?.focus();
   }
 
@@ -111,12 +124,12 @@ export function CampaignWorkspaceTabs({
                 aria-selected={selected}
                 className={`${tabButtonClassName} ${
                   selected
-                    ? "border-orange-400 bg-orange-400 text-black"
+                    ? "border-orange-400 bg-orange-400/10 text-orange-100"
                     : "border-transparent text-orange-300 hover:border-orange-400/60 hover:bg-orange-400/10 hover:text-orange-200"
                 }`}
                 id={tabId}
                 key={tab.id}
-                onClick={() => setSelectedTabId(tab.id)}
+                onClick={() => selectTab(tab.id)}
                 onKeyDown={(event) => handleKeyDown(event, tabIndex)}
                 ref={(element) => {
                   tabRefs.current[tab.id] = element;
@@ -138,14 +151,14 @@ export function CampaignWorkspaceTabs({
         return (
           <div
             aria-labelledby={`${baseId}-${tab.id}-tab`}
-            className="min-w-0 pt-6 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+            className="min-w-0 pt-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:pt-6"
             hidden={!selected}
             id={`${baseId}-${tab.id}-panel`}
             key={tab.id}
             role="tabpanel"
             tabIndex={0}
           >
-            {tab.content}
+            {tab.id !== "regimes" || mountedRegimes ? tab.content : null}
           </div>
         );
       })}

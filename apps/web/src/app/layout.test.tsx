@@ -16,12 +16,14 @@ vi.mock("@/lib/shadow-override", () => ({
 const { default: RootLayout } = await import("./layout");
 
 describe("RootLayout", () => {
-  it("locks viewport shells to the document without body overscroll", async () => {
+  it("allows natural mobile scrolling and contains desktop shells", async () => {
     const layout = await RootLayout({ children: <div>Campaign</div> });
     const body = layout.props.children;
 
-    expect(body.props.className).toContain("h-full");
-    expect(body.props.className).toContain("overflow-hidden");
-    expect(body.props.className).not.toContain("min-h-full");
+    const classes = body.props.className.split(/\s+/);
+    expect(classes).toEqual(
+      expect.arrayContaining(["min-h-full", "md:h-full", "md:overflow-hidden"]),
+    );
+    expect(classes).not.toContain("overflow-hidden");
   });
 });

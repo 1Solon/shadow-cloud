@@ -18,6 +18,13 @@ import type { GameTurnRecord } from "@/lib/shadow-cloud-api";
 
 const defaultRefreshIntervalMs = 60 * 1000;
 const maxCompletedTurns = 25;
+const compactTimestampFormatter = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  timeZone: "UTC",
+});
 
 type TurnTimingHistoryCardProps = {
   openTurn: GameTurnRecord | null;
@@ -33,7 +40,11 @@ function TurnTimestamp({ timestamp }: { timestamp: string }) {
     return "Unknown";
   }
 
-  return <time dateTime={timestamp}>{formattedTimestamp}</time>;
+  return (
+    <time dateTime={timestamp} title={formattedTimestamp}>
+      {compactTimestampFormatter.format(new Date(timestamp))} UTC
+    </time>
+  );
 }
 
 function TurnTimingHistoryRow({
@@ -49,34 +60,75 @@ function TurnTimingHistoryRow({
     <tr
       className={
         isOpen
-          ? "h-16 border-b border-orange-400 bg-orange-400 text-black"
+          ? "h-16 border-b border-orange-400/30 border-l-2 border-l-orange-400 bg-orange-400/10 text-orange-100"
           : "h-16 border-b border-orange-400/20 bg-orange-400/5 text-orange-200"
       }
+      role="row"
     >
-      <td className="px-4 py-3 font-medium">{record.roundNumber}</td>
-      <td className="px-4 py-3">
-        {record.seatNumber == null ? "No seat" : `Seat ${record.seatNumber}`}
+      <td
+        className="px-3 py-2 align-top sm:px-4 sm:py-3"
+        data-label="Turn"
+        role="cell"
+      >
+        <span className="block font-medium">Round {record.roundNumber}</span>
+        <span className="mt-1 block text-xs text-orange-300/70">
+          {record.seatNumber == null ? "No seat" : `Seat ${record.seatNumber}`}
+        </span>
       </td>
-      <td className="px-4 py-3">{record.playerDisplayName}</td>
-      <td className="px-4 py-3">
-        <TurnTimestamp timestamp={record.startedAt} />
+      <td
+        className="break-words px-3 py-2 align-top sm:px-4 sm:py-3"
+        data-label="Player"
+        role="cell"
+      >
+        {record.playerDisplayName}
       </td>
-      <td className="px-4 py-3">
-        {record.endedAt ? (
-          <TurnTimestamp timestamp={record.endedAt} />
-        ) : (
-          "In progress"
-        )}
+      <td
+        className="px-3 py-2 align-top sm:px-4 sm:py-3"
+        data-label="Timeline"
+        role="cell"
+      >
+        <div className="space-y-1">
+          <div>
+            <span className="mr-2 text-[0.6rem] uppercase tracking-[0.14em] text-orange-300/60">
+              Started
+            </span>
+            <TurnTimestamp timestamp={record.startedAt} />
+          </div>
+          <div>
+            <span className="mr-2 text-[0.6rem] uppercase tracking-[0.14em] text-orange-300/60">
+              {record.endedAt ? "Completed" : "Status"}
+            </span>
+            {record.endedAt ? (
+              <TurnTimestamp timestamp={record.endedAt} />
+            ) : (
+              "In progress"
+            )}
+          </div>
+        </div>
       </td>
-      <td className="px-4 py-3 font-medium">
+      <td
+        className="px-3 py-2 align-top font-medium sm:px-4 sm:py-3"
+        data-label="Duration"
+        role="cell"
+      >
         {formatTurnDuration(getTurnDurationMs(record, now))}
       </td>
-      <td className="px-4 py-3">
+      <td
+        className="break-words px-3 py-2 align-top sm:px-4 sm:py-3"
+        data-label="Result"
+        role="cell"
+      >
         {isOpen
-          ? "Current turn: In progress"
+          ? "Current turn"
           : formatCompletionReason(record.completionReason)}
       </td>
-      <td className="px-4 py-3">{record.reminderCount}</td>
+      <td
+        className="px-3 py-2 align-top sm:px-4 sm:py-3"
+        data-label="Reminders"
+        role="cell"
+      >
+        {record.reminderCount}
+      </td>
     </tr>
   );
 }
@@ -107,13 +159,13 @@ export function TurnTimingHistoryCard({
 
   return (
     <Card className="overflow-hidden">
-      <CardHeader>
+      <CardHeader className="p-4 sm:p-5">
         <CardTitle>Turn timings:</CardTitle>
         <CardDescription>
           See how long the current and previous turns have taken.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-4 pt-0 sm:p-5 sm:pt-0">
         {hasTurns ? (
           <div
             aria-label="Recent turn timing history table"
@@ -121,37 +173,61 @@ export function TurnTimingHistoryCard({
             role="region"
             tabIndex={0}
           >
-            <table className="min-w-[64rem] w-full text-left text-sm font-mono">
+            <table
+              className="history-table history-table--stacked w-full text-left text-xs font-mono sm:min-w-[38rem] sm:text-sm"
+              role="table"
+            >
               <caption className="sr-only">Recent turn timing history</caption>
-              <thead className="border-b border-orange-400/30 bg-orange-400/10 text-xs uppercase tracking-[0.18em] text-orange-300/80">
-                <tr className="h-12">
-                  <th className="px-4 py-3" scope="col">
-                    Round
+              <thead
+                className="border-b border-orange-400/30 bg-orange-400/10 text-xs uppercase tracking-[0.18em] text-orange-300/80"
+                role="rowgroup"
+              >
+                <tr className="h-10" role="row">
+                  <th
+                    className="px-3 py-2 sm:px-4 sm:py-3"
+                    role="columnheader"
+                    scope="col"
+                  >
+                    Turn
                   </th>
-                  <th className="px-4 py-3" scope="col">
-                    Seat
-                  </th>
-                  <th className="px-4 py-3" scope="col">
+                  <th
+                    className="px-3 py-2 sm:px-4 sm:py-3"
+                    role="columnheader"
+                    scope="col"
+                  >
                     Player
                   </th>
-                  <th className="px-4 py-3" scope="col">
-                    Started
+                  <th
+                    className="px-3 py-2 sm:px-4 sm:py-3"
+                    role="columnheader"
+                    scope="col"
+                  >
+                    Timeline
                   </th>
-                  <th className="px-4 py-3" scope="col">
-                    Completed
-                  </th>
-                  <th className="px-4 py-3" scope="col">
+                  <th
+                    className="px-3 py-2 sm:px-4 sm:py-3"
+                    role="columnheader"
+                    scope="col"
+                  >
                     Duration
                   </th>
-                  <th className="px-4 py-3" scope="col">
+                  <th
+                    className="px-3 py-2 sm:px-4 sm:py-3"
+                    role="columnheader"
+                    scope="col"
+                  >
                     Result
                   </th>
-                  <th className="px-4 py-3" scope="col">
+                  <th
+                    className="px-3 py-2 sm:px-4 sm:py-3"
+                    role="columnheader"
+                    scope="col"
+                  >
                     Reminders
                   </th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody role="rowgroup">
                 {openTurn ? (
                   <TurnTimingHistoryRow isOpen now={now} record={openTurn} />
                 ) : null}

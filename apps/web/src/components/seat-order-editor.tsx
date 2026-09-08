@@ -20,6 +20,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useRouter } from "next/navigation";
+import type { AcceptedRosterOwner } from "@/components/accepted-roster";
 import {
   ManageSeatModal,
   type ManageSeatModalSeat,
@@ -56,13 +57,10 @@ type SeatOrderPlayer = {
 
 type SeatOrderEditorProps = {
   gameNumber: number;
-  players: SeatOrderPlayer[];
-  activePlayerEntryId: string | null;
-  seatOrderBaseline: SeatOrderBaseline;
+  roster: AcceptedRosterOwner;
   canEdit: boolean;
   presentation?: "card" | "configuration";
   onDirtyChange?: (isDirty: boolean) => void;
-  onSnapshotAccepted?: (snapshot: SeatOrderSnapshot) => void;
 };
 
 type PendingSeatAction = {
@@ -388,7 +386,7 @@ function SortableSeatRow({
 export function SeatOrderEditor(props: SeatOrderEditorProps) {
   return (
     <CampaignSeatOrderEditor
-      key={props.seatOrderBaseline?.campaignId}
+      key={props.roster.current.seatOrderBaseline?.campaignId}
       {...props}
     />
   );
@@ -396,13 +394,10 @@ export function SeatOrderEditor(props: SeatOrderEditorProps) {
 
 function CampaignSeatOrderEditor({
   gameNumber,
-  players,
-  activePlayerEntryId,
-  seatOrderBaseline,
+  roster,
   canEdit: hasEditPermission,
   presentation = "card",
   onDirtyChange,
-  onSnapshotAccepted,
 }: SeatOrderEditorProps) {
   const router = useRouter();
   const [permissionLost, setPermissionLost] = useState(false);
@@ -410,13 +405,6 @@ function CampaignSeatOrderEditor({
   const permissionVersionRef = useRef(0);
   const isConfiguration = presentation === "configuration";
   const [isCardEditing, setIsCardEditing] = useState(false);
-  const [acceptedSnapshot, setAcceptedSnapshot] = useState<
-    Pick<
-      SeatOrderSnapshot,
-      "players" | "activePlayerEntryId" | "seatOrderBaseline"
-    >
-  >({ players, activePlayerEntryId, seatOrderBaseline });
-  const [previousPlayers, setPreviousPlayers] = useState(players);
   const [draft, setDraft] = useState<{
     players: SeatOrderPlayer[];
     activePlayerEntryId: string | null;
@@ -457,21 +445,7 @@ function CampaignSeatOrderEditor({
     }),
   );
   const isMutating = isPending || requiresReload;
-  const incomingPlayersChanged = previousPlayers !== players;
-  if (incomingPlayersChanged) setPreviousPlayers(players);
-  // Keep authoritative state separate from a captured proposal, and never roll it back.
-  if (
-    seatOrderBaseline &&
-    seatOrderBaseline.campaignId ===
-      acceptedSnapshot.seatOrderBaseline?.campaignId &&
-    seatOrderBaseline.revision >= acceptedSnapshot.seatOrderBaseline.revision &&
-    (incomingPlayersChanged ||
-      seatOrderBaseline.revision !==
-        acceptedSnapshot.seatOrderBaseline.revision)
-  ) {
-    setAcceptedSnapshot({ players, activePlayerEntryId, seatOrderBaseline });
-  }
-  const latestRoster = acceptedSnapshot;
+  const latestRoster = roster.current;
   const draftBaseline = draft?.baseline ?? latestRoster;
   const draftBaselinePlayers = draftBaseline.players;
   const workingPlayers = draft?.players ?? draftBaselinePlayers;
@@ -539,34 +513,9 @@ function CampaignSeatOrderEditor({
   }
 
   function acceptSnapshot(snapshot: SeatOrderSnapshot | null | undefined) {
-    if (
-      !snapshot ||
-      !Array.isArray(snapshot.players) ||
-      !(
-        snapshot.activePlayerEntryId === null ||
-        typeof snapshot.activePlayerEntryId === "string"
-      ) ||
-      typeof snapshot.seatOrderBaseline?.campaignId !== "string" ||
-      snapshot.seatOrderBaseline.campaignId.trim().length === 0 ||
-      snapshot.seatOrderBaseline.campaignId !== snapshot.gameId ||
-      !Number.isSafeInteger(snapshot.seatOrderBaseline.revision) ||
-      snapshot.seatOrderBaseline.revision < 0
-    )
-      return "Loading the latest roster failed. Try again.";
-
-    if (snapshot.gameId !== seatOrderBaseline?.campaignId) {
-      return "The returned roster belongs to a different campaign. Open the original campaign from the campaign list before editing.";
-    }
-
-    setAcceptedSnapshot((current) =>
-      current.seatOrderBaseline &&
-      current.seatOrderBaseline.campaignId === snapshot.gameId &&
-      current.seatOrderBaseline.revision > snapshot.seatOrderBaseline.revision
-        ? current
-        : snapshot,
-    );
+    const error = roster.accept(snapshot);
+    if (error) return error;
     setDraft(null);
-    onSnapshotAccepted?.(snapshot);
     return null;
   }
 

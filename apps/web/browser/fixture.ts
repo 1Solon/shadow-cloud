@@ -8,13 +8,15 @@ import { encode } from "next-auth/jwt";
 import { startUpstream } from "./upstream";
 
 export const test = base.extend<{
+  privilegedNonOverlord: boolean;
   campaign: {
     url: string;
     upstream: Awaited<ReturnType<typeof startUpstream>>;
   };
 }>({
+  privilegedNonOverlord: [false, { option: true }],
   campaign: [
-    async ({ context }, runTest, testInfo) => {
+    async ({ context, privilegedNonOverlord }, runTest, testInfo) => {
       const source = path.resolve(__dirname, "..");
       const snapshot = await mkdtemp(
         path.join(tmpdir(), "shadow-cloud-browser-"),
@@ -53,6 +55,13 @@ export const test = base.extend<{
           "junction",
         );
         upstream = await startUpstream(secret);
+        if (privilegedNonOverlord) {
+          upstream.game.organizerId = "browser-successor";
+          upstream.game.organizerDisplayName = "Browser Successor";
+          upstream.game.players.forEach((player) => {
+            player.isOrganizer = player.userId === "browser-successor";
+          });
+        }
         child = fork(path.join(source, "browser/next-server.mjs"), [], {
           cwd: appRoot,
           execArgv: [],
@@ -105,7 +114,7 @@ export const test = base.extend<{
                 userId: "browser-overlord",
                 name: "Browser Overlord",
                 email: "overlord@example.invalid",
-                isShadowOverride: false,
+                isShadowOverride: privilegedNonOverlord,
               },
             }),
             url,

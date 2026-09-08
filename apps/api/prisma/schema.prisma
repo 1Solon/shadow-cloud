@@ -149,6 +149,7 @@ model Game {
   turnReminderRepeatHours Int                   @default(24)
   turnRemindersEnabled    Boolean               @default(true)
   turnRevision            Int                   @default(0)
+  saveRevision            Int                   @default(0)
   createdAt               DateTime              @default(now())
   updatedAt               DateTime              @updatedAt
   organizerId             String
@@ -221,6 +222,7 @@ model FileVersion {
   originalName       String
   versionNumber      Int
   contentHash        String?
+  contentRevision    Int       @default(0)
   idempotencyKey     String?
   clientOriginalName String?
   clientFileSize     Int?
@@ -246,6 +248,35 @@ model RegistrationRequest {
   requestedAt       DateTime                  @default(now())
   respondedAt       DateTime?
   game              Game                      @relation(fields: [gameId], references: [id], onDelete: Cascade)
+}
+
+// Paths never become canonical again: undo stages a verified byte-exact copy.
+model PasswordReset {
+  id                String   @id @default(cuid())
+  gameId            String
+  fileVersionId     String
+  sourcePath        String
+  sourceId          String
+  outputId          String
+  outputRevision    Int
+  saveRevision      Int
+  turnRecordId      String?
+  actorId           String
+  regimeId          String
+  regimeName        String
+  state             String   @default("ACTIVE")
+  createdAt         DateTime @default(now())
+  closedAt          DateTime?
+  cleanedAt         DateTime?
+
+  @@index([gameId, state])
+}
+
+model SaveCleanup {
+  id          String   @id @default(cuid())
+  storagePath String   @unique
+  dueAt       DateTime @default(now())
+  createdAt   DateTime @default(now())
 }
 
 model AuditEvent {

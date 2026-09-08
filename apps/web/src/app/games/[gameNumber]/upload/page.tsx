@@ -91,7 +91,10 @@ export default async function UploadPage({
             </CardContent>
           </Card>
         ) : isActivePlayer ? (
-          <UploadSaveForm gameNumber={game.gameNumber} />
+          <UploadSaveForm
+            gameNumber={game.gameNumber}
+            saveBaseline={game.saveBaseline}
+          />
         ) : (
           <Card>
             <CardHeader>
