@@ -121,7 +121,11 @@ export class GamesController {
     @Param('gameId') gameId: string,
     @Req() request: AuthenticatedRequest,
   ) {
-    return this.gamesService.inspectLatestSave(gameId, request.user?.sub);
+    return this.gamesService.inspectLatestSave(
+      gameId,
+      request.user?.sub,
+      request.user?.shadowOverrideEnabled === true,
+    );
   }
 
   @Post(':gameId/password-reset')
@@ -132,7 +136,12 @@ export class GamesController {
     @Req() request: AuthenticatedRequest,
     @Body() input: ResetPasswordInput,
   ) {
-    return this.gamesService.resetPassword(gameId, request.user?.sub, input);
+    return this.gamesService.resetPassword(
+      gameId,
+      request.user?.sub,
+      input,
+      request.user?.shadowOverrideEnabled === true,
+    );
   }
 
   @Get(':gameId/password-reset')
@@ -145,6 +154,7 @@ export class GamesController {
     return this.gamesService.getPasswordResetRecovery(
       gameId,
       request.user?.sub,
+      request.user?.shadowOverrideEnabled === true,
     );
   }
 
@@ -160,6 +170,7 @@ export class GamesController {
       gameId,
       request.user?.sub,
       input,
+      request.user?.shadowOverrideEnabled === true,
     );
   }
 

@@ -1,4 +1,5 @@
 import { createApiAccessToken, getServerAuthSession } from "@/auth";
+import { getShadowOverrideEnabled } from "@/lib/shadow-override";
 import type { SaveInspection } from "@/lib/save-inspection";
 
 const apiBaseUrl = process.env.SHADOW_CLOUD_API_URL ?? "http://localhost:3001";
@@ -10,6 +11,7 @@ const safeErrors = new Set([
   "This campaign has no save to inspect.",
   "Campaign not found.",
   "Only the current Overlord can inspect regimes.",
+  "Only the current Overlord or an enabled Shadow Override can inspect regimes.",
   "The latest save changed. Inspect it again.",
   "Save inspection is not configured on this server.",
   "The latest save is unavailable. Refresh and try again.",
@@ -24,7 +26,10 @@ export async function GET(
     Response.json({ error }, { status, headers });
   const session = await getServerAuthSession();
   if (!session?.user?.id) return fail("Sign in to inspect this save.", 401);
-  const token = await createApiAccessToken(session).catch(() => null);
+  const shadowOverrideEnabled = await getShadowOverrideEnabled();
+  const token = await createApiAccessToken(session, {
+    shadowOverrideEnabled,
+  }).catch(() => null);
   if (!token) return fail("API authentication is unavailable.", 503);
   const { gameNumber } = await context.params;
   try {

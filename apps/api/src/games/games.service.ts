@@ -107,28 +107,56 @@ export class GamesService {
     );
   }
 
-  inspectLatestSave(gameId: string, userId: string | undefined) {
-    return this.gamesFile.inspectLatestSave(gameId, userId);
+  inspectLatestSave(
+    gameId: string,
+    userId: string | undefined,
+    shadowOverrideEnabled = false,
+  ) {
+    return this.gamesFile.inspectLatestSave(
+      gameId,
+      userId,
+      shadowOverrideEnabled,
+    );
   }
 
   resetPassword(
     gameId: string,
     userId: string | undefined,
     input: Parameters<GamesFileService['resetPassword']>[2],
+    shadowOverrideEnabled = false,
   ) {
-    return this.gamesFile.resetPassword(gameId, userId, input);
+    return this.gamesFile.resetPassword(
+      gameId,
+      userId,
+      input,
+      shadowOverrideEnabled,
+    );
   }
 
-  getPasswordResetRecovery(gameId: string, userId: string | undefined) {
-    return this.gamesFile.getPasswordResetRecovery(gameId, userId);
+  getPasswordResetRecovery(
+    gameId: string,
+    userId: string | undefined,
+    shadowOverrideEnabled = false,
+  ) {
+    return this.gamesFile.getPasswordResetRecovery(
+      gameId,
+      userId,
+      shadowOverrideEnabled,
+    );
   }
 
   undoPasswordReset(
     gameId: string,
     userId: string | undefined,
     input: Parameters<GamesFileService['undoPasswordReset']>[2],
+    shadowOverrideEnabled = false,
   ) {
-    return this.gamesFile.undoPasswordReset(gameId, userId, input);
+    return this.gamesFile.undoPasswordReset(
+      gameId,
+      userId,
+      input,
+      shadowOverrideEnabled,
+    );
   }
 
   async downloadSave(gameId: string, fileVersionId: string) {

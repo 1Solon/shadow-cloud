@@ -15,8 +15,9 @@ is valid only for those bytes, not a persistent regime identifier or Cloud seat.
 Passwords, their lengths, object graphs, offsets and archive names are not returned.
 
 `GET /v1/games/:gameId/save-inspection` uses the authenticated actor and requires
-the current Overlord, without an uploader or Shadow Override exception. It reads
-the latest version from real storage with a size cap, then rechecks Overlord and
+the current Overlord or a privileged user with Shadow Override explicitly enabled.
+Uploader status alone does not authorize inspection. It reads
+the latest version from real storage with a size cap, then rechecks authorization and
 latest-file identity before returning. The web proxy also requires a session and
 both responses disable caching. No-save is 404, denied access is 401/403,
 superseded inspection is 409, format failures are 422 and unavailable storage or
@@ -183,7 +184,17 @@ later uploads are intentional and unchanged.
 
 ## Undo Contract (SOL-22)
 
-`GET /v1/games/:gameId/password-reset` is current-Overlord-only and no-store.
+`GET /v1/games/:gameId/password-reset` requires the current Overlord or an enabled,
+privileged Shadow Override and is no-store. The same authorization applies to
+reset and undo writes. The web proxy signs the server-read override setting;
+the API independently verifies the actor's privilege and rechecks it before
+committing writes. Audit and replacement records retain the actual actor, not
+the campaign Overlord's identity.
+Privilege checks use the existing AuthService role cache (60 seconds by default);
+Discord role revocation is not instantaneous. Web session role flags are refreshed
+at sign-in, so the API remains the authorization boundary even if older UI controls
+are still visible. Explicitly disabling Override removes access immediately on the
+next request using the updated setting.
 It returns `{ undo: null }` or `{ undo: { resetId, outputId, outputRevision,
 expectedSaveBaseline, regimeName } }`. Availability checks the latest file,
 revision, active turn record and actual source/output hashes, then rechecks

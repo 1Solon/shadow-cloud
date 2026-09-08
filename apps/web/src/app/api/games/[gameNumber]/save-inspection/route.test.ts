@@ -3,7 +3,11 @@ vi.mock("@/auth", () => ({
   getServerAuthSession: vi.fn(),
   createApiAccessToken: vi.fn(),
 }));
+vi.mock("@/lib/shadow-override", () => ({
+  getShadowOverrideEnabled: vi.fn().mockResolvedValue(false),
+}));
 import { createApiAccessToken, getServerAuthSession } from "@/auth";
+import { getShadowOverrideEnabled } from "@/lib/shadow-override";
 import { GET } from "./route";
 const request = () =>
   GET(new Request("http://localhost/api/games/1/save-inspection"), {
@@ -24,7 +28,59 @@ it("requires a session before reaching the API", async () => {
   vi.mocked(getServerAuthSession).mockResolvedValue(null);
   const fetch = vi.spyOn(globalThis, "fetch");
   expect((await request()).status).toBe(401);
+  expect(getShadowOverrideEnabled).not.toHaveBeenCalled();
+  expect(createApiAccessToken).not.toHaveBeenCalled();
   expect(fetch).not.toHaveBeenCalled();
+});
+it.each([true, false])(
+  "uses the trusted override setting %s, not request headers",
+  async (shadowOverrideEnabled) => {
+    await authenticate();
+    vi.mocked(getShadowOverrideEnabled).mockResolvedValue(
+      shadowOverrideEnabled,
+    );
+    const fetch = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(Response.json({ regimes: [] }));
+    const response = await GET(
+      new Request("http://localhost/api/games/1/save-inspection", {
+        headers: { shadowOverrideEnabled: String(!shadowOverrideEnabled) },
+      }),
+      { params: Promise.resolve({ gameNumber: "1" }) },
+    );
+    expect(response.status).toBe(200);
+    expect(createApiAccessToken).toHaveBeenCalledWith(
+      await getServerAuthSession(),
+      { shadowOverrideEnabled },
+    );
+    expect(fetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        headers: { authorization: expect.stringMatching(/^Bearer /) },
+      }),
+    );
+  },
+);
+it("does not reach the API when token creation fails", async () => {
+  await authenticate();
+  vi.mocked(createApiAccessToken).mockRejectedValue(new Error("unavailable"));
+  const fetch = vi.spyOn(globalThis, "fetch");
+  expect((await request()).status).toBe(503);
+  expect(fetch).not.toHaveBeenCalled();
+});
+it("preserves API authorization denials", async () => {
+  await authenticate();
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    Response.json(
+      { message: "Only the current Overlord can inspect regimes." },
+      { status: 403 },
+    ),
+  );
+  const response = await request();
+  expect(response.status).toBe(403);
+  expect(await response.json()).toEqual({
+    error: "Only the current Overlord can inspect regimes.",
+  });
 });
 it("forwards authorization without caching and returns only allowlisted metadata", async () => {
   await authenticate();

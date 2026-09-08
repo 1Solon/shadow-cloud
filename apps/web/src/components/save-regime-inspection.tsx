@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  useTransition,
-} from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import type { SaveInspection } from "@/lib/save-inspection";
 import {
   Card,
@@ -20,12 +14,12 @@ import { SavePasswordUndo } from "./save-password-undo";
 
 export function SaveRegimeInspection({
   gameNumber,
-  isOverlord,
+  canManagePasswords,
   hasSave,
   saveRevision,
 }: {
   gameNumber: number;
-  isOverlord: boolean;
+  canManagePasswords: boolean;
   hasSave: boolean;
   saveRevision?: string;
 }) {
@@ -34,7 +28,7 @@ export function SaveRegimeInspection({
     action: "reset" | "undo";
   } | null>(null);
   const clearSuccess = useCallback(() => setSuccess(null), []);
-  if (!isOverlord) return null;
+  if (!canManagePasswords) return null;
   return (
     <Card
       className="min-w-0 overflow-hidden font-mono text-sm text-orange-200"
@@ -89,50 +83,53 @@ function InspectionDraft({
   const inspectionControllerRef = useRef<AbortController | null>(null);
   const inspectionRequestRef = useRef(0);
 
-  const inspect = useCallback((clearSuccess = true) => {
-    inspectionControllerRef.current?.abort();
-    const controller = new AbortController();
-    const requestId = inspectionRequestRef.current + 1;
-    inspectionRequestRef.current = requestId;
-    setInspection(null);
-    setError(null);
-    setSelected(null);
-    setInspectionState("loading");
-    if (clearSuccess) onInspect();
-    startTransition(async () => {
-      try {
-        const response = await fetch(
-          `/api/games/${encodeURIComponent(String(gameNumber))}/save-inspection`,
-          { cache: "no-store", signal: controller.signal },
-        );
-        const payload = await response.json();
-        if (
-          controller.signal.aborted ||
-          requestId !== inspectionRequestRef.current
-        )
-          return;
-        if (!response.ok) {
-          setError(payload.error ?? "Save inspection failed.");
+  const inspect = useCallback(
+    (clearSuccess = true) => {
+      inspectionControllerRef.current?.abort();
+      const controller = new AbortController();
+      const requestId = inspectionRequestRef.current + 1;
+      inspectionRequestRef.current = requestId;
+      setInspection(null);
+      setError(null);
+      setSelected(null);
+      setInspectionState("loading");
+      if (clearSuccess) onInspect();
+      startTransition(async () => {
+        try {
+          const response = await fetch(
+            `/api/games/${encodeURIComponent(String(gameNumber))}/save-inspection`,
+            { cache: "no-store", signal: controller.signal },
+          );
+          const payload = await response.json();
+          if (
+            controller.signal.aborted ||
+            requestId !== inspectionRequestRef.current
+          )
+            return;
+          if (!response.ok) {
+            setError(payload.error ?? "Save inspection failed.");
+            setInspectionState("error");
+            return;
+          }
+          setInspection(payload);
+          setInspectionState("loaded");
+        } catch {
+          if (
+            controller.signal.aborted ||
+            requestId !== inspectionRequestRef.current
+          )
+            return;
+          setError("The save inspection request failed. Try again.");
           setInspectionState("error");
-          return;
+        } finally {
+          if (inspectionControllerRef.current === controller) {
+            inspectionControllerRef.current = null;
+          }
         }
-        setInspection(payload);
-        setInspectionState("loaded");
-      } catch {
-        if (
-          controller.signal.aborted ||
-          requestId !== inspectionRequestRef.current
-        )
-          return;
-        setError("The save inspection request failed. Try again.");
-        setInspectionState("error");
-      } finally {
-        if (inspectionControllerRef.current === controller) {
-          inspectionControllerRef.current = null;
-        }
-      }
-    });
-  }, [gameNumber, onInspect, startTransition]);
+      });
+    },
+    [gameNumber, onInspect, startTransition],
+  );
 
   useEffect(() => {
     if (!hasSave) return;

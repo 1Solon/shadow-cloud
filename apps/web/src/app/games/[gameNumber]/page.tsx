@@ -44,8 +44,10 @@ export default async function GameDetailPage({
   const isActivePlayer = Boolean(
     session?.user?.id && game.activePlayerUserId === session.user.id,
   );
-  const isOverlord = Boolean(
-    session?.user?.id && session.user.id === game.organizerId,
+  const canManagePasswords = Boolean(
+    session?.user?.id &&
+    (session.user.id === game.organizerId ||
+      (session.user.isShadowOverride && shadowOverrideEnabled)),
   );
   const canEditSeatOrder = Boolean(
     session?.user?.id &&
@@ -177,12 +179,12 @@ export default async function GameDetailPage({
           />
         }
         regimes={
-          isOverlord ? (
+          canManagePasswords ? (
             <SaveRegimeInspection
               key={game.id}
               saveRevision={`${game.fileVersions[0]?.id}:${game.fileVersions[0]?.contentRevision}`}
               gameNumber={game.gameNumber}
-              isOverlord={isOverlord}
+              canManagePasswords={canManagePasswords}
               hasSave={game.fileVersions.length > 0}
             />
           ) : undefined

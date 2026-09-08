@@ -30,7 +30,9 @@ const { GamesQueryService } =
 let directory: string;
 let storage: FileStorageService;
 let service: InstanceType<typeof GamesFileService>;
+const isUserShadowOverride = vi.fn(async (_userId: string) => false);
 beforeEach(async () => {
+  isUserShadowOverride.mockReset().mockResolvedValue(false);
   vi.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
   vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
   vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
@@ -40,7 +42,7 @@ beforeEach(async () => {
   vi.stubEnv('SHADOW_CLOUD_SAVE_ARCHIVE_KEY', archiveKey.toString('hex'));
   storage = new FileStorageService();
   service = new GamesFileService(
-    {} as never,
+    { isUserShadowOverride } as never,
     storage,
     new BotNotificationsService(),
   );
@@ -157,6 +159,124 @@ async function resetInput() {
     confirmed: true,
   };
 }
+
+it('enabled Shadow Override can inspect, reset, recover and undo without impersonating the Overlord', async () => {
+  await seed();
+  isUserShadowOverride.mockResolvedValue(true);
+  const inspection = await service.inspectLatestSave('1', 'player', true);
+  await service.resetPassword(
+    '1',
+    'player',
+    {
+      ...inspection,
+      regimeId: inspection.regimes[0].id,
+      password: 'NewSecret',
+      confirmed: true,
+    },
+    true,
+  );
+  expect(await fixture.db.passwordReset.findFirstOrThrow()).toMatchObject({
+    actorId: 'player',
+  });
+  const { undo } = await service.getPasswordResetRecovery('1', 'player', true);
+  expect(undo).not.toBeNull();
+  await service.undoPasswordReset(
+    '1',
+    'player',
+    { ...undo!, confirmed: true },
+    true,
+  );
+  expect(await service.getPasswordResetRecovery('1', 'player', true)).toEqual({
+    undo: null,
+  });
+  expect(
+    await fixture.db.game.findUniqueOrThrow({ where: { id: 'campaign' } }),
+  ).toMatchObject({ organizerId: 'overlord' });
+  expect(await fixture.db.auditEvent.findMany()).toEqual(
+    expect.arrayContaining([expect.objectContaining({ actorId: 'player' })]),
+  );
+});
+
+it.each([
+  { actor: 'player', enabled: true, privileged: false, status: 403 },
+  { actor: 'player', enabled: false, privileged: true, status: 403 },
+  { actor: undefined, enabled: true, privileged: true, status: 401 },
+])(
+  'denies all password operations without both authority and intent: %j',
+  async ({ actor, enabled, privileged, status }) => {
+    await seed();
+    const input = await resetInput();
+    await service.resetPassword('1', 'overlord', input);
+    const { undo } = await service.getPasswordResetRecovery('1', 'overlord');
+    isUserShadowOverride.mockResolvedValue(privileged);
+    for (const operation of [
+      () => service.inspectLatestSave('1', actor, enabled),
+      () => service.resetPassword('1', actor, input, enabled),
+      () => service.getPasswordResetRecovery('1', actor, enabled),
+      () =>
+        service.undoPasswordReset(
+          '1',
+          actor,
+          { ...undo!, confirmed: true },
+          enabled,
+        ),
+    ])
+      await expect(operation()).rejects.toMatchObject({ status });
+  },
+);
+
+it.each(['reset', 'undo'] as const)(
+  'revalidates override privilege inside the %s transaction and rolls back publication',
+  async (operation) => {
+    await seed();
+    const input = await resetInput();
+    if (operation === 'undo')
+      await service.resetPassword('1', 'overlord', input);
+    const { undo } = await service.getPasswordResetRecovery('1', 'overlord');
+    const before = await fixture.db.fileVersion.findUniqueOrThrow({
+      where: { id: 'latest' },
+    });
+    const gameBefore = await fixture.db.game.findUniqueOrThrow({
+      where: { id: 'campaign' },
+    });
+    isUserShadowOverride.mockResolvedValueOnce(true).mockResolvedValue(false);
+    await expect(
+      operation === 'reset'
+        ? service.resetPassword('1', 'player', input, true)
+        : service.undoPasswordReset(
+            '1',
+            'player',
+            { ...undo!, confirmed: true },
+            true,
+          ),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(isUserShadowOverride).toHaveBeenCalledTimes(2);
+    expect(
+      await fixture.db.fileVersion.findUniqueOrThrow({
+        where: { id: 'latest' },
+      }),
+    ).toEqual(before);
+    expect(
+      await fixture.db.game.findUniqueOrThrow({ where: { id: 'campaign' } }),
+    ).toEqual(gameBefore);
+  },
+);
+
+it.each(['inspection', 'recovery'] as const)(
+  'rechecks override privilege before returning %s',
+  async (operation) => {
+    await seed();
+    if (operation === 'recovery')
+      await service.resetPassword('1', 'overlord', await resetInput());
+    isUserShadowOverride.mockResolvedValueOnce(true).mockResolvedValue(false);
+    await expect(
+      operation === 'inspection'
+        ? service.inspectLatestSave('1', 'player', true)
+        : service.getPasswordResetRecovery('1', 'player', true),
+    ).rejects.toMatchObject({ status: 403 });
+    expect(isUserShadowOverride).toHaveBeenCalledTimes(2);
+  },
+);
 
 it('undo restores the byte-exact immediate source as a replacement and consumes recovery without changing the turn', async () => {
   const original = await seed();

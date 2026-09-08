@@ -13,7 +13,9 @@ afterEach(() => {
 it("uses the shared campaign card framing and heading styles", () => {
   const fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
-  render(<SaveRegimeInspection gameNumber={1} isOverlord hasSave={false} />);
+  render(
+    <SaveRegimeInspection gameNumber={1} canManagePasswords hasSave={false} />,
+  );
   expect(
     screen.getByRole("region", { name: "In-game regime inspection" }),
   ).toHaveClass(
@@ -73,7 +75,7 @@ it.each(["reset", "undo"])(
     const view = render(
       <SaveRegimeInspection
         gameNumber={1}
-        isOverlord
+        canManagePasswords
         hasSave
         saveRevision="file:1"
       />,
@@ -98,7 +100,7 @@ it.each(["reset", "undo"])(
     view.rerender(
       <SaveRegimeInspection
         gameNumber={1}
-        isOverlord
+        canManagePasswords
         hasSave
         saveRevision="file:2"
       />,
@@ -126,12 +128,12 @@ it("offers read-only inspection only to the Overlord and explains missing saves"
   const fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
   const view = render(
-    <SaveRegimeInspection gameNumber={1} isOverlord={false} hasSave />,
+    <SaveRegimeInspection gameNumber={1} canManagePasswords={false} hasSave />,
   );
   expect(screen.queryByRole("button")).not.toBeInTheDocument();
   expect(fetchMock).not.toHaveBeenCalled();
   view.rerender(
-    <SaveRegimeInspection gameNumber={1} isOverlord hasSave={false} />,
+    <SaveRegimeInspection gameNumber={1} canManagePasswords hasSave={false} />,
   );
   expect(
     screen.getByText("This campaign has no save to inspect."),
@@ -164,7 +166,7 @@ it("shows names, current marker and ineligible explanations without a password c
     ),
   );
   vi.stubGlobal("fetch", fetchMock);
-  render(<SaveRegimeInspection gameNumber={1} isOverlord hasSave />);
+  render(<SaveRegimeInspection gameNumber={1} canManagePasswords hasSave />);
   expect(
     await screen.findByRole("button", { name: "Edit Password" }),
   ).toBeInTheDocument();
@@ -198,7 +200,7 @@ it.each([403, 409, 422, 503])(
         ),
       ),
     );
-    render(<SaveRegimeInspection gameNumber={1} isOverlord hasSave />);
+    render(<SaveRegimeInspection gameNumber={1} canManagePasswords hasSave />);
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Inspect again.",
     );

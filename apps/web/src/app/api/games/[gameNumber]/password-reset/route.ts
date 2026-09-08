@@ -1,4 +1,5 @@
 import { createApiAccessToken, getServerAuthSession } from "@/auth";
+import { getShadowOverrideEnabled } from "@/lib/shadow-override";
 
 export async function GET(
   _request: Request,
@@ -10,7 +11,10 @@ export async function GET(
   const session = await getServerAuthSession();
   if (!session?.user?.id)
     return fail("Sign in to manage password recovery.", 401);
-  const token = await createApiAccessToken(session).catch(() => null);
+  const shadowOverrideEnabled = await getShadowOverrideEnabled();
+  const token = await createApiAccessToken(session, {
+    shadowOverrideEnabled,
+  }).catch(() => null);
   if (!token) return fail("API authentication is unavailable.", 503);
   const { gameNumber } = await context.params;
   try {
@@ -21,7 +25,7 @@ export async function GET(
     if (!response.ok)
       return fail(
         response.status === 403
-          ? "Only the current Overlord can manage password recovery."
+          ? "Only the current Overlord or an enabled Shadow Override can manage password recovery."
           : "Recovery is unavailable. Refresh the campaign and try again.",
         response.status,
       );
@@ -57,7 +61,10 @@ export async function POST(
     Response.json({ error }, { status, headers });
   const session = await getServerAuthSession();
   if (!session?.user?.id) return fail("Sign in to reset a password.", 401);
-  const token = await createApiAccessToken(session).catch(() => null);
+  const shadowOverrideEnabled = await getShadowOverrideEnabled();
+  const token = await createApiAccessToken(session, {
+    shadowOverrideEnabled,
+  }).catch(() => null);
   if (!token) return fail("API authentication is unavailable.", 503);
   const { gameNumber } = await context.params;
   let body;
@@ -101,7 +108,7 @@ export async function POST(
         response.status === 409
           ? "The campaign or latest save changed. Inspect it again before resetting."
           : response.status === 403
-            ? "Only the current Overlord can reset passwords."
+            ? "Only the current Overlord or an enabled Shadow Override can reset passwords."
             : "Password reset failed. Inspect the latest save and try again.",
         response.status,
       );

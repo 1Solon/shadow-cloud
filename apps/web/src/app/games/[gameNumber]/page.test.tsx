@@ -419,13 +419,13 @@ describe("GameDetailPage workspace composition", () => {
     expect(regimes?.key).toBe("game-1");
     expect(regimes?.props).toMatchObject({
       gameNumber: 42,
-      isOverlord: true,
+      canManagePasswords: true,
       hasSave: true,
       saveRevision: "file-newest:3",
     });
   });
 
-  it("only authorizes the Regimes tab for the campaign Overlord", async () => {
+  it("authorizes the Regimes tab for the campaign Overlord but not ordinary players", async () => {
     const overlordPage = await renderPage({
       session: { user: { id: "organizer-1", isShadowOverride: false } },
     });
@@ -446,6 +446,31 @@ describe("GameDetailPage workspace composition", () => {
     ) as ReactElement<ComponentProps<typeof CampaignWorkspaceTabs>>;
     expect(playerWorkspace.props.regimes).toBeUndefined();
   });
+
+  it.each([
+    [true, true, true],
+    [true, false, false],
+    [false, true, false],
+    [false, false, false],
+  ])(
+    "authorizes Regimes for override user=%s with enabled=%s: %s",
+    async (isShadowOverride, shadowOverrideEnabled, expected) => {
+      const page = await renderPage({
+        session: { user: { id: "admin-1", isShadowOverride } },
+        shadowOverrideEnabled,
+      });
+      const workspace = findElementByType(
+        page,
+        CampaignWorkspaceTabs,
+      ) as ReactElement<ComponentProps<typeof CampaignWorkspaceTabs>>;
+      const inspection = findElementByType(
+        workspace.props.regimes,
+        SaveRegimeInspection,
+      );
+      expect(inspection !== null).toBe(expected);
+      if (inspection) expect(inspection.props.canManagePasswords).toBe(true);
+    },
+  );
 
   it("composes the complete campaign data into one details workspace", async () => {
     const page = await renderPage();

@@ -17,6 +17,7 @@ export async function startUpstream(secret: string) {
       method: string;
       path: string;
       subject?: string;
+      shadowOverrideEnabled?: unknown;
       body?: unknown;
     }>;
   } = {
@@ -110,11 +111,15 @@ export async function startUpstream(secret: string) {
       }
       const isMetadata = method === "PATCH" && path === `${base}/metadata`;
       const isTransfer = method === "POST" && path === `${base}/transfer-host`;
-      if (!isMetadata && !isTransfer) {
+      const isInspection =
+        method === "GET" && path === `${base}/save-inspection`;
+      const isRecovery = method === "GET" && path === `${base}/password-reset`;
+      if (!isMetadata && !isTransfer && !isInspection && !isRecovery) {
         reply(404, { message: "Unknown fixture campaign or route." });
         return;
       }
       let subject: string | undefined;
+      let shadowOverrideEnabled: unknown;
       try {
         const { payload } = await jwtVerify(
           (request.headers.authorization ?? "").replace(/^Bearer /, ""),
@@ -122,8 +127,47 @@ export async function startUpstream(secret: string) {
           { algorithms: ["HS256"], requiredClaims: ["sub", "iat", "exp"] },
         );
         subject = payload.sub;
+        shadowOverrideEnabled = payload.shadowOverrideEnabled;
       } catch {
         reply(401, { message: "Invalid fixture API token." });
+        return;
+      }
+      if (isInspection || isRecovery) {
+        upstream.requests.push({
+          method,
+          path,
+          subject,
+          shadowOverrideEnabled,
+        });
+        // Fixture privilege is independent of the campaign's current Overlord.
+        if (
+          subject !== upstream.game.organizerId &&
+          !(subject === "browser-overlord" && shadowOverrideEnabled === true)
+        ) {
+          reply(403, {
+            message: "Only the current Overlord can inspect regimes.",
+          });
+          return;
+        }
+        reply(
+          200,
+          isInspection
+            ? {
+                fileVersionId: upstream.game.fileVersions[0]?.id,
+                sourceId: "synthetic-source",
+                expectedSaveBaseline: "synthetic-baseline",
+                regimes: [
+                  {
+                    id: "north",
+                    name: "North Reach",
+                    current: true,
+                    eligible: true,
+                    reason: null,
+                  },
+                ],
+              }
+            : { undo: null },
+        );
         return;
       }
       if (subject !== upstream.game.organizerId) {

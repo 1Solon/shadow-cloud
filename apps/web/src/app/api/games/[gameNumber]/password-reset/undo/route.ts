@@ -1,4 +1,5 @@
 import { createApiAccessToken, getServerAuthSession } from "@/auth";
+import { getShadowOverrideEnabled } from "@/lib/shadow-override";
 
 export async function POST(
   request: Request,
@@ -10,7 +11,10 @@ export async function POST(
   const session = await getServerAuthSession();
   if (!session?.user?.id)
     return fail("Sign in to manage password recovery.", 401);
-  const token = await createApiAccessToken(session).catch(() => null);
+  const shadowOverrideEnabled = await getShadowOverrideEnabled();
+  const token = await createApiAccessToken(session, {
+    shadowOverrideEnabled,
+  }).catch(() => null);
   if (!token) return fail("API authentication is unavailable.", 503);
   const { gameNumber } = await context.params;
   let body;
@@ -45,7 +49,7 @@ export async function POST(
         response.status === 409
           ? "This reset can no longer be undone. Refresh the campaign and download the latest save."
           : response.status === 403
-            ? "Only the current Overlord can manage password recovery."
+            ? "Only the current Overlord or an enabled Shadow Override can manage password recovery."
             : "Undo failed. Refresh the campaign and try again.",
         response.status,
       );

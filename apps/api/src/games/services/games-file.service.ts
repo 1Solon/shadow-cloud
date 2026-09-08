@@ -100,7 +100,23 @@ export class GamesFileService {
     }
   }
 
-  private async recoverySnapshot(gameId: string, userId: string | undefined) {
+  private async canManagePasswords(
+    organizerId: string,
+    userId: string,
+    shadowOverrideEnabled: boolean,
+  ) {
+    return (
+      organizerId === userId ||
+      (shadowOverrideEnabled === true &&
+        (await this.authService.isUserShadowOverride(userId)))
+    );
+  }
+
+  private async recoverySnapshot(
+    gameId: string,
+    userId: string | undefined,
+    shadowOverrideEnabled = false,
+  ) {
     if (!userId)
       throw new UnauthorizedException('Sign in to manage password recovery.');
     const game = await prisma.game.findFirst({
@@ -115,9 +131,15 @@ export class GamesFileService {
       },
     });
     if (!game) throw new NotFoundException('Campaign not found.');
-    if (game.organizerId !== userId)
+    if (
+      !(await this.canManagePasswords(
+        game.organizerId,
+        userId,
+        shadowOverrideEnabled,
+      ))
+    )
       throw new ForbiddenException(
-        'Only the current Overlord can manage password recovery.',
+        'Only the current Overlord or an enabled Shadow Override can manage password recovery.',
       );
     const file = game.fileVersions[0];
     const reset = file
@@ -135,8 +157,16 @@ export class GamesFileService {
     return { game, file, reset };
   }
 
-  async getPasswordResetRecovery(gameId: string, userId: string | undefined) {
-    const { game, file, reset } = await this.recoverySnapshot(gameId, userId);
+  async getPasswordResetRecovery(
+    gameId: string,
+    userId: string | undefined,
+    shadowOverrideEnabled = false,
+  ) {
+    const { game, file, reset } = await this.recoverySnapshot(
+      gameId,
+      userId,
+      shadowOverrideEnabled,
+    );
     if (!reset) return { undo: null };
     const source = await this.readSave(reset.sourcePath);
     const output = await this.readSave(file.storagePath);
@@ -144,7 +174,11 @@ export class GamesFileService {
       `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
     if (hash(source) !== reset.sourceId || hash(output) !== reset.outputId)
       return { undo: null };
-    const current = await this.recoverySnapshot(gameId, userId);
+    const current = await this.recoverySnapshot(
+      gameId,
+      userId,
+      shadowOverrideEnabled,
+    );
     if (
       current.reset?.id !== reset.id ||
       saveBaseline(current.game) !== saveBaseline(game) ||
@@ -169,8 +203,13 @@ export class GamesFileService {
     gameId: string,
     userId: string | undefined,
     input: UndoPasswordResetInput,
+    shadowOverrideEnabled = false,
   ) {
-    const { game, file, reset } = await this.recoverySnapshot(gameId, userId);
+    const { game, file, reset } = await this.recoverySnapshot(
+      gameId,
+      userId,
+      shadowOverrideEnabled,
+    );
     const conflict = () =>
       new ConflictException(
         'This reset can no longer be undone. Refresh the campaign and download the latest save.',
@@ -213,13 +252,23 @@ export class GamesFileService {
         const fenced = await tx.game.updateMany({
           where: {
             id: game.id,
-            organizerId: userId,
+            organizerId: game.organizerId,
             turnRevision: game.turnRevision,
             saveRevision: game.saveRevision,
           },
           data: { saveRevision: { increment: 1 } },
         });
         if (!fenced.count) throw conflict();
+        if (
+          !(await this.canManagePasswords(
+            game.organizerId,
+            userId!,
+            shadowOverrideEnabled,
+          ))
+        )
+          throw new ForbiddenException(
+            'Password recovery permission was lost.',
+          );
         const current = await tx.fileVersion.findFirst({
           where: { gameId: game.id },
           orderBy: { versionNumber: 'desc' },
@@ -321,6 +370,7 @@ export class GamesFileService {
       await lease.discard();
       if (
         error instanceof ConflictException ||
+        error instanceof ForbiddenException ||
         error instanceof ServiceUnavailableException
       )
         throw error;
@@ -336,6 +386,7 @@ export class GamesFileService {
     gameId: string,
     userId: string | undefined,
     input: ResetPasswordInput,
+    shadowOverrideEnabled = false,
   ) {
     if (!userId)
       throw new UnauthorizedException('Sign in to reset a password.');
@@ -351,9 +402,15 @@ export class GamesFileService {
       },
     });
     if (!game) throw new NotFoundException('Campaign not found.');
-    if (game.organizerId !== userId)
+    if (
+      !(await this.canManagePasswords(
+        game.organizerId,
+        userId,
+        shadowOverrideEnabled,
+      ))
+    )
       throw new ForbiddenException(
-        'Only the current Overlord can reset passwords.',
+        'Only the current Overlord or an enabled Shadow Override can reset passwords.',
       );
     if (!input || input.confirmed !== true)
       throw new BadRequestException(
@@ -409,13 +466,21 @@ export class GamesFileService {
         const fenced = await tx.game.updateMany({
           where: {
             id: game.id,
-            organizerId: userId,
+            organizerId: game.organizerId,
             turnRevision: game.turnRevision,
             saveRevision: game.saveRevision,
           },
           data: { saveRevision: { increment: 1 } },
         });
         if (!fenced.count) throw conflict();
+        if (
+          !(await this.canManagePasswords(
+            game.organizerId,
+            userId,
+            shadowOverrideEnabled,
+          ))
+        )
+          throw new ForbiddenException('Password reset permission was lost.');
         const current = await tx.fileVersion.findFirst({
           where: { gameId: game.id },
           orderBy: { versionNumber: 'desc' },
@@ -512,6 +577,7 @@ export class GamesFileService {
       await lease.discard();
       if (
         error instanceof ConflictException ||
+        error instanceof ForbiddenException ||
         error instanceof ServiceUnavailableException
       )
         throw error;
@@ -529,7 +595,11 @@ export class GamesFileService {
     private readonly botNotifications: BotNotificationsService,
   ) {}
 
-  async inspectLatestSave(gameId: string, userId: string | undefined) {
+  async inspectLatestSave(
+    gameId: string,
+    userId: string | undefined,
+    shadowOverrideEnabled = false,
+  ) {
     if (!userId)
       throw new UnauthorizedException('Sign in to inspect this save.');
     const game = await prisma.game.findFirst({
@@ -547,9 +617,15 @@ export class GamesFileService {
       },
     });
     if (!game) throw new NotFoundException('Campaign not found.');
-    if (game.organizerId !== userId)
+    if (
+      !(await this.canManagePasswords(
+        game.organizerId,
+        userId,
+        shadowOverrideEnabled,
+      ))
+    )
       throw new ForbiddenException(
-        'Only the current Overlord can inspect regimes.',
+        'Only the current Overlord or an enabled Shadow Override can inspect regimes.',
       );
     const file = game.fileVersions[0];
     if (!file)
@@ -605,9 +681,16 @@ export class GamesFileService {
         },
       },
     });
-    if (!current || current.organizerId !== userId)
+    if (
+      !current ||
+      !(await this.canManagePasswords(
+        current.organizerId,
+        userId,
+        shadowOverrideEnabled,
+      ))
+    )
       throw new ForbiddenException(
-        'Only the current Overlord can inspect regimes.',
+        'Only the current Overlord or an enabled Shadow Override can inspect regimes.',
       );
     if (
       current.fileVersions[0]?.id !== file.id ||
