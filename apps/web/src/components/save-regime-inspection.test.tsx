@@ -116,7 +116,7 @@ it.each(["reset", "undo"])(
       ).toBeVisible();
     } else {
       expect(
-        await screen.findByRole("button", { name: "Refresh", exact: true }),
+        await screen.findByRole("button", { name: "Refresh" }),
       ).toBeEnabled();
     }
   },
@@ -168,9 +168,7 @@ it("shows names, current marker and ineligible explanations without a password c
   expect(
     await screen.findByRole("button", { name: "Edit Password" }),
   ).toBeInTheDocument();
-  expect(
-    screen.getByRole("button", { name: "Refresh", exact: true }),
-  ).toBeEnabled();
+  expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled();
   expect(
     screen.queryByRole("button", { name: "Inspect regimes" }),
   ).not.toBeInTheDocument();
