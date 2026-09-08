@@ -16,6 +16,15 @@ A position in a campaign's turn order that can be occupied by a player or left o
 **Roster**:
 A campaign's seats, their order, and their occupants.
 
+**Regime**:
+A nation inside a Shadow Empire game, controlled by a human or the game AI. A regime is distinct from a Shadow Cloud seat and the player occupying that seat.
+
+**In-game password**:
+The password protecting access to a human-controlled regime inside Shadow Empire, distinct from authentication to Shadow Cloud.
+
+**In-game password reset**:
+An Overlord-authorized replacement of a human-controlled regime's in-game password without requiring the old password or the affected player's approval.
+
 **Seat Order draft**:
 A proposed change to a campaign's roster or active seat, based on the campaign state presented when the draft was loaded.
 
