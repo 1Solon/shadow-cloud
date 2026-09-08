@@ -1,8 +1,10 @@
 # Password Reset Release Acceptance
 
 [SOL-24](https://linear.app/1solon/issue/SOL-24) is the release gate for
-[SOL-18](https://linear.app/1solon/issue/SOL-18). **Human acceptance is pending.**
-Passing automation does not authorize deployment or closing either issue.
+[SOL-18](https://linear.app/1solon/issue/SOL-18). **Acceptance signed off with
+explicit limitations on 2026-09-08.** See the final sign-off below. Earlier
+pending/not-run statements describe historical checkpoints, not current status.
+This sign-off does not authorize deployment or closing the parent specification.
 
 ## Evidence Boundaries
 
@@ -185,3 +187,98 @@ with **570/570 tests in 35 files passing**; unchanged web, bot and desktop tasks
 reused the successful results above. Final aggregate: **1,153/1,153 tests in
 93 files passing**, with three package cache hits. Lint passed all three tasks
 (API uncached, web/bot cached). Human acceptance remains pending.
+
+## Connected Acceptance Evidence (2026-09-08)
+
+This checkpoint used an isolated synthetic campaign/API/web/desktop runtime. It
+did not use a real campaign, credential, archive key, production service or real
+Discord destination. A freshly generated synthetic archive key was used.
+
+- Computer use exercised the actual browser campaign page against the isolated
+  API: inspection identified the current eligible regime and explained the
+  unprotected regime's ineligibility; explicit target/restart confirmation
+  submitted the reset; success survived refresh. The browser undo warning and
+  confirmation restored the immediate source byte-exactly, retaining file identity
+  and all turn state. The local receiver recorded one reset and one undo event
+  without the synthetic reset password. The recovery worker completed cleanup.
+- With synthetic unfinished local work present, computer-operated native sync
+  displayed the local-preservation and restart warning. Hash checks confirmed no
+  local overwrite, upload, new file version or turn advancement.
+
+- Native desktop recovery for the 2401 current campaign was completed after the
+  reset and immediate undo: the unfinished local save was preserved outside the
+  campaign directory, Resume+Sync obtained the collision-suffixed revision 2
+  download, and sync was paused again. The downloaded bytes matched the undone
+  canonical artifact; the older baseline and preserved unfinished work remained
+  unchanged.
+- The 2402 non-current `North Reach` synthetic campaign was reset by the
+  `Test Overlord` and returned HTTP 201. Its unauthenticated download returned
+  canonical bytes. The player received HTTP 403 for inspection and reset.
+- Malformed and unsupported synthetic saves returned HTTP 422 for both
+  inspection and reset, with API state and storage unchanged.
+- One explicit generic replacement returned HTTP 200, superseded the reset's
+  undo, and completed recovery cleanup. Replaying the old undo returned HTTP 409
+  without changing the latest bytes, file revision or turn state.
+- The 2402 notification receiver captured two events (reset and generic
+  replacement); neither contained any of the known synthetic password values.
+  The turn remained round 24, seat 2, `Test Player`, with turn revision 0.
+
+This establishes connected service and desktop-sync behavior for the tested
+synthetic fixtures only. It does not establish that an in-game login accepts or
+rejects a reset value, does not establish compatibility with any game build, and
+does not claim a full replay. The notification check used a local receiver, not
+real Discord. The original Human Matrix is the initial checkpoint, not the latest
+status: subsequent user observations are recorded below. The full matrix has not
+been completed.
+
+Private evidence is retained outside the checkout at the operator's isolated
+runtime and is not attached to Linear. No production change or commit was made.
+
+## Subsequent Human Observations
+
+The user tested private copies in Shadow Empire and explicitly reported:
+
+- The initial current-regime reset loaded and accepted its new password.
+- Both shorter and longer current-regime replacements loaded, accepted their new
+  passwords, and retained them after save/reload.
+- On separate fresh loads of both variants, the prior known test password was
+  rejected and the respective replacement succeeded.
+- The API-generated undo output loaded and restored known baseline access.
+- The non-current target was reached by playing onward and accepted its new
+  password.
+
+No credentials or real campaign identifiers are retained in this record. The game
+build remains unknown. Non-current old-password rejection and persistence after
+returning to the target on a later round were not verified. The user explicitly
+judged the accumulated game evidence sufficient and declined replaying all players
+solely to return to that regime; later-round replay is therefore an accepted
+verification gap, not a passed test. Boundary-character/length coverage and broad
+unrelated-state comparisons beyond the tested cases are not claimed.
+
+Together these observations establish the tested game behaviors and isolated
+connected workflow, not universal build compatibility or real Discord delivery.
+The final disposition of the remaining release criteria is recorded below;
+the parent specification is not automatically closed.
+
+## Acceptance Sign-off (2026-09-08)
+
+After reviewing the human observations and connected checks, the user explicitly
+approved committing this evidence and closing SOL-24 with the stated limitations.
+Completion is based on those observations and accepted verification gaps, not a
+claim that every original matrix cell passed.
+
+- Game build/version remains unknown; compatibility is limited to the tested
+  installation and format evidence, not all Shadow Empire versions.
+- Exhaustive character/length-boundary testing, non-current old-password
+  rejection, broad unrelated-state comparisons, and returning to the non-current
+  regime after a full round are not claimed. The user accepted the accumulated
+  evidence rather than requiring further full-round replay.
+- Notification payload/delivery checks used an isolated local receiver, not real
+  Discord. Real Discord delivery is deferred to a disposable-campaign rollout
+  smoke test; it is not represented as verified here.
+
+Deployment is separate: apply the revision/recovery migrations, provision the
+archive key privately, and coordinate API/web/desktop updates because older
+clients do not supply the required save baseline. No deployment, push, or parent
+closure is authorized by this sign-off. No saves, keys, tokens, or test passwords
+are included in this evidence commit.
