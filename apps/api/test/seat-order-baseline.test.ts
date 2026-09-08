@@ -103,11 +103,12 @@ beforeEach(async () => {
   });
   mutations = new TurnMutationsService(fixture.db, new TurnRecordsService(), {
     fileStorage: {
-      stageUpload: async () => ({
-        fileName: 'turn.se1',
-        storagePath: '/test/turn.se1',
-      }),
-      removeFile: async () => {},
+      stageUpload: async (input) => {
+        const storagePath = '/test/turn.se1';
+        await input.prepare?.(storagePath);
+        return { fileName: 'turn.se1', storagePath };
+      },
+      removeFileOrThrow: async () => {},
     },
   });
 });

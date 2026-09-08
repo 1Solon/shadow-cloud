@@ -12,6 +12,7 @@ import {
   trimFileHistory,
 } from '../games-domain';
 import { FileStorageService } from '../file-storage.service';
+import { saveBaseline } from '../support/save-baseline';
 import { buildCanonicalThreadName } from '../support/game-configuration.helpers';
 import { buildGameDetailFileVersionPayload } from '../support/game-detail-file-version-payload';
 import { buildGameIdentifierWhere } from '../support/game-lookup.helpers';
@@ -138,6 +139,7 @@ export class GamesQueryService {
 
       return {
         id: game.id,
+        saveBaseline: saveBaseline(game),
         slug: game.slug,
         gameNumber: game.gameNumber,
         name: game.name,
@@ -310,6 +312,7 @@ export class GamesQueryService {
       organizerId: game.organizerId,
       organizerDisplayName: game.organizer.displayName,
       seatOrderBaseline: { campaignId: game.id, revision: game.turnRevision },
+      saveBaseline: saveBaseline(game),
       playerCount: game.playerCount,
       hasAiPlayers: game.hasAiPlayers,
       dlcMode: game.dlcMode,

@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/card";
 
 type SaveUploadCardProps = {
+  saveBaseline?: string;
   activePlayerDisplayName: string;
   gameNumber: number;
   isActivePlayer: boolean;
@@ -15,6 +16,7 @@ type SaveUploadCardProps = {
 };
 
 export function SaveUploadCard({
+  saveBaseline,
   activePlayerDisplayName,
   gameNumber,
   isActivePlayer,
@@ -30,7 +32,7 @@ export function SaveUploadCard({
       </CardHeader>
       <CardContent>
         {isActivePlayer ? (
-          <UploadSaveForm gameNumber={gameNumber} />
+          <UploadSaveForm gameNumber={gameNumber} saveBaseline={saveBaseline} />
         ) : (
           <div className="rounded-lg border border-orange-400/20 bg-orange-400/5 px-4 py-4 text-sm text-orange-300 font-mono">
             {isSignedIn

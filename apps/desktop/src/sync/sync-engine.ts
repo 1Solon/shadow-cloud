@@ -8,6 +8,9 @@ import {
   type LocalSaveFile,
 } from "./sync-files";
 
+const replacementGuidance =
+  "The latest save changed. Your local files have been preserved. Pause sync and move unfinished saves outside the campaign folder, then sync again to obtain the updated save, or open the campaign page and download it. Stop and restart the current turn from the updated save. Uploading a turn played from the old copy could undo this password reset.";
+
 export type GameListItem = {
   id: string;
   slug: string;
@@ -20,6 +23,7 @@ export type GameListItem = {
 };
 
 export type GameDetail = {
+  saveBaseline?: string;
   id: string;
   gameNumber: number;
   slug: string;
@@ -35,12 +39,16 @@ export type GameDetail = {
     uploadedById: string;
     uploadedByDisplayName: string;
     contentHash?: string | null;
+    contentRevision?: number;
     idempotencyKey?: string | null;
     replacedAt?: string | null;
   }>;
 };
 
 export type CampaignSyncState = {
+  conflictedUploads?: Record<string, string>;
+  // Retain conflicts persisted before per-fingerprint tracking.
+  conflictedUpload?: { fingerprint: string; message: string };
   gameNumber?: number;
   name?: string;
   roundNumber?: number;
@@ -56,6 +64,7 @@ export type CampaignSyncState = {
   lastUploadedFileVersionId?: string;
   lastDownloadedFileVersionId?: string;
   lastDownloadedFileReplacedAt?: string | null;
+  lastDownloadedContentRevision?: number;
   needsDecision?: {
     reason:
       | "remote-advanced-before-local-upload"
@@ -107,6 +116,7 @@ export type SyncAdapters = {
       expectedActivePlayerUserId: string | null;
       expectedRoundNumber: number;
       expectedLatestFileVersionId: string | null;
+      expectedSaveBaseline?: string;
     },
   ) => Promise<{
     fileVersionId: string;
@@ -195,6 +205,9 @@ function isSameRemoteRevision(
 ) {
   return (
     campaignState.lastDownloadedFileVersionId === remoteFile.id &&
+    (remoteFile.contentRevision === undefined ||
+      campaignState.lastDownloadedContentRevision ===
+        remoteFile.contentRevision) &&
     (campaignState.lastDownloadedFileReplacedAt ?? null) ===
       (remoteFile.replacedAt ?? null)
   );
@@ -235,11 +248,6 @@ async function downloadRemoteSave(input: {
     new Set(await adapters.listExistingFileNames(campaignDirectoryPath)),
   );
 
-  await adapters.writeFileAtomically(
-    campaignDirectoryPath,
-    fileName,
-    download.bytes,
-  );
   const contentHash = await createFileFingerprint({
     name: fileName,
     path: joinPath(campaignDirectoryPath, fileName),
@@ -247,6 +255,16 @@ async function downloadRemoteSave(input: {
     size: download.bytes.byteLength,
     bytes: download.bytes,
   });
+  if (remoteFile.contentHash && remoteFile.contentHash !== contentHash) {
+    throw new Error(
+      "The downloaded save changed or failed verification. No local files were changed. Sync again to obtain the latest save.",
+    );
+  }
+  await adapters.writeFileAtomically(
+    campaignDirectoryPath,
+    fileName,
+    download.bytes,
+  );
   const uploadedFingerprints = new Set(
     campaignState.uploadedFingerprints ?? [],
   );
@@ -255,7 +273,11 @@ async function downloadRemoteSave(input: {
   campaignState.uploadedFingerprints = [...uploadedFingerprints];
   campaignState.lastDownloadedFileVersionId = remoteFile.id;
   campaignState.lastDownloadedFileReplacedAt = remoteFile.replacedAt ?? null;
-  campaignState.status = getDownloadedStatus(remoteFileName);
+  campaignState.lastDownloadedContentRevision = remoteFile.contentRevision;
+  campaignState.status =
+    fileName === remoteFileName
+      ? getDownloadedStatus(remoteFileName)
+      : `Downloaded ${fileName}. Use this updated save before continuing.`;
   addLedgerEntry(campaignState, {
     id: createLedgerId({
       gameId,
@@ -315,6 +337,62 @@ async function syncCampaign(input: {
   } catch (error) {
     campaignState.error = getErrorMessage(error, "Could not rename campaign");
     await adapters.ensureDir(campaignDirectoryPath);
+  }
+
+  // Replacements retain the uploader and file ID, including after reset/undo.
+  // Check all local bytes, not timestamps, before accepting a new revision.
+  if (
+    latestRemoteFile &&
+    !isSameRemoteRevision(previousCampaignState, latestRemoteFile) &&
+    ((latestRemoteFile.contentRevision ?? 0) > 0 ||
+      latestRemoteFile.replacedAt != null ||
+      latestRemoteFile.id === previousCampaignState.lastDownloadedFileVersionId)
+  ) {
+    const pendingSave = await chooseNewestPendingSave(
+      await adapters.listLocalSaves(campaignDirectoryPath),
+      new Set(previousCampaignState.uploadedFingerprints ?? []),
+    );
+    if (pendingSave) {
+      campaignState.conflictedUploads = {
+        ...campaignState.conflictedUploads,
+        [pendingSave.fingerprint]: replacementGuidance,
+      };
+      campaignState.status = "Needs your decision";
+      campaignState.error = replacementGuidance;
+      campaignState.needsDecision = {
+        reason: "remote-advanced-before-local-upload",
+        localFileName: pendingSave.file.name,
+        remoteFileVersionId: latestRemoteFile.id,
+        message: replacementGuidance,
+      };
+      addLedgerEntry(campaignState, {
+        id: createLedgerId({
+          gameId: game.id,
+          direction: "upload",
+          contentHash: pendingSave.fingerprint,
+        }),
+        direction: "upload",
+        status: "needs-decision",
+        contentHash: pendingSave.fingerprint,
+        fileName: pendingSave.file.name,
+        fileVersionId: latestRemoteFile.id,
+        retryCount: 0,
+        lastError: replacementGuidance,
+        updatedAt: timestamp,
+      });
+      return campaignState;
+    }
+    await downloadRemoteSave({
+      token: state.token!,
+      gameId: game.id,
+      gameNumber: detail.gameNumber,
+      campaignDirectoryPath,
+      campaignState,
+      remoteFile: latestRemoteFile,
+      timestamp,
+      adapters,
+    });
+    return campaignState;
   }
 
   if (detail.activePlayerUserId === currentUserId) {
@@ -382,12 +460,18 @@ async function syncCampaign(input: {
           previousCampaignState.lastDownloadedFileVersionId) &&
       !isSameRemoteRevision(previousCampaignState, latestRemoteFile)
     ) {
+      campaignState.conflictedUploads = {
+        ...campaignState.conflictedUploads,
+        [pendingSave.fingerprint]: replacementGuidance,
+      };
       campaignState.status = "Needs your decision";
       campaignState.needsDecision = {
         reason: "remote-advanced-before-local-upload",
         localFileName: pendingSave.file.name,
         remoteFileVersionId: latestRemoteFile.id,
+        message: replacementGuidance,
       };
+      campaignState.error = replacementGuidance;
       addLedgerEntry(campaignState, {
         id: createLedgerId({
           gameId: game.id,
@@ -414,6 +498,8 @@ async function syncCampaign(input: {
       campaignState.lastDownloadedFileVersionId = latestRemoteFile.id;
       campaignState.lastDownloadedFileReplacedAt =
         latestRemoteFile.replacedAt ?? null;
+      campaignState.lastDownloadedContentRevision =
+        latestRemoteFile.contentRevision;
       campaignState.status = "Local save already matches latest remote";
       addLedgerEntry(campaignState, {
         id: createLedgerId({
@@ -433,11 +519,18 @@ async function syncCampaign(input: {
     }
 
     if (latestRemoteFile && !latestRemoteFile.contentHash) {
+      const message =
+        "The remote save history could not be verified. Your local files have been preserved. Review the latest save before uploading again.";
+      campaignState.conflictedUploads = {
+        ...campaignState.conflictedUploads,
+        [pendingSave.fingerprint]: message,
+      };
       campaignState.status = "Needs your decision";
       campaignState.needsDecision = {
         reason: "unverified-remote-history-before-local-upload",
         localFileName: pendingSave.file.name,
         remoteFileVersionId: latestRemoteFile.id,
+        message,
       };
       addLedgerEntry(campaignState, {
         id: createLedgerId({
@@ -456,20 +549,65 @@ async function syncCampaign(input: {
       return campaignState;
     }
 
+    const conflictMessage =
+      previousCampaignState.conflictedUploads?.[pendingSave.fingerprint] ??
+      (previousCampaignState.conflictedUpload?.fingerprint ===
+      pendingSave.fingerprint
+        ? previousCampaignState.conflictedUpload.message
+        : undefined);
+    if (conflictMessage) {
+      campaignState.status = "Needs your decision";
+      campaignState.error = conflictMessage;
+      campaignState.needsDecision = {
+        reason: "remote-advanced-before-local-upload",
+        localFileName: pendingSave.file.name,
+        message: conflictMessage,
+      };
+      return campaignState;
+    }
+
     const idempotencyKey = createLedgerId({
       gameId: game.id,
       direction: "upload",
       contentHash: pendingSave.fingerprint,
     });
-    const upload = await adapters.uploadSave(state.token!, detail.gameNumber, {
-      file: pendingSave.file,
-      contentHash: pendingSave.fingerprint,
-      idempotencyKey,
-      expectedActivePlayerEntryId: detail.activePlayerEntryId,
-      expectedActivePlayerUserId: detail.activePlayerUserId,
-      expectedRoundNumber: detail.roundNumber,
-      expectedLatestFileVersionId: latestRemoteFile?.id ?? null,
-    });
+    const upload = await adapters
+      .uploadSave(state.token!, detail.gameNumber, {
+        file: pendingSave.file,
+        contentHash: pendingSave.fingerprint,
+        idempotencyKey,
+        expectedActivePlayerEntryId: detail.activePlayerEntryId,
+        expectedActivePlayerUserId: detail.activePlayerUserId,
+        expectedRoundNumber: detail.roundNumber,
+        expectedLatestFileVersionId: latestRemoteFile?.id ?? null,
+        expectedSaveBaseline: detail.saveBaseline,
+      })
+      .catch((error: unknown) => {
+        if (
+          typeof error !== "object" ||
+          error === null ||
+          !("status" in error) ||
+          error.status !== 409
+        )
+          throw error;
+        const message = `${getErrorMessage(
+          error,
+          "The save changed. Review the latest save before uploading again.",
+        )} ${replacementGuidance}`;
+        campaignState.conflictedUploads = {
+          ...campaignState.conflictedUploads,
+          [pendingSave.fingerprint]: message,
+        };
+        campaignState.status = "Needs your decision";
+        campaignState.error = message;
+        campaignState.needsDecision = {
+          reason: "remote-advanced-before-local-upload",
+          localFileName: pendingSave.file.name,
+          message,
+        };
+        return null;
+      });
+    if (!upload) return campaignState;
     uploadedFingerprints.add(pendingSave.fingerprint);
     campaignState.uploadedFingerprints = [...uploadedFingerprints];
     campaignState.lastUploadedFileVersionId = upload.fileVersionId;

@@ -5,23 +5,27 @@ import { useRouter } from "next/navigation";
 import { Button, buttonVariants } from "@/components/ui/button";
 
 type UploadSaveFormProps = {
+  saveBaseline?: string;
   gameNumber: number;
   presentation?: "standard" | "compact";
 };
 
 export function UploadSaveForm({
+  saveBaseline,
   gameNumber,
   presentation = "standard",
 }: UploadSaveFormProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedBaseline, setSelectedBaseline] = useState(saveBaseline);
   const [isDragOver, setIsDragOver] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const isCompact = presentation === "compact";
 
   function handleFile(file: File | undefined) {
+    setSelectedBaseline(saveBaseline);
     setSelectedFile(file ?? null);
     setErrorMessage(null);
   }
@@ -47,6 +51,7 @@ export function UploadSaveForm({
 
         const formData = new FormData();
         formData.set("file", selectedFile, selectedFile.name);
+        formData.set("expectedSaveBaseline", selectedBaseline ?? "");
         setErrorMessage(null);
 
         startTransition(async () => {
@@ -154,7 +159,9 @@ export function UploadSaveForm({
           </>
         ) : isCompact ? (
           <div className="text-base font-mono text-orange-300">
-            {"> Download the latest save above. When you’ve finished your turn, click here or drag and drop your new save for the next Lord."}
+            {
+              "> Download the latest save above. When you’ve finished your turn, click here or drag and drop your new save for the next Lord."
+            }
           </div>
         ) : (
           <>

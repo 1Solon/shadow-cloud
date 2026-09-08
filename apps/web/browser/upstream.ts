@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { jwtVerify } from "jose";
-import type { GameDetail } from "../src/lib/shadow-cloud-api";
+import type { GameDetail, GameListItem } from "../src/lib/shadow-cloud-api";
 
 export type MutationOutcome =
   | { kind: "success" }
@@ -17,6 +17,7 @@ export async function startUpstream(secret: string) {
       method: string;
       path: string;
       subject?: string;
+      shadowOverrideEnabled?: unknown;
       body?: unknown;
     }>;
   } = {
@@ -79,6 +80,26 @@ export async function startUpstream(secret: string) {
     };
     try {
       const base = `/v1/games/${upstream.game.gameNumber}`;
+      if (method === "GET" && path === "/v1/games") {
+        const game = upstream.game;
+        const latest = game.fileVersions[0];
+        const item: GameListItem = {
+          ...game,
+          playerCount: game.playerCount ?? game.players.length,
+          filledSeatCount: game.players.filter(
+            (player) => player.userId !== null,
+          ).length,
+          participantUserIds: game.players.flatMap((player) =>
+            player.userId ? [player.userId] : [],
+          ),
+          updatedAt: latest?.uploadedAt ?? "2026-07-11T12:00:00.000Z",
+          latestSave: latest
+            ? { id: latest.id, originalName: latest.originalName }
+            : null,
+        };
+        reply(200, [item]);
+        return;
+      }
       if (method === "GET" && path === `${base}/detail`) {
         upstream.requests.push({ method, path });
         if (upstream.detailFailure) {
@@ -90,11 +111,15 @@ export async function startUpstream(secret: string) {
       }
       const isMetadata = method === "PATCH" && path === `${base}/metadata`;
       const isTransfer = method === "POST" && path === `${base}/transfer-host`;
-      if (!isMetadata && !isTransfer) {
+      const isInspection =
+        method === "GET" && path === `${base}/save-inspection`;
+      const isRecovery = method === "GET" && path === `${base}/password-reset`;
+      if (!isMetadata && !isTransfer && !isInspection && !isRecovery) {
         reply(404, { message: "Unknown fixture campaign or route." });
         return;
       }
       let subject: string | undefined;
+      let shadowOverrideEnabled: unknown;
       try {
         const { payload } = await jwtVerify(
           (request.headers.authorization ?? "").replace(/^Bearer /, ""),
@@ -102,8 +127,48 @@ export async function startUpstream(secret: string) {
           { algorithms: ["HS256"], requiredClaims: ["sub", "iat", "exp"] },
         );
         subject = payload.sub;
+        shadowOverrideEnabled = payload.shadowOverrideEnabled;
       } catch {
         reply(401, { message: "Invalid fixture API token." });
+        return;
+      }
+      if (isInspection || isRecovery) {
+        upstream.requests.push({
+          method,
+          path,
+          subject,
+          shadowOverrideEnabled,
+        });
+        // Fixture privilege is independent of the campaign's current Overlord.
+        if (
+          subject !== upstream.game.organizerId &&
+          !(subject === "browser-overlord" && shadowOverrideEnabled === true)
+        ) {
+          reply(403, {
+            message: "Only the current Overlord can inspect regimes.",
+          });
+          return;
+        }
+        reply(
+          200,
+          isInspection
+            ? {
+                fileVersionId: upstream.game.fileVersions[0]?.id,
+                contentRevision: upstream.game.fileVersions[0]?.contentRevision,
+                sourceId: "synthetic-source",
+                expectedSaveBaseline: "synthetic-baseline",
+                regimes: [
+                  {
+                    id: "north",
+                    name: "North Reach",
+                    current: true,
+                    eligible: true,
+                    reason: null,
+                  },
+                ],
+              }
+            : { undo: null },
+        );
         return;
       }
       if (subject !== upstream.game.organizerId) {

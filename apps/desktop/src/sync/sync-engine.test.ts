@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { runSyncOnce, type SyncAdapters, type SyncState } from "./sync-engine";
+import {
+  runSyncOnce,
+  type GameDetail,
+  type SyncAdapters,
+  type SyncState,
+} from "./sync-engine";
+import type { LocalSaveFile } from "./sync-files";
 
 function createBaseState(): SyncState {
   return {
@@ -28,6 +34,7 @@ function createAdapters(overrides: Partial<SyncAdapters> = {}): SyncAdapters {
       },
     ]),
     getGameDetail: vi.fn(async () => ({
+      saveBaseline: "campaign:2:3",
       id: "game-1",
       gameNumber: 1,
       slug: "ashes",
@@ -64,6 +71,412 @@ function createAdapters(overrides: Partial<SyncAdapters> = {}): SyncAdapters {
 }
 
 describe("runSyncOnce", () => {
+  it.each(["network", "write", "revision-race"])(
+    "recovers a replacement download after %s failure without accepting an unreceived revision",
+    async (failure) => {
+      const state = createBaseState();
+      state.campaigns["game-1"] = {
+        lastDownloadedFileVersionId: "same-id",
+        lastDownloadedContentRevision: 0,
+      };
+      const adapters = createAdapters({ listLocalSaves: async () => [] });
+      const detail: GameDetail = {
+        ...(await adapters.getGameDetail("desktop-token", 1)),
+        fileVersions: [
+          {
+            id: "same-id",
+            originalName: "1-T4-S1-Solon.se1",
+            uploadedAt: "2026-09-07T10:00:00Z",
+            uploadedById: "user-2",
+            uploadedByDisplayName: "Other",
+            contentRevision: 1,
+            contentHash:
+              "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+          },
+        ],
+      };
+      adapters.getGameDetail = async () => detail;
+      adapters.downloadFile = vi.fn(async () => {
+        if (failure === "network") throw new Error("Download unavailable");
+        return {
+          bytes: new Uint8Array(
+            failure === "revision-race" ? [9, 8, 7] : [1, 2, 3],
+          ),
+          fileName: "ignored.se1",
+        };
+      });
+      if (failure === "write")
+        adapters.writeFileAtomically = vi.fn(async () => {
+          throw new Error("Disk full");
+        });
+      const failed = await runSyncOnce(state, adapters);
+      expect(failed.campaigns["game-1"]).toMatchObject({
+        status: "Sync failed",
+        lastDownloadedContentRevision: 0,
+      });
+      expect(failed.campaigns["game-1"].uploadedFingerprints).toBeUndefined();
+      if (failure !== "write")
+        expect(adapters.writeFileAtomically).not.toHaveBeenCalled();
+      detail.fileVersions[0].contentRevision = 3;
+      adapters.downloadFile = vi.fn(async () => ({
+        bytes: new Uint8Array([1, 2, 3]),
+        fileName: "ignored.se1",
+      }));
+      adapters.writeFileAtomically = vi.fn(async () => "saved");
+      const recovered = await runSyncOnce(failed, adapters);
+      expect(recovered.campaigns["game-1"]).toMatchObject({
+        status: "Downloaded load turn 4",
+        lastDownloadedContentRevision: 3,
+      });
+      expect(recovered.campaigns["game-1"].error).toBeUndefined();
+      expect(recovered.campaigns["game-1"].needsDecision).toBeUndefined();
+      expect(adapters.writeFileAtomically).toHaveBeenCalledWith(
+        "C:/ShadowEmpire/Saves/1 - Ashes",
+        "1-T4-S1-Solon.se1",
+        new Uint8Array([1, 2, 3]),
+      );
+      expect(adapters.uploadSave).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["user-1", "user-2"])(
+    "protects pending local work after an original uploader's reset while %s is active",
+    async (activePlayerUserId) => {
+      const adapters = createAdapters();
+      const localFiles = await adapters.listLocalSaves("unused");
+      const detail: GameDetail = {
+        ...(await adapters.getGameDetail("desktop-token", 1)),
+        activePlayerUserId,
+        fileVersions: [
+          {
+            id: "remote-1",
+            originalName: "1-T4-S1-Solon.se1",
+            uploadedAt: "2026-09-07T10:00:00Z",
+            uploadedById: "user-1",
+            uploadedByDisplayName: "Solon",
+            contentRevision: 1,
+          },
+        ],
+      };
+      adapters.getGameDetail = async () => detail;
+      adapters.listLocalSaves = async () => localFiles;
+      const state = createBaseState();
+      state.campaigns["game-1"] = { lastUploadedFileVersionId: "remote-1" };
+      let next = await runSyncOnce(state, adapters);
+      const message =
+        "The latest save changed. Your local files have been preserved. Pause sync and move unfinished saves outside the campaign folder, then sync again to obtain the updated save, or open the campaign page and download it. Stop and restart the current turn from the updated save. Uploading a turn played from the old copy could undo this password reset.";
+      expect(next.campaigns["game-1"]).toMatchObject({
+        status: "Needs your decision",
+        error: message,
+        needsDecision: { message, localFileName: "turn.se1" },
+      });
+      detail.fileVersions[0].contentRevision = 2;
+      next = await runSyncOnce(next, adapters);
+      expect(next.campaigns["game-1"].needsDecision?.message).toBe(message);
+      expect(adapters.uploadSave).not.toHaveBeenCalled();
+      expect(adapters.writeFileAtomically).not.toHaveBeenCalled();
+      expect(localFiles[0].bytes).toEqual(new Uint8Array([1, 2, 3]));
+      adapters.listLocalSaves = async () => [];
+      next = await runSyncOnce(next, adapters);
+      expect(next.campaigns["game-1"]).toMatchObject({
+        lastDownloadedContentRevision: 2,
+        status: "Downloaded load turn 4",
+      });
+      expect(next.campaigns["game-1"].needsDecision).toBeUndefined();
+      expect(next.campaigns["game-1"].error).toBeUndefined();
+    },
+  );
+
+  it.each(["replacement", "advanced-remote", "unverified-history"])(
+    "never uploads unchanged work rejected by %s preflight after it is moved out and returned",
+    async (conflict) => {
+      const a: LocalSaveFile = {
+        name: "unfinished.se1",
+        path: "unfinished.se1",
+        modifiedAt: Date.parse("2026-09-07T12:00:00Z"),
+        size: 3,
+        bytes: new Uint8Array([4, 5, 6]),
+      };
+      let files = [a];
+      const adapters = createAdapters({
+        listLocalSaves: async () => files,
+        listExistingFileNames: async () => files.map((file) => file.name),
+        downloadFile: vi.fn(async () => ({
+          bytes: new Uint8Array([1, 2, 3]),
+          fileName: "updated.se1",
+        })),
+        writeFileAtomically: vi.fn(async (directory, name, bytes) => {
+          const path = `${directory}/${name}`;
+          files.push({ name, path, bytes, size: bytes.length, modifiedAt: 1 });
+          return path;
+        }),
+      });
+      const detail: GameDetail = {
+        ...(await adapters.getGameDetail("desktop-token", 1)),
+        fileVersions: [
+          {
+            id: "remote-1",
+            originalName: "updated.se1",
+            uploadedAt: "2026-09-07T10:00:00Z",
+            uploadedById: conflict === "advanced-remote" ? "user-2" : "user-1",
+            uploadedByDisplayName: "Solon",
+            contentRevision: conflict === "replacement" ? 1 : 0,
+            contentHash:
+              conflict === "unverified-history"
+                ? null
+                : "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+          },
+        ],
+      };
+      adapters.getGameDetail = async () => detail;
+      let state = await runSyncOnce(createBaseState(), adapters);
+      expect(state.campaigns["game-1"].needsDecision).toMatchObject({
+        reason:
+          conflict === "unverified-history"
+            ? "unverified-remote-history-before-local-upload"
+            : "remote-advanced-before-local-upload",
+        localFileName: a.name,
+      });
+      expect(adapters.uploadSave).not.toHaveBeenCalled();
+      expect(adapters.writeFileAtomically).not.toHaveBeenCalled();
+
+      files = [];
+      state = await runSyncOnce(state, adapters);
+      expect(adapters.writeFileAtomically).toHaveBeenCalledTimes(1);
+      expect(state.campaigns["game-1"].needsDecision).toBeUndefined();
+      detail.saveBaseline = "fresh-baseline";
+      detail.fileVersions[0].contentHash =
+        "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81";
+      files.push({
+        ...a,
+        name: "returned.se1",
+        path: "returned.se1",
+        modifiedAt: a.modifiedAt + 1,
+      });
+      state = await runSyncOnce(JSON.parse(JSON.stringify(state)), adapters);
+      state = await runSyncOnce(state, adapters);
+      expect(adapters.uploadSave).not.toHaveBeenCalled();
+      expect(state.campaigns["game-1"].needsDecision?.localFileName).toBe(
+        "returned.se1",
+      );
+      expect(files.at(-1)?.bytes).toEqual(new Uint8Array([4, 5, 6]));
+    },
+  );
+
+  it.each(["user-1", "user-2"])(
+    "downloads reset and undo revisions with the same ID and timestamp while %s is active, preserving old copies",
+    async (activePlayerUserId) => {
+      const files: LocalSaveFile[] = [];
+      const adapters = createAdapters({
+        listLocalSaves: async () => files,
+        listExistingFileNames: async () => files.map((file) => file.name),
+        writeFileAtomically: async (directory, name, bytes) => {
+          expect(files.some((file) => file.name === name)).toBe(false);
+          const path = `${directory}/${name}`;
+          files.push({
+            name,
+            path,
+            bytes,
+            size: bytes.length,
+            modifiedAt: Date.parse("2026-09-07T12:00:00Z"),
+          });
+          return path;
+        },
+      });
+      const detail: GameDetail = {
+        ...(await adapters.getGameDetail("desktop-token", 1)),
+        activePlayerUserId,
+        fileVersions: [
+          {
+            id: "same-id",
+            originalName: "1-T4-S1-Solon.se1",
+            uploadedAt: "2026-09-07T10:00:00Z",
+            uploadedById: "user-1",
+            uploadedByDisplayName: "Solon",
+            contentRevision: 0,
+          },
+        ],
+      };
+      adapters.getGameDetail = async () => detail;
+      let state = await runSyncOnce(createBaseState(), adapters);
+      for (const revision of [1, 2, 5]) {
+        detail.fileVersions[0].contentRevision = revision;
+        detail.fileVersions[0].replacedAt = "2026-09-07T11:00:00Z";
+        adapters.downloadFile = vi.fn(async () => ({
+          bytes: new Uint8Array(revision === 2 ? [9, 8, 7] : [revision]),
+          fileName: "ignored.se1",
+        }));
+        state = await runSyncOnce(state, adapters);
+        expect(state.campaigns["game-1"].lastDownloadedContentRevision).toBe(
+          revision,
+        );
+        expect(state.campaigns["game-1"].status).toContain(
+          "Use this updated save before continuing.",
+        );
+        expect(state.campaigns["game-1"].status).toContain(files.at(-1)?.name);
+        state = await runSyncOnce(state, adapters);
+        expect(adapters.downloadFile).toHaveBeenCalledTimes(1);
+      }
+      expect(files.map((file) => file.name)).toEqual([
+        "1-T4-S1-Solon.se1",
+        "1-T4-S1-Solon (1).se1",
+        "1-T4-S1-Solon (2).se1",
+        "1-T4-S1-Solon (3).se1",
+      ]);
+      expect(files.map((file) => [...file.bytes])).toEqual([
+        [9, 8, 7],
+        [1],
+        [9, 8, 7],
+        [5],
+      ]);
+      expect(adapters.uploadSave).not.toHaveBeenCalled();
+    },
+  );
+
+  it("obtains a reset of an own upload that was never downloaded, then uploads new work with the current baseline", async () => {
+    const adapters = createAdapters({
+      downloadFile: async () => ({
+        bytes: new Uint8Array([1, 2, 3]),
+        fileName: "remote.se1",
+      }),
+    });
+    const state = createBaseState();
+    state.campaigns["game-1"] = {
+      lastUploadedFileVersionId: "remote-1",
+      lastDownloadedFileVersionId: "older-turn",
+      uploadedFingerprints: [
+        "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+      ],
+    };
+    const detail: GameDetail = {
+      ...(await adapters.getGameDetail("desktop-token", 1)),
+      saveBaseline: "after-reset",
+      fileVersions: [
+        {
+          id: "remote-1",
+          originalName: "turn.se1",
+          uploadedAt: "2026-09-07T10:00:00Z",
+          uploadedById: "user-1",
+          uploadedByDisplayName: "Solon",
+          contentRevision: 1,
+          contentHash:
+            "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+        },
+      ],
+    };
+    adapters.getGameDetail = async () => detail;
+    const downloaded = await runSyncOnce(state, adapters);
+    expect(downloaded.campaigns["game-1"].lastDownloadedContentRevision).toBe(
+      1,
+    );
+    expect(adapters.uploadSave).not.toHaveBeenCalled();
+    adapters.listLocalSaves = async () => [
+      {
+        name: "replayed-turn.se1",
+        path: "replayed-turn.se1",
+        bytes: new Uint8Array([4, 5, 6]),
+        size: 3,
+        modifiedAt: Date.parse("2026-09-07T12:00:00Z"),
+      },
+    ];
+    const uploaded = await runSyncOnce(downloaded, adapters);
+    expect(uploaded.campaigns["game-1"].status).toBe(
+      "Uploaded replayed-turn.se1",
+    );
+    expect(adapters.uploadSave).toHaveBeenCalledWith(
+      "desktop-token",
+      1,
+      expect.objectContaining({
+        expectedSaveBaseline: "after-reset",
+        expectedLatestFileVersionId: "remote-1",
+        file: expect.objectContaining({ bytes: new Uint8Array([4, 5, 6]) }),
+      }),
+    );
+  });
+
+  it("does not retry conflicted local bytes on the next poll with a refreshed baseline", async () => {
+    const adapters = createAdapters({
+      uploadSave: vi.fn(async () => {
+        throw Object.assign(
+          new Error("The save changed. Review the latest save."),
+          { status: 409 },
+        );
+      }),
+    });
+    const first = await runSyncOnce(createBaseState(), adapters);
+    expect(first.campaigns["game-1"].error).toContain(
+      "Uploading a turn played from the old copy could undo this password reset.",
+    );
+    const detail = await adapters.getGameDetail("desktop-token", 1);
+    adapters.getGameDetail = vi.fn(async () => ({
+      ...detail,
+      saveBaseline: "campaign:2:4",
+    }));
+    const second = await runSyncOnce(first, adapters);
+    expect(second.campaigns["game-1"].error).toBe(
+      first.campaigns["game-1"].error,
+    );
+    expect(adapters.uploadSave).toHaveBeenCalledTimes(1);
+    expect(second.campaigns["game-1"].needsDecision?.message).toMatch(
+      /save changed/i,
+    );
+  });
+  it.each(["conflicts", "succeeds"])(
+    "never retries rejected A after newer B %s and is removed",
+    async (outcome) => {
+      const adapters = createAdapters();
+      const [a] = await adapters.listLocalSaves("unused");
+      const b = {
+        ...a,
+        name: "b.se1",
+        modifiedAt: 3,
+        bytes: new Uint8Array([4, 5, 6]),
+      };
+      const conflict = Object.assign(new Error("Inspect the changed save."), {
+        status: 409,
+      });
+      const upload = vi
+        .fn<SyncAdapters["uploadSave"]>()
+        .mockRejectedValueOnce(conflict);
+      if (outcome === "conflicts") upload.mockRejectedValueOnce(conflict);
+      else
+        upload.mockResolvedValueOnce({
+          fileVersionId: "b",
+          originalName: b.name,
+        });
+      upload.mockResolvedValue({
+        fileVersionId: "unexpected",
+        originalName: a.name,
+      });
+      adapters.uploadSave = upload;
+      let state = await runSyncOnce(createBaseState(), adapters);
+      adapters.listLocalSaves = async () => [a, b];
+      state = await runSyncOnce(state, adapters);
+      expect(upload).toHaveBeenCalledTimes(2);
+      const detail = await adapters.getGameDetail("desktop-token", 1);
+      adapters.getGameDetail = async () => ({
+        ...detail,
+        saveBaseline: "fresh-baseline",
+      });
+      adapters.listLocalSaves = async () => [a];
+      // Poll from serialized state, as after a desktop restart.
+      state = await runSyncOnce(JSON.parse(JSON.stringify(state)), adapters);
+      state = await runSyncOnce(state, adapters);
+      expect(upload).toHaveBeenCalledTimes(2);
+      expect(state.campaigns["game-1"].needsDecision?.localFileName).toBe(
+        a.name,
+      );
+      if (outcome === "conflicts") {
+        adapters.listLocalSaves = async () => [b];
+        state = await runSyncOnce(state, adapters);
+        expect(upload).toHaveBeenCalledTimes(2);
+        expect(state.campaigns["game-1"].needsDecision?.localFileName).toBe(
+          b.name,
+        );
+      }
+    },
+  );
+
   it("uploads the newest pending save when it is the user turn", async () => {
     const state = createBaseState();
     const adapters = createAdapters();
@@ -78,6 +491,7 @@ describe("runSyncOnce", () => {
       expectedActivePlayerUserId: "user-1",
       expectedRoundNumber: 4,
       expectedLatestFileVersionId: null,
+      expectedSaveBaseline: "campaign:2:3",
     });
     expect(nextState.campaigns["game-1"]).toMatchObject({
       lastUploadedFileVersionId: "remote-1",
@@ -220,6 +634,10 @@ describe("runSyncOnce", () => {
   it("records the latest remote file turn as the load turn shown by desktop", async () => {
     const state = createBaseState();
     const adapters = createAdapters({
+      downloadFile: async () => ({
+        bytes: new Uint8Array([1, 2, 3]),
+        fileName: "1-T10-S1-Solon.se1",
+      }),
       getGameDetail: vi.fn(async () => ({
         id: "game-1",
         gameNumber: 1,
@@ -536,8 +954,12 @@ describe("runSyncOnce", () => {
       ...createBaseState(),
       campaigns: {
         "game-1": {
+          uploadedFingerprints: [
+            "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+          ],
           lastDownloadedFileVersionId: "version-7",
-          lastDownloadedFileReplacedAt: null,
+          lastDownloadedFileReplacedAt: "2026-07-10T14:30:00.000Z",
+          lastDownloadedContentRevision: 1,
         },
       },
     };
@@ -561,6 +983,7 @@ describe("runSyncOnce", () => {
             contentHash: null,
             idempotencyKey: null,
             replacedAt: "2026-07-10T14:30:00.000Z",
+            contentRevision: 2,
             replacedByDisplayName: "Other",
           },
         ],
@@ -574,6 +997,7 @@ describe("runSyncOnce", () => {
     expect(nextState.campaigns["game-1"]).toMatchObject({
       lastDownloadedFileVersionId: "version-7",
       lastDownloadedFileReplacedAt: "2026-07-10T14:30:00.000Z",
+      lastDownloadedContentRevision: 2,
     });
   });
 
@@ -737,6 +1161,9 @@ describe("runSyncOnce", () => {
       ...createBaseState(),
       campaigns: {
         "game-1": {
+          uploadedFingerprints: [
+            "sha256:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+          ],
           lastDownloadedFileVersionId: "version-7",
           lastDownloadedFileReplacedAt: null,
         },

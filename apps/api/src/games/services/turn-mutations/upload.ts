@@ -5,6 +5,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { createHash } from 'node:crypto';
 import {
   AuditEventType,
   GameRole,
@@ -13,6 +14,8 @@ import {
   type PrismaClient,
 } from '@prisma/client';
 import { buildGameIdentifierWhere } from '../../support/game-lookup.helpers';
+import { assertSaveBaseline } from '../../support/save-baseline';
+import { saveStagingLease } from '../../support/save-recovery';
 import type {
   UploadedSaveFile,
   UploadSaveSafetyMetadata,
@@ -163,6 +166,7 @@ export async function uploadSave(
   );
   if (replay) return replay;
   const expected = participants(observed, userId, false, gameId);
+  assertSaveBaseline(observed, metadata.expectedSaveBaseline);
   const observedLatest = await database.fileVersion.findFirst({
     where: { gameId: observed.id },
     orderBy: { versionNumber: 'desc' },
@@ -170,31 +174,42 @@ export async function uploadSave(
   checkExpectations(expected, observedLatest?.id ?? null, metadata);
   const fileStorage = dependencies.fileStorage;
   if (!fileStorage) throw new Error('Upload file storage is not configured.');
-  const stored = await fileStorage.stageUpload({
-    gameId: observed.id,
-    gameNumber: observed.gameNumber,
-    turn: expected.turnState.roundNumber + (expected.roundAdvanced ? 1 : 0),
-    seat: expected.next.turnOrder,
-    playerName: expected.next.user!.displayName,
-    originalName: file.originalname,
-    content: file.buffer,
-  });
-
+  const lease = saveStagingLease(database, fileStorage);
   let result;
   try {
+    const stored = await fileStorage.stageUpload({
+      gameId: observed.id,
+      gameNumber: observed.gameNumber,
+      turn: expected.turnState.roundNumber + (expected.roundAdvanced ? 1 : 0),
+      seat: expected.next.turnOrder,
+      playerName: expected.next.user!.displayName,
+      originalName: file.originalname,
+      content: file.buffer,
+      prepare: lease.prepare,
+    });
+
     result = await database.$transaction(async (transaction) => {
       // The first write reserves the revision and acquires SQLite's write lock.
       // Every proof below is protected until commit; never retry changed intent.
       const fenced = await transaction.game.updateMany({
-        where: { id: observed.id, turnRevision: observed.turnRevision },
-        data: { turnRevision: { increment: 1 } },
+        where: {
+          id: observed.id,
+          turnRevision: observed.turnRevision,
+          saveRevision: observed.saveRevision,
+        },
+        data: {
+          turnRevision: { increment: 1 },
+          saveRevision: { increment: 1 },
+        },
       });
       const game = await transaction.game.findUnique({
         where: { id: observed.id },
         include,
       });
       if (!game)
-        throw new ConflictException('The turn changed before this upload.');
+        throw new ConflictException(
+          'The campaign or save changed. Refresh and review the latest save before uploading again.',
+        );
       const replay = await findReplay(
         transaction,
         game,
@@ -209,7 +224,9 @@ export async function uploadSave(
         true,
       );
       if (fenced.count !== 1)
-        throw new ConflictException('The turn changed before this upload.');
+        throw new ConflictException(
+          'The campaign or save changed. Refresh and review the latest save before uploading again.',
+        );
       const latest = await transaction.fileVersion.findFirst({
         where: { gameId: game.id },
         orderBy: { versionNumber: 'desc' },
@@ -252,7 +269,7 @@ export async function uploadSave(
           storagePath: stored.storagePath,
           originalName: stored.fileName,
           versionNumber,
-          contentHash: metadata.contentHash,
+          contentHash: `sha256:${createHash('sha256').update(file.buffer).digest('hex')}`,
           idempotencyKey: metadata.idempotencyKey,
           clientOriginalName: file.originalname,
           clientFileSize: file.size,
@@ -313,10 +330,13 @@ export async function uploadSave(
           }),
         },
       });
+      await transaction.saveCleanup.delete({
+        where: { storagePath: stored.storagePath },
+      });
       return { game, active, next, fileVersion, roundNumber, roundAdvanced };
     });
   } catch (error) {
-    await fileStorage.removeFile(stored.storagePath);
+    await lease.discard();
     if (error instanceof UploadReplay) return error.result;
     throw error;
   }

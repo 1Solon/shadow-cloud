@@ -32,12 +32,12 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body
-        className={`h-full overflow-hidden flex flex-col font-mono ${shadowOverrideEnabled ? "terminal-override-active" : ""}`}
+        className={`min-h-full md:h-full md:overflow-hidden flex flex-col font-mono ${shadowOverrideEnabled ? "terminal-override-active" : ""}`}
       >
         {/* CRT scanlines overlay */}
         <div
           aria-hidden="true"
-          className="fixed inset-0 pointer-events-none z-50 opacity-10"
+          className="fixed inset-0 pointer-events-none z-50 opacity-5"
           style={{
             background:
               "linear-gradient(to bottom, transparent 50%, var(--terminal-scanline-color) 50%)",

@@ -7,6 +7,7 @@ import { TerminalConfirmationModal } from "@/components/terminal-confirmation-mo
 import { TurnCommandCenter } from "@/components/turn-command-center";
 import { TurnTimingHistoryCard } from "@/components/turn-timing-history-card";
 import { WorldStateHistoryCard } from "@/components/world-state-history-card";
+import { SaveRegimeInspection } from "@/components/save-regime-inspection";
 import { getShadowOverrideEnabled } from "@/lib/shadow-override";
 import { getGameDetail } from "@/lib/shadow-cloud-api";
 import { transferOutcomeMessage } from "@/lib/transfer-outcome";
@@ -42,6 +43,11 @@ export default async function GameDetailPage({
 
   const isActivePlayer = Boolean(
     session?.user?.id && game.activePlayerUserId === session.user.id,
+  );
+  const canManagePasswords = Boolean(
+    session?.user?.id &&
+    (session.user.id === game.organizerId ||
+      (session.user.isShadowOverride && shadowOverrideEnabled)),
   );
   const canEditSeatOrder = Boolean(
     session?.user?.id &&
@@ -111,6 +117,7 @@ export default async function GameDetailPage({
       ) : null}
 
       <TurnCommandCenter
+        saveBaseline={game.saveBaseline}
         activePlayerDisplayName={game.activePlayerDisplayName}
         activeSeatNumber={
           activePlayer?.turnOrder ?? game.openTurn?.seatNumber ?? null
@@ -130,6 +137,7 @@ export default async function GameDetailPage({
       <CampaignWorkspaceTabs
         saves={
           <WorldStateHistoryCard
+            saveBaseline={game.saveBaseline}
             currentUserId={session?.user?.id ?? null}
             fileVersions={game.fileVersions}
             gameNumber={game.gameNumber}
@@ -144,14 +152,6 @@ export default async function GameDetailPage({
             openTurn={game.openTurn}
             recentCompletedTurns={game.recentCompletedTurns}
           />
-        }
-        administration={
-          canDeleteGame ? (
-            <AdministratorActionsCard
-              gameName={game.name}
-              gameNumber={game.gameNumber}
-            />
-          ) : undefined
         }
         campaign={
           <CampaignDetailsWorkspace
@@ -177,6 +177,26 @@ export default async function GameDetailPage({
             turnTargetHours={game.turnTargetHours}
             zoneCount={game.zoneCount}
           />
+        }
+        regimes={
+          canManagePasswords ? (
+            <SaveRegimeInspection
+              key={game.id}
+              campaignId={game.id}
+              saveRevision={`${game.fileVersions[0]?.id}:${game.fileVersions[0]?.contentRevision}`}
+              gameNumber={game.gameNumber}
+              canManagePasswords={canManagePasswords}
+              hasSave={game.fileVersions.length > 0}
+            />
+          ) : undefined
+        }
+        administration={
+          canDeleteGame ? (
+            <AdministratorActionsCard
+              gameName={game.name}
+              gameNumber={game.gameNumber}
+            />
+          ) : undefined
         }
       />
     </div>

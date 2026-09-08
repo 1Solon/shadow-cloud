@@ -46,6 +46,13 @@ Notes to verify the committed value. Removing the session cookie must remove
 the SSR editing control and make the same proxy return 401 without forwarding
 another mutation. No browser request interception or mocked router is involved.
 
+`responsive-workspace.spec.ts` verifies the campaign list, latest-save action,
+collapsed long notes, stacked mobile history, and configuration entry at 400px
+and either side of the 640px, 768px, and 1280px breakpoints, plus 1440px. It
+also checks guest search and retains screenshots in its test output directory
+for visual inspection. The list adapter derives its single campaign from the
+same in-memory detail used by the campaign route; no live campaign is accessed.
+
 `upstream.spec.ts` checks the owned HTTP adapter's metadata and transfer
 outcomes against fresh authoritative HTTP reads. These fast contract checks
 do not launch Chromium or Next. Run only the browser scenario, or repeat it:
@@ -142,7 +149,7 @@ an explicit user reload. This is a per-test in-process control, not an HTTP
 failure-injection endpoint. Recovery tests cover both same-route page failures
 and renumbered layout/page failures, with no transfer replay during read retries.
 
-The adapter intentionally implements only campaign detail, metadata and
+The adapter intentionally implements only campaign list, detail, metadata and
 transfer HTTP endpoints. It has no remotely accessible fixture-control route,
 database, production failure-injection hook or generic scenario framework.
 It models only what these browser cases need, not all API validation or turn

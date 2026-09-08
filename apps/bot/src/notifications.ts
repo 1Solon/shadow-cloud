@@ -5,6 +5,7 @@ import {
   ContainerBuilder,
   MessageFlags,
   SeparatorSpacingSize,
+  escapeMarkdown,
   type InteractionEditReplyOptions,
   type InteractionReplyOptions,
   type MessageCreateOptions,
@@ -55,6 +56,7 @@ export type UploadNotificationPayload = {
 export type SaveReplacedNotificationPayload = {
   game: UploadNotificationPayload["game"];
   replacement: {
+    passwordRecovery?: { operation: "reset" | "undo"; regimeName: string };
     versionId: string;
     versionNumber: number;
     originalName: string;
@@ -356,6 +358,7 @@ export function buildSaveReplacedNotificationMessage(
     payload.replacement.replacedBy.discordId,
   );
   const replacedAt = formatDiscordTimestamp(payload.replacement.replacedAt);
+  const recovery = payload.replacement.passwordRecovery;
   const downloadUrl = new URL(
     `/api/games/${encodeURIComponent(String(payload.game.gameNumber))}/files/${encodeURIComponent(payload.replacement.versionId)}`,
     webBaseUrl,
@@ -363,7 +366,9 @@ export function buildSaveReplacedNotificationMessage(
 
   return buildDiscordNotification({
     headline: `The save for ${payload.game.name} was corrected`,
-    message: `Download [${payload.replacement.originalName}](${downloadUrl}) to continue with the corrected save.`,
+    message: recovery
+      ? `The Overlord ${recovery.operation === "reset" ? "reset the in-game password" : "undid the latest password reset and restored the previous password"} for **${escapeMarkdown(recovery.regimeName)}**. The latest save has been replaced; the turn has not advanced. Download [the updated save](${downloadUrl}) before continuing. If you already started from the previous copy, restart from the updated save.`
+      : `Download [${payload.replacement.originalName}](${downloadUrl}) to continue with the corrected save.`,
     details: [`**Corrected by:** ${correctedBy}`],
     metadata: replacedAt ? [`-# ${replacedAt}`] : [],
     mentionedUserIds: payload.replacement.replacedBy.discordId

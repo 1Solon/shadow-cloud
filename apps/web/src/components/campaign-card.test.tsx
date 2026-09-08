@@ -4,7 +4,10 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CampaignCard } from "@/components/campaign-card";
+import {
+  CampaignCard,
+  formatRelativeTimestamp,
+} from "@/components/campaign-card";
 import type { GameListItem } from "@/lib/shadow-cloud-api";
 
 const push = vi.fn();
@@ -107,5 +110,24 @@ describe("CampaignCard", () => {
     expect(
       screen.queryByRole("button", { name: "> Upload your turn" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("shows one Overlord value and keeps the exact update timestamp available", () => {
+    render(<CampaignCard currentUserId="user-2" game={game} />);
+
+    expect(screen.getAllByText("Overlord", { exact: true })).toHaveLength(1);
+
+    const updated = screen.getByTitle(`Updated ${game.updatedAt}`);
+    expect(updated).toHaveAttribute("dateTime", game.updatedAt);
+    expect(updated).toHaveAccessibleName(`Updated ${game.updatedAt}`);
+  });
+
+  it("formats relative update times from a supplied clock", () => {
+    const now = Date.parse("2026-07-10T02:00:00.000Z");
+
+    expect(formatRelativeTimestamp(game.updatedAt, now)).toBe("2 hours ago");
+    expect(formatRelativeTimestamp("2026-07-10T02:05:00.000Z", now)).toBe(
+      "in 5 minutes",
+    );
   });
 });
