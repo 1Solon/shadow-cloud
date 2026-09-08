@@ -168,7 +168,7 @@ it("shows names, current marker and ineligible explanations without a password c
   expect(
     await screen.findByRole("button", { name: "Edit Password" }),
   ).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Refresh" })).toBeEnabled();
+  expect(await screen.findByRole("button", { name: "Refresh" })).toBeEnabled();
   expect(
     screen.queryByRole("button", { name: "Inspect regimes" }),
   ).not.toBeInTheDocument();
@@ -203,7 +203,7 @@ it.each([403, 409, 422, 503])(
       "Inspect again.",
     );
     expect(
-      screen.getByRole("button", { name: "Retry inspection" }),
+      await screen.findByRole("button", { name: "Retry inspection" }),
     ).toBeEnabled();
   },
 );
