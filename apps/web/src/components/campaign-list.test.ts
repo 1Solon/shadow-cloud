@@ -73,50 +73,7 @@ afterEach(() => {
 });
 
 describe("campaign list sorting and filtering", () => {
-  it("sorts numeric target hours in either direction, retaining invalid targets last", () => {
-    const games = [
-      { ...campaigns[0], turnTargetHours: 100 },
-      { ...campaigns[1], turnTargetHours: 2 },
-      { ...campaigns[2], turnTargetHours: 24 },
-      ...[0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1].map(
-        (turnTargetHours, index) => ({
-          ...campaigns[0],
-          id: `unknown-${index}`,
-          name: `Unknown ${index}`,
-          turnTargetHours,
-        }),
-      ),
-    ];
-    const unknownIds = [
-      "unknown-0",
-      "unknown-1",
-      "unknown-2",
-      "unknown-3",
-      "unknown-4",
-      "unknown-5",
-    ];
-    expect(
-      sortAndFilterCampaigns(games, "user-1", "target-asc", "all").map(
-        (game) => game.id,
-      ),
-    ).toEqual(["alpha", "bravo", "zulu", ...unknownIds]);
-    expect(
-      sortAndFilterCampaigns(games, "user-1", "target-desc", "all").map(
-        (game) => game.id,
-      ),
-    ).toEqual(["zulu", "bravo", "alpha", ...unknownIds]);
-    expect(
-      sortAndFilterCampaigns(
-        games,
-        "user-1",
-        "target-asc",
-        "your-turn",
-        "BRAVO",
-      ).map((game) => game.id),
-    ).toEqual(["bravo"]);
-  });
-
-  it("sorts elapsed duration in either direction with unknown starts last and stable name ties", () => {
+  it("sorts current turn starts oldest or newest with unknowns last and name ties, independently of update time", () => {
     vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-07-10T12:00:00Z"));
     const games = [
       { ...campaigns[0], currentTurnStartedAt: "2026-07-10T10:00:00Z" },
@@ -142,12 +99,12 @@ describe("campaign list sorting and filtering", () => {
       },
     ];
     expect(
-      sortAndFilterCampaigns(games, "user-1", "elapsed-asc", "all").map(
+      sortAndFilterCampaigns(games, "user-1", "turn-newest", "all").map(
         (game) => game.id,
       ),
     ).toEqual(["future", "bravo", "tie", "zulu", "alpha", "invalid"]);
     expect(
-      sortAndFilterCampaigns(games, "user-1", "elapsed-desc", "all").map(
+      sortAndFilterCampaigns(games, "user-1", "turn-oldest", "all").map(
         (game) => game.id,
       ),
     ).toEqual(["tie", "zulu", "bravo", "future", "alpha", "invalid"]);
@@ -161,24 +118,20 @@ describe("campaign list sorting and filtering", () => {
     ]);
   });
 
-  it("sorts campaigns by newest or oldest update time", () => {
-    expect(campaignIds("updated-desc")).toEqual(["alpha", "bravo", "zulu"]);
-    expect(campaignIds("updated-asc")).toEqual(["zulu", "bravo", "alpha"]);
-  });
-
-  it("sorts campaigns by name in either direction", () => {
+  it("sorts campaigns by name", () => {
     expect(campaignIds("name-asc")).toEqual(["alpha", "bravo", "zulu"]);
-    expect(campaignIds("name-desc")).toEqual(["zulu", "bravo", "alpha"]);
   });
 
   it("filters campaigns by whether it is the current user's turn", () => {
-    expect(campaignIds("updated-desc", "your-turn")).toEqual(["bravo", "zulu"]);
-    expect(campaignIds("updated-desc", "waiting")).toEqual(["alpha"]);
+    expect(campaignIds("turn-newest", "your-turn")).toEqual(["bravo", "zulu"]);
+    expect(campaignIds("turn-oldest", "your-turn")).toEqual(["zulu", "bravo"]);
+    expect(campaignIds("turn-newest", "waiting")).toEqual(["alpha"]);
   });
 
   it("searches by campaign number or name without case sensitivity", () => {
-    expect(campaignIds("updated-desc", "all", "2")).toEqual(["bravo"]);
-    expect(campaignIds("updated-desc", "all", "ALP")).toEqual(["alpha"]);
+    expect(campaignIds("turn-newest", "all", "2")).toEqual(["bravo"]);
+    expect(campaignIds("turn-oldest", "all", "ALP")).toEqual(["alpha"]);
+    expect(campaignIds("name-asc", "your-turn", " ALP ")).toEqual([]);
   });
 
   it("exposes a labeled search field and filters cards as it changes", async () => {
@@ -273,7 +226,7 @@ describe("campaign list sorting and filtering", () => {
 
     expect(
       screen.getByRole("combobox", { name: "Sort active campaigns" }),
-    ).toHaveTextContent("Default order");
+    ).toHaveTextContent("Turn (Newest)");
     expect(
       screen.queryByRole("combobox", {
         name: "Filter active campaigns by turn status",
