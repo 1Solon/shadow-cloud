@@ -53,6 +53,11 @@ export type UploadNotificationPayload = {
   }>;
 };
 
+export type ActivePlayerChangedNotificationPayload = {
+  game: UploadNotificationPayload["game"];
+  turn: Omit<UploadNotificationPayload["turn"], "roundAdvanced">;
+};
+
 export type SaveReplacedNotificationPayload = {
   game: UploadNotificationPayload["game"];
   replacement: {
@@ -347,6 +352,29 @@ export function buildSaveNotificationMessage(
       ? [payload.turn.activePlayer.discordId]
       : [],
   });
+}
+
+export function buildActivePlayerChangedNotificationMessage(
+  payload: ActivePlayerChangedNotificationPayload,
+  webBaseUrl: string,
+): MessageCreateOptions {
+  const player = payload.turn.activePlayer;
+  const label = player.discordId
+    ? `<@${player.discordId}>`
+    : escapeMarkdown(player.displayName);
+  const gameUrl = new URL(
+    `/games/${encodeURIComponent(String(payload.game.gameNumber))}`,
+    webBaseUrl,
+  ).toString();
+  return {
+    ...buildDiscordNotification({
+      headline: `It is ${label}'s turn!`,
+      message: `The active seat was changed. Round ${payload.turn.roundNumber}, seat ${player.turnOrder}. Review the [campaign](${gameUrl}) before continuing.`,
+    }),
+    allowedMentions: player.discordId
+      ? { users: [player.discordId] }
+      : { parse: [] },
+  };
 }
 
 export function buildSaveReplacedNotificationMessage(

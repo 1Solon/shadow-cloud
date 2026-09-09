@@ -69,9 +69,98 @@ function campaignIds(
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
 });
 
 describe("campaign list sorting and filtering", () => {
+  it("sorts numeric target hours in either direction, retaining invalid targets last", () => {
+    const games = [
+      { ...campaigns[0], turnTargetHours: 100 },
+      { ...campaigns[1], turnTargetHours: 2 },
+      { ...campaigns[2], turnTargetHours: 24 },
+      ...[0, -1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1].map(
+        (turnTargetHours, index) => ({
+          ...campaigns[0],
+          id: `unknown-${index}`,
+          name: `Unknown ${index}`,
+          turnTargetHours,
+        }),
+      ),
+    ];
+    const unknownIds = [
+      "unknown-0",
+      "unknown-1",
+      "unknown-2",
+      "unknown-3",
+      "unknown-4",
+      "unknown-5",
+    ];
+    expect(
+      sortAndFilterCampaigns(games, "user-1", "target-asc", "all").map(
+        (game) => game.id,
+      ),
+    ).toEqual(["alpha", "bravo", "zulu", ...unknownIds]);
+    expect(
+      sortAndFilterCampaigns(games, "user-1", "target-desc", "all").map(
+        (game) => game.id,
+      ),
+    ).toEqual(["zulu", "bravo", "alpha", ...unknownIds]);
+    expect(
+      sortAndFilterCampaigns(
+        games,
+        "user-1",
+        "target-asc",
+        "your-turn",
+        "BRAVO",
+      ).map((game) => game.id),
+    ).toEqual(["bravo"]);
+  });
+
+  it("sorts elapsed duration in either direction with unknown starts last and stable name ties", () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-07-10T12:00:00Z"));
+    const games = [
+      { ...campaigns[0], currentTurnStartedAt: "2026-07-10T10:00:00Z" },
+      { ...campaigns[1], currentTurnStartedAt: null },
+      { ...campaigns[2], currentTurnStartedAt: "2026-07-10T11:00:00Z" },
+      {
+        ...campaigns[0],
+        id: "invalid",
+        name: "Invalid",
+        currentTurnStartedAt: "invalid",
+      },
+      {
+        ...campaigns[0],
+        id: "future",
+        name: "Future",
+        currentTurnStartedAt: "2026-07-11T00:00:00Z",
+      },
+      {
+        ...campaigns[0],
+        id: "tie",
+        name: "A tie",
+        currentTurnStartedAt: "2026-07-10T10:00:00Z",
+      },
+    ];
+    expect(
+      sortAndFilterCampaigns(games, "user-1", "elapsed-asc", "all").map(
+        (game) => game.id,
+      ),
+    ).toEqual(["future", "bravo", "tie", "zulu", "alpha", "invalid"]);
+    expect(
+      sortAndFilterCampaigns(games, "user-1", "elapsed-desc", "all").map(
+        (game) => game.id,
+      ),
+    ).toEqual(["tie", "zulu", "bravo", "future", "alpha", "invalid"]);
+    expect(games.map((game) => game.id)).toEqual([
+      "zulu",
+      "alpha",
+      "bravo",
+      "invalid",
+      "future",
+      "tie",
+    ]);
+  });
+
   it("sorts campaigns by newest or oldest update time", () => {
     expect(campaignIds("updated-desc")).toEqual(["alpha", "bravo", "zulu"]);
     expect(campaignIds("updated-asc")).toEqual(["zulu", "bravo", "alpha"]);
@@ -101,7 +190,7 @@ describe("campaign list sorting and filtering", () => {
         emptyTitle: "No campaigns",
         emptyDescription: "No campaigns are available.",
         currentUserId: "user-1",
-        hasSortingOptions: true,
+        hasExtendedControls: true,
       }),
     );
 
@@ -128,7 +217,7 @@ describe("campaign list sorting and filtering", () => {
         emptyTitle: "No campaigns",
         emptyDescription: "No campaigns are available.",
         currentUserId: "user-1",
-        hasSortingOptions: true,
+        hasExtendedControls: true,
       }),
     );
 
@@ -147,7 +236,7 @@ describe("campaign list sorting and filtering", () => {
         emptyTitle: "No campaigns",
         emptyDescription: "No campaigns are available.",
         currentUserId: "user-1",
-        hasSortingOptions: true,
+        hasExtendedControls: true,
       }),
     );
 
@@ -182,7 +271,14 @@ describe("campaign list sorting and filtering", () => {
       }),
     ).not.toBeInTheDocument();
 
-    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: "Sort active campaigns" }),
+    ).toHaveTextContent("Default order");
+    expect(
+      screen.queryByRole("combobox", {
+        name: "Filter active campaigns by turn status",
+      }),
+    ).not.toBeInTheDocument();
 
     await user.type(search, "ALP");
     expect(screen.getByText("Alpha")).toBeInTheDocument();

@@ -17,9 +17,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { GameListItem } from "@/lib/shadow-cloud-api";
+import { getTurnDurationMs, normalizeTurnTargetHours } from "@/lib/turn-timing";
 
 export type CampaignSortOption =
-  "updated-desc" | "updated-asc" | "name-asc" | "name-desc";
+  | "updated-desc"
+  | "updated-asc"
+  | "name-asc"
+  | "name-desc"
+  | "elapsed-asc"
+  | "elapsed-desc"
+  | "target-asc"
+  | "target-desc";
 
 export type CampaignTurnFilter = "all" | "your-turn" | "waiting";
 
@@ -77,7 +85,35 @@ export function sortAndFilterCampaigns(
     searchQuery,
   );
 
+  const now = new Date(Date.now());
   return filteredCampaigns.sort((left, right) => {
+    if (sortOption.startsWith("elapsed-") || sortOption.startsWith("target-")) {
+      const timingValue = (game: GameListItem) => {
+        if (sortOption.startsWith("target-")) {
+          return normalizeTurnTargetHours(game.turnTargetHours);
+        }
+        return game.currentTurnStartedAt != null
+          ? getTurnDurationMs(
+              { startedAt: game.currentTurnStartedAt, endedAt: null },
+              now,
+            )
+          : null;
+      };
+      const leftValue = timingValue(left);
+      const rightValue = timingValue(right);
+      if (leftValue === null || rightValue === null) {
+        return leftValue === rightValue
+          ? compareCampaignNames(left, right)
+          : leftValue === null
+            ? 1
+            : -1;
+      }
+      const comparison = leftValue - rightValue;
+      return (
+        (sortOption.endsWith("-asc") ? comparison : -comparison) ||
+        compareCampaignNames(left, right)
+      );
+    }
     if (sortOption === "name-asc") {
       return compareCampaignNames(left, right);
     }
@@ -106,7 +142,7 @@ type CampaignListProps = {
   emptyTitle: string;
   emptyDescription: ReactNode;
   currentUserId?: string;
-  hasSortingOptions?: boolean;
+  hasExtendedControls?: boolean;
 };
 
 export function CampaignList({
@@ -115,23 +151,25 @@ export function CampaignList({
   emptyTitle,
   emptyDescription,
   currentUserId,
-  hasSortingOptions = false,
+  hasExtendedControls = false,
 }: CampaignListProps) {
-  const [sortOption, setSortOption] =
-    useState<CampaignSortOption>("updated-desc");
+  const [sortOption, setSortOption] = useState<CampaignSortOption | "default">(
+    hasExtendedControls ? "updated-desc" : "default",
+  );
   const [turnFilter, setTurnFilter] = useState<CampaignTurnFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const visibleCampaigns = hasSortingOptions
-    ? sortAndFilterCampaigns(
-        campaigns,
-        currentUserId,
-        sortOption,
-        turnFilter,
-        searchQuery,
-      )
-    : filterCampaigns(campaigns, currentUserId, "all", searchQuery);
+  const visibleCampaigns =
+    sortOption !== "default"
+      ? sortAndFilterCampaigns(
+          campaigns,
+          currentUserId,
+          sortOption,
+          hasExtendedControls ? turnFilter : "all",
+          searchQuery,
+        )
+      : filterCampaigns(campaigns, currentUserId, "all", searchQuery);
   const hasActiveFilter =
-    searchQuery.trim() !== "" || (hasSortingOptions && turnFilter !== "all");
+    searchQuery.trim() !== "" || (hasExtendedControls && turnFilter !== "all");
   const campaignCount = hasActiveFilter
     ? `${visibleCampaigns.length} / ${campaigns.length}`
     : String(visibleCampaigns.length);
@@ -164,24 +202,24 @@ export function CampaignList({
                 className="h-9 w-full rounded-md border border-orange-400 bg-black px-3 text-sm normal-case tracking-normal text-orange-300 shadow-xs outline-none placeholder:text-orange-300/40 focus-visible:ring-2 focus-visible:ring-orange-300"
               />
             </label>
-            {hasSortingOptions ? (
-              <>
-                <label className="flex min-w-0 flex-col gap-1 text-xs uppercase tracking-[0.16em] text-orange-300/70 sm:w-56">
-                  Sort by
-                  <Select
-                    value={sortOption}
-                    onValueChange={(value) => {
-                      setSortOption(value as CampaignSortOption);
-                    }}
-                  >
-                    <SelectTrigger
-                      className="w-full"
-                      aria-label={`Sort ${campaignListName}`}
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent position="popper">
-                      <SelectGroup>
+            <label className="flex min-w-0 flex-col gap-1 text-xs uppercase tracking-[0.16em] text-orange-300/70 sm:w-56">
+              Sort by
+              <Select
+                value={sortOption}
+                onValueChange={(value) => {
+                  setSortOption(value as CampaignSortOption | "default");
+                }}
+              >
+                <SelectTrigger
+                  className="w-full"
+                  aria-label={`Sort ${campaignListName}`}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  <SelectGroup>
+                    {hasExtendedControls ? (
+                      <>
                         <SelectItem value="updated-desc">
                           Newest first
                         </SelectItem>
@@ -190,38 +228,50 @@ export function CampaignList({
                         </SelectItem>
                         <SelectItem value="name-asc">A–Z</SelectItem>
                         <SelectItem value="name-desc">Z–A</SelectItem>
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </label>
-                <label className="flex min-w-0 flex-col gap-1 text-xs uppercase tracking-[0.16em] text-orange-300/70 sm:w-52">
-                  Turn status
-                  <Select
-                    value={turnFilter}
-                    onValueChange={(value) => {
-                      setTurnFilter(value as CampaignTurnFilter);
-                    }}
+                      </>
+                    ) : (
+                      <SelectItem value="default">Default order</SelectItem>
+                    )}
+                    <SelectItem value="elapsed-asc">
+                      Elapsed: shortest first
+                    </SelectItem>
+                    <SelectItem value="elapsed-desc">
+                      Elapsed: longest first
+                    </SelectItem>
+                    <SelectItem value="target-asc">
+                      Target: shortest first
+                    </SelectItem>
+                    <SelectItem value="target-desc">
+                      Target: longest first
+                    </SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </label>
+            {hasExtendedControls ? (
+              <label className="flex min-w-0 flex-col gap-1 text-xs uppercase tracking-[0.16em] text-orange-300/70 sm:w-52">
+                Turn status
+                <Select
+                  value={turnFilter}
+                  onValueChange={(value) => {
+                    setTurnFilter(value as CampaignTurnFilter);
+                  }}
+                >
+                  <SelectTrigger
+                    className="w-full"
+                    aria-label={`Filter ${campaignListName} by turn status`}
                   >
-                    <SelectTrigger
-                      className="w-full"
-                      aria-label={`Filter ${campaignListName} by turn status`}
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent position="popper">
-                      <SelectGroup>
-                        <SelectItem value="all">All campaigns</SelectItem>
-                        <SelectItem value="your-turn">
-                          Your turn only
-                        </SelectItem>
-                        <SelectItem value="waiting">
-                          Waiting on others
-                        </SelectItem>
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                </label>
-              </>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper">
+                    <SelectGroup>
+                      <SelectItem value="all">All campaigns</SelectItem>
+                      <SelectItem value="your-turn">Your turn only</SelectItem>
+                      <SelectItem value="waiting">Waiting on others</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </label>
             ) : null}
           </div>
         ) : null}

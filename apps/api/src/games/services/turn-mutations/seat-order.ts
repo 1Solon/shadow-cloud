@@ -19,7 +19,10 @@ import type { TurnRecordsService } from '../turn-records.service';
 import type { TurnMutationDependencies } from './dependencies';
 
 const include = {
-  players: { include: { user: true }, orderBy: { turnOrder: 'asc' } },
+  players: {
+    include: { user: { include: { identities: true } } },
+    orderBy: { turnOrder: 'asc' },
+  },
   turnState: true,
 } satisfies Prisma.GameInclude;
 
@@ -399,6 +402,32 @@ export async function reorderSeatOrder(
           role: seat.role,
         },
       });
+    }
+    if (activeChanged) {
+      await dependencies.botNotifications?.enqueueActivePlayerChanged?.(
+        transaction,
+        {
+          game: {
+            id: game.id,
+            gameNumber: game.gameNumber,
+            slug: game.slug,
+            name: game.name,
+            discordThreadId: game.discordThreadId,
+          },
+          turn: {
+            roundNumber: turnState.roundNumber,
+            activePlayer: {
+              id: nextActiveSeat.userId!,
+              displayName: nextActiveSeat.user!.displayName,
+              discordId:
+                nextActiveSeat.user!.identities.find(
+                  (identity) => identity.provider === 'discord',
+                )?.providerId ?? null,
+              turnOrder: nextActiveSeat.turnOrder,
+            },
+          },
+        },
+      );
     }
     await transaction.auditEvent.create({
       data: {

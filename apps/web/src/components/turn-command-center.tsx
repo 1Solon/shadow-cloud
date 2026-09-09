@@ -4,7 +4,11 @@ import { useEffect, useId, useState } from "react";
 import { DownloadSaveButton } from "@/components/download-save-button";
 import { GameNotesMarkdown } from "@/components/game-notes-markdown";
 import { UploadSaveForm } from "@/components/upload-save-form";
-import { formatTurnDuration, getTurnDurationMs } from "@/lib/turn-timing";
+import {
+  formatTurnDuration,
+  getTurnDurationMs,
+  normalizeTurnTargetHours,
+} from "@/lib/turn-timing";
 
 export type TurnCommandCenterProps = {
   saveBaseline?: string;
@@ -85,10 +89,8 @@ export function TurnCommandCenter({
         )
       : null;
   const elapsed = hasValidTurnStart ? formatTurnDuration(elapsedMs) : "Unknown";
-  const target =
-    Number.isSafeInteger(turnTargetHours) && turnTargetHours > 0
-      ? `${turnTargetHours}h`
-      : "Unknown";
+  const targetHours = normalizeTurnTargetHours(turnTargetHours);
+  const target = targetHours !== null ? `${targetHours}h` : "Unknown";
   const canUpload = isSignedIn && isActivePlayer;
   const hasNotes = notes.trim().length > 0;
 

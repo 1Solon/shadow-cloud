@@ -7,11 +7,29 @@ import {
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { PrismaClient } from '@prisma/client';
+import { AuthService } from '../src/auth/auth.service';
+import { BotNotificationsService } from '../src/games/bot-notifications.service';
+import { GamesService } from '../src/games/games.service';
+import { GamesFileService } from '../src/games/services/games-file.service';
+import { GamesQueryService } from '../src/games/services/games-query.service';
+import { GamesRegistrationService } from '../src/games/services/games-registration.service';
+import { GamesTurnService } from '../src/games/services/games-turn.service';
 import { FileStorageService } from '../src/games/file-storage.service';
 import { TurnMutationsService } from '../src/games/services/turn-mutations.service';
 import { TurnRecordsService } from '../src/games/services/turn-records.service';
 import { createSqliteFixture } from './support/sqlite-fixture';
+
+// Route the legacy database singleton to a real migrated SQLite connection.
+const database = vi.hoisted(() => ({ current: null as PrismaClient | null }));
+vi.mock('../src/database', async () => ({
+  ...(await import('@prisma/client')),
+  prisma: new Proxy(
+    {},
+    { get: (_, key) => Reflect.get(database.current!, key) },
+  ),
+}));
 
 const file = {
   originalname: 'turn.se1',
@@ -26,6 +44,7 @@ let duringStorage: () => Promise<void>;
 
 beforeEach(async () => {
   fixture = await createSqliteFixture();
+  database.current = fixture.db;
   directory = await mkdtemp(join(tmpdir(), 'shadow-cloud-upload-'));
   const previous = process.env.SHADOW_CLOUD_SAVE_DIR;
   process.env.SHADOW_CLOUD_SAVE_DIR = directory;
@@ -161,6 +180,147 @@ async function seedDeliveries() {
 }
 
 describe('upload safety through the public mutation owner', () => {
+  it('persists first-upload advancement and round wrap through fresh campaign queries without advancing retries', async () => {
+    await fixture.db.turnState.update({
+      where: { gameId: 'game-1' },
+      data: {
+        activePlayerId: 'user-1',
+        activePlayerEntryId: 'seat-1',
+        roundNumber: 1,
+      },
+    });
+    await fixture.db.turnRecord.update({
+      where: { id: 'turn-1' },
+      data: {
+        gamePlayerId: 'seat-1',
+        userId: 'user-1',
+        seatNumber: 1,
+        playerDisplayName: 'Alpha',
+        roundNumber: 1,
+      },
+    });
+
+    const freshCampaignService = async () => {
+      await database.current!.$disconnect();
+      database.current = fixture.connect();
+      const owner = new TurnMutationsService(
+        database.current,
+        new TurnRecordsService(),
+        { fileStorage: storage },
+      );
+      const auth = new AuthService();
+      const notifications = new BotNotificationsService();
+      return new GamesService(
+        auth,
+        new GamesQueryService(storage),
+        new GamesRegistrationService(notifications, owner),
+        new GamesTurnService(owner),
+        storage,
+        new GamesFileService(auth, storage, notifications),
+        owner,
+      );
+    };
+
+    let campaigns = await freshCampaignService();
+    expect((await campaigns.getGameDetail('1')).fileVersions).toEqual([]);
+    for (const step of [
+      {
+        uploader: 'user-1',
+        nextUser: 'user-2',
+        nextSeat: 'seat-2',
+        nextName: 'Overlord',
+        round: 1,
+        version: 1,
+        name: '1-T1-S3-Overlord.se1',
+      },
+      {
+        uploader: 'user-2',
+        nextUser: 'user-1',
+        nextSeat: 'seat-1',
+        nextName: 'Alpha',
+        round: 2,
+        version: 2,
+        name: '1-T2-S1-Alpha.se1',
+      },
+    ]) {
+      const before = await campaigns.getGameDetail('1');
+      const metadata = {
+        idempotencyKey: `completed-turn-${step.version}`,
+        expectedSaveBaseline: before.saveBaseline,
+        expectedActivePlayerEntryId: before.activePlayerEntryId!,
+        expectedActivePlayerUserId: step.uploader,
+        expectedRoundNumber: before.roundNumber,
+        expectedLatestFileVersionId: before.fileVersions[0]?.id ?? null,
+      };
+      const uploaded = await campaigns.uploadSave(
+        '1',
+        step.uploader,
+        file,
+        metadata,
+      );
+      expect(uploaded).toMatchObject({
+        versionNumber: step.version,
+        originalName: step.name,
+        roundNumber: step.round,
+        roundAdvanced: step.version === 2,
+        activePlayer: { id: step.nextSeat, userId: step.nextUser },
+      });
+
+      campaigns = await freshCampaignService();
+      const detail = await campaigns.getGameDetail('ashes');
+      expect(detail).toMatchObject({
+        activePlayerEntryId: step.nextSeat,
+        activePlayerUserId: step.nextUser,
+        activePlayerDisplayName: step.nextName,
+        roundNumber: step.round,
+        seatOrderBaseline: { revision: step.version },
+        openTurn: {
+          gamePlayerId: step.nextSeat,
+          userId: step.nextUser,
+          roundNumber: step.round,
+        },
+      });
+      expect(detail.fileVersions).toHaveLength(step.version);
+      expect(detail.fileVersions[0]).toMatchObject({
+        id: uploaded.fileVersionId,
+        originalName: step.name,
+        uploadedById: step.uploader,
+      });
+      expect(detail.recentCompletedTurns).toHaveLength(step.version);
+      expect(detail.recentCompletedTurns).toContainEqual(
+        expect.objectContaining({
+          userId: step.uploader,
+          completionReason: 'SAVE_UPLOADED',
+          endedAt: detail.openTurn!.startedAt,
+        }),
+      );
+      expect(await campaigns.listGames()).toEqual([
+        expect.objectContaining({
+          activePlayerUserId: step.nextUser,
+          activePlayerDisplayName: step.nextName,
+          roundNumber: step.round,
+          latestSave: { id: uploaded.fileVersionId, originalName: step.name },
+        }),
+      ]);
+      expect(await campaigns.getGameStatus('1', step.uploader)).toMatchObject({
+        activePlayer: { id: step.nextSeat, userId: step.nextUser },
+        canCurrentPlayerUpload: false,
+      });
+      expect(await campaigns.getGameStatus('1', step.nextUser)).toMatchObject({
+        canCurrentPlayerUpload: true,
+      });
+
+      expect(
+        await campaigns.uploadSave('game-1', step.uploader, file, metadata),
+      ).toMatchObject({
+        fileVersionId: uploaded.fileVersionId,
+        idempotentReplay: true,
+      });
+      campaigns = await freshCampaignService();
+      expect(await campaigns.getGameDetail('1')).toEqual(detail);
+    }
+  });
+
   it.each(['wraparound', 'single-player'])(
     'completes a %s turn with incremented round, canonical naming, and exactly one revision',
     async (scenario) => {

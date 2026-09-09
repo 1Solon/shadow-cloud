@@ -12,6 +12,11 @@ import { SaveUploadCard } from "@/components/save-upload-card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { GameListItem } from "@/lib/shadow-cloud-api";
+import {
+  formatTurnDuration,
+  getTurnDurationMs,
+  normalizeTurnTargetHours,
+} from "@/lib/turn-timing";
 import { cn } from "@/lib/utils";
 
 type CampaignCardProps = {
@@ -55,6 +60,17 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
   const [isUploadButtonHighlighted, setIsUploadButtonHighlighted] =
     useState(false);
   const [relativeUpdatedAt, setRelativeUpdatedAt] = useState(game.updatedAt);
+  const [now, setNow] = useState<Date | null>(null);
+  const elapsed = formatTurnDuration(
+    now && game.currentTurnStartedAt != null
+      ? getTurnDurationMs(
+          { startedAt: game.currentTurnStartedAt, endedAt: null },
+          now,
+        )
+      : null,
+  );
+  const targetHours = normalizeTurnTargetHours(game.turnTargetHours);
+  const target = targetHours !== null ? `${targetHours}h` : "Unknown";
   const isUsersTurn = Boolean(
     currentUserId && game.activePlayerUserId === currentUserId,
   );
@@ -64,6 +80,7 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
 
   useEffect(() => {
     function updateRelativeTimestamp() {
+      setNow(new Date());
       setRelativeUpdatedAt(formatRelativeTimestamp(game.updatedAt, Date.now()));
     }
 
@@ -165,6 +182,14 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
             </div>
 
             <dl className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 md:grid-cols-3 md:gap-x-4 md:pl-1">
+              <div className="col-span-2 min-w-0 px-1 md:col-span-3">
+                <dt className="text-xs uppercase tracking-[0.16em] text-orange-300/70 group-focus-visible:text-black/70">
+                  Elapsed / target
+                </dt>
+                <dd className="text-sm font-medium text-orange-300 group-focus-visible:text-black">
+                  {`${elapsed} / ${target}`}
+                </dd>
+              </div>
               <div className="min-w-0 px-1">
                 <dt
                   className={cn(

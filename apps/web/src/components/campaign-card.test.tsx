@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -62,10 +62,49 @@ const game: GameListItem = {
 
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   push.mockReset();
 });
 
 describe("CampaignCard", () => {
+  it("keeps unavailable timing visible and applies the individual view's validity rules", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-10T02:00:00.000Z"));
+    const { rerender } = render(<CampaignCard game={game} />);
+    for (const turnTargetHours of [
+      0,
+      -1,
+      1.5,
+      NaN,
+      Infinity,
+      Number.MAX_SAFE_INTEGER + 1,
+    ]) {
+      rerender(<CampaignCard game={{ ...game, turnTargetHours }} />);
+      expect(screen.getByText("2h / Unknown")).toBeVisible();
+    }
+    for (const currentTurnStartedAt of [null, "invalid-start"]) {
+      rerender(<CampaignCard game={{ ...game, currentTurnStartedAt }} />);
+      expect(screen.getByText("Unknown / 24h")).toBeVisible();
+    }
+    rerender(
+      <CampaignCard
+        game={{ ...game, currentTurnStartedAt: "2026-07-11T00:00:00.000Z" }}
+      />,
+    );
+    expect(screen.getByText("<1m / 24h")).toBeVisible();
+  });
+
+  it("shows current turn elapsed / target and refreshes elapsed each minute", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-10T00:59:00.000Z"));
+    render(<CampaignCard game={game} />);
+
+    expect(screen.getByText("Elapsed / target")).toBeVisible();
+    expect(screen.getByText("59m / 24h")).toBeVisible();
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(screen.getByText("1h / 24h")).toBeVisible();
+  });
+
   it("places the latest-turn download to the left of the upload action", async () => {
     const user = userEvent.setup();
     render(<CampaignCard currentUserId="user-1" game={game} />);

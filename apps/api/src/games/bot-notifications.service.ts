@@ -48,6 +48,11 @@ export type UploadNotificationPayload = {
   }>;
 };
 
+export type ActivePlayerChangedNotificationPayload = {
+  game: UploadNotificationPayload['game'];
+  turn: Omit<UploadNotificationPayload['turn'], 'roundAdvanced'>;
+};
+
 export type SaveReplacedNotificationPayload = {
   game: UploadNotificationPayload['game'];
   replacement: {
@@ -121,6 +126,7 @@ export type TurnNudgeNotificationPayload = {
 };
 
 type NotificationEventName =
+  | 'active-player-changed'
   | 'save-uploaded'
   | 'save-replaced'
   | 'game-initialized'
@@ -194,6 +200,21 @@ export class BotNotificationsService implements OnModuleInit, OnModuleDestroy {
       eventName: 'save-uploaded',
       gameId: payload.game.id,
       gameSlug: payload.game.slug,
+    });
+  }
+
+  async enqueueActivePlayerChanged(
+    transaction: Prisma.TransactionClient,
+    payload: ActivePlayerChangedNotificationPayload,
+  ) {
+    if (!payload.game.discordThreadId) return;
+    await transaction.notificationDelivery.create({
+      data: {
+        event: NotificationDeliveryEvent.ACTIVE_PLAYER_CHANGED,
+        payload: JSON.stringify(payload),
+        gameId: payload.game.id,
+        gameSlug: payload.game.slug,
+      },
     });
   }
 
@@ -474,6 +495,8 @@ export class BotNotificationsService implements OnModuleInit, OnModuleDestroy {
     event: NotificationDeliveryEvent,
   ): NotificationEventName {
     switch (event) {
+      case NotificationDeliveryEvent.ACTIVE_PLAYER_CHANGED:
+        return 'active-player-changed';
       case NotificationDeliveryEvent.SAVE_UPLOADED:
         return 'save-uploaded';
       case NotificationDeliveryEvent.SAVE_REPLACED:
@@ -489,6 +512,8 @@ export class BotNotificationsService implements OnModuleInit, OnModuleDestroy {
 
   private getEndpointForEvent(event: NotificationDeliveryEvent) {
     switch (event) {
+      case NotificationDeliveryEvent.ACTIVE_PLAYER_CHANGED:
+        return `${this.notificationBaseUrl}/notify/active-player-changed`;
       case NotificationDeliveryEvent.SAVE_UPLOADED:
         return this.saveUploadedEndpoint;
       case NotificationDeliveryEvent.SAVE_REPLACED:

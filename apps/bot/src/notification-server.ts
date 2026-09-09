@@ -1,6 +1,8 @@
 import { createServer } from "node:http";
 import type { Client, Message } from "discord.js";
 import {
+  buildActivePlayerChangedNotificationMessage,
+  type ActivePlayerChangedNotificationPayload,
   buildGameInitNotificationMessage,
   buildSaveReplacedNotificationMessage,
   buildSaveNotificationMessage,
@@ -120,6 +122,8 @@ export function startNotificationServer(
     const isGameInitializedRequest = request.url === "/notify/game-initialized";
     const isThreadRenameRequest = request.url === "/notify/thread-rename";
     const isTurnNudgeRequest = request.url === "/notify/turn-nudge";
+    const isActivePlayerChangedRequest =
+      request.url === "/notify/active-player-changed";
 
     if (request.method === "GET" && request.url === "/health") {
       response.writeHead(200).end("ok");
@@ -132,7 +136,8 @@ export function startNotificationServer(
         !isSaveReplacedRequest &&
         !isGameInitializedRequest &&
         !isThreadRenameRequest &&
-        !isTurnNudgeRequest)
+        !isTurnNudgeRequest &&
+        !isActivePlayerChangedRequest)
     ) {
       response.writeHead(404).end("Not found");
       return;
@@ -153,6 +158,7 @@ export function startNotificationServer(
 
     try {
       const payload = JSON.parse(Buffer.concat(chunks).toString("utf8")) as
+        | ActivePlayerChangedNotificationPayload
         | UploadNotificationPayload
         | SaveReplacedNotificationPayload
         | GameInitializedNotificationPayload
@@ -191,7 +197,12 @@ export function startNotificationServer(
 
       let notificationMessage;
 
-      if (isSaveUploadedRequest) {
+      if (isActivePlayerChangedRequest) {
+        notificationMessage = buildActivePlayerChangedNotificationMessage(
+          payload as ActivePlayerChangedNotificationPayload,
+          webBaseUrl,
+        );
+      } else if (isSaveUploadedRequest) {
         notificationMessage = buildSaveNotificationMessage(
           payload as UploadNotificationPayload,
           webBaseUrl,
@@ -241,4 +252,5 @@ export function startNotificationServer(
       `Shadow Cloud notification server listening on ${notificationPort}`,
     );
   });
+  return server;
 }

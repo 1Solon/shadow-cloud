@@ -12,6 +12,10 @@ const turnTimestampFormatter = new Intl.DateTimeFormat("en-US", {
   timeZone: "UTC",
 });
 
+export function normalizeTurnTargetHours(hours: number): number | null {
+  return Number.isSafeInteger(hours) && hours > 0 ? hours : null;
+}
+
 export function getTurnDurationMs(
   record: Pick<GameTurnRecord, "startedAt" | "endedAt">,
   now: Date,

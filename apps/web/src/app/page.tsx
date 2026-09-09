@@ -92,7 +92,7 @@ export default async function Home() {
               emptyTitle="No campaigns assigned to you"
               emptyDescription="Join a Shadow Cloud campaign through Discord to see your active turns here."
               currentUserId={userId}
-              hasSortingOptions
+              hasExtendedControls
             />
           ) : null}
           <CampaignList
