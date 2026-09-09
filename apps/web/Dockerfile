@@ -23,6 +23,7 @@ ENV SHADOW_CLOUD_VERSION=$SHADOW_CLOUD_VERSION
 WORKDIR /workspace
 
 COPY apps/web apps/web
+COPY scripts/dev-env.mjs scripts/dev-env.mjs
 
 ENV NEXTAUTH_SECRET=docker-build-secret
 ENV NEXTAUTH_URL=http://localhost:3000
