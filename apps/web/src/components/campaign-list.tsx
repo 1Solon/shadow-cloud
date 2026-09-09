@@ -17,17 +17,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { GameListItem } from "@/lib/shadow-cloud-api";
-import { getTurnDurationMs, normalizeTurnTargetHours } from "@/lib/turn-timing";
 
-export type CampaignSortOption =
-  | "updated-desc"
-  | "updated-asc"
-  | "name-asc"
-  | "name-desc"
-  | "elapsed-asc"
-  | "elapsed-desc"
-  | "target-asc"
-  | "target-desc";
+export type CampaignSortOption = "name-asc" | "turn-oldest" | "turn-newest";
 
 export type CampaignTurnFilter = "all" | "your-turn" | "waiting";
 
@@ -85,54 +76,26 @@ export function sortAndFilterCampaigns(
     searchQuery,
   );
 
-  const now = new Date(Date.now());
   return filteredCampaigns.sort((left, right) => {
-    if (sortOption.startsWith("elapsed-") || sortOption.startsWith("target-")) {
-      const timingValue = (game: GameListItem) => {
-        if (sortOption.startsWith("target-")) {
-          return normalizeTurnTargetHours(game.turnTargetHours);
-        }
-        return game.currentTurnStartedAt != null
-          ? getTurnDurationMs(
-              { startedAt: game.currentTurnStartedAt, endedAt: null },
-              now,
-            )
-          : null;
-      };
-      const leftValue = timingValue(left);
-      const rightValue = timingValue(right);
-      if (leftValue === null || rightValue === null) {
-        return leftValue === rightValue
-          ? compareCampaignNames(left, right)
-          : leftValue === null
-            ? 1
-            : -1;
-      }
-      const comparison = leftValue - rightValue;
-      return (
-        (sortOption.endsWith("-asc") ? comparison : -comparison) ||
-        compareCampaignNames(left, right)
-      );
-    }
     if (sortOption === "name-asc") {
       return compareCampaignNames(left, right);
     }
 
-    if (sortOption === "name-desc") {
-      return compareCampaignNames(right, left);
+    const leftStart = Date.parse(left.currentTurnStartedAt ?? "");
+    const rightStart = Date.parse(right.currentTurnStartedAt ?? "");
+    if (Number.isNaN(leftStart) || Number.isNaN(rightStart)) {
+      return Number.isNaN(leftStart) === Number.isNaN(rightStart)
+        ? compareCampaignNames(left, right)
+        : Number.isNaN(leftStart)
+          ? 1
+          : -1;
     }
 
-    const leftUpdatedAt = Date.parse(left.updatedAt) || 0;
-    const rightUpdatedAt = Date.parse(right.updatedAt) || 0;
-    const updatedAtComparison = leftUpdatedAt - rightUpdatedAt;
-
-    if (updatedAtComparison === 0) {
-      return compareCampaignNames(left, right);
-    }
-
-    return sortOption === "updated-asc"
-      ? updatedAtComparison
-      : -updatedAtComparison;
+    const comparison = leftStart - rightStart;
+    return (
+      (sortOption === "turn-oldest" ? comparison : -comparison) ||
+      compareCampaignNames(left, right)
+    );
   });
 }
 
@@ -153,21 +116,17 @@ export function CampaignList({
   currentUserId,
   hasExtendedControls = false,
 }: CampaignListProps) {
-  const [sortOption, setSortOption] = useState<CampaignSortOption | "default">(
-    hasExtendedControls ? "updated-desc" : "default",
-  );
+  const [sortOption, setSortOption] =
+    useState<CampaignSortOption>("turn-newest");
   const [turnFilter, setTurnFilter] = useState<CampaignTurnFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const visibleCampaigns =
-    sortOption !== "default"
-      ? sortAndFilterCampaigns(
-          campaigns,
-          currentUserId,
-          sortOption,
-          hasExtendedControls ? turnFilter : "all",
-          searchQuery,
-        )
-      : filterCampaigns(campaigns, currentUserId, "all", searchQuery);
+  const visibleCampaigns = sortAndFilterCampaigns(
+    campaigns,
+    currentUserId,
+    sortOption,
+    hasExtendedControls ? turnFilter : "all",
+    searchQuery,
+  );
   const hasActiveFilter =
     searchQuery.trim() !== "" || (hasExtendedControls && turnFilter !== "all");
   const campaignCount = hasActiveFilter
@@ -207,7 +166,7 @@ export function CampaignList({
               <Select
                 value={sortOption}
                 onValueChange={(value) => {
-                  setSortOption(value as CampaignSortOption | "default");
+                  setSortOption(value as CampaignSortOption);
                 }}
               >
                 <SelectTrigger
@@ -218,32 +177,9 @@ export function CampaignList({
                 </SelectTrigger>
                 <SelectContent position="popper">
                   <SelectGroup>
-                    {hasExtendedControls ? (
-                      <>
-                        <SelectItem value="updated-desc">
-                          Newest first
-                        </SelectItem>
-                        <SelectItem value="updated-asc">
-                          Oldest first
-                        </SelectItem>
-                        <SelectItem value="name-asc">A–Z</SelectItem>
-                        <SelectItem value="name-desc">Z–A</SelectItem>
-                      </>
-                    ) : (
-                      <SelectItem value="default">Default order</SelectItem>
-                    )}
-                    <SelectItem value="elapsed-asc">
-                      Elapsed: shortest first
-                    </SelectItem>
-                    <SelectItem value="elapsed-desc">
-                      Elapsed: longest first
-                    </SelectItem>
-                    <SelectItem value="target-asc">
-                      Target: shortest first
-                    </SelectItem>
-                    <SelectItem value="target-desc">
-                      Target: longest first
-                    </SelectItem>
+                    <SelectItem value="name-asc">Name</SelectItem>
+                    <SelectItem value="turn-oldest">Turn (Oldest)</SelectItem>
+                    <SelectItem value="turn-newest">Turn (Newest)</SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>

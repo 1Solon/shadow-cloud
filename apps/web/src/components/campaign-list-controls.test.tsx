@@ -26,7 +26,7 @@ const base: GameListItem = {
   gameNumber: 1,
   name: "Long",
   organizerDisplayName: "Overlord",
-  updatedAt: "2026-07-10T00:00:00Z",
+  updatedAt: "2026-07-12T00:00:00Z",
   roundNumber: 1,
   activePlayerUserId: null,
   activePlayerDisplayName: "Unassigned",
@@ -62,7 +62,7 @@ const campaigns = [
 ];
 
 it.each([false, true])(
-  "offers both time directions on overview cards (extended controls: %s), preserving defaults",
+  "offers exactly Name, Turn (Oldest), Turn (Newest), defaulting to newest starts (extended controls: %s)",
   async (hasExtendedControls) => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-07-11T00:00:00Z"));
@@ -84,24 +84,25 @@ it.each([false, true])(
       screen
         .getAllByRole("link")
         .map((card) => within(card).getByText(/^\d : \w+$/).textContent);
-    expect(order()).toEqual(
-      hasExtendedControls
-        ? ["3 : Short", "1 : Long", "2 : Unknown"]
-        : ["1 : Long", "2 : Unknown", "3 : Short"],
-    );
+    expect(order()).toEqual(["3 : Short", "1 : Long", "2 : Unknown"]);
     expect(screen.getByText("Unknown / Unknown")).toBeVisible();
     expect(screen.getByText("2d / 48h")).toBeVisible();
     expect(screen.getByText("1d / 2h")).toBeVisible();
     const sort = screen.getByRole("combobox", {
       name: "Sort active campaigns",
     });
+    expect(sort).toHaveTextContent("Turn (Newest)");
     for (const [label, expected] of [
-      ["Elapsed: shortest first", ["3 : Short", "1 : Long", "2 : Unknown"]],
-      ["Elapsed: longest first", ["1 : Long", "3 : Short", "2 : Unknown"]],
-      ["Target: shortest first", ["3 : Short", "1 : Long", "2 : Unknown"]],
-      ["Target: longest first", ["1 : Long", "3 : Short", "2 : Unknown"]],
+      ["Name", ["1 : Long", "3 : Short", "2 : Unknown"]],
+      ["Turn (Oldest)", ["1 : Long", "3 : Short", "2 : Unknown"]],
+      ["Turn (Newest)", ["3 : Short", "1 : Long", "2 : Unknown"]],
     ] as const) {
       fireEvent.keyDown(sort, { key: "ArrowDown" });
+      expect(
+        (await screen.findAllByRole("option")).map(
+          (option) => option.textContent,
+        ),
+      ).toEqual(["Name", "Turn (Oldest)", "Turn (Newest)"]);
       fireEvent.click(await screen.findByRole("option", { name: label }));
       expect(order()).toEqual(expected);
     }
@@ -109,5 +110,21 @@ it.each([false, true])(
       target: { value: "Unknown" },
     });
     expect(order()).toEqual(["2 : Unknown"]);
+    if (hasExtendedControls) {
+      const filter = screen.getByRole("combobox", {
+        name: "Filter active campaigns by turn status",
+      });
+      fireEvent.keyDown(filter, { key: "ArrowDown" });
+      fireEvent.click(
+        await screen.findByRole("option", { name: "Your turn only" }),
+      );
+      expect(screen.queryAllByRole("link")).toHaveLength(0);
+      expect(screen.getByText("No campaigns match your search")).toBeVisible();
+      fireEvent.keyDown(filter, { key: "ArrowDown" });
+      fireEvent.click(
+        await screen.findByRole("option", { name: "Waiting on others" }),
+      );
+      expect(order()).toEqual(["2 : Unknown"]);
+    }
   },
 );
