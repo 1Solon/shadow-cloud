@@ -335,7 +335,7 @@ describe("TurnTimingHistoryCard", () => {
     expect(
       table.querySelector('time[datetime="2026-07-10T10:30:00.000Z"]'),
     ).toBeInTheDocument();
-    expect(within(table).getAllByText(/ UTC$/)).toHaveLength(3);
+    expect(within(table).getAllByText(/ local$/)).toHaveLength(3);
   });
 
   it("renders Unknown for malformed turn timestamps and durations", () => {

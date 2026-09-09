@@ -194,7 +194,13 @@ describe("WorldStateHistoryCard", () => {
       }),
     ).toHaveLength(1);
     expect(
-      within(rows[1]).getByText("Jul 10, 2026, 7:00 PM UTC", { exact: true }),
+      within(rows[1]).getByText(
+        `${new Intl.DateTimeFormat("en-US", {
+          dateStyle: "medium",
+          timeStyle: "short",
+        }).format(new Date(latest.uploadedAt))} local`,
+        { exact: true },
+      ),
     ).toBeInTheDocument();
     expect(within(rows[1]).getAllByRole("link")).toHaveLength(1);
     expect(within(rows[1]).getAllByRole("button")).toHaveLength(1);

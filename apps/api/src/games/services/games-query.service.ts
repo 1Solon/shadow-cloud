@@ -122,6 +122,7 @@ export class GamesQueryService {
           select: {
             id: true,
             originalName: true,
+            uploadedAt: true,
           },
           orderBy: {
             versionNumber: 'desc',
@@ -133,6 +134,7 @@ export class GamesQueryService {
     });
 
     return games.map((game) => {
+      const latestSave = game.fileVersions[0];
       const activePlayerEntry = game.turnState
         ? resolveActivePlayerEntry(game.players, game.turnState)
         : null;
@@ -154,7 +156,7 @@ export class GamesQueryService {
         }),
         discordThreadId: game.discordThreadId,
         organizerDisplayName: game.organizer.displayName,
-        updatedAt: game.updatedAt.toISOString(),
+        updatedAt: (latestSave?.uploadedAt ?? game.updatedAt).toISOString(),
         roundNumber: game.turnState?.roundNumber ?? 1,
         activePlayerUserId: activePlayerEntry?.userId ?? null,
         activePlayerDisplayName:
@@ -171,7 +173,9 @@ export class GamesQueryService {
         turnRemindersEnabled: game.turnRemindersEnabled,
         currentTurnStartedAt:
           game.turnRecords[0]?.startedAt.toISOString() ?? null,
-        latestSave: game.fileVersions[0] ?? null,
+        latestSave: latestSave
+          ? { id: latestSave.id, originalName: latestSave.originalName }
+          : null,
       };
     });
   }

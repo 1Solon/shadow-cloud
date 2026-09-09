@@ -1,4 +1,5 @@
 import { DownloadSaveButton } from "@/components/download-save-button";
+import { LocalTimestamp } from "@/components/local-timestamp";
 import { ReplaceSaveFileAction } from "@/components/replace-save-file-action";
 import {
   CardContent,
@@ -18,16 +19,6 @@ type WorldStateHistoryCardProps = {
   isShadowOverrideUser: boolean;
   shadowOverrideEnabled: boolean;
 };
-
-const timestampFormatter = new Intl.DateTimeFormat("en-US", {
-  dateStyle: "medium",
-  timeStyle: "short",
-  timeZone: "UTC",
-});
-
-function formatTimestamp(timestamp: string) {
-  return `${timestampFormatter.format(new Date(timestamp))} UTC`;
-}
 
 export function WorldStateHistoryCard({
   saveBaseline,
@@ -153,9 +144,7 @@ export function WorldStateHistoryCard({
                         data-label="Uploaded"
                         role="cell"
                       >
-                        <time dateTime={fileVersion.uploadedAt}>
-                          {formatTimestamp(fileVersion.uploadedAt)}
-                        </time>
+                        <LocalTimestamp timestamp={fileVersion.uploadedAt} />
                       </td>
                       <td
                         className="break-words px-3 py-2 sm:px-4 sm:py-3"
@@ -167,9 +156,9 @@ export function WorldStateHistoryCard({
                           <>
                             {fileVersion.replacedByDisplayName}
                             <span className="block text-xs opacity-70">
-                              <time dateTime={fileVersion.replacedAt}>
-                                {formatTimestamp(fileVersion.replacedAt)}
-                              </time>
+                              <LocalTimestamp
+                                timestamp={fileVersion.replacedAt}
+                              />
                             </span>
                           </>
                         ) : (

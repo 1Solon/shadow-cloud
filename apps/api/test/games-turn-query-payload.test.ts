@@ -92,11 +92,50 @@ describe('GamesQueryService turn timing payloads', () => {
     vi.clearAllMocks();
   });
 
+  it.each(['2026-06-01T00:00:00.000Z', '2026-08-01T00:00:00.000Z'])(
+    'uses the latest turn upload for the update age despite a campaign update at %s',
+    async (updatedAt) => {
+      prismaMock.game.findMany.mockResolvedValue([
+        createGame({
+          updatedAt: new Date(updatedAt),
+          fileVersions: [
+            {
+              id: 'file-latest',
+              originalName: '1-T3-S1-Ashes.se1',
+              uploadedAt: new Date('2026-07-15T06:00:00.000Z'),
+            },
+          ],
+        }),
+      ]);
+
+      const [game] = await new GamesQueryService({} as never).listGames();
+
+      expect(game.updatedAt).toBe('2026-07-15T06:00:00.000Z');
+      expect(game.latestSave).toEqual({
+        id: 'file-latest',
+        originalName: '1-T3-S1-Ashes.se1',
+      });
+    },
+  );
+
+  it('retains the campaign update age when no turn has been uploaded', async () => {
+    prismaMock.game.findMany.mockResolvedValue([createGame()]);
+
+    const [game] = await new GamesQueryService({} as never).listGames();
+
+    expect(game.updatedAt).toBe('2026-07-11T00:00:00.000Z');
+    expect(game.latestSave).toBeNull();
+  });
+
   it('returns list policy fields and the open turn start time without detail history', async () => {
     prismaMock.game.findMany.mockResolvedValue([
       createGame({
         fileVersions: [
-          { id: 'file-latest', originalName: '1-T3-S1-Ashes.se1' },
+          {
+            id: 'file-latest',
+            originalName: '1-T3-S1-Ashes.se1',
+            uploadedAt: endedAt,
+          },
         ],
       }),
     ]);
@@ -129,6 +168,7 @@ describe('GamesQueryService turn timing payloads', () => {
             select: {
               id: true,
               originalName: true,
+              uploadedAt: true,
             },
             orderBy: { versionNumber: 'desc' },
             take: 1,

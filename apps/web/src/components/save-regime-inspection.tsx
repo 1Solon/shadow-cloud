@@ -35,9 +35,9 @@ export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
       <CardHeader>
         <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-1.5">
-            <CardTitle>Password reset:</CardTitle>
+            <CardTitle>Passwords:</CardTitle>
             <CardDescription>
-              Reset/Change passwords in the latest save
+              Reset/Change passwords in the latest save.
             </CardDescription>
           </div>
           {hasSave ? (

@@ -102,8 +102,8 @@ export default async function Home() {
             emptyDescription={
               <>
                 Run <span className="font-mono text-orange-400">/init</span>{" "}
-                inside a Discord forum thread to create the first Shadow Cloud
-                campaign record.
+                or <span className="font-mono text-orange-400">/register</span>{" "}
+                inside a forum thread to join your first Shadow Cloud Campaign.
               </>
             }
             currentUserId={userId}

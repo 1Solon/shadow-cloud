@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { LocalTimestamp } from "@/components/local-timestamp";
 import {
   Card,
   CardContent,
@@ -11,20 +12,12 @@ import {
 import {
   formatCompletionReason,
   formatTurnDuration,
-  formatTurnTimestamp,
   getTurnDurationMs,
 } from "@/lib/turn-timing";
 import type { GameTurnRecord } from "@/lib/shadow-cloud-api";
 
 const defaultRefreshIntervalMs = 60 * 1000;
 const maxCompletedTurns = 25;
-const compactTimestampFormatter = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-  timeZone: "UTC",
-});
 
 type TurnTimingHistoryCardProps = {
   openTurn: GameTurnRecord | null;
@@ -32,20 +25,6 @@ type TurnTimingHistoryCardProps = {
   initialNow: string;
   refreshIntervalMs?: number;
 };
-
-function TurnTimestamp({ timestamp }: { timestamp: string }) {
-  const formattedTimestamp = formatTurnTimestamp(timestamp);
-
-  if (formattedTimestamp === "Unknown") {
-    return "Unknown";
-  }
-
-  return (
-    <time dateTime={timestamp} title={formattedTimestamp}>
-      {compactTimestampFormatter.format(new Date(timestamp))} UTC
-    </time>
-  );
-}
 
 function TurnTimingHistoryRow({
   record,
@@ -92,14 +71,14 @@ function TurnTimingHistoryRow({
             <span className="mr-2 text-[0.6rem] uppercase tracking-[0.14em] text-orange-300/60">
               Started
             </span>
-            <TurnTimestamp timestamp={record.startedAt} />
+            <LocalTimestamp compact timestamp={record.startedAt} />
           </div>
           <div>
             <span className="mr-2 text-[0.6rem] uppercase tracking-[0.14em] text-orange-300/60">
               {record.endedAt ? "Completed" : "Status"}
             </span>
             {record.endedAt ? (
-              <TurnTimestamp timestamp={record.endedAt} />
+              <LocalTimestamp compact timestamp={record.endedAt} />
             ) : (
               "In progress"
             )}

@@ -127,7 +127,7 @@ it("uses the shared campaign card framing and heading styles", () => {
     "bg-black/90",
     "shadow-orange-400/20",
   );
-  expect(screen.getByRole("heading", { name: "Password reset:" })).toHaveClass(
+  expect(screen.getByRole("heading", { name: "Passwords:" })).toHaveClass(
     "text-xl",
     "font-semibold",
   );
