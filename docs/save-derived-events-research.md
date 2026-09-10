@@ -81,9 +81,9 @@ The official PDF was downloaded to `/tmp/opencode/shadow-empire-manual.pdf` and 
 
 ## SOL-28 Implementation Evidence Gate
 
-Repository inspection on 2026-09-10 found no validated multi-save corpus establishing the additional save semantics required by SOL-28. The existing [save-format evidence](save-format.md) covers password-reset targeting in one observed save; automated save fixtures are synthetic and are not playable game saves. A stored save artifact alone cannot establish identity stability or before/after elimination behavior. No stored campaign save or credential is included in this document or the associated draft PR.
+Initial repository inspection on 2026-09-10 found no validated multi-save corpus establishing the additional save semantics required by SOL-28. The existing [save-format evidence](save-format.md) covers password-reset targeting in one observed save; automated save fixtures are synthetic and are not playable game saves. A stored save artifact alone cannot establish identity stability or before/after elimination behavior. No stored campaign save or credential is included in this document or the associated draft PR. The subsequently authorized corpus investigation below supersedes the initial absence of multi-save evidence, but does not satisfy every release gate.
 
-The following requirements remain blocked, rather than implemented with guessed predicates:
+The initial evidence checklist was:
 
 | Required evidence | What must be established |
 | --- | --- |
@@ -95,3 +95,42 @@ The following requirements remain blocked, rather than implemented with guessed 
 To resume, obtain an authorized, disposable campaign save corpus with the game version, relevant fog-of-war settings, expected in-game outcomes, and consecutive saves covering these transitions. Supply any archive access material through the existing secret configuration, not issue descriptions, commits, or test fixtures. Keep original private saves out of version control; derive safe regression fixtures only after validating their semantics against the game.
 
 This gate is required by SOL-28's save-reader testing decisions: synthetic fixtures alone cannot establish actual game-format semantics. No claims, event generation, elimination controls, or turn-eligibility changes have been implemented by this research-only change. The canonical feature specification remains in Linear.
+
+## Authorized Multi-Save Investigation
+
+On 2026-09-10 the user explicitly authorized using campaign 282's saves from the main Shadow Cloud site, with participant permission secured. Eight available history archives were downloaded read-only into a private temporary directory outside the repository. All passed the existing bounded archive/NRBF readers; final SHA-256 comparisons confirmed the originals were unchanged. The archive key was loaded from local configuration in process memory without emitting it. No game code, CLR deserialization, campaign mutation, or password change was performed.
+
+The investigation combined those saves with static PE/IL inspection of the installed game executable already identified in [save-format.md](save-format.md), SHA-256 `60d7bb341acbf9c7108cd80c6b0ed6933b024e7bfedbe434853027055b68c29f`. Method-relative offsets below locate primary implementation evidence. This executable does not establish complete compatibility with every producer build in the corpus.
+
+### Persistent Identity: Supported for the Observed Profile
+
+- `RegimeClass.Id` is serialized as Int32. `GetObjectData` at 0x075b–0x0766 writes the in-memory `id` member under `Id`; its serialization constructor at 0x182a–0x1836 reads it back.
+- `DataClass.AddRegime` at 0x007b–0x009c increments `RegimeIdCounter` and assigns the new identity. `DataClass.RemoveRegime` at 0x0037–0x0072 compacts the array and renumbers references, proving that an array position is not persistent identity.
+- Every present regime had a unique positive Id in all eight saves, and the identity set remained stable across all seven comparisons. `RandomCode` changes and is not a suitable identity.
+- Campaign-scoped serialized Id associations are supported by this evidence. Incoming-save lineage and ambiguity checks remain necessary. Corrections, compaction, imports, creation, and legacy missing-ID cases were not exercised by this series; do not manufacture missing identities.
+
+### Elimination: Still Requires Targeted Evidence
+
+- No awake-to-sleep transition or regime disappearance occurs in the series. The observed Sleep transition is a dormant AI non-major waking up, not a defeat. `EventRelatedClass.ResetSleep` at 0x03e9–0x064c likewise demonstrates reversible dormancy behavior. Neither `Sleep` nor `hideFromList` is a universal eliminated flag.
+- Human defeat-related paths check locations and qualifying units, with game-state and processing-time conditions. `ResourceWindowClass2.DoEndTurnStuff` at 0x0012–0x01ed calls surrender processing and creates elimination reports for awake human recipients. This supports a public-human notification path, not a universal AI-elimination predicate.
+- The saves contain `surrenderedInRound`, but the installed executable's regime metadata has no such field. Its name alone does not validate its producer/consumer semantics. The corpus contains differing regime subversion markers; matching-build evidence is needed for this field.
+- `AI == false` alone is insufficient for player-regime enumeration: the corpus includes an untyped slot-zero entry with that flag. Regime-type metadata and special-slot handling must be validated independently of password-reset eligibility.
+
+### Land Ownership: Formula and Stream Profile Supported
+
+- `HexClass.StreamRead` reads `LandscapeType` and `Regime` indices. Resolve ownership through that save's regime array, then use persistent Id for comparisons. Land classification comes from `LandscapeTypeClass.IsSea`.
+- `EventRelatedClass.Helper_RegimeRatings` at 0x1580–0x167d traverses map 0, excludes sea terrain, counts all remaining hexes in the denominator, and attributes owned land to regimes. Unowned land counts in the denominator.
+- All eight saves passed complete version-21 hex-stream framing, owner/terrain reference checks, and map-data size/padding checks. The land denominator remained stable while ownership changed. No names, coordinates, counts, or ownership shares are published here.
+- At 0x176a–0x17a1 the game stores rounded `zonePercentage` values for majors. Recomputed values matched every major's saved value in the first six samples, but not current ownership in the last two. One matched the preceding sample. This is a saved-report-input cross-check, not an observed in-game report session.
+
+### Public Reporting: Precision and Timing Remain a Gate
+
+The Secretary's Victory Overview renderer lists majors' rounded “PLANET %” values without the ordinary statistics visibility filters. Consequently, the earlier manual-only research must not be interpreted as proving that complete fog of war hides every territory report. Ordinary statistics do have global and viewer-specific visibility predicates.
+
+However, the overview reads cached, rounded values rather than rescanning current ownership. The observed discrepancies mean access to that report does not by itself establish universal knowledge of exact current-map thresholds. End-to-end report availability across players/builds and the timing/precision appropriate for announcements still require verification. AI-elimination recipient visibility remains a separate gate.
+
+### Remaining Validation and Local Reproduction
+
+Next evidence should cover known human and AI-major defeats, peaceful minor absorption, identity changes/corrections, and same-checkpoint in-game territorial report observations. Obtain matching-build semantics for `surrenderedInRound`; do not infer them from a suggestive member name. The feature remains unimplemented, with victory still out of scope.
+
+Temporary read-only tooling and detailed method citations are retained outside git in `/tmp/opencode/sol28-inspect.mjs`, `/tmp/opencode/sol28-il.py`, and `/tmp/opencode/sol28-research-findings.md`. The sanitized comparison can be repeated locally with `node /tmp/opencode/sol28-inspect.mjs --report --quiet`. These temporary artifacts are not portable repository fixtures or a substitute for feature tests. Original saves, secrets, raw graphs, and private map state must remain outside commits and issue descriptions.
