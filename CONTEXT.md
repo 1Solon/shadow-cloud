@@ -22,6 +22,12 @@ The authoritative account of a campaign's roster and active seat currently accep
 **Regime**:
 A nation inside a Shadow Empire game, controlled by a human or the game AI. A regime is distinct from a Shadow Cloud seat and the player occupying that seat.
 
+**Regime elimination**:
+The defeat of an in-game regime such that it no longer participates in the game. This is distinct from a player resigning from a Shadow Cloud campaign.
+
+**Regime association**:
+The campaign-specific link between a seat and the in-game regime it represents. The association belongs to the seat, so a replacement player inherits it.
+
 **In-game password**:
 The password protecting access to a human-controlled regime inside Shadow Empire, distinct from authentication to Shadow Cloud.
 
@@ -37,6 +43,9 @@ A Seat Order draft whose baseline predates a change to the roster, Overlord owne
 **Overlord**:
 The player responsible for organizing and administering a campaign.
 _Avoid_: Host, organizer
+
+**GM**:
+A person eligible to use Shadow Override. A GM is distinct from a campaign's Overlord.
 
 **Overlord transfer**:
 Reassignment of campaign control to another eligible player in that campaign.
