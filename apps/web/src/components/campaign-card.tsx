@@ -275,7 +275,7 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
                       "h-9 w-full px-2 text-xs sm:px-4 sm:text-sm",
                     )}
                     fileName={game.latestSave.originalName}
-                    href={`/api/games/${game.gameNumber}/files/${game.latestSave.id}`}
+                    href={`/api/games/${game.gameNumber}/files/${game.latestSave.id}?revision=${game.latestSave.contentRevision}`}
                     label="Download latest turn"
                   />
                 ) : (

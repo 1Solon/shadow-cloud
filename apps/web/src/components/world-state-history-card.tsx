@@ -174,7 +174,7 @@ export function WorldStateHistoryCard({
                           <DownloadSaveButton
                             className="inline-flex h-9 items-center rounded-md border border-orange-400/70 bg-orange-400/5 px-3 text-xs font-medium uppercase tracking-[0.18em] font-mono text-orange-300 transition-colors hover:bg-orange-400 hover:text-black"
                             fileName={fileVersion.originalName}
-                            href={`/api/games/${gameNumber}/files/${fileVersion.id}`}
+                            href={`/api/games/${gameNumber}/files/${fileVersion.id}?revision=${fileVersion.contentRevision}`}
                             label={
                               isMostRecent ? "Download latest save" : "Download"
                             }

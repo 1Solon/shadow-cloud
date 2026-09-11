@@ -18,6 +18,7 @@ const defaultProps = {
   isActivePlayer: true,
   isSignedIn: true,
   latestSave: {
+    contentRevision: 1,
     id: "save-9",
     originalName: "281-T9-S4-zarohn.se1",
   },

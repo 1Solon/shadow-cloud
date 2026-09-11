@@ -23,6 +23,7 @@ export type TurnCommandCenterProps = {
   isActivePlayer: boolean;
   isSignedIn: boolean;
   latestSave: {
+    contentRevision: number;
     id: string;
     originalName: string;
   } | null;
@@ -222,7 +223,7 @@ export function TurnCommandCenter({
                 <DownloadSaveButton
                   className="inline-flex min-h-11 shrink-0 items-center rounded-md border border-orange-400/70 bg-orange-400 px-3 text-xs font-medium text-black transition-colors hover:bg-orange-300"
                   fileName={latestSave.originalName}
-                  href={`/api/games/${gameNumber}/files/${latestSave.id}`}
+                  href={`/api/games/${gameNumber}/files/${latestSave.id}?revision=${latestSave.contentRevision}`}
                   label="Download latest save"
                 />
               </div>

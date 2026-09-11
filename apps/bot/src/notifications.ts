@@ -62,6 +62,7 @@ export type SaveReplacedNotificationPayload = {
   game: UploadNotificationPayload["game"];
   replacement: {
     passwordRecovery?: { operation: "reset" | "undo"; regimeName: string };
+    contentRevision: number;
     versionId: string;
     versionNumber: number;
     originalName: string;
@@ -390,13 +391,17 @@ export function buildSaveReplacedNotificationMessage(
   const downloadUrl = new URL(
     `/api/games/${encodeURIComponent(String(payload.game.gameNumber))}/files/${encodeURIComponent(payload.replacement.versionId)}`,
     webBaseUrl,
-  ).toString();
+  );
+  downloadUrl.searchParams.set(
+    "revision",
+    String(payload.replacement.contentRevision),
+  );
 
   return buildDiscordNotification({
     headline: `The save for ${payload.game.name} was corrected`,
     message: recovery
-      ? `The Overlord ${recovery.operation === "reset" ? "reset the in-game password" : "undid the latest password reset and restored the previous password"} for **${escapeMarkdown(recovery.regimeName)}**. The latest save has been replaced; the turn has not advanced. Download [the updated save](${downloadUrl}) before continuing. If you already started from the previous copy, restart from the updated save.`
-      : `Download [${payload.replacement.originalName}](${downloadUrl}) to continue with the corrected save.`,
+      ? `The Overlord ${recovery.operation === "reset" ? "reset the in-game password" : "undid the latest password reset and restored the previous password"} for **${escapeMarkdown(recovery.regimeName)}**. The latest save has been replaced; the turn has not advanced. Download [the updated save](${downloadUrl.toString()}) before continuing. If you already started from the previous copy, restart from the updated save.`
+      : `Download [${payload.replacement.originalName}](${downloadUrl.toString()}) to continue with the corrected save.`,
     details: [`**Corrected by:** ${correctedBy}`],
     metadata: replacedAt ? [`-# ${replacedAt}`] : [],
     mentionedUserIds: payload.replacement.replacedBy.discordId

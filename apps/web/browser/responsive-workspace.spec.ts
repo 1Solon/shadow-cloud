@@ -26,6 +26,7 @@ test("campaign actions and configuration remain reachable on mobile and desktop"
   };
   campaign.upstream.game.fileVersions = [
     {
+      contentRevision: 0,
       id: "latest-save",
       originalName: "42-T1-S2-Browser-Successor.se1",
       uploadedAt: "2026-07-11T12:00:00.000Z",

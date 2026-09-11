@@ -289,6 +289,7 @@ describe("/api/games/[gameNumber]/files/[fileVersionId]", () => {
     expect(response.headers.get("last-modified")).toBe(
       "Fri, 10 Jul 2026 12:00:00 GMT",
     );
+    expect(response.headers.get("cache-control")).toBe("no-store");
     await expect(response.text()).resolves.toBe("save contents");
     expect(mockedGetServerAuthSession).not.toHaveBeenCalled();
     expect(mockedGetShadowOverrideEnabled).not.toHaveBeenCalled();

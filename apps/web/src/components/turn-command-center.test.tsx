@@ -51,6 +51,7 @@ const defaultProps: React.ComponentProps<typeof TurnCommandCenter> = {
   isActivePlayer: true,
   isSignedIn: true,
   latestSave: {
+    contentRevision: 3,
     id: "save-9",
     originalName: "42-T4-S2-Rhea.se1",
   },
@@ -91,7 +92,7 @@ describe("TurnCommandCenter", () => {
     );
     expect(quickDownload).toHaveAttribute(
       "data-href",
-      "/api/games/42/files/save-9",
+      "/api/games/42/files/save-9?revision=3",
     );
 
     const uploader = screen.getByTestId("upload-save-form");

@@ -196,6 +196,7 @@ const previewFactories: Record<DebugPreviewName, DebugPreviewFactory> = {
           discordThreadId: fixture.discordThreadId,
         },
         replacement: {
+          contentRevision: 2,
           versionId: "debug-version",
           versionNumber: 7,
           originalName: "42-T3-S1-Debug.se1",

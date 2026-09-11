@@ -57,6 +57,7 @@ export type SaveReplacedNotificationPayload = {
   game: UploadNotificationPayload['game'];
   replacement: {
     passwordRecovery?: { operation: 'reset' | 'undo'; regimeName: string };
+    contentRevision: number;
     versionId: string;
     versionNumber: number;
     originalName: string;
