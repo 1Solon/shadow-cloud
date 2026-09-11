@@ -1,6 +1,12 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import {
+  forwardRef,
+  useImperativeHandle,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { useRouter } from "next/navigation";
 import { Button, buttonVariants } from "@/components/ui/button";
 
@@ -10,11 +16,17 @@ type UploadSaveFormProps = {
   presentation?: "standard" | "compact";
 };
 
-export function UploadSaveForm({
-  saveBaseline,
-  gameNumber,
-  presentation = "standard",
-}: UploadSaveFormProps) {
+export type UploadSaveFormHandle = {
+  selectFile: (file: File) => void;
+};
+
+export const UploadSaveForm = forwardRef<
+  UploadSaveFormHandle,
+  UploadSaveFormProps
+>(function UploadSaveForm(
+  { saveBaseline, gameNumber, presentation = "standard" },
+  ref,
+) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -29,6 +41,10 @@ export function UploadSaveForm({
     setSelectedFile(file ?? null);
     setErrorMessage(null);
   }
+
+  useImperativeHandle(ref, () => ({
+    selectFile: handleFile,
+  }));
 
   function clearFile() {
     setSelectedFile(null);
@@ -228,4 +244,4 @@ export function UploadSaveForm({
       ) : null}
     </form>
   );
-}
+});

@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState, type DragEvent } from "react";
 import { DownloadSaveButton } from "@/components/download-save-button";
 import { GameNotesMarkdown } from "@/components/game-notes-markdown";
-import { UploadSaveForm } from "@/components/upload-save-form";
+import {
+  UploadSaveForm,
+  type UploadSaveFormHandle,
+} from "@/components/upload-save-form";
 import {
   formatTurnDuration,
   getTurnDurationMs,
@@ -44,6 +47,13 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
+function containsFiles(event: DragEvent<HTMLElement>) {
+  return (
+    event.dataTransfer.files.length > 0 ||
+    Array.from(event.dataTransfer.types).includes("Files")
+  );
+}
+
 export function TurnCommandCenter({
   saveBaseline,
   activePlayerDisplayName,
@@ -59,7 +69,9 @@ export function TurnCommandCenter({
   turnTargetHours,
 }: TurnCommandCenterProps) {
   const headingId = useId();
+  const uploadFormRef = useRef<UploadSaveFormHandle>(null);
   const [now, setNow] = useState(() => new Date(initialNow));
+  const [dropNotice, setDropNotice] = useState<string | null>(null);
   const [notesOpen, setNotesOpen] = useState(
     notes.trim().length <= lengthyNotesCharacterCount,
   );
@@ -98,6 +110,34 @@ export function TurnCommandCenter({
     <section
       aria-labelledby={headingId}
       className="overflow-hidden rounded-lg border border-orange-400/40 bg-black font-mono text-orange-100"
+      onDragOver={(event) => {
+        if (!event.defaultPrevented && containsFiles(event)) {
+          event.preventDefault();
+        }
+      }}
+      onDrop={(event) => {
+        if (event.defaultPrevented || !containsFiles(event)) {
+          return;
+        }
+
+        event.preventDefault();
+        const file = event.dataTransfer.files[0];
+        if (!file) {
+          return;
+        }
+
+        if (canUpload) {
+          setDropNotice(null);
+          uploadFormRef.current?.selectFile(file);
+          return;
+        }
+
+        setDropNotice(
+          isSignedIn
+            ? `It is currently ${activePlayerDisplayName}’s turn. Only the active lord can upload this save.`
+            : `Sign in with the Discord account for ${activePlayerDisplayName} to upload this save.`,
+        );
+      }}
     >
       <h2 className="sr-only" id={headingId}>
         Current turn
@@ -191,6 +231,7 @@ export function TurnCommandCenter({
               <div className="min-h-0 flex-1">
                 <UploadSaveForm
                   gameNumber={gameNumber}
+                  ref={uploadFormRef}
                   saveBaseline={saveBaseline}
                   presentation="compact"
                 />
@@ -199,6 +240,14 @@ export function TurnCommandCenter({
           </div>
         ) : null}
       </div>
+      {dropNotice ? (
+        <p
+          className="border-t border-orange-400/30 bg-orange-400/10 px-3 py-2.5 text-sm text-orange-200 sm:px-4"
+          role="status"
+        >
+          {dropNotice}
+        </p>
+      ) : null}
     </section>
   );
 }
