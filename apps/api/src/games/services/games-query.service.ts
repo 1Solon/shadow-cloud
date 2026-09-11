@@ -120,6 +120,7 @@ export class GamesQueryService {
         },
         fileVersions: {
           select: {
+            contentRevision: true,
             id: true,
             originalName: true,
             uploadedAt: true,
@@ -174,7 +175,11 @@ export class GamesQueryService {
         currentTurnStartedAt:
           game.turnRecords[0]?.startedAt.toISOString() ?? null,
         latestSave: latestSave
-          ? { id: latestSave.id, originalName: latestSave.originalName }
+          ? {
+              contentRevision: latestSave.contentRevision,
+              id: latestSave.id,
+              originalName: latestSave.originalName,
+            }
           : null,
       };
     });

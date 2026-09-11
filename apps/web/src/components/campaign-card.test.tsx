@@ -55,6 +55,7 @@ const game: GameListItem = {
   turnRemindersEnabled: true,
   currentTurnStartedAt: "2026-07-10T00:00:00.000Z",
   latestSave: {
+    contentRevision: 3,
     id: "file-latest",
     originalName: "42-T4-S1-Rhea.se1",
   },
@@ -117,7 +118,7 @@ describe("CampaignCard", () => {
     expect(download).toHaveAttribute("data-file-name", "42-T4-S1-Rhea.se1");
     expect(download).toHaveAttribute(
       "data-href",
-      "/api/games/42/files/file-latest",
+      "/api/games/42/files/file-latest?revision=3",
     );
     expect(download.compareDocumentPosition(upload)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,

@@ -299,7 +299,11 @@ describe('upload safety through the public mutation owner', () => {
           activePlayerUserId: step.nextUser,
           activePlayerDisplayName: step.nextName,
           roundNumber: step.round,
-          latestSave: { id: uploaded.fileVersionId, originalName: step.name },
+          latestSave: {
+            contentRevision: 0,
+            id: uploaded.fileVersionId,
+            originalName: step.name,
+          },
         }),
       ]);
       expect(await campaigns.getGameStatus('1', step.uploader)).toMatchObject({

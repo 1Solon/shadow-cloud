@@ -106,6 +106,7 @@ const saveReplacedPayload = {
     discordThreadId: "thread-1",
   },
   replacement: {
+    contentRevision: 4,
     versionId: "version-1",
     versionNumber: 7,
     originalName: "42-T4-S2-Other.se1",
@@ -537,6 +538,9 @@ describe("buildSaveReplacedNotificationMessage", () => {
     expect(message).toContain("42-T4-S2-Other.se1");
     expect(message).toContain("<@discord-1>");
     expect(message).toContain("<t:1783693800:F>");
+    expect(message).toContain(
+      "https://shadow.example/api/games/42/files/version-1?revision=4",
+    );
     expect(message).toContain("**Corrected by:** <@discord-1>");
     expect(message).not.toContain("**Corrected by**");
     expect(message).not.toContain("active player");

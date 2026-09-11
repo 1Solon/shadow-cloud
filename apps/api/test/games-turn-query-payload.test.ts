@@ -100,6 +100,7 @@ describe('GamesQueryService turn timing payloads', () => {
           updatedAt: new Date(updatedAt),
           fileVersions: [
             {
+              contentRevision: 4,
               id: 'file-latest',
               originalName: '1-T3-S1-Ashes.se1',
               uploadedAt: new Date('2026-07-15T06:00:00.000Z'),
@@ -112,6 +113,7 @@ describe('GamesQueryService turn timing payloads', () => {
 
       expect(game.updatedAt).toBe('2026-07-15T06:00:00.000Z');
       expect(game.latestSave).toEqual({
+        contentRevision: 4,
         id: 'file-latest',
         originalName: '1-T3-S1-Ashes.se1',
       });
@@ -132,6 +134,7 @@ describe('GamesQueryService turn timing payloads', () => {
       createGame({
         fileVersions: [
           {
+            contentRevision: 2,
             id: 'file-latest',
             originalName: '1-T3-S1-Ashes.se1',
             uploadedAt: endedAt,
@@ -149,6 +152,7 @@ describe('GamesQueryService turn timing payloads', () => {
       turnRemindersEnabled: true,
       currentTurnStartedAt: '2026-07-10T00:00:00.000Z',
       latestSave: {
+        contentRevision: 2,
         id: 'file-latest',
         originalName: '1-T3-S1-Ashes.se1',
       },
@@ -166,6 +170,7 @@ describe('GamesQueryService turn timing payloads', () => {
           },
           fileVersions: {
             select: {
+              contentRevision: true,
               id: true,
               originalName: true,
               uploadedAt: true,

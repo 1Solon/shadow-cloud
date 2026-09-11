@@ -365,6 +365,7 @@ export class SavePublication {
             discordThreadId: game.discordThreadId,
           },
           replacement: {
+            contentRevision: file.contentRevision + 1,
             versionId: file.id,
             versionNumber: file.versionNumber,
             originalName: file.originalName,
@@ -556,6 +557,7 @@ export class SavePublication {
             discordThreadId: game.discordThreadId,
           },
           replacement: {
+            contentRevision: file.contentRevision + 1,
             versionId: file.id,
             versionNumber: file.versionNumber,
             originalName: file.originalName,
@@ -901,6 +903,7 @@ export class SavePublication {
             discordThreadId: game.discordThreadId,
           },
           replacement: {
+            contentRevision: fileVersion.contentRevision + 1,
             versionId: fileVersion.id,
             versionNumber: fileVersion.versionNumber,
             originalName: fileVersion.originalName,

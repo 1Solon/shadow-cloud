@@ -79,6 +79,7 @@ it.each(["Australia/Sydney", "America/New_York"])(
           shadowOverrideEnabled={false}
           fileVersions={[
             {
+              contentRevision: 1,
               id: "save-1",
               originalName: "save.se1",
               uploadedAt: startedAt,

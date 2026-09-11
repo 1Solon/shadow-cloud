@@ -94,7 +94,11 @@ export async function startUpstream(secret: string) {
           ),
           updatedAt: latest?.uploadedAt ?? "2026-07-11T12:00:00.000Z",
           latestSave: latest
-            ? { id: latest.id, originalName: latest.originalName }
+            ? {
+                contentRevision: latest.contentRevision,
+                id: latest.id,
+                originalName: latest.originalName,
+              }
             : null,
         };
         reply(200, [item]);
@@ -107,6 +111,17 @@ export async function startUpstream(secret: string) {
           return;
         }
         reply(200, upstream.game);
+        return;
+      }
+      if (method === "GET" && path.startsWith(`${base}/files/`)) {
+        const body = Buffer.from("corrected save");
+        response.writeHead(200, {
+          "content-disposition": 'attachment; filename="42-T1-S1-Browser.se1"',
+          "content-length": String(body.byteLength),
+          "content-type": "application/octet-stream",
+          "last-modified": "Fri, 11 Sep 2026 13:00:38 GMT",
+        });
+        response.end(body);
         return;
       }
       const isMetadata = method === "PATCH" && path === `${base}/metadata`;

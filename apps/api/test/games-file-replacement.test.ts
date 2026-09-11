@@ -124,9 +124,7 @@ describe('GamesFileService replaceSave', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi
-      .spyOn(Logger.prototype, 'warn')
-      .mockImplementation(() => undefined);
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     const pending = new Map<string, { id: string; storagePath: string }>();
     const queue = async ({
       where,
@@ -271,6 +269,7 @@ describe('GamesFileService replaceSave', () => {
           discordThreadId: 'thread-1',
         },
         replacement: {
+          contentRevision: 1,
           versionId: 'version-7',
           versionNumber: 7,
           originalName: 'original.se1',

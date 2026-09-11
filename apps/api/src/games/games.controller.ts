@@ -235,6 +235,7 @@ export class GamesController {
     );
     response.setHeader('content-length', String(download.size));
     response.setHeader('last-modified', download.lastModified.toUTCString());
+    response.setHeader('cache-control', 'no-store');
 
     return new StreamableFile(download.stream);
   }

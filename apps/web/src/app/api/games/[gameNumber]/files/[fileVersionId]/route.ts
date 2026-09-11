@@ -57,6 +57,7 @@ export async function GET(
   }
 
   const headers = new Headers();
+  headers.set("cache-control", "no-store");
 
   for (const headerName of [
     "content-type",

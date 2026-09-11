@@ -41,6 +41,7 @@ function createFileVersion(
   overrides: Partial<GameDetailFileVersion> = {},
 ): GameDetailFileVersion {
   return {
+    contentRevision: 0,
     id: "version-1",
     originalName: "42-T4-S2-Owner.se1",
     uploadedAt: "2026-07-10T19:00:00.000Z",
@@ -78,6 +79,7 @@ describe("WorldStateHistoryCard", () => {
 
   it("renders owner replacement controls without changing history rows", () => {
     const latest = createFileVersion({
+      contentRevision: 4,
       id: "version-latest",
       originalName: "42-T4-S3-Latest.se1",
       replacedAt: "2026-07-10T20:00:00.000Z",
@@ -98,10 +100,10 @@ describe("WorldStateHistoryCard", () => {
     ).toHaveAttribute("data-most-recent", "false");
     expect(
       screen.getByRole("link", { name: "42-T4-S3-Latest.se1" }),
-    ).toHaveAttribute("href", "/api/games/42/files/version-latest");
+    ).toHaveAttribute("href", "/api/games/42/files/version-latest?revision=4");
     expect(
       screen.getByRole("link", { name: "42-T4-S2-Older.se1" }),
-    ).toHaveAttribute("href", "/api/games/42/files/version-older");
+    ).toHaveAttribute("href", "/api/games/42/files/version-older?revision=0");
     const table = screen.getByRole("table", { name: "Campaign save history" });
     const rows = within(table).getAllByRole("row");
     expect(rows).toHaveLength(3);

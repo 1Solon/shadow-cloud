@@ -29,13 +29,14 @@ export type GameListItem = {
   turnRemindersEnabled: boolean;
   currentTurnStartedAt: string | null;
   latestSave: {
+    contentRevision: number;
     id: string;
     originalName: string;
   } | null;
 };
 
 export type GameDetailFileVersion = {
-  contentRevision?: number;
+  contentRevision: number;
   id: string;
   originalName: string;
   uploadedAt: string;
