@@ -4,6 +4,20 @@ import type { Command, Companion, Snapshot } from "./port";
 function message(error: unknown): string {
   if (error === "update-required")
     return "Update required. Campaign changes are disabled until the Companion and server versions match.";
+  if (error === "onboarding-incomplete")
+    return "Finish the onboarding review before any turn can be sent.";
+  if (error === "invalid-onboarding-step")
+    return "That setup step is not available yet. No files were changed.";
+  if (error === "authentication-unavailable")
+    return "Could not reach Shadow Cloud to sign in. Check the connection and retry.";
+  if (error === "authorization-expired")
+    return "That sign-in request is invalid, expired, or already used. Start again.";
+  if (error === "folder-selection-cancelled")
+    return "No Companion root was selected. No files were changed.";
+  if (error === "invalid-companion-root")
+    return "That folder cannot be used as the Companion root. Choose a real local directory.";
+  if (error === "storage-unavailable")
+    return "The Companion could not save its local state. No transfer was started.";
   if (error === "not-available")
     return "This action is not available in the foundation build. No files were changed.";
   return "Could not communicate with the Companion engine. Please reopen the application.";

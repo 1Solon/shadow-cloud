@@ -5,9 +5,9 @@ of the greenfield Companion rebuild. Its implementation-specific instructions
 and regression-test paths no longer describe the application.
 
 See [the Companion developer guide](../apps/desktop/README.md) for the current
-foundation, checks, and limitations. The accepted rebuild is tracked in
+Device-session, Campaign-folder ownership, checks, and limitations. The accepted rebuild is tracked in
 [SOL-29](https://linear.app/1solon/issue/SOL-29/spec-rebuild-shadow-cloud-companion-as-a-greenfield-cross-platform-app).
-The foundation does not transfer any saves yet.
+The Companion does not transfer any saves yet.
 
 The replacement engine must preserve the server's correction semantics: password
 reset and undo can change the canonical save without advancing the turn or

@@ -13,12 +13,18 @@ icons are generated from `apps/web/src/app/favicon.ico`.
 
 ## Current slice
 
-SOL-31 establishes the shell, protocol handshake, revisioned engine boundary,
-presentation, and native build definitions. It does **not** implement device
-sign-in, persistent preferences, campaign discovery, save transfer, tray,
-autostart, or updater installation. The native application is truthfully signed
-out with no campaigns. Preferences last for the process lifetime. Those features
-remain in SOL-32 through SOL-37 under
+SOL-32 adds the Companion's Device-session sign-in, durable non-secret
+preferences, explicit Companion-root onboarding, and immutable Campaign-folder
+ownership. Browser handoff and one-use pasted tokens both exchange for a scoped,
+rotating Device session. The refresh secret lives in the operating-system vault;
+when that vault is unavailable, the session is deliberately memory-only. SQLite
+never stores credentials.
+
+Campaign observation and save transfer are still deferred. The interface remains
+truthfully empty after onboarding, and its transfer controls remain unavailable
+until the observation and reconciliation slices land in SOL-33 through SOL-35.
+Tray, autostart, notifications, and updater installation remain in SOL-36 and
+SOL-37 under
 [SOL-29](https://linear.app/1solon/issue/SOL-29/spec-rebuild-shadow-cloud-companion-as-a-greenfield-cross-platform-app).
 
 ## Development
@@ -42,11 +48,44 @@ For deterministic Linux browser checks:
 pnpm --filter @shadow-cloud/desktop dev:ui
 ```
 
-Open `http://127.0.0.1:1420/?scenario=active`, `offline`, `paused`, or
-`update-required`. These explicitly labelled, synthetic engine adapters exercise
-the production React boundary without real accounts, files, or transfers. No
-query parameter activates them in a production build; `check-bundle.mjs` verifies
-that their code and campaign fixtures are absent.
+Open `http://127.0.0.1:1420/?scenario=onboarding`, `active`, `offline`, `paused`,
+or `update-required`. These explicitly labelled, synthetic engine adapters
+exercise the production React boundary without real accounts, files, or
+transfers. No query parameter activates them in a production build;
+`check-bundle.mjs` verifies that their code and campaign fixtures are absent.
+
+## Device sessions and onboarding
+
+The Companion starts read-only and cannot send a turn before the user completes
+the final onboarding review. Sign-in creates a ten-minute, single-use handoff.
+The normal path opens an approval page in the system browser and polls with a
+separate secret. A one-use token can instead be copied from that page and pasted
+into a system that cannot open the browser. Successful exchange returns only the
+three Companion scopes: observe campaigns, download saves, and submit turns.
+Access tokens are short-lived; refresh secrets rotate on every use.
+
+Signing out first persists non-secret signed-out intent, attempts server
+revocation, clears both vault and in-memory credentials, and preserves the
+Companion root, owned Campaign folders, saves, and non-secret preferences. If a
+vault deletion fails, later protocol checks retry it without ever restoring the
+retained secret. If the vault is unavailable at sign-in, a banner explains that
+the session lasts only until the process exits.
+
+## Campaign-folder ownership
+
+Each campaign receives exactly one direct child of the configured Companion
+root, named from its server number and name plus a stable ID-derived suffix. A
+complete `.shadow-cloud-campaign.json` marker is written atomically and is the
+only proof of ownership. A moved folder with the same marker is rediscovered;
+an unrelated target, malformed marker, duplicate matching markers, path escape,
+or symlink is an explicit error. Existing directories are never adopted,
+renamed, merged, or overwritten. Rediscovery keys only on the immutable Campaign
+ID, so later server-side name changes cannot strand a correctly marked folder.
+
+Only canonical direct children of the canonical root are accepted. Server names
+cannot supply path separators, traversal components, control characters, Windows
+reserved characters, or reserved device names, so the same ownership rule holds
+on Linux, macOS, and Windows.
 
 ## Ownership and protocol
 
@@ -58,8 +97,9 @@ accepts only newer revisions, and unsubscribes on unmount.
 
 `src/engine/port.ts` is the presentation contract, mirrored by the serializable
 Rust types. `src/engine/native.ts` is the only frontend module importing Tauri.
-Capabilities permit event subscription only: no frontend filesystem, store,
-shell, dialog, or HTTP plugin. Future side effects belong behind the engine.
+Capabilities permit event subscription only: the webview has no filesystem,
+store, shell, dialog, or HTTP permission. Browser opening, directory selection,
+vault access, SQLite, and network I/O all remain behind the Rust engine.
 
 The root `package.json` release is the protocol source for both the Rust build
 and `GET /v1/companion/protocol`. Only an exact match connects. Missing or invalid

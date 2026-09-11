@@ -86,19 +86,21 @@ enum ArmyCountPreset {
 }
 
 model User {
-  id             String         @id @default(cuid())
-  email          String         @unique
-  displayName    String
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  identities     AuthIdentity[]
-  organizedGames Game[]
-  memberships    GamePlayer[]
-  activeTurns    TurnState[]
-  uploads        FileVersion[]  @relation("UploadedBy")
-  replacements   FileVersion[]  @relation("ReplacedBy")
-  auditEvents    AuditEvent[]   @relation("ActorEvents")
-  turnRecords    TurnRecord[]
+  id                String             @id @default(cuid())
+  email             String             @unique
+  displayName       String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  identities        AuthIdentity[]
+  organizedGames    Game[]
+  memberships       GamePlayer[]
+  activeTurns       TurnState[]
+  uploads           FileVersion[]      @relation("UploadedBy")
+  replacements      FileVersion[]      @relation("ReplacedBy")
+  auditEvents       AuditEvent[]       @relation("ActorEvents")
+  turnRecords       TurnRecord[]
+  deviceSessions    DeviceSession[]
+  companionHandoffs CompanionHandoff[]
 }
 
 model AuthIdentity {
@@ -112,20 +114,34 @@ model AuthIdentity {
   @@unique([provider, providerId])
 }
 
-model DesktopAuthHandoff {
-  id                      String    @id
-  pollSecretHash          String
-  approvedUserId          String?
-  approvedUserEmail       String?
-  approvedUserDisplayName String?
-  approvedUserAvatarUrl   String?
-  expiresAt               DateTime
-  approvedAt              DateTime?
-  consumedAt              DateTime?
-  createdAt               DateTime  @default(now())
+model CompanionHandoff {
+  id              String    @id
+  pollSecretHash  String
+  pasteSecretHash String?
+  approvedUserId  String?
+  approvedUser    User?     @relation(fields: [approvedUserId], references: [id], onDelete: Cascade)
+  expiresAt       DateTime
+  approvedAt      DateTime?
+  consumedAt      DateTime?
+  createdAt       DateTime  @default(now())
 
   @@index([expiresAt])
   @@index([consumedAt])
+}
+
+model DeviceSession {
+  id                String    @id
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshSecretHash String
+  expiresAt         DateTime
+  lastUsedAt        DateTime?
+  revokedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
 }
 
 model Game {
@@ -253,22 +269,22 @@ model RegistrationRequest {
 
 // Paths never become canonical again: undo stages a verified byte-exact copy.
 model PasswordReset {
-  id                String   @id @default(cuid())
-  gameId            String
-  fileVersionId     String
-  sourcePath        String
-  sourceId          String
-  outputId          String
-  outputRevision    Int
-  saveRevision      Int
-  turnRecordId      String?
-  actorId           String
-  regimeId          String
-  regimeName        String
-  state             String   @default("ACTIVE")
-  createdAt         DateTime @default(now())
-  closedAt          DateTime?
-  cleanedAt         DateTime?
+  id             String    @id @default(cuid())
+  gameId         String
+  fileVersionId  String
+  sourcePath     String
+  sourceId       String
+  outputId       String
+  outputRevision Int
+  saveRevision   Int
+  turnRecordId   String?
+  actorId        String
+  regimeId       String
+  regimeName     String
+  state          String    @default("ACTIVE")
+  createdAt      DateTime  @default(now())
+  closedAt       DateTime?
+  cleanedAt      DateTime?
 
   @@index([gameId, state])
 }

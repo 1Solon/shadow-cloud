@@ -3,6 +3,302 @@ import type { Companion, Snapshot, Theme } from "../engine/port";
 import { useCompanion } from "../engine/useCompanion";
 import { Campaigns } from "./Campaigns";
 
+function CredentialStorageNotice({ snapshot }: { snapshot: Snapshot }) {
+  if (
+    snapshot.session.state !== "signed-in" ||
+    snapshot.session.credentialStorage !== "memory-only"
+  )
+    return null;
+  return (
+    <div className="connection-notice connection-notice--warning" role="status">
+      <strong>MEMORY-ONLY SESSION</strong>
+      <p>
+        The operating-system credential vault is unavailable. This Device
+        session lasts only until you quit; sign in again after quitting.
+      </p>
+    </div>
+  );
+}
+
+function Onboarding({
+  snapshot,
+  pending,
+  error,
+  send,
+  dismissError,
+}: {
+  snapshot: Snapshot;
+  pending: boolean;
+  error: string | null;
+  send: (command: Parameters<Companion["command"]>[0]) => Promise<void>;
+  dismissError: () => void;
+}) {
+  const [token, setToken] = useState("");
+  const stage = snapshot.onboarding.stage;
+  const step =
+    stage === "welcome"
+      ? 1
+      : stage === "sign-in"
+        ? 2
+        : stage === "companion-root"
+          ? 3
+          : stage === "automatic-uploads"
+            ? 4
+            : 5;
+
+  return (
+    <div className="desktop-stage">
+      <div className="terminal-frame terminal-frame--onboarding">
+        <header className="product-header">
+          <div className="product-title">
+            <span>
+              {"> SHADOW CLOUD"}
+              <em> / COMPANION</em>
+            </span>
+            <i aria-hidden="true" />
+          </div>
+          <div className="connection">
+            <small>NETWORK</small>
+            <strong>
+              {snapshot.connection.reachable ? "CONNECTED" : "DISCONNECTED"}
+            </strong>
+          </div>
+        </header>
+        {error && (
+          <div className="command-error" role="alert">
+            <p>{error}</p>
+            <button
+              type="button"
+              className="outline-button"
+              onClick={dismissError}
+            >
+              DISMISS
+            </button>
+          </div>
+        )}
+        <CredentialStorageNotice snapshot={snapshot} />
+        <main className="onboarding-page">
+          <div
+            className="onboarding-progress"
+            aria-label={"Step " + step + " of 5"}
+          >
+            <span>SETUP</span>
+            <strong>{String(step).padStart(2, "0")} / 05</strong>
+          </div>
+          {stage === "welcome" && (
+            <section className="onboarding-panel">
+              <small>WELCOME</small>
+              <h1>{"> WELCOME TO SHADOW CLOUD"}</h1>
+              <p className="onboarding-lead">
+                The Companion keeps each Campaign&apos;s saves in its own folder
+                and moves every new turn safely between this computer and Shadow
+                Cloud.
+              </p>
+              <div className="promise-grid">
+                <div>
+                  <strong>ONE CAMPAIGN, ONE FOLDER</strong>
+                  <p>Received saves and your local work stay together.</p>
+                </div>
+                <div>
+                  <strong>NO SILENT OVERWRITES</strong>
+                  <p>Your existing files are never replaced or deleted.</p>
+                </div>
+                <div>
+                  <strong>SAFE WHEN OFFLINE</strong>
+                  <p>Local work waits until the connection is ready.</p>
+                </div>
+              </div>
+              <button
+                className="primary-button onboarding-action"
+                type="button"
+                disabled={pending}
+                onClick={() => void send({ type: "continue-onboarding" })}
+              >
+                BEGIN SETUP
+              </button>
+            </section>
+          )}
+          {stage === "sign-in" && (
+            <section className="onboarding-panel">
+              <small>DEVICE SESSION</small>
+              <h1>{"> CONNECT THIS DEVICE"}</h1>
+              <p className="onboarding-lead">
+                Sign in through the Shadow Cloud website. This Device session
+                can observe your Campaigns and transfer seated turns; it cannot
+                administer Campaigns or your account.
+              </p>
+              <button
+                className="primary-button onboarding-action"
+                type="button"
+                disabled={
+                  pending || snapshot.session.state === "waiting-for-browser"
+                }
+                onClick={() => void send({ type: "start-browser-sign-in" })}
+              >
+                SIGN IN WITH BROWSER
+              </button>
+              {snapshot.session.authorizationUrl && (
+                <div className="authorization-link" role="status">
+                  <strong>WAITING FOR APPROVAL</strong>
+                  <p>
+                    If the browser did not open, copy this link into any browser
+                    where you can sign in:
+                  </p>
+                  <code>{snapshot.session.authorizationUrl}</code>
+                </div>
+              )}
+              <div className="onboarding-divider">
+                <span>OR USE A ONE-USE TOKEN</span>
+              </div>
+              <form
+                className="token-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void send({ type: "submit-handoff-token", token });
+                }}
+              >
+                <label htmlFor="handoff-token">One-use token</label>
+                <p>
+                  Paste the ten-minute token shown after approving the link on
+                  another system.
+                </p>
+                <div>
+                  <input
+                    id="handoff-token"
+                    type="text"
+                    autoComplete="off"
+                    spellCheck={false}
+                    value={token}
+                    onChange={(event) => setToken(event.target.value)}
+                  />
+                  <button
+                    className="outline-button"
+                    type="submit"
+                    disabled={pending || !token.trim()}
+                  >
+                    CONNECT WITH TOKEN
+                  </button>
+                </div>
+              </form>
+            </section>
+          )}
+          {stage === "companion-root" && (
+            <section className="onboarding-panel">
+              <small>LOCAL FILES</small>
+              <h1>{"> CHOOSE COMPANION ROOT"}</h1>
+              <p className="onboarding-lead">
+                Choose one directory. Each Campaign receives a uniquely named,
+                marker-owned folder directly inside it.
+              </p>
+              <div className="onboarding-callout">
+                Existing unrelated folders are never adopted, merged, or
+                renamed. A name conflict stops setup with an explicit error.
+              </div>
+              <button
+                className="primary-button onboarding-action"
+                type="button"
+                disabled={pending}
+                onClick={() => void send({ type: "choose-companion-root" })}
+              >
+                CHOOSE FOLDER
+              </button>
+            </section>
+          )}
+          {stage === "automatic-uploads" && (
+            <section className="onboarding-panel">
+              <small>TURN CANDIDATES</small>
+              <h1>{"> TURN SUBMISSION"}</h1>
+              <p className="onboarding-lead">
+                When one stable new .se1 file appears during your turn, the
+                Companion can send it automatically after a visible 15-second
+                cancellation window.
+              </p>
+              <div className="choice-card">
+                <div>
+                  <strong>AUTOMATIC UPLOADS</strong>
+                  <p>
+                    Enabled by default. You can change this globally or per
+                    Campaign later.
+                  </p>
+                </div>
+                <button
+                  className="outline-button"
+                  type="button"
+                  role="switch"
+                  aria-label="Automatic uploads"
+                  aria-checked={snapshot.preferences.automaticUploads}
+                  disabled={pending}
+                  onClick={() =>
+                    void send({
+                      type: "set-automatic-uploads",
+                      enabled: !snapshot.preferences.automaticUploads,
+                    })
+                  }
+                >
+                  {snapshot.preferences.automaticUploads
+                    ? "ENABLED"
+                    : "DISABLED"}
+                </button>
+              </div>
+              <button
+                className="primary-button onboarding-action"
+                type="button"
+                disabled={pending}
+                onClick={() => void send({ type: "continue-onboarding" })}
+              >
+                CONTINUE TO REVIEW
+              </button>
+            </section>
+          )}
+          {stage === "review" && (
+            <section className="onboarding-panel">
+              <small>FINAL REVIEW</small>
+              <h1>{"> REVIEW AND ENABLE SYNC"}</h1>
+              <p className="onboarding-lead">
+                Nothing can be sent until you finish this review.
+              </p>
+              <dl className="review-list">
+                <div>
+                  <dt>CONNECTED AS</dt>
+                  <dd>{snapshot.displayName}</dd>
+                </div>
+                <div>
+                  <dt>COMPANION ROOT</dt>
+                  <dd>{snapshot.rootPath}</dd>
+                </div>
+                <div>
+                  <dt>AUTOMATIC UPLOADS</dt>
+                  <dd>
+                    {snapshot.preferences.automaticUploads
+                      ? "ENABLED — 15 SECOND CANCELLATION"
+                      : "DISABLED — MANUAL SEND"}
+                  </dd>
+                </div>
+                <div>
+                  <dt>CAMPAIGN FOLDERS</dt>
+                  <dd>UNIQUE MARKER OWNERSHIP REQUIRED</dd>
+                </div>
+              </dl>
+              <button
+                className="primary-button onboarding-action"
+                type="button"
+                disabled={pending}
+                onClick={() => void send({ type: "complete-onboarding" })}
+              >
+                FINISH SETUP
+              </button>
+            </section>
+          )}
+        </main>
+        <footer className="product-footer">
+          <span>VERSION: v{snapshot.appVersion}</span>
+          <span>TRANSFERS: LOCKED UNTIL FINAL REVIEW</span>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 function ConnectionNotice({ snapshot }: { snapshot: Snapshot }) {
   const state = snapshot.connection.state;
   if (state === "connected" && !snapshot.paused) return null;
@@ -61,6 +357,18 @@ export function App({
     );
   const mismatch = snapshot.connection.state === "update-required";
 
+  if (snapshot.onboarding.stage !== "complete") {
+    return (
+      <Onboarding
+        snapshot={snapshot}
+        pending={pending}
+        error={error}
+        send={send}
+        dismissError={dismissError}
+      />
+    );
+  }
+
   return (
     <div className="desktop-stage">
       <div className="terminal-frame">
@@ -110,6 +418,7 @@ export function App({
             </button>
           ))}
         </nav>
+        <CredentialStorageNotice snapshot={snapshot} />
         <ConnectionNotice snapshot={snapshot} />
         {error && (
           <div className="command-error" role="alert">
@@ -194,10 +503,15 @@ export function App({
                     <h2>COMPANION ROOT</h2>
                     <p>
                       {snapshot.rootPath ??
-                        "Not configured — available with device sign-in in the next milestone."}
+                        "Not configured — choose a Companion root before transfers can start."}
                     </p>
                   </div>
-                  <button className="outline-button" type="button" disabled>
+                  <button
+                    className="outline-button"
+                    type="button"
+                    disabled={pending}
+                    onClick={() => void send({ type: "choose-companion-root" })}
+                  >
                     CHANGE FOLDER
                   </button>
                 </div>
@@ -232,12 +546,27 @@ export function App({
                       : "DISABLED"}
                   </button>
                 </div>
+                <div className="settings-card">
+                  <div>
+                    <small>DEVICE SESSION</small>
+                    <h2>CONNECTED AS {snapshot.displayName}</h2>
+                    <p>
+                      Refresh secret:{" "}
+                      {snapshot.session.credentialStorage === "vault"
+                        ? "protected by the operating-system vault"
+                        : "memory only — sign in again after quitting"}
+                    </p>
+                  </div>
+                  <button
+                    className="danger-button"
+                    type="button"
+                    disabled={pending}
+                    onClick={() => void send({ type: "sign-out" })}
+                  >
+                    SIGN OUT
+                  </button>
+                </div>
               </div>
-              <p className="foundation-note">
-                Foundation build: preferences last for this session. Device
-                sign-in, durable storage, and campaign transfers are not
-                connected yet.
-              </p>
             </section>
           )}
         </main>

@@ -3,6 +3,8 @@ import rootPackage from "../../../../package.json";
 import type { Campaign, Companion, Snapshot } from "../engine/port";
 
 export function createDevelopmentCompanion(scenario: string): Companion {
+  const startsOnboarding = scenario === "onboarding";
+  let onboardingComplete = !startsOnboarding;
   const campaigns: Campaign[] = [
     {
       id: "black-glass",
@@ -90,10 +92,32 @@ export function createDevelopmentCompanion(scenario: string): Companion {
       serverProtocolVersion:
         scenario === "update-required" ? "999.0.0" : rootPackage.version,
     },
-    readOnly: scenario === "offline" || scenario === "update-required",
+    session: {
+      state: startsOnboarding ? "signed-out" : "signed-in",
+      authorizationUrl: null,
+      handoffExpiresAt: null,
+      credentialStorage: startsOnboarding
+        ? null
+        : scenario === "memory-only"
+          ? "memory-only"
+          : "vault",
+    },
+    onboarding: {
+      stage: startsOnboarding ? "welcome" : "complete",
+      canSend:
+        !startsOnboarding &&
+        scenario !== "offline" &&
+        scenario !== "update-required" &&
+        scenario !== "paused",
+    },
+    readOnly:
+      startsOnboarding ||
+      scenario === "offline" ||
+      scenario === "update-required" ||
+      scenario === "paused",
     paused: scenario === "paused",
-    displayName: "SOLON",
-    rootPath: "~/Games/Shadow Cloud",
+    displayName: startsOnboarding ? null : "SOLON",
+    rootPath: startsOnboarding ? null : "~/Games/Shadow Cloud",
     preferences: { theme: "dark", automaticUploads: true },
     campaigns,
     activity: [
@@ -130,6 +154,12 @@ export function createDevelopmentCompanion(scenario: string): Companion {
     },
     command: async (command) => {
       const mismatch = state.connection.state === "update-required";
+      const requireCompatibleServer = () => {
+        if (state.connection.state === "update-required")
+          throw "update-required";
+        if (state.connection.state !== "connected")
+          throw "authentication-unavailable";
+      };
       if (
         mismatch &&
         ((command.type === "set-paused" && !command.paused) ||
@@ -139,6 +169,79 @@ export function createDevelopmentCompanion(scenario: string): Companion {
         throw "update-required";
       const next = snapshot();
       switch (command.type) {
+        case "continue-onboarding":
+          if (next.onboarding.stage === "welcome")
+            next.onboarding.stage = "sign-in";
+          else if (next.onboarding.stage === "automatic-uploads")
+            next.onboarding.stage = "review";
+          else throw "invalid-onboarding-step";
+          break;
+        case "start-browser-sign-in":
+          requireCompatibleServer();
+          if (
+            next.onboarding.stage !== "sign-in" ||
+            next.session.state === "signed-in"
+          )
+            throw "invalid-onboarding-step";
+          next.session = {
+            state: "waiting-for-browser",
+            authorizationUrl:
+              "https://shadow-cloud.example/api/auth/companion?handoff=development",
+            handoffExpiresAt: "2026-09-11T20:10:00Z",
+            credentialStorage: null,
+          };
+          break;
+        case "submit-handoff-token":
+          if (
+            next.onboarding.stage !== "sign-in" ||
+            next.session.state === "signed-in"
+          )
+            throw "invalid-onboarding-step";
+          requireCompatibleServer();
+          if (!command.token.trim()) throw "authorization-expired";
+          next.displayName = "SOLON";
+          next.session = {
+            state: "signed-in",
+            authorizationUrl: null,
+            handoffExpiresAt: null,
+            credentialStorage: "vault",
+          };
+          next.onboarding.stage =
+            onboardingComplete && next.rootPath
+              ? "complete"
+              : next.rootPath
+                ? "automatic-uploads"
+                : "companion-root";
+          break;
+        case "choose-companion-root":
+          if (next.session.state !== "signed-in")
+            throw "invalid-onboarding-step";
+          next.rootPath = "~/Games/Shadow Cloud";
+          next.onboarding.stage =
+            next.onboarding.stage === "complete"
+              ? "complete"
+              : "automatic-uploads";
+          break;
+        case "complete-onboarding":
+          if (
+            next.onboarding.stage !== "review" ||
+            next.session.state !== "signed-in" ||
+            !next.rootPath
+          )
+            throw "invalid-onboarding-step";
+          onboardingComplete = true;
+          next.onboarding.stage = "complete";
+          break;
+        case "sign-out":
+          next.displayName = null;
+          next.session = {
+            state: "signed-out",
+            authorizationUrl: null,
+            handoffExpiresAt: null,
+            credentialStorage: null,
+          };
+          next.onboarding.stage = "sign-in";
+          break;
         case "set-theme":
           next.preferences.theme = command.theme;
           break;
@@ -150,8 +253,16 @@ export function createDevelopmentCompanion(scenario: string): Companion {
           break;
         // No file or network side effects, even in development.
         case "campaign-action":
+          if (!state.onboarding.canSend) throw "onboarding-incomplete";
           throw "not-available";
       }
+      next.onboarding.canSend =
+        next.onboarding.stage === "complete" &&
+        next.session.state === "signed-in" &&
+        Boolean(next.rootPath) &&
+        next.connection.state === "connected" &&
+        !next.paused;
+      next.readOnly = !next.onboarding.canSend;
       if (JSON.stringify(next) !== JSON.stringify(state)) {
         state = { ...next, revision: state.revision + 1 };
         for (const listener of listeners) listener(snapshot());

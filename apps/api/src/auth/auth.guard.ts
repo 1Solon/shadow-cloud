@@ -38,6 +38,13 @@ export class AppAuthGuard implements CanActivate {
         },
       );
 
+      // Website bearer tokens deliberately have no token-use claim. Device
+      // sessions are accepted only by the dedicated Companion guard, never by
+      // generic campaign administration or account routes.
+      if (payload.tokenUse != null) {
+        throw new Error('A purpose-bound token cannot be used as a web token.');
+      }
+
       request.user = payload;
       return true;
     } catch {

@@ -280,7 +280,7 @@ export function Campaigns({
               <p>
                 {snapshot.campaigns.length
                   ? "Change your search or show another sync status."
-                  : "Device sign-in and campaign setup arrive in the next milestone. This build does not transfer files."}
+                  : "Campaign discovery is not available in this build. No files are transferred."}
               </p>
             </div>
             {snapshot.campaigns.length > 0 && (

@@ -3,6 +3,13 @@ export type Theme = "dark" | "light" | "system";
 export type SyncStatus = "conflict" | "sending" | "synchronized" | "archived";
 export type CampaignAction =
   "resolve-conflict" | "cancel-automatic-send" | "open-folder";
+export type OnboardingStage =
+  | "welcome"
+  | "sign-in"
+  | "companion-root"
+  | "automatic-uploads"
+  | "review"
+  | "complete";
 
 export interface Campaign {
   id: string;
@@ -28,6 +35,13 @@ export interface Snapshot {
     reachable: boolean;
     serverProtocolVersion: string | null;
   };
+  session: {
+    state: "signed-out" | "waiting-for-browser" | "signed-in";
+    authorizationUrl: string | null;
+    handoffExpiresAt: string | null;
+    credentialStorage: "vault" | "memory-only" | null;
+  };
+  onboarding: { stage: OnboardingStage; canSend: boolean };
   readOnly: boolean;
   paused: boolean;
   displayName: string | null;
@@ -43,6 +57,12 @@ export interface Snapshot {
 }
 
 export type Command =
+  | { type: "continue-onboarding" }
+  | { type: "start-browser-sign-in" }
+  | { type: "submit-handoff-token"; token: string }
+  | { type: "choose-companion-root" }
+  | { type: "complete-onboarding" }
+  | { type: "sign-out" }
   | { type: "set-theme"; theme: Theme }
   | { type: "set-automatic-uploads"; enabled: boolean }
   | { type: "set-paused"; paused: boolean }
