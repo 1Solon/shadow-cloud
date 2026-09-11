@@ -1,0 +1,3 @@
+# Rebuild the Desktop companion as a greenfield app
+
+The existing `apps/desktop` implementation, its tests, persisted state model, desktop handoff behavior, and obsolete documentation will be replaced rather than migrated, reused, or kept behind a compatibility layer. The replacement remains a Tauri application and may add narrowly scoped desktop-support API behavior, while the API, website, bot, and shared domain remain surrounding systems; this clean boundary is preferable because there are no existing Desktop companion users or state to preserve, but save files on disk must never be discarded during the transition. Already-applied database migration history remains intact, and obsolete tables are retired only through a forward migration.

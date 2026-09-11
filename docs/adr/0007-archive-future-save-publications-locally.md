@@ -1,0 +1,3 @@
+# Archive future Save publications locally
+
+After a Campaign is activated in the Desktop companion, it receives every subsequent Save publication in server order, including publications completed between polls or while paused and offline; first setup downloads the current Canonical save but does not backfill earlier turns. Byte-identical publications share existing local contents, and deleting an old Received save is respected rather than repaired automatically. This favors a complete prospective handoff archive and simple access from Shadow Empire over minimal disk use, so the companion reports archive size but never applies automatic save-file retention.

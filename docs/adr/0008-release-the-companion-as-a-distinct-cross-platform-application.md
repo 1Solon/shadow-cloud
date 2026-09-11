@@ -1,0 +1,3 @@
+# Release the Companion as a distinct cross-platform application
+
+Shadow Cloud Companion uses the bundle identifier `com.shadowcloud.companion`, the repository's shared release version, stable and opt-in preview channels, and treats Windows, macOS, and Linux as equal supported targets. Native CI builds a Windows x86-64 NSIS installer, a universal Intel/Apple-Silicon macOS DMG, and a Linux x86-64 AppImage on Ubuntu 22.04. Initial support targets Windows 10 22H2 or newer, macOS 12 or newer, and Ubuntu 22.04/Debian 12-class Linux desktops. Platform publisher signing and notarization are deferred, so artifacts must say they are unsigned; free Tauri updater signatures remain mandatory and installation always requires consent.

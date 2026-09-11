@@ -1,0 +1,3 @@
+# Enforce lockstep Companion protocol releases
+
+The server and Desktop companion ship from the same repository release and accept only the exact current Companion protocol version; no prior-release compatibility window is maintained. Desktop artifacts are published before the matching server contract is activated, and a mismatched companion becomes read-only, preserves local work, and requires a confirmed update before transfers resume. This trades rolling compatibility and independently deployable versions for a smaller protocol surface and coordinated development, while still handling offline or deferred client updates safely rather than assuming literal simultaneous installation.

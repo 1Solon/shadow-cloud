@@ -1,0 +1,3 @@
+# Use revocable least-privilege Device sessions
+
+Each Companion installation authenticates with a revocable Device session whose short-lived access tokens permit only Campaign observation and the seated player's save transfers. Browser approval and the manual copy-paste fallback both exchange a short-lived, single-use handoff secret for a rotating refresh secret held in the operating system vault; neither flow grants Overlord administration, password recovery, Seat management, or generic replacement authority. This requires a dedicated server-side device lifecycle, but avoids exposing the website session or an unrevocable long-lived bearer token to a background desktop application.
