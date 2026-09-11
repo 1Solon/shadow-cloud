@@ -1,26 +1,27 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Shadow Cloud Local",
-  "version": "0.16.1",
-  "identifier": "com.shadowcloud.desktop",
+  "productName": "Shadow Cloud Companion",
+  "version": "../../../package.json",
+  "identifier": "com.shadowcloud.companion",
   "build": {
     "beforeDevCommand": "pnpm vite --host 127.0.0.1",
     "devUrl": "http://127.0.0.1:1420",
-    "beforeBuildCommand": "pnpm vite build",
+    "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"
   },
   "app": {
     "windows": [
       {
-        "title": "Shadow Cloud: Local",
-        "width": 1120,
-        "height": 760,
-        "minWidth": 860,
-        "minHeight": 560
+        "title": "Shadow Cloud Companion",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 640,
+        "minHeight": 480
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost; connect-src ipc: http://ipc.localhost; font-src 'self'; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'none'",
+      "devCsp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost ws://127.0.0.1:1420; img-src 'self' data:; object-src 'none'"
     }
   },
   "bundle": {
@@ -33,7 +34,9 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "macOS": { "minimumSystemVersion": "12.0" },
+    "windows": { "nsis": { "displayLanguageSelector": false } }
   },
   "plugins": {
     "updater": {

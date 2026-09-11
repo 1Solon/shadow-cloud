@@ -1,4 +1,4 @@
-name: Publish Desktop App
+name: Publish Companion
 
 on:
   release:
@@ -76,17 +76,14 @@ jobs:
       matrix:
         include:
           - platform: macos-latest
-            args: --target aarch64-apple-darwin
-            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
-          - platform: macos-latest
-            args: --target x86_64-apple-darwin
+            args: --target universal-apple-darwin --bundles dmg
             rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
           - platform: ubuntu-22.04
-            args: ''
-            rust-targets: ''
+            args: --target x86_64-unknown-linux-gnu --bundles appimage
+            rust-targets: x86_64-unknown-linux-gnu
           - platform: windows-latest
-            args: ''
-            rust-targets: ''
+            args: --target x86_64-pc-windows-msvc --bundles nsis
+            rust-targets: x86_64-pc-windows-msvc
 
     steps:
       - name: Check out release source
@@ -138,36 +135,11 @@ jobs:
         with:
           workspaces: apps/desktop/src-tauri -> target
 
-      - name: Apply git release version
+      - name: Validate shared release and protocol version
         shell: bash
         env:
-          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
-        run: |
-          node --input-type=module <<'NODE'
-          import { readFileSync, writeFileSync } from "node:fs";
-
-          const releaseTag = process.env.RELEASE_TAG || JSON.parse(readFileSync("package.json", "utf8")).version;
-          let version = releaseTag.trim().replace(/^refs\/tags\//, "");
-          if (version.startsWith("v")) version = version.slice(1);
-          if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version)) {
-            throw new Error(`Release tag ${releaseTag} is not semantic.`);
-          }
-
-          for (const path of ["package.json", "apps/desktop/src-tauri/tauri.conf.json"]) {
-            const contents = readFileSync(path, "utf8");
-            JSON.parse(contents);
-            writeFileSync(path, contents.replace(/("version"\s*:\s*)"[^"]+"/, `$1"${version}"`));
-          }
-
-          for (const [path, pattern] of [
-            ["apps/desktop/src-tauri/Cargo.toml", /(\[package\][\s\S]*?\nversion\s*=\s*)"[^"]+"/],
-            ["apps/desktop/src-tauri/Cargo.lock", /(\[\[package\]\]\r?\nname\s*=\s*"shadow-cloud-desktop"\r?\nversion\s*=\s*)"[^"]+"/],
-          ]) {
-            const contents = readFileSync(path, "utf8");
-            if (!pattern.test(contents)) throw new Error(`Version not found in ${path}.`);
-            writeFileSync(path, contents.replace(pattern, `$1"${version}"`));
-          }
-          NODE
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: node apps/desktop/scripts/check-release.mjs
 
       - name: Install desktop dependencies
         run: pnpm install --filter @shadow-cloud/desktop... --frozen-lockfile
@@ -182,8 +154,8 @@ jobs:
           projectPath: apps/desktop
           releaseId: ${{ needs.prepare.outputs.release_id }}
           tagName: ${{ needs.prepare.outputs.release_tag }}
-          releaseName: Shadow Cloud Local v__VERSION__
-          releaseBody: See the assets to download this desktop version.
+          releaseName: Shadow Cloud Companion v__VERSION__
+          releaseBody: Windows x64 NSIS, universal macOS DMG, and Linux x64 AppImage. OS publisher signing and notarization are deferred; updater artifacts retain their separate cryptographic signatures.
           releaseDraft: false
           prerelease: ${{ needs.prepare.outputs.prerelease }}
           includeUpdaterJson: true

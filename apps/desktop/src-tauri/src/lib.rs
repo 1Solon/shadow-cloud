@@ -1,132 +1,110 @@
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
-use tauri::{
-    menu::MenuBuilder,
-    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    Manager, State, WindowEvent,
-};
+use shadow_cloud_companion_engine::{Command, CommandError, Engine, Snapshot};
+use std::{sync::Mutex, time::Duration};
+use tauri::{Emitter, Manager, State};
 
-#[derive(Default)]
-struct TrayCloseState {
-    minimize_to_tray_on_close: AtomicBool,
-    is_quitting: AtomicBool,
+#[tauri::command]
+fn companion_snapshot(engine: State<'_, Mutex<Engine>>) -> Snapshot {
+    engine
+        .lock()
+        .expect("engine coordinator poisoned")
+        .snapshot()
 }
 
 #[tauri::command]
-fn set_minimize_to_tray_on_close(enabled: bool, state: State<'_, Arc<TrayCloseState>>) {
-    state
-        .minimize_to_tray_on_close
-        .store(enabled, Ordering::Relaxed);
+fn companion_command(
+    command: Command,
+    engine: State<'_, Mutex<Engine>>,
+) -> Result<Snapshot, CommandError> {
+    engine
+        .lock()
+        .expect("engine coordinator poisoned")
+        .command(command)
 }
 
-fn should_hide_window_on_close(minimize_to_tray_on_close: bool, is_quitting: bool) -> bool {
-    minimize_to_tray_on_close && !is_quitting
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Protocol {
+    protocol_version: String,
 }
 
-fn show_main_window(app: &tauri::AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.show();
-        let _ = window.unminimize();
-        let _ = window.set_focus();
+async fn check_protocol(client: &reqwest::Client, url: &str) -> Result<String, ()> {
+    let mut response = client.get(url).send().await.map_err(|_| ())?;
+    if !response.status().is_success() {
+        return Err(());
     }
+    let mut body = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(|_| ())? {
+        if body.len() + chunk.len() > 4096 {
+            return Err(());
+        }
+        body.extend_from_slice(&chunk);
+    }
+    let protocol: Protocol = serde_json::from_slice(&body).map_err(|_| ())?;
+    Ok(protocol.protocol_version)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::should_hide_window_on_close;
-
-    #[test]
-    fn hides_window_when_close_to_tray_is_enabled_and_app_is_not_quitting() {
-        assert!(should_hide_window_on_close(true, false));
+fn api_base_url() -> String {
+    #[cfg(debug_assertions)]
+    if let Ok(url) = std::env::var("SHADOW_CLOUD_API_URL") {
+        return url;
     }
-
-    #[test]
-    fn allows_close_when_preference_is_disabled_or_app_is_quitting() {
-        assert!(!should_hide_window_on_close(false, false));
-        assert!(!should_hide_window_on_close(true, true));
-    }
+    option_env!("SHADOW_CLOUD_API_URL")
+        .unwrap_or("https://shadow-cloud.solonsstuff.com")
+        .into()
 }
 
 pub fn run() {
-    let tray_close_state = Arc::new(TrayCloseState::default());
-    let close_state = Arc::clone(&tray_close_state);
-    let menu_state = Arc::clone(&tray_close_state);
-
     tauri::Builder::default()
-        .plugin(tauri_plugin_updater::Builder::new().build())
-        .manage(tray_close_state)
-        .setup(|app| {
-            let menu = MenuBuilder::new(app)
-                .text("show", "Show Shadow Cloud")
-                .text("quit", "Quit")
-                .build()?;
-            let mut tray = TrayIconBuilder::new()
-                .menu(&menu)
-                .tooltip("Shadow Cloud Local")
-                .show_menu_on_left_click(false)
-                .on_menu_event(|app, event| match event.id().as_ref() {
-                    "show" => show_main_window(app),
-                    "quit" => {
-                        app.state::<Arc<TrayCloseState>>()
-                            .is_quitting
-                            .store(true, Ordering::Relaxed);
-                        app.exit(0);
-                    }
-                    _ => {}
-                })
-                .on_tray_icon_event(|tray, event| match event {
-                    TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    }
-                    | TrayIconEvent::DoubleClick {
-                        button: MouseButton::Left,
-                        ..
-                    } => show_main_window(tray.app_handle()),
-                    _ => {}
-                });
-
-            if let Some(icon) = app.default_window_icon() {
-                tray = tray.icon(icon.clone());
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
             }
+        }))
+        .manage(Mutex::new(Engine::new()))
+        .setup(|app| {
+            let mut revisions = app
+                .state::<Mutex<Engine>>()
+                .lock()
+                .expect("engine coordinator poisoned")
+                .subscribe();
+            let events = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                while revisions.changed().await.is_ok() {
+                    let snapshot = revisions.borrow_and_update().clone();
+                    // Full immutable snapshots are revisioned and may coalesce.
+                    let _ = events.emit("companion:snapshot", snapshot);
+                }
+            });
 
-            tray.build(app)?;
+            let client = reqwest::Client::builder()
+                .timeout(Duration::from_secs(10))
+                .redirect(reqwest::redirect::Policy::none())
+                .https_only(!cfg!(debug_assertions))
+                .build()?;
+            let url = format!(
+                "{}/v1/companion/protocol",
+                api_base_url().trim_end_matches('/')
+            );
+            let coordinator = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    let observation = check_protocol(&client, &url).await;
+                    coordinator
+                        .state::<Mutex<Engine>>()
+                        .lock()
+                        .expect("engine coordinator poisoned")
+                        .observe_protocol(observation);
+                    tokio::time::sleep(Duration::from_secs(30)).await;
+                }
+            });
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![set_minimize_to_tray_on_close])
-        .on_window_event(move |window, event| {
-            if window.label() != "main" {
-                return;
-            }
-
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                if should_hide_window_on_close(
-                    close_state
-                        .minimize_to_tray_on_close
-                        .load(Ordering::Relaxed),
-                    close_state.is_quitting.load(Ordering::Relaxed),
-                ) {
-                    api.prevent_close();
-                    let _ = window.hide();
-                }
-            }
-        })
-        .on_menu_event(move |app, event| {
-            if event.id().as_ref() == "quit" {
-                menu_state.is_quitting.store(true, Ordering::Relaxed);
-                app.exit(0);
-            }
-        })
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            show_main_window(app);
-        }))
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_store::Builder::default().build())
+        .invoke_handler(tauri::generate_handler![
+            companion_snapshot,
+            companion_command
+        ])
         .run(tauri::generate_context!())
-        .expect("error while running Shadow-Cloud desktop");
+        .expect("could not start Shadow Cloud Companion");
 }

@@ -87,6 +87,12 @@ pnpm dev:desktop
 
 The desktop command starts the API, web app, bot, and Tauri desktop app.
 
+The desktop application is being rebuilt as **Shadow Cloud Companion**. The
+accepted interface and clean native foundation are in `apps/desktop`; sign-in
+and file transfers are not connected yet. See the
+[Companion developer guide](apps/desktop/README.md) for standalone development,
+the synthetic browser harness, native builds, and verification limits.
+
 By default, the services are available at:
 
 * Web: `http://localhost:3000`
@@ -152,4 +158,3 @@ To stop the stack:
 ```bash
 docker compose down
 ```
-

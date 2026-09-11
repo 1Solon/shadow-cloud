@@ -67,40 +67,7 @@ jobs:
           fi
           export RELEASE_VERSION="$version"
 
-          node --input-type=module <<'NODE'
-          import { readFileSync } from "node:fs";
-
-          const expectedVersion = process.env.RELEASE_VERSION;
-          const versions = new Map([
-            ["package.json", JSON.parse(readFileSync("package.json", "utf8")).version],
-            [
-              "apps/desktop/src-tauri/tauri.conf.json",
-              JSON.parse(readFileSync("apps/desktop/src-tauri/tauri.conf.json", "utf8")).version,
-            ],
-          ]);
-
-          for (const [path, pattern] of [
-            ["apps/desktop/src-tauri/Cargo.toml", /\[package\][\s\S]*?\nversion\s*=\s*"([^"]+)"/],
-            ["apps/desktop/src-tauri/Cargo.lock", /\[\[package\]\]\r?\nname\s*=\s*"shadow-cloud-desktop"\r?\nversion\s*=\s*"([^"]+)"/],
-          ]) {
-            const match = readFileSync(path, "utf8").match(pattern);
-            if (!match) throw new Error(`Version not found in ${path}.`);
-            versions.set(path, match[1]);
-          }
-
-          const mismatches = [...versions].filter(
-            ([, currentVersion]) => currentVersion !== expectedVersion,
-          );
-          if (mismatches.length > 0) {
-            const details = mismatches
-              .map(([path, currentVersion]) => `${path}: ${currentVersion}`)
-              .join("\n");
-            throw new Error(
-              `Release ${expectedVersion} does not match the deployment branch:\n${details}\n` +
-                "Bump versions through a pull request before publishing or manually dispatching the release.",
-            );
-          }
-          NODE
+          node apps/desktop/scripts/check-release.mjs
 
           echo "image_namespace=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
           echo "release_sha=$release_sha" >> "$GITHUB_OUTPUT"

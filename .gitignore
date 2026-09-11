@@ -13,8 +13,6 @@ coverage
 packages/database/prisma/dev.db
 packages/database/prisma/dev.db-journal
 storage
-!apps/desktop/src/storage/
-!apps/desktop/src/storage/**
 saves
 dev.db
 docs/superpowers

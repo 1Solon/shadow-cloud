@@ -1,48 +1,25 @@
 import { spawn } from "node:child_process";
-import { loadRootEnv, resolveWebUrl } from "../../../scripts/dev-env.mjs";
+import { loadRootEnv } from "../../../scripts/dev-env.mjs";
 
 await loadRootEnv();
 
-const apiUrl = process.env.SHADOW_CLOUD_API_URL ?? "http://localhost:3001";
-const webUrl = resolveWebUrl();
-
-async function waitFor(url, label) {
-  const deadline = Date.now() + 90_000;
-
-  while (Date.now() < deadline) {
-    try {
-      const response = await fetch(url);
-
-      if (response.ok || response.status < 500) {
-        return;
-      }
-    } catch {
-      // Service may still be starting.
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
-  }
-
-  throw new Error(`${label} did not become ready at ${url}.`);
-}
-
-await Promise.all([waitFor(`${apiUrl}/v1`, "API"), waitFor(webUrl, "Web")]);
-
+// The native process owns networking. Start even when the server is offline.
 const child = spawn("pnpm", ["tauri", "dev"], {
   stdio: "inherit",
-  shell: true,
+  shell: process.platform === "win32",
   env: {
     ...process.env,
-    VITE_SHADOW_CLOUD_API_URL: apiUrl,
-    VITE_SHADOW_CLOUD_WEB_URL: webUrl,
+    SHADOW_CLOUD_API_URL:
+      process.env.SHADOW_CLOUD_API_URL ?? "http://127.0.0.1:3001",
   },
 });
-
-child.on("exit", (code, signal) => {
-  if (signal) {
-    process.kill(process.pid, signal);
-    return;
-  }
-
-  process.exit(code ?? 0);
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.on(signal, () => child.kill(signal));
+}
+child.on("error", (error) => {
+  console.error(error.message);
+  process.exitCode = 1;
+});
+child.on("exit", (code) => {
+  process.exitCode = code ?? 1;
 });

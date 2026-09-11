@@ -1,0 +1,102 @@
+name: Companion native builds
+
+on:
+  pull_request:
+    paths:
+      - "apps/desktop/**"
+      - "apps/api/src/companion/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.base.json"
+      - ".github/workflows/companion.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/desktop/**"
+      - "apps/api/src/companion/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsconfig.base.json"
+      - ".github/workflows/companion.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: companion-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native:
+    name: ${{ matrix.name }} (unsigned publisher)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x64 AppImage
+            os: ubuntu-22.04
+            targets: x86_64-unknown-linux-gnu
+            args: --target x86_64-unknown-linux-gnu --bundles appimage
+          - name: Windows x64 NSIS
+            os: windows-latest
+            targets: x86_64-pc-windows-msvc
+            args: --target x86_64-pc-windows-msvc --bundles nsis
+          - name: Universal macOS DMG
+            os: macos-latest
+            targets: aarch64-apple-darwin,x86_64-apple-darwin
+            args: --target universal-apple-darwin --bundles dmg
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.20.0
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          toolchain: 1.98.1
+          targets: ${{ matrix.targets }}
+      - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: |
+            apps/desktop/src-tauri -> target
+            apps/desktop/engine -> target
+      - name: Linux native prerequisites
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get -o APT::Update::Error-Mode=any -o Acquire::Retries=3 update
+          sudo apt-get -o Acquire::Retries=3 install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf xvfb
+      - run: pnpm install --filter @shadow-cloud/desktop... --frozen-lockfile
+      - name: Check shared release and protocol
+        run: node apps/desktop/scripts/check-release.mjs
+      - run: pnpm --filter @shadow-cloud/desktop typecheck
+      - run: pnpm --filter @shadow-cloud/desktop test
+      - run: pnpm --filter @shadow-cloud/desktop test:engine
+      - name: Build native distribution (no publisher credentials)
+        run: pnpm --filter @shadow-cloud/desktop build:native ${{ matrix.args }}
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+      - name: Launch Linux AppImage (startup only)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          mapfile -t bundles < <(find apps/desktop/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage -maxdepth 1 -name '*.AppImage' -type f)
+          test "${#bundles[@]}" -eq 1
+          dbus-run-session -- xvfb-run -a node apps/desktop/scripts/smoke-native.mjs "${bundles[0]}" --appimage-extract-and-run
+      - name: Launch macOS application bundle (startup only)
+        if: runner.os == 'macOS'
+        run: node apps/desktop/scripts/smoke-native.mjs "apps/desktop/src-tauri/target/universal-apple-darwin/release/bundle/macos/Shadow Cloud Companion.app/Contents/MacOS/shadow-cloud-companion"
+      - name: Install and launch Windows NSIS (startup only)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem apps/desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis -Filter *.exe)
+          if ($installers.Count -ne 1) { throw "Expected one NSIS installer" }
+          $companionInstall = Join-Path $env:RUNNER_TEMP 'companion-smoke'
+          $install = Start-Process -FilePath $installers[0].FullName -ArgumentList '/S', "/D=$companionInstall" -PassThru -Wait
+          if ($install.ExitCode -ne 0) { throw "NSIS installation failed: $($install.ExitCode)" }
+          node apps/desktop/scripts/smoke-native.mjs "$companionInstall/shadow-cloud-companion.exe"
