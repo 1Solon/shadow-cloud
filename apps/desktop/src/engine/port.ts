@@ -1,5 +1,6 @@
 // The UI's only application boundary. Kept in step with engine/src/lib.rs.
 export type Theme = "dark" | "light" | "system";
+export type AutomaticMode = "inherit" | "automatic" | "manual";
 export type SyncStatus =
   | "conflict"
   | "sending"
@@ -21,6 +22,11 @@ export type OnboardingStage =
   | "complete";
 
 export interface Campaign {
+  countdown?: {
+    authorizationId: string;
+    contentHash: string;
+    remainingSeconds: number;
+  } | null;
   candidates?: {
     contentHash: string;
     filename: string;
@@ -39,6 +45,7 @@ export interface Campaign {
   statusLabel: string;
   detail: string;
   automaticUploads: boolean;
+  automaticMode?: AutomaticMode;
   turnStartedAt: string | null;
   lastTransfer: string;
   archiveBytes?: number;
@@ -81,6 +88,11 @@ export interface Snapshot {
 
 export type Command =
   | {
+      type: "cancel-automatic-send";
+      campaignId: string;
+      authorizationId: string;
+    }
+  | {
       type: "candidate-action";
       campaignId: string;
       contentHash: string;
@@ -96,6 +108,11 @@ export type Command =
   | { type: "reset-companion" }
   | { type: "set-theme"; theme: Theme }
   | { type: "set-automatic-uploads"; enabled: boolean }
+  | {
+      type: "set-campaign-automatic-uploads";
+      campaignId: string;
+      mode: AutomaticMode;
+    }
   | { type: "set-paused"; paused: boolean }
   | { type: "campaign-action"; campaignId: string; action: CampaignAction };
 

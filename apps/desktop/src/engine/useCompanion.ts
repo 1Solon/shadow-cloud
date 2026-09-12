@@ -9,7 +9,7 @@ function message(error: unknown): string {
   if (error === "invalid-onboarding-step")
     return "That setup step is not available yet. No files were changed.";
   if (error === "authentication-unavailable")
-    return "Could not reach Shadow Cloud to sign in. Check the connection and retry.";
+    return "Could not reach Shadow Cloud. Check the connection and retry.";
   if (error === "authorization-expired")
     return "That sign-in request is invalid, expired, or already used. Start again.";
   if (error === "folder-selection-cancelled")
@@ -17,9 +17,9 @@ function message(error: unknown): string {
   if (error === "invalid-companion-root")
     return "That folder cannot be used as the Companion root. Choose a real local directory.";
   if (error === "storage-unavailable")
-    return "The Companion could not save its local state. No transfer was started.";
+    return "The Companion could not save its local state. Check Campaign status before retrying.";
   if (error === "not-available")
-    return "This action is not available in the foundation build. No files were changed.";
+    return "This action is no longer available. Review the current Campaign status and try again.";
   return "Could not communicate with the Companion engine. Please reopen the application.";
 }
 

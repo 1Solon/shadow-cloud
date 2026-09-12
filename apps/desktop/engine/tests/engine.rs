@@ -1490,6 +1490,9 @@ fn typed_commands_reject_unknown_fields_and_never_offer_force_send() {
 
 #[derive(Default)]
 struct PublicationRemote {
+    offline_observe: std::sync::atomic::AtomicBool,
+    interrupted: std::sync::atomic::AtomicBool,
+    during_observe: Mutex<Option<Box<dyn FnOnce() + Send>>>,
     offline_submission_once: std::sync::atomic::AtomicBool,
     submission_mismatch: std::sync::atomic::AtomicBool,
     submitted_keys: Mutex<Vec<String>>,
@@ -1530,6 +1533,9 @@ impl PublicationRemote {
 }
 #[async_trait]
 impl CompanionRemote for PublicationRemote {
+    fn receive_interrupted(&self) -> bool {
+        self.interrupted.load(std::sync::atomic::Ordering::SeqCst)
+    }
     async fn submit(
         &self,
         _: &str,
@@ -1626,6 +1632,16 @@ impl CompanionRemote for PublicationRemote {
             || self.revoked.load(std::sync::atomic::Ordering::SeqCst)
         {
             return Err(shadow_cloud_companion_engine::ReceiveError::Unauthorized);
+        }
+        let action = self.during_observe.lock().unwrap().take();
+        if let Some(action) = action {
+            action();
+        }
+        if self
+            .offline_observe
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            return Err(shadow_cloud_companion_engine::ReceiveError::Offline);
         }
         Ok(vec![shadow_cloud_companion_engine::ObservedCampaign {
             baseline: format!(
@@ -2516,4 +2532,521 @@ async fn an_unaccepted_request_retries_immutable_staging_with_the_same_key_and_p
         b"changed while offline"
     );
     assert_eq!(snapshot.campaigns[0].candidates.len(), 1);
+}
+
+#[derive(Default)]
+struct AutomaticPlatform {
+    clock: std::sync::atomic::AtomicU64,
+    notifications: Mutex<Vec<shadow_cloud_companion_engine::AutomaticNotification>>,
+    selected: PathBuf,
+}
+#[async_trait]
+impl CompanionPlatform for AutomaticPlatform {
+    fn now_millis(&self) -> u64 {
+        self.clock.load(std::sync::atomic::Ordering::SeqCst)
+    }
+    async fn notify_automatic(
+        &self,
+        notification: shadow_cloud_companion_engine::AutomaticNotification,
+    ) -> Result<(), ()> {
+        self.notifications.lock().unwrap().push(notification);
+        Ok(())
+    }
+    fn open_url(&self, _: &str) -> Result<(), ()> {
+        Ok(())
+    }
+    fn choose_directory(&self) -> Result<Option<PathBuf>, ()> {
+        Ok(Some(self.selected.clone()))
+    }
+}
+
+#[tokio::test]
+async fn automatic_send_gives_fifteen_seconds_to_cancel_and_preserves_the_ordinary_candidate() {
+    use std::sync::atomic::Ordering;
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("root");
+    fs::create_dir(&root).unwrap();
+    let db = temp.path().join("state/db");
+    let remote = Arc::new(PublicationRemote::default());
+    remote.publish(b"received");
+    remote.can_submit.store(true, Ordering::SeqCst);
+    let vault = Arc::new(FakeVault::default());
+    let mut engine = receiving_engine(&root, &db, remote.clone(), vault.clone()).await;
+    engine.reconcile().await.unwrap();
+    drop(engine);
+    let platform = Arc::new(AutomaticPlatform {
+        selected: root.clone(),
+        ..Default::default()
+    });
+    let mut engine = Engine::open(&db, remote.clone(), platform.clone(), vault).unwrap();
+    engine.observe_protocol(Ok(RELEASE.into()));
+    engine.restore_session().await.unwrap();
+    let folder = fs::read_dir(&root).unwrap().next().unwrap().unwrap().path();
+    fs::write(folder.join("mine.se1"), b"my turn").unwrap();
+    engine.reconcile().await.unwrap();
+    let snapshot = engine.reconcile().await.unwrap();
+    assert_eq!(
+        snapshot.campaigns[0]
+            .countdown
+            .as_ref()
+            .unwrap()
+            .remaining_seconds,
+        15
+    );
+    assert_eq!(platform.notifications.lock().unwrap().len(), 1);
+    for second in 1..15 {
+        platform.clock.store(second * 1000, Ordering::SeqCst);
+        engine.reconcile().await.unwrap();
+    }
+    assert_eq!(remote.dispatches.load(Ordering::SeqCst), 0);
+    engine
+        .command(Command::CampaignAction {
+            campaign_id: "campaign-1".into(),
+            action: shadow_cloud_companion_engine::CampaignAction::CancelAutomaticSend,
+        })
+        .await
+        .unwrap();
+    platform.clock.store(15_000, Ordering::SeqCst);
+    let snapshot = engine.reconcile().await.unwrap();
+    assert!(snapshot.campaigns[0].countdown.is_none());
+    assert!(snapshot.campaigns[0].candidates[0].can_send);
+    assert!(!snapshot.campaigns[0].candidates[0].ignored);
+    assert_eq!(fs::read(folder.join("mine.se1")).unwrap(), b"my turn");
+    assert_eq!(remote.dispatches.load(Ordering::SeqCst), 0);
+}
+
+async fn automatic_engine_fixture() -> (
+    tempfile::TempDir,
+    Engine,
+    Arc<PublicationRemote>,
+    Arc<AutomaticPlatform>,
+    Arc<FakeVault>,
+    PathBuf,
+) {
+    use std::sync::atomic::Ordering;
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("root");
+    fs::create_dir(&root).unwrap();
+    let db = temp.path().join("state/db");
+    let remote = Arc::new(PublicationRemote::default());
+    remote.publish(b"received");
+    remote.can_submit.store(true, Ordering::SeqCst);
+    let vault = Arc::new(FakeVault::default());
+    let mut engine = receiving_engine(&root, &db, remote.clone(), vault.clone()).await;
+    engine.reconcile().await.unwrap();
+    drop(engine);
+    let platform = Arc::new(AutomaticPlatform {
+        selected: root.clone(),
+        ..Default::default()
+    });
+    let mut engine = Engine::open(&db, remote.clone(), platform.clone(), vault.clone()).unwrap();
+    engine.observe_protocol(Ok(RELEASE.into()));
+    engine.restore_session().await.unwrap();
+    let file = fs::read_dir(&root)
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path()
+        .join("mine.se1");
+    fs::write(&file, b"my turn").unwrap();
+    engine.reconcile().await.unwrap();
+    engine.reconcile().await.unwrap();
+    (temp, engine, remote, platform, vault, file)
+}
+
+#[tokio::test]
+async fn automatic_send_stages_at_fifteen_seconds_and_cannot_reauthorize_sent_contents() {
+    use std::sync::atomic::Ordering;
+    let (_temp, mut engine, remote, platform, _vault, file) = automatic_engine_fixture().await;
+    for second in 1..15 {
+        platform.clock.store(second * 1000, Ordering::SeqCst);
+        engine.reconcile().await.unwrap();
+    }
+    assert_eq!(remote.dispatches.load(Ordering::SeqCst), 0);
+    platform.clock.store(15_000, Ordering::SeqCst);
+    let snapshot = engine.reconcile().await.unwrap();
+    assert_eq!(remote.dispatches.load(Ordering::SeqCst), 1);
+    assert_eq!(snapshot.campaigns[0].status_label, "Submission accepted");
+    assert!(snapshot.campaigns[0].countdown.is_none());
+    assert_eq!(remote.saves.lock().unwrap().last().unwrap().1, b"my turn");
+    fs::write(file, b"later local work").unwrap();
+    let snapshot = engine.reconcile().await.unwrap();
+    assert_eq!(snapshot.campaigns[0].candidates.len(), 1);
+    assert!(!snapshot.campaigns[0].candidates[0].can_send);
+    assert_eq!(remote.dispatches.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn automatic_countdown_restarts_after_wake_restart_and_file_mutation_and_ignores_old_notification_actions(
+) {
+    use std::sync::atomic::Ordering;
+    let (temp, mut engine, remote, platform, vault, file) = automatic_engine_fixture().await;
+    let old_id = engine.snapshot().campaigns[0]
+        .countdown
+        .as_ref()
+        .unwrap()
+        .authorization_id
+        .clone();
+    platform.clock.store(60_000, Ordering::SeqCst);
+    assert!(engine.reconcile().await.unwrap().campaigns[0]
+        .countdown
+        .is_none());
+    let snapshot = engine.reconcile().await.unwrap();
+    assert_eq!(
+        snapshot.campaigns[0]
+            .countdown
+            .as_ref()
+            .unwrap()
+            .remaining_seconds,
+        15
+    );
+    assert_eq!(remote.dispatches.load(Ordering::SeqCst), 0);
+    fs::write(&file, b"changed turn").unwrap();
+    assert!(engine.reconcile().await.unwrap().campaigns[0]
+        .countdown
+        .is_none());
+    let snapshot = engine.reconcile().await.unwrap();
+    assert_eq!(
+        snapshot.campaigns[0]
+            .countdown
+            .as_ref()
+            .unwrap()
+            .remaining_seconds,
+        15
+    );
+    engine
+        .command(Command::CancelAutomaticSend {
+            campaign_id: "campaign-1".into(),
+            authorization_id: old_id,
+        })
+        .await
+        .unwrap();
+    assert!(engine.snapshot().campaigns[0].countdown.is_some());
+    drop(engine);
+    platform.clock.store(120_000, Ordering::SeqCst);
+    let mut engine = Engine::open(
+        &temp.path().join("state/db"),
+        remote.clone(),
+        platform.clone(),
+        vault,
+    )
+    .unwrap();
+    engine.observe_protocol(Ok(RELEASE.into()));
+    engine.restore_session().await.unwrap();
+    assert!(engine.reconcile().await.unwrap().campaigns[0]
+        .countdown
+        .is_none());
+    assert_eq!(
+        engine.reconcile().await.unwrap().campaigns[0]
+            .countdown
+            .as_ref()
+            .unwrap()
+            .remaining_seconds,
+        15
+    );
+    assert_eq!(remote.dispatches.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn automatic_send_never_fires_an_elapsed_countdown_after_a_reconciliation_stall() {
+    use std::sync::atomic::Ordering;
+    let (_temp, mut engine, remote, platform, _vault, _file) = automatic_engine_fixture().await;
+    for second in 1..15 {
+        platform.clock.store(second * 1000, Ordering::SeqCst);
+        engine.reconcile().await.unwrap();
+    }
+    platform.clock.store(15_000, Ordering::SeqCst);
+    let clock = platform.clone();
+    *remote.during_observe.lock().unwrap() = Some(Box::new(move || {
+        clock.clock.store(60_000, Ordering::SeqCst);
+    }));
+    let snapshot = engine.reconcile().await.unwrap();
+    assert_eq!(remote.dispatches.load(Ordering::SeqCst), 0);
+    assert!(snapshot.campaigns[0].countdown.is_none());
+    engine.reconcile().await.unwrap();
+    assert_eq!(
+        engine.reconcile().await.unwrap().campaigns[0]
+            .countdown
+            .as_ref()
+            .unwrap()
+            .remaining_seconds,
+        15
+    );
+}
+
+#[tokio::test]
+async fn offline_before_automatic_dispatch_requires_a_new_full_window_and_matching_authorization() {
+    use std::sync::atomic::Ordering;
+    let (_temp, mut engine, remote, platform, _vault, _file) = automatic_engine_fixture().await;
+    for second in 1..15 {
+        platform.clock.store(second * 1000, Ordering::SeqCst);
+        engine.reconcile().await.unwrap();
+    }
+    platform.clock.store(15_000, Ordering::SeqCst);
+    let second = remote.clone();
+    *remote.during_observe.lock().unwrap() = Some(Box::new(move || {
+        let failure = second.clone();
+        *second.during_observe.lock().unwrap() = Some(Box::new(move || {
+            failure.offline_observe.store(true, Ordering::SeqCst);
+        }));
+    }));
+    engine.reconcile().await.unwrap();
+    assert_eq!(remote.dispatches.load(Ordering::SeqCst), 0);
+    remote.offline_observe.store(false, Ordering::SeqCst);
+    engine.observe_protocol(Ok(RELEASE.into()));
+    let snapshot = engine.reconcile().await.unwrap();
+    assert_eq!(
+        snapshot.campaigns[0]
+            .countdown
+            .as_ref()
+            .unwrap()
+            .remaining_seconds,
+        15
+    );
+    // A Roster/Seat/turn revision invalidates the original authorization even when bytes match.
+    remote.turn_revision.store(1, Ordering::SeqCst);
+    assert!(engine.reconcile().await.unwrap().campaigns[0]
+        .countdown
+        .is_none());
+    assert!(!engine.snapshot().campaigns[0].candidates[0].can_send);
+    assert_eq!(remote.dispatches.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn changed_local_contents_cannot_silently_renew_stale_automatic_authorization() {
+    use std::sync::atomic::Ordering;
+    let (_temp, mut engine, remote, _platform, _vault, file) = automatic_engine_fixture().await;
+    remote.turn_revision.store(1, Ordering::SeqCst);
+    assert!(engine.reconcile().await.unwrap().campaigns[0]
+        .countdown
+        .is_none());
+    fs::write(file, b"edited after stale turn").unwrap();
+    engine.reconcile().await.unwrap();
+    let snapshot = engine.reconcile().await.unwrap();
+    assert!(snapshot.campaigns[0].countdown.is_none());
+    assert!(!snapshot.campaigns[0].candidates[0].can_send);
+}
+
+#[tokio::test]
+async fn another_candidate_appearing_at_automatic_authorization_blocks_dispatch() {
+    use std::sync::atomic::Ordering;
+    let (_temp, mut engine, remote, platform, _vault, file) = automatic_engine_fixture().await;
+    for second in 1..15 {
+        platform.clock.store(second * 1000, Ordering::SeqCst);
+        engine.reconcile().await.unwrap();
+    }
+    platform.clock.store(15_000, Ordering::SeqCst);
+    let second = remote.clone();
+    *remote.during_observe.lock().unwrap() = Some(Box::new(move || {
+        *second.during_observe.lock().unwrap() = Some(Box::new(move || {
+            fs::write(file.with_file_name("another.se1"), b"second candidate").unwrap();
+        }));
+    }));
+    engine.reconcile().await.unwrap();
+    assert_eq!(remote.dispatches.load(Ordering::SeqCst), 0);
+    let snapshot = engine.reconcile().await.unwrap();
+    assert_eq!(snapshot.campaigns[0].candidates.len(), 2);
+    assert!(snapshot.campaigns[0].countdown.is_none());
+}
+
+#[tokio::test]
+async fn restart_after_automatic_staging_cannot_dispatch_without_a_fresh_countdown() {
+    use std::sync::atomic::Ordering;
+    let (temp, mut engine, remote, platform, vault, _file) = automatic_engine_fixture().await;
+    let db = temp.path().join("state/db");
+    let database = rusqlite::Connection::open(&db).unwrap();
+    database.execute_batch("CREATE TRIGGER interrupt_dispatch BEFORE UPDATE OF state ON turn_submissions WHEN NEW.state IN ('dispatched','abandoned') BEGIN SELECT RAISE(ABORT,'storage interrupted'); END;").unwrap();
+    for second in 1..=15 {
+        platform.clock.store(second * 1000, Ordering::SeqCst);
+        engine.reconcile().await.unwrap();
+    }
+    assert_eq!(remote.dispatches.load(Ordering::SeqCst), 0);
+    drop(engine);
+    database
+        .execute_batch("DROP TRIGGER interrupt_dispatch;")
+        .unwrap();
+    let mut engine = Engine::open(&db, remote.clone(), platform.clone(), vault).unwrap();
+    engine.observe_protocol(Ok(RELEASE.into()));
+    engine.restore_session().await.unwrap();
+    engine.reconcile().await.unwrap();
+    assert_eq!(remote.dispatches.load(Ordering::SeqCst), 0);
+    assert_eq!(
+        engine.reconcile().await.unwrap().campaigns[0]
+            .countdown
+            .as_ref()
+            .unwrap()
+            .remaining_seconds,
+        15
+    );
+}
+
+#[tokio::test]
+async fn even_a_short_native_sleep_discards_countdowns_and_reobserves_before_a_full_window() {
+    use std::sync::atomic::Ordering;
+    let (_temp, mut engine, remote, platform, _vault, _file) = automatic_engine_fixture().await;
+    for second in 1..15 {
+        platform.clock.store(second * 1000, Ordering::SeqCst);
+        engine.reconcile().await.unwrap();
+    }
+    platform.clock.store(15_000, Ordering::SeqCst);
+    assert!(engine.resume().campaigns[0].countdown.is_none());
+    assert!(engine.reconcile().await.unwrap().campaigns[0]
+        .countdown
+        .is_none());
+    assert_eq!(
+        engine.reconcile().await.unwrap().campaigns[0]
+            .countdown
+            .as_ref()
+            .unwrap()
+            .remaining_seconds,
+        15
+    );
+    assert_eq!(remote.dispatches.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn switching_accounts_requires_explicit_send_for_existing_local_work() {
+    use std::sync::atomic::Ordering;
+    let (_temp, mut engine, remote, _platform, _vault, file) = automatic_engine_fixture().await;
+    engine.command(Command::SignOut).await.unwrap();
+    remote.switch_account.store(true, Ordering::SeqCst);
+    engine
+        .command(Command::SubmitHandoffToken {
+            token: "other-account".into(),
+        })
+        .await
+        .unwrap();
+    engine.command(Command::ContinueOnboarding).await.unwrap();
+    engine.reconcile().await.unwrap();
+    let snapshot = engine.reconcile().await.unwrap();
+    assert!(snapshot.campaigns[0].countdown.is_none());
+    assert!(snapshot.campaigns[0].candidates[0].can_send);
+    assert!(!snapshot.campaigns[0].candidates[0].ignored);
+    assert_eq!(fs::read(file).unwrap(), b"my turn");
+    assert_eq!(remote.dispatches.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn cancel_stops_automatic_sending_even_when_its_durable_write_temporarily_fails() {
+    use std::sync::atomic::Ordering;
+    let (temp, mut engine, remote, platform, _vault, _file) = automatic_engine_fixture().await;
+    let id = engine.snapshot().campaigns[0]
+        .countdown
+        .as_ref()
+        .unwrap()
+        .authorization_id
+        .clone();
+    let database = rusqlite::Connection::open(temp.path().join("state/db")).unwrap();
+    database.execute_batch("CREATE TRIGGER fail_cancel BEFORE INSERT ON automatic_cancelled BEGIN SELECT RAISE(ABORT,'storage unavailable'); END;").unwrap();
+    assert_eq!(
+        engine
+            .command(Command::CancelAutomaticSend {
+                campaign_id: "campaign-1".into(),
+                authorization_id: id
+            })
+            .await,
+        Err(CommandError::StorageUnavailable)
+    );
+    assert!(engine.snapshot().campaigns[0].countdown.is_none());
+    for second in 1..15 {
+        platform.clock.store(second * 1000, Ordering::SeqCst);
+        engine.reconcile().await.unwrap();
+    }
+    database.execute_batch("DROP TRIGGER fail_cancel;").unwrap();
+    platform.clock.store(15_000, Ordering::SeqCst);
+    let snapshot = engine.reconcile().await.unwrap();
+    assert!(snapshot.campaigns[0].countdown.is_none());
+    assert!(snapshot.campaigns[0].candidates[0].can_send);
+    assert_eq!(remote.dispatches.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn campaign_automatic_override_survives_restart_and_inherit_tracks_the_global_preference() {
+    use shadow_cloud_companion_engine::AutomaticMode;
+    let (temp, mut engine, remote, platform, vault, _file) = automatic_engine_fixture().await;
+    let snapshot = engine
+        .command(Command::SetCampaignAutomaticUploads {
+            campaign_id: "campaign-1".into(),
+            mode: AutomaticMode::Manual,
+        })
+        .await
+        .unwrap();
+    assert!(!snapshot.campaigns[0].automatic_uploads);
+    assert!(snapshot.campaigns[0].countdown.is_none());
+    engine
+        .command(Command::SetAutomaticUploads { enabled: false })
+        .await
+        .unwrap();
+    engine
+        .command(Command::SetCampaignAutomaticUploads {
+            campaign_id: "campaign-1".into(),
+            mode: AutomaticMode::Automatic,
+        })
+        .await
+        .unwrap();
+    assert!(engine.reconcile().await.unwrap().campaigns[0]
+        .countdown
+        .is_some());
+    drop(engine);
+    let mut engine = Engine::open(&temp.path().join("state/db"), remote, platform, vault).unwrap();
+    engine.observe_protocol(Ok(RELEASE.into()));
+    engine.restore_session().await.unwrap();
+    engine.reconcile().await.unwrap();
+    let snapshot = engine.reconcile().await.unwrap();
+    assert!(!snapshot.preferences.automatic_uploads);
+    assert!(snapshot.campaigns[0].automatic_uploads);
+    assert_eq!(
+        snapshot.campaigns[0]
+            .countdown
+            .as_ref()
+            .unwrap()
+            .remaining_seconds,
+        15
+    );
+    let snapshot = engine
+        .command(Command::SetCampaignAutomaticUploads {
+            campaign_id: "campaign-1".into(),
+            mode: AutomaticMode::Inherit,
+        })
+        .await
+        .unwrap();
+    assert!(!snapshot.campaigns[0].automatic_uploads);
+    assert!(snapshot.campaigns[0].countdown.is_none());
+    engine
+        .command(Command::SetAutomaticUploads { enabled: true })
+        .await
+        .unwrap();
+    assert!(engine.reconcile().await.unwrap().campaigns[0]
+        .countdown
+        .is_some());
+}
+
+#[tokio::test]
+async fn cancel_queued_as_connection_drops_persists_the_exact_suppression_across_restart() {
+    let (temp, mut engine, remote, platform, vault, _file) = automatic_engine_fixture().await;
+    let id = engine.snapshot().campaigns[0]
+        .countdown
+        .as_ref()
+        .unwrap()
+        .authorization_id
+        .clone();
+    engine.observe_protocol(Err(()));
+    assert!(engine.snapshot().campaigns[0].countdown.is_none());
+    engine
+        .command(Command::CancelAutomaticSend {
+            campaign_id: "campaign-1".into(),
+            authorization_id: id,
+        })
+        .await
+        .unwrap();
+    drop(engine);
+    let mut engine = Engine::open(&temp.path().join("state/db"), remote, platform, vault).unwrap();
+    engine.observe_protocol(Ok(RELEASE.into()));
+    engine.restore_session().await.unwrap();
+    engine.reconcile().await.unwrap();
+    let snapshot = engine.reconcile().await.unwrap();
+    assert!(snapshot.campaigns[0].countdown.is_none());
+    assert!(snapshot.campaigns[0].candidates[0].can_send);
+    assert!(!snapshot.campaigns[0].candidates[0].ignored);
 }

@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { createDevelopmentCompanion } from "../development/companion";
 import { Campaigns } from "./Campaigns";
+import { App } from "./App";
 
 afterEach(cleanup);
 it("shows receive failures and requests an explicit current-save redownload through the engine", async () => {
@@ -86,4 +87,118 @@ it("shows candidate facts and sends only the exact candidate the player selected
     contentHash: "sha256:first",
     action: "ignore",
   });
+});
+
+it("keeps cancellation available offline and binds it to the displayed countdown", async () => {
+  const snapshot = await createDevelopmentCompanion("offline").snapshot();
+  snapshot.campaigns = [
+    {
+      ...snapshot.campaigns[1],
+      countdown: {
+        authorizationId: "countdown-first",
+        contentHash: "sha256:first",
+        remainingSeconds: 15,
+      },
+      actions: ["cancel-automatic-send", "open-folder"],
+    },
+  ];
+  const send = vi.fn(async () => {});
+  const view = render(
+    <Campaigns snapshot={snapshot} send={send} pending={false} />,
+  );
+  expect(screen.getByText("Sends in 00:15")).toBeVisible();
+  const cancel = screen.getByRole("button", { name: "> CANCEL SEND" });
+  expect(cancel).toBeEnabled();
+  expect(screen.getByRole("button", { name: "OPEN FOLDER" })).toBeDisabled();
+  await userEvent.click(cancel);
+  expect(send).toHaveBeenLastCalledWith({
+    type: "cancel-automatic-send",
+    campaignId: "long-meridian",
+    authorizationId: "countdown-first",
+  });
+
+  snapshot.campaigns[0].countdown = {
+    authorizationId: "countdown-changed-contents",
+    contentHash: "sha256:changed",
+    remainingSeconds: 15,
+  };
+  view.rerender(<Campaigns snapshot={snapshot} send={send} pending={false} />);
+  await userEvent.click(cancel);
+  expect(send).toHaveBeenLastCalledWith({
+    type: "cancel-automatic-send",
+    campaignId: "long-meridian",
+    authorizationId: "countdown-changed-contents",
+  });
+});
+
+it("lets each Campaign inherit the global send preference or choose an override", async () => {
+  const snapshot = await createDevelopmentCompanion("offline").snapshot();
+  snapshot.campaigns = [
+    { ...snapshot.campaigns[0], automaticMode: "inherit", actions: [] },
+  ];
+  const send = vi.fn(async () => {});
+  const view = render(
+    <Campaigns snapshot={snapshot} send={send} pending={false} />,
+  );
+  const preference = screen.getByRole("combobox", {
+    name: "Automatic sends for Black Glass",
+  });
+  expect(preference).toHaveValue("inherit");
+  expect(
+    screen.getByRole("option", { name: "Use global setting (Automatic)" }),
+  ).toBeInTheDocument();
+  await userEvent.selectOptions(preference, "manual");
+  expect(send).toHaveBeenLastCalledWith({
+    type: "set-campaign-automatic-uploads",
+    campaignId: "black-glass",
+    mode: "manual",
+  });
+
+  snapshot.campaigns[0].automaticMode = "manual";
+  snapshot.campaigns[0].automaticUploads = false;
+  snapshot.preferences.automaticUploads = false;
+  view.rerender(<Campaigns snapshot={snapshot} send={send} pending={false} />);
+  expect(preference).toHaveValue("manual");
+  expect(
+    screen.getByRole("option", { name: "Use global setting (Manual)" }),
+  ).toBeInTheDocument();
+  await userEvent.selectOptions(preference, "automatic");
+  expect(send).toHaveBeenLastCalledWith({
+    type: "set-campaign-automatic-uploads",
+    campaignId: "black-glass",
+    mode: "automatic",
+  });
+  await userEvent.selectOptions(preference, "inherit");
+  expect(send).toHaveBeenLastCalledWith({
+    type: "set-campaign-automatic-uploads",
+    campaignId: "black-glass",
+    mode: "inherit",
+  });
+});
+
+it("lets the automatic development scenario cancel and retain an ordinary Turn candidate", async () => {
+  render(
+    <App companion={createDevelopmentCompanion("automatic")} development />,
+  );
+  expect(await screen.findByText("Sends in 00:15")).toBeVisible();
+  expect(screen.getByText("completed-turn.se1")).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "> CANCEL SEND" }));
+  expect(screen.queryByText("Sends in 00:15")).not.toBeInTheDocument();
+  expect(screen.getByText("Automatic send cancelled")).toBeVisible();
+  expect(screen.getByText("completed-turn.se1")).toBeVisible();
+  expect(
+    screen.getByRole("button", { name: "Send completed-turn.se1" }),
+  ).toBeEnabled();
+  await userEvent.selectOptions(
+    screen.getByRole("combobox", {
+      name: "Automatic sends for Long Meridian",
+    }),
+    "manual",
+  );
+  expect(
+    screen.getByRole("combobox", {
+      name: "Automatic sends for Long Meridian",
+    }),
+  ).toHaveValue("manual");
+  expect(screen.getByText("completed-turn.se1")).toBeVisible();
 });

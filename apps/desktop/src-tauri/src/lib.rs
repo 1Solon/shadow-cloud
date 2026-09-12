@@ -1,16 +1,18 @@
 use async_trait::async_trait;
+mod lifecycle;
+mod notifications;
 #[path = "../service_config.rs"]
 mod service_config;
 use shadow_cloud_companion_engine::{
-    Command, CommandError, CompanionPlatform, CompanionRemote, ConnectionState, DeviceCredentials,
-    Engine, ExchangeOutcome, Handoff, ObservedCampaign, PublicationPage, ReceiveError, RemoteError,
-    SavePublication, SecretVault, SessionState, Snapshot, SubmissionReceipt, TurnSubmission,
-    RELEASE,
+    AutomaticNotification, Command, CommandError, CompanionPlatform, CompanionRemote,
+    ConnectionState, DeviceCredentials, Engine, ExchangeOutcome, Handoff, ObservedCampaign,
+    PublicationPage, ReceiveError, RemoteError, SavePublication, SecretVault, SessionState,
+    Snapshot, SubmissionReceipt, TurnSubmission, RELEASE,
 };
 use std::{
     path::PathBuf,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicUsize, Ordering},
         Arc,
     },
     time::Duration,
@@ -18,12 +20,35 @@ use std::{
 use tauri::{Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, MutexGuard};
+
+/// A queued native request interrupts read-only work until that request owns
+/// the coordinator. Releasing one request must not hide any later requests.
+struct PendingCommand(Arc<AtomicUsize>);
+
+impl PendingCommand {
+    fn new(pending: Arc<AtomicUsize>) -> Self {
+        pending.fetch_add(1, Ordering::SeqCst);
+        Self(pending)
+    }
+
+    async fn acquire<T>(self, owner: &Mutex<T>) -> MutexGuard<'_, T> {
+        let owner = owner.lock().await;
+        drop(self);
+        owner
+    }
+}
+
+impl Drop for PendingCommand {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
 
 struct Coordinator {
     engine: Mutex<Engine>,
     snapshots: tokio::sync::watch::Receiver<Snapshot>,
-    interrupt_receive: Arc<AtomicBool>,
+    interrupt_receive: Arc<AtomicUsize>,
 }
 
 #[tauri::command]
@@ -38,9 +63,8 @@ async fn companion_command(
 ) -> Result<Snapshot, CommandError> {
     // Interrupt only read-only receive HTTP requests and bounded hashing. Auth
     // mutation requests finish normally so rotating credentials cannot be lost.
-    coordinator.interrupt_receive.store(true, Ordering::SeqCst);
-    let mut engine = coordinator.engine.lock().await;
-    coordinator.interrupt_receive.store(false, Ordering::SeqCst);
+    let pending = PendingCommand::new(coordinator.interrupt_receive.clone());
+    let mut engine = pending.acquire(&coordinator.engine).await;
     engine.command(command).await
 }
 
@@ -68,7 +92,7 @@ struct HttpRemote {
     client: reqwest::Client,
     api_base_url: String,
     web_base_url: String,
-    interrupt_receive: Arc<AtomicBool>,
+    interrupt_receive: Arc<AtomicUsize>,
 }
 
 impl HttpRemote {
@@ -127,7 +151,7 @@ impl HttpRemote {
     ) -> Result<Vec<u8>, ReceiveError> {
         tokio::select! {
             result=self.receive_bytes_uninterrupted(request,limit) => result,
-            _=async { while !self.interrupt_receive.load(Ordering::SeqCst) { tokio::time::sleep(Duration::from_millis(20)).await; } } => Err(ReceiveError::Interrupted),
+            _=async { while self.interrupt_receive.load(Ordering::SeqCst) == 0 { tokio::time::sleep(Duration::from_millis(20)).await; } } => Err(ReceiveError::Interrupted),
         }
     }
     async fn receive_bytes_uninterrupted(
@@ -167,7 +191,7 @@ impl HttpRemote {
                 .build()?,
             api_base_url: api_base_url.trim_end_matches('/').into(),
             web_base_url: web_base_url.trim_end_matches('/').into(),
-            interrupt_receive: Arc::new(AtomicBool::new(false)),
+            interrupt_receive: Arc::new(AtomicUsize::new(0)),
         })
     }
 
@@ -239,11 +263,11 @@ impl CompanionRemote for HttpRemote {
     ) -> Result<Option<SubmissionReceipt>, ReceiveError> {
         tokio::select! {
             result=self.submission_response(self.receive_request(access,&["submissions",key],&[])?)=>result,
-            _=async {while !self.interrupt_receive.load(Ordering::SeqCst){tokio::time::sleep(Duration::from_millis(20)).await;}}=>Err(ReceiveError::Interrupted),
+            _=async {while self.interrupt_receive.load(Ordering::SeqCst) == 0 {tokio::time::sleep(Duration::from_millis(20)).await;}}=>Err(ReceiveError::Interrupted),
         }
     }
     fn receive_interrupted(&self) -> bool {
-        self.interrupt_receive.load(Ordering::SeqCst)
+        self.interrupt_receive.load(Ordering::SeqCst) != 0
     }
     async fn observe(&self, access: &str) -> Result<Vec<ObservedCampaign>, ReceiveError> {
         #[derive(serde::Deserialize)]
@@ -391,9 +415,27 @@ impl CompanionRemote for HttpRemote {
 
 struct NativePlatform {
     app: tauri::AppHandle,
+    notifications: notifications::Notifications,
+    lifecycle: Arc<std::sync::OnceLock<lifecycle::Lifecycle>>,
 }
 
+#[async_trait]
 impl CompanionPlatform for NativePlatform {
+    async fn notify_automatic(&self, notification: AutomaticNotification) -> Result<(), ()> {
+        if self
+            .lifecycle
+            .get()
+            .is_none_or(|lifecycle| !lifecycle.ready())
+        {
+            return Err(());
+        }
+        self.notifications.show(notification).await
+    }
+
+    fn dismiss_automatic(&self, authorization_id: &str) {
+        self.notifications.dismiss(authorization_id);
+    }
+
     fn open_folder(&self, path: &std::path::Path) -> Result<(), ()> {
         self.app
             .opener()
@@ -533,11 +575,27 @@ pub fn run() {
             }
             let database_path = data_directory.join("companion.sqlite3");
             let interrupt_receive = remote.interrupt_receive.clone();
+            let notification_app = app.handle().clone();
+            let notification_interrupt = interrupt_receive.clone();
+            let notifications = notifications::Notifications::new(move |command| {
+                // Register on the native callback thread before queueing behind
+                // reconciliation, preserving all other queued requests.
+                let pending = PendingCommand::new(notification_interrupt.clone());
+                let app = notification_app.clone();
+                tauri::async_runtime::spawn(async move {
+                    let state = app.state::<Coordinator>();
+                    let mut engine = pending.acquire(&state.engine).await;
+                    let _ = engine.command(command).await;
+                });
+            });
+            let lifecycle = Arc::new(std::sync::OnceLock::new());
             let engine = Engine::open(
                 &database_path,
                 remote,
                 Arc::new(NativePlatform {
                     app: app.handle().clone(),
+                    notifications,
+                    lifecycle: lifecycle.clone(),
                 }),
                 Arc::new(SystemVault),
             )?;
@@ -545,8 +603,20 @@ pub fn run() {
             app.manage(Coordinator {
                 engine: Mutex::new(engine),
                 snapshots: revisions.clone(),
-                interrupt_receive,
+                interrupt_receive: interrupt_receive.clone(),
             });
+
+            let lifecycle_app = app.handle().clone();
+            let lifecycle_interrupt = interrupt_receive.clone();
+            let _ = lifecycle.set(lifecycle::Lifecycle::new(move || {
+                let pending = PendingCommand::new(lifecycle_interrupt.clone());
+                let app = lifecycle_app.clone();
+                tauri::async_runtime::spawn(async move {
+                    let state = app.state::<Coordinator>();
+                    let mut engine = pending.acquire(&state.engine).await;
+                    engine.resume();
+                });
+            }));
 
             let events = app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -567,11 +637,20 @@ pub fn run() {
             );
             let coordinator = app.handle().clone();
             tauri::async_runtime::spawn(async move {
+                let mut next_protocol_check = tokio::time::Instant::now();
                 loop {
-                    let observation = check_protocol(&protocol_client, &protocol_url).await;
+                    let observation = if tokio::time::Instant::now() >= next_protocol_check {
+                        let observation = check_protocol(&protocol_client, &protocol_url).await;
+                        next_protocol_check = tokio::time::Instant::now() + Duration::from_secs(30);
+                        Some(observation)
+                    } else {
+                        None
+                    };
                     let state = coordinator.state::<Coordinator>();
                     let mut engine = state.engine.lock().await;
-                    engine.observe_protocol(observation);
+                    if let Some(observation) = observation {
+                        engine.observe_protocol(observation);
+                    }
                     let snapshot = engine.snapshot();
                     if snapshot.connection.state == ConnectionState::Connected
                         && snapshot.session.state == SessionState::SignedOut
@@ -584,7 +663,9 @@ pub fn run() {
                         let _ = engine.reconcile().await;
                     }
                     drop(engine);
-                    tokio::time::sleep(Duration::from_secs(30)).await;
+                    // The engine owns deadlines and resets them after a gap or wake.
+                    // Sleep after each reconciliation; never replay missed ticks.
+                    tokio::time::sleep(Duration::from_secs(1)).await;
                 }
             });
 
@@ -609,6 +690,76 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("could not start Shadow Cloud Companion");
+}
+
+#[cfg(test)]
+mod coordinator_tests {
+    use super::*;
+    use std::{
+        future::Future,
+        task::{Context, Poll, Waker},
+    };
+
+    #[tokio::test]
+    async fn queued_cancel_still_interrupts_reconciliation_after_an_earlier_command_runs() {
+        let remote = HttpRemote::new(
+            "https://synthetic.invalid".into(),
+            "https://synthetic.invalid".into(),
+        )
+        .unwrap();
+        let coordinator = Mutex::new(());
+        // A dispatched submission keeps ownership while Theme, a background
+        // reconciliation, and notification Cancel queue in this exact order.
+        let dispatched_submission = coordinator.lock().await;
+        let mut theme =
+            Box::pin(PendingCommand::new(remote.interrupt_receive.clone()).acquire(&coordinator));
+        let mut reconciliation = Box::pin(coordinator.lock());
+        let mut cancel =
+            Box::pin(PendingCommand::new(remote.interrupt_receive.clone()).acquire(&coordinator));
+        let mut context = Context::from_waker(Waker::noop());
+        assert!(matches!(theme.as_mut().poll(&mut context), Poll::Pending));
+        assert!(matches!(
+            reconciliation.as_mut().poll(&mut context),
+            Poll::Pending
+        ));
+        assert!(matches!(cancel.as_mut().poll(&mut context), Poll::Pending));
+
+        drop(dispatched_submission);
+        let theme_owner = theme.await;
+        assert!(remote.receive_interrupted());
+        drop(theme_owner);
+        let reconciliation_owner = reconciliation.await;
+        // This is the production remote gate checked before any new Send.
+        // Completing Theme cannot remove the later Cancel authorization barrier.
+        assert!(remote.receive_interrupted());
+        drop(reconciliation_owner);
+        let cancel_owner = cancel.await;
+        assert!(!remote.receive_interrupted());
+        drop(cancel_owner);
+    }
+
+    #[tokio::test]
+    async fn abandoning_a_queued_command_releases_its_own_interruption() {
+        let remote = HttpRemote::new(
+            "https://synthetic.invalid".into(),
+            "https://synthetic.invalid".into(),
+        )
+        .unwrap();
+        let coordinator = Mutex::new(());
+        let owner = coordinator.lock().await;
+        let mut request =
+            Box::pin(PendingCommand::new(remote.interrupt_receive.clone()).acquire(&coordinator));
+        assert!(matches!(
+            request
+                .as_mut()
+                .poll(&mut Context::from_waker(Waker::noop())),
+            Poll::Pending
+        ));
+        assert!(remote.receive_interrupted());
+        drop(request);
+        assert!(!remote.receive_interrupted());
+        drop(owner);
+    }
 }
 
 #[cfg(test)]
@@ -654,7 +805,7 @@ mod receive_transport_tests {
         remote.client = reqwest::Client::new();
         let command = async {
             tokio::time::sleep(Duration::from_millis(30)).await;
-            remote.interrupt_receive.store(true, Ordering::SeqCst);
+            remote.interrupt_receive.store(1, Ordering::SeqCst);
         };
         let (result, ()) = tokio::time::timeout(Duration::from_millis(500), async {
             tokio::join!(remote.observe("synthetic-access"), command)
@@ -678,7 +829,7 @@ mod submission_transport_tests {
         remote.client = reqwest::Client::new();
         let interrupt = async {
             tokio::time::sleep(Duration::from_millis(30)).await;
-            remote.interrupt_receive.store(true, Ordering::SeqCst);
+            remote.interrupt_receive.store(1, Ordering::SeqCst);
         };
         let (result, ()) = tokio::time::timeout(Duration::from_millis(500), async {
             tokio::join!(remote.receipt("synthetic", "operation-key"), interrupt)

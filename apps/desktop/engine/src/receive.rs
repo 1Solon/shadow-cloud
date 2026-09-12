@@ -148,6 +148,7 @@ impl Engine {
 
     /// Native coordinator's polling seam. Pausing allows observation, never file effects.
     pub async fn reconcile(&mut self) -> Result<Snapshot, CommandError> {
+        self.check_reconciliation_gap();
         self.require_compatible_server()?;
         if self.snapshot.session.state != SessionState::SignedIn {
             return Ok(self.snapshot());
@@ -171,6 +172,8 @@ impl Engine {
         let mut campaigns = Vec::new();
         for observation in observed {
             let mut campaign = Campaign {
+                countdown: None,
+                automatic_mode: self.campaign_automatic_mode(&observation.id)?,
                 candidates: vec![],
                 id: observation.id.clone(),
                 number: observation.number,
@@ -207,7 +210,7 @@ impl Engine {
                             "Synchronized"
                         }
                         .into();
-                        campaign.detail = if missing { "The received contents were moved or deleted. Redownload the current save when needed." } else { "Save publications are retained locally. Sending turns is not available yet." }.into();
+                        campaign.detail = if missing { "The received contents were moved or deleted. Redownload the current save when needed." } else { "Campaign saves are retained locally. New local work appears here as a Turn candidate." }.into();
                         campaign.last_transfer = current
                             .as_ref()
                             .map(|s| s.published_at.clone())
@@ -272,6 +275,7 @@ impl Engine {
             if let Some(secrets) = &self.secrets {
                 campaign.archive_bytes=self.store.connection.query_row("SELECT COALESCE(SUM(size),0) FROM (SELECT hash,MAX(size) AS size FROM received_publications WHERE account=?1 AND campaign=?2 AND state='published' GROUP BY hash)",params![secrets.account_id,observation.id],|r|r.get::<_,i64>(0)).map_err(|_|CommandError::StorageUnavailable)? as u64;
             }
+            campaign.automatic_uploads = self.automatic_enabled(&campaign.automatic_mode);
             campaigns.push(campaign);
             if self.snapshot.session.state != SessionState::SignedIn
                 || self.snapshot.connection.state != ConnectionState::Connected
@@ -284,6 +288,9 @@ impl Engine {
         } else {
             vec![]
         };
+        if !self.check_reconciliation_gap() {
+            self.advance_automatic().await?;
+        }
         self.finish_change(&previous);
         Ok(self.snapshot())
     }

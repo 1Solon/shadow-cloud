@@ -13,6 +13,8 @@ use std::{
 mod receive;
 mod submit;
 pub use receive::{ObservedCampaign, PublicationPage, ReceiveError, SavePublication};
+mod automatic;
+pub use automatic::{AutomaticMode, AutomaticNotification, Countdown};
 pub use submit::{CandidateAction, SubmissionReceipt, TurnCandidate, TurnSubmission};
 
 pub const RELEASE: &str = env!("COMPANION_RELEASE");
@@ -322,6 +324,8 @@ pub enum SyncStatus {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Campaign {
+    pub countdown: Option<Countdown>,
+    pub automatic_mode: AutomaticMode,
     pub candidates: Vec<TurnCandidate>,
     pub id: String,
     pub number: u32,
@@ -425,6 +429,14 @@ pub struct Snapshot {
     deny_unknown_fields
 )]
 pub enum Command {
+    SetCampaignAutomaticUploads {
+        campaign_id: String,
+        mode: AutomaticMode,
+    },
+    CancelAutomaticSend {
+        campaign_id: String,
+        authorization_id: String,
+    },
     CandidateAction {
         campaign_id: String,
         content_hash: String,
@@ -579,7 +591,18 @@ pub trait CompanionRemote: Send + Sync {
     async fn revoke(&self, refresh_token: &str) -> Result<(), RemoteError>;
 }
 
+#[async_trait]
 pub trait CompanionPlatform: Send + Sync {
+    fn now_millis(&self) -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64
+    }
+    async fn notify_automatic(&self, _notification: AutomaticNotification) -> Result<(), ()> {
+        Err(())
+    }
+    fn dismiss_automatic(&self, _authorization_id: &str) {}
     fn open_folder(&self, _path: &Path) -> Result<(), ()> {
         Err(())
     }
@@ -661,6 +684,16 @@ impl Store {
                  CREATE TABLE IF NOT EXISTS settings (
                    key TEXT PRIMARY KEY NOT NULL,
                    value TEXT NOT NULL
+                 );
+                 CREATE TABLE IF NOT EXISTS candidate_scan_accounts (
+                   campaign TEXT PRIMARY KEY NOT NULL, account TEXT NOT NULL
+                 );
+                 CREATE TABLE IF NOT EXISTS automatic_submissions (
+                   account TEXT NOT NULL, operation TEXT NOT NULL, PRIMARY KEY(account,operation)
+                 );
+                 CREATE TABLE IF NOT EXISTS automatic_cancelled (
+                   account TEXT NOT NULL, campaign TEXT NOT NULL, hash TEXT NOT NULL,
+                   PRIMARY KEY(account,campaign,hash)
                  );
                  CREATE TABLE IF NOT EXISTS turn_candidates (
                    account TEXT NOT NULL, campaign TEXT NOT NULL, hash TEXT NOT NULL,
@@ -800,6 +833,10 @@ impl SecretVault for UnavailableVault {
 
 /// One coordinator owns this value. No decision is made by the webview.
 pub struct Engine {
+    countdowns: std::collections::HashMap<String, automatic::Authorization>,
+    last_reconciliation: Option<u64>,
+    retired_countdowns: std::collections::VecDeque<automatic::Authorization>,
+    pending_cancellations: std::collections::HashSet<(String, String, String)>,
     scan_observations: std::collections::HashMap<(String, String, String), submit::ScannedFile>,
     snapshot: Snapshot,
     revisions: tokio::sync::watch::Sender<Snapshot>,
@@ -920,6 +957,10 @@ impl Engine {
             platform,
             vault,
             scan_observations: Default::default(),
+            countdowns: Default::default(),
+            last_reconciliation: None,
+            retired_countdowns: Default::default(),
+            pending_cancellations: Default::default(),
             pending_handoff: None,
             secrets: None,
             onboarding_complete,
@@ -939,6 +980,15 @@ impl Engine {
     pub async fn command(&mut self, command: Command) -> Result<Snapshot, CommandError> {
         let previous = self.snapshot.clone();
         match command {
+            Command::SetCampaignAutomaticUploads { campaign_id, mode } => {
+                self.set_campaign_automatic(&campaign_id, mode)?;
+            }
+            Command::CancelAutomaticSend {
+                campaign_id,
+                authorization_id,
+            } => {
+                self.cancel_automatic(&campaign_id, Some(&authorization_id))?;
+            }
             Command::CandidateAction {
                 campaign_id,
                 content_hash,
@@ -1084,7 +1134,11 @@ impl Engine {
                     return Err(CommandError::OnboardingIncomplete);
                 }
                 self.require_compatible_server()?;
-                self.receive_action(&campaign_id, action).await?;
+                if action == CampaignAction::CancelAutomaticSend {
+                    self.cancel_automatic(&campaign_id, None)?;
+                } else {
+                    self.receive_action(&campaign_id, action).await?;
+                }
             }
         }
         self.finish_change(&previous);
@@ -1292,6 +1346,7 @@ impl Engine {
     }
 
     fn finish_change(&mut self, previous: &Snapshot) {
+        self.clear_invalid_countdowns();
         // Navigation must not forget reached steps or bypass their prerequisites.
         if self.snapshot.onboarding.stage > self.furthest_onboarding_stage {
             self.furthest_onboarding_stage = self.snapshot.onboarding.stage.clone();

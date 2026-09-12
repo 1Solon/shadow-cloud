@@ -26,9 +26,9 @@ are received in order, including turns published while this Companion was
 offline or paused. Campaign cards show reception progress, actionable failures,
 and cumulative archive content received. A missing current save can be explicitly
 redownloaded. SOL-34 adds content provenance and explicit manual Turn submission.
-Automatic sending remains in SOL-35.
-Tray, autostart, notifications, and updater installation remain in SOL-36 and
-SOL-37 under
+SOL-35 adds cancellable automatic submission and native notifications.
+Conflict resolution and recovery remain in SOL-36; tray, autostart, updater
+installation, and full native acceptance remain in SOL-37 under
 [SOL-29](https://linear.app/1solon/issue/SOL-29/spec-rebuild-shadow-cloud-companion-as-a-greenfield-cross-platform-app).
 
 ## Development
@@ -72,7 +72,7 @@ pnpm --filter @shadow-cloud/desktop dev:ui
 ```
 
 Open `http://127.0.0.1:1420/?scenario=onboarding`, `active`, `receiving`, `offline`,
-`paused`, `manual`, or `update-required`. These explicitly labelled, synthetic engine adapters
+`paused`, `manual`, `automatic`, or `update-required`. These explicitly labelled, synthetic engine adapters
 exercise the production React boundary without real accounts, files, or
 transfers. No query parameter activates them in a production build;
 `check-bundle.mjs` verifies that their code and campaign fixtures are absent.
@@ -198,6 +198,29 @@ with `baseline`, `contentHash`, UTF-8 `filename`, and `file`. Receipt recovery u
 `GET /v1/companion/submissions/:operationKey`, including after Campaign membership
 loss. The forward `companion_submission_receipts` migration is required for these
 endpoints; historical migrations remain intact.
+
+## Automatic Turn submission
+
+Automatic sending defaults on globally. Each Campaign can inherit that preference
+or explicitly use Automatic or Manual. One stable, unignored Turn candidate during
+the player's current turn starts a visible 15-second countdown and a native
+notification with Cancel. Native notification actions and sleep monitoring must be
+available before a countdown can start; manual Send remains available otherwise.
+
+Cancel retains the ordinary candidate and suppresses automatic sending for its
+exact contents. It takes effect immediately even if recording it in SQLite fails;
+the coordinator retries that write. Changed contents start from a new full window,
+but cannot silently acquire a newer turn, Seat, or Canonical-save baseline.
+Multiple candidates require the player to select or ignore contents. Existing
+local work requires explicit Send after switching accounts.
+
+Sleep, a stalled reconciliation, restart, or reconnection invalidates an elapsed
+window. Reconciliation checks the account, current turn, baseline, and exact
+contents again before staging. Undispatched automatic stages are abandoned after
+restart; dispatched operations retain their immutable bytes and receipt identity.
+Native Cancel callbacks carry the exact authorization and interrupt work before
+waiting for the coordinator. No webview timer or notification handler can send a
+file directly.
 
 ## Checks and distributions
 

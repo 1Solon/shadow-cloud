@@ -102,6 +102,7 @@ export function Campaigns({
           <p className="section-intro">
             Shadow Cloud receives campaign saves into these folders. Select a
             completed Turn candidate to send, or ignore its exact contents.
+            Automatic sends give you 15 seconds to cancel.
           </p>
         </div>
         <div className="campaign-list-controls">
@@ -313,33 +314,73 @@ export function Campaigns({
                 ))}
               </ul>
             )}
-            {campaign.actions.length > 0 && (
-              <div className="campaign-actions">
-                {campaign.actions.map((action) => (
-                  <button
-                    key={action}
-                    className={
-                      action === "resolve-conflict"
-                        ? "danger-button"
-                        : action === "open-folder"
-                          ? "outline-button"
-                          : "primary-button"
-                    }
-                    type="button"
-                    disabled={pending || snapshot.readOnly}
-                    onClick={() =>
+            <div className="campaign-actions">
+              <label className="campaign-automatic-mode">
+                AUTOMATIC SENDS
+                <select
+                  aria-label={`Automatic sends for ${campaign.name}`}
+                  value={campaign.automaticMode ?? "inherit"}
+                  disabled={pending}
+                  onChange={(event) => {
+                    const mode = event.target.value;
+                    if (
+                      mode === "inherit" ||
+                      mode === "automatic" ||
+                      mode === "manual"
+                    )
                       void send({
-                        type: "campaign-action",
+                        type: "set-campaign-automatic-uploads",
                         campaignId: campaign.id,
-                        action,
-                      })
-                    }
-                  >
-                    {actionLabels[action]}
-                  </button>
-                ))}
-              </div>
-            )}
+                        mode,
+                      });
+                  }}
+                >
+                  <option value="inherit">
+                    Use global setting (
+                    {snapshot.preferences.automaticUploads
+                      ? "Automatic"
+                      : "Manual"}
+                    )
+                  </option>
+                  <option value="automatic">Automatic</option>
+                  <option value="manual">Manual</option>
+                </select>
+              </label>
+              {campaign.actions.map((action) => (
+                <button
+                  key={action}
+                  className={
+                    action === "resolve-conflict"
+                      ? "danger-button"
+                      : action === "open-folder"
+                        ? "outline-button"
+                        : "primary-button"
+                  }
+                  type="button"
+                  disabled={
+                    pending ||
+                    (snapshot.readOnly && action !== "cancel-automatic-send")
+                  }
+                  onClick={() =>
+                    void send(
+                      action === "cancel-automatic-send" && campaign.countdown
+                        ? {
+                            type: "cancel-automatic-send",
+                            campaignId: campaign.id,
+                            authorizationId: campaign.countdown.authorizationId,
+                          }
+                        : {
+                            type: "campaign-action",
+                            campaignId: campaign.id,
+                            action,
+                          },
+                    )
+                  }
+                >
+                  {actionLabels[action]}
+                </button>
+              ))}
+            </div>
           </article>
         ))}
         {visible.length === 0 && (

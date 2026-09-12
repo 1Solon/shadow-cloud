@@ -672,7 +672,7 @@ it("shows rejected commands without pretending that a campaign changed", async (
     await screen.findByRole("button", { name: "> RESOLVE CONFLICT" }),
   );
   expect(await screen.findByRole("alert")).toHaveTextContent(
-    "No files were changed",
+    "This action is no longer available. Review the current Campaign status and try again.",
   );
   expect((await companion.snapshot()).campaigns[0].syncStatus).toBe("conflict");
 });

@@ -580,6 +580,28 @@ p {
   padding: 0 10px;
   font-size: 9px;
 }
+.campaign-automatic-mode {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-right: auto;
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+.campaign-automatic-mode select {
+  min-height: 32px;
+  max-width: 100%;
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  padding: 0 6px;
+  background: var(--card);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: normal;
+}
 .empty-state {
   display: flex;
   align-items: center;

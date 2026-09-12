@@ -92,6 +92,32 @@ export function createDevelopmentCompanion(scenario: string): Companion {
       actions: [],
     },
   ];
+  for (const campaign of campaigns)
+    campaign.automaticMode = campaign.automaticUploads ? "inherit" : "manual";
+  if (scenario === "automatic" || scenario === "countdown") {
+    campaigns.splice(0, 1);
+    campaigns.splice(1);
+    Object.assign(campaigns[0], {
+      countdown: {
+        authorizationId: "development-countdown-1",
+        contentHash: "sha256:development-completed",
+        remainingSeconds: 15,
+      },
+      detail:
+        "Your completed Turn candidate will send after 15 seconds. Cancel to review it first.",
+      candidates: [
+        {
+          contentHash: "sha256:development-completed",
+          filename: "completed-turn.se1",
+          size: 204800,
+          modifiedAt: Date.parse("2026-09-12T14:20:00Z"),
+          stable: true,
+          ignored: false,
+          canSend: true,
+        },
+      ],
+    });
+  }
   if (scenario === "manual") {
     campaigns.splice(1);
     Object.assign(campaigns[0], {
@@ -99,6 +125,7 @@ export function createDevelopmentCompanion(scenario: string): Companion {
       statusLabel: "Turn candidates",
       activeLord: "You",
       automaticUploads: false,
+      automaticMode: "manual",
       detail:
         "Select the completed turn to send. Your original files stay in this folder.",
       actions: ["open-folder"],
@@ -233,7 +260,24 @@ export function createDevelopmentCompanion(scenario: string): Companion {
       )
         throw "update-required";
       const next = snapshot();
+      const cancelCountdown = (campaign: Campaign) => {
+        campaign.countdown = null;
+        campaign.syncStatus = "needs-attention";
+        campaign.statusLabel = "Automatic send cancelled";
+        campaign.detail = "Review this Turn candidate and send it when ready.";
+        campaign.actions = campaign.actions.filter(
+          (action) => action !== "cancel-automatic-send",
+        );
+      };
       switch (command.type) {
+        case "cancel-automatic-send": {
+          const campaign = next.campaigns.find(
+            (c) => c.id === command.campaignId,
+          );
+          if (campaign?.countdown?.authorizationId === command.authorizationId)
+            cancelCountdown(campaign);
+          break;
+        }
         case "candidate-action": {
           const campaign = next.campaigns.find(
             (c) => c.id === command.campaignId,
@@ -249,9 +293,14 @@ export function createDevelopmentCompanion(scenario: string): Companion {
             );
             campaign.statusLabel = "Submission accepted";
             campaign.syncStatus = "synchronized";
+            campaign.countdown = null;
+            campaign.actions = campaign.actions.filter(
+              (action) => action !== "cancel-automatic-send",
+            );
           } else {
             candidate.ignored = command.action === "ignore";
             candidate.canSend = !candidate.ignored && candidate.stable;
+            if (campaign.countdown) cancelCountdown(campaign);
           }
           break;
         }
@@ -361,7 +410,28 @@ export function createDevelopmentCompanion(scenario: string): Companion {
           break;
         case "set-automatic-uploads":
           next.preferences.automaticUploads = command.enabled;
+          for (const campaign of next.campaigns) {
+            if (campaign.automaticMode === "inherit") {
+              campaign.automaticUploads = command.enabled;
+              if (!command.enabled && campaign.countdown)
+                cancelCountdown(campaign);
+            }
+          }
           break;
+        case "set-campaign-automatic-uploads": {
+          const campaign = next.campaigns.find(
+            (c) => c.id === command.campaignId,
+          );
+          if (!campaign) throw "not-available";
+          campaign.automaticMode = command.mode;
+          campaign.automaticUploads =
+            command.mode === "inherit"
+              ? next.preferences.automaticUploads
+              : command.mode === "automatic";
+          if (!campaign.automaticUploads && campaign.countdown)
+            cancelCountdown(campaign);
+          break;
+        }
         case "set-paused":
           next.paused = command.paused;
           break;
