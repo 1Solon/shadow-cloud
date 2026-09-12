@@ -5,6 +5,7 @@ import type {
   Companion,
   OnboardingStage,
   Snapshot,
+  UpdateBlocker,
 } from "../engine/port";
 
 const onboardingStages: OnboardingStage[] = [
@@ -17,7 +18,10 @@ const onboardingStages: OnboardingStage[] = [
 ];
 
 export function createDevelopmentCompanion(scenario: string): Companion {
-  const startsOnboarding = scenario === "onboarding";
+  const startsOnboarding =
+    scenario === "onboarding" || scenario === "onboarding-update-required";
+  const requiresUpdate =
+    scenario === "update-required" || scenario === "onboarding-update-required";
   let onboardingComplete = !startsOnboarding;
   let furthestOnboardingStep = startsOnboarding ? 0 : 5;
   const campaigns: Campaign[] = [
@@ -150,7 +154,7 @@ export function createDevelopmentCompanion(scenario: string): Companion {
       ],
     });
   }
-  if (scenario === "manual") {
+  if (scenario === "manual" || scenario === "updates") {
     campaigns.splice(1);
     Object.assign(campaigns[0], {
       syncStatus: "needs-attention",
@@ -185,6 +189,7 @@ export function createDevelopmentCompanion(scenario: string): Companion {
       ],
     });
   }
+  if (scenario === "onboarding-update-required") campaigns.splice(0);
   if (scenario === "receiving") {
     campaigns[0] = {
       ...campaigns[0],
@@ -205,6 +210,17 @@ export function createDevelopmentCompanion(scenario: string): Companion {
     };
   }
   let state: Snapshot = {
+    desktop: {
+      trayAvailable: scenario !== "native-unavailable",
+      startAtLoginAvailable: scenario !== "native-unavailable",
+    },
+    updates: {
+      state: "idle",
+      version: null,
+      offerId: null,
+      installBlockers: [],
+      detail: null,
+    },
     diagnostics: null,
     revision: 0,
     appVersion: rootPackage.version,
@@ -214,11 +230,10 @@ export function createDevelopmentCompanion(scenario: string): Companion {
       state:
         scenario === "offline"
           ? "offline"
-          : scenario === "update-required"
+          : requiresUpdate
             ? "update-required"
             : "connected",
-      serverProtocolVersion:
-        scenario === "update-required" ? "999.0.0" : rootPackage.version,
+      serverProtocolVersion: requiresUpdate ? "999.0.0" : rootPackage.version,
     },
     session: {
       state: startsOnboarding ? "signed-out" : "signed-in",
@@ -236,18 +251,24 @@ export function createDevelopmentCompanion(scenario: string): Companion {
       canSend:
         !startsOnboarding &&
         scenario !== "offline" &&
-        scenario !== "update-required" &&
+        !requiresUpdate &&
         scenario !== "paused",
     },
     readOnly:
       startsOnboarding ||
       scenario === "offline" ||
-      scenario === "update-required" ||
+      requiresUpdate ||
       scenario === "paused",
     paused: scenario === "paused",
     displayName: startsOnboarding ? null : "SOLON",
     rootPath: startsOnboarding ? null : "~/Games/Shadow Cloud",
-    preferences: { theme: "dark", automaticUploads: true },
+    preferences: {
+      theme: "dark",
+      automaticUploads: true,
+      updateChannel: "stable",
+      startAtLogin: false,
+      keepRunningInTray: true,
+    },
     campaigns,
     activity: [
       {
@@ -271,6 +292,26 @@ export function createDevelopmentCompanion(scenario: string): Companion {
       },
     ],
   };
+  const projectUpdateBlockers = (snapshot: Snapshot) => {
+    const blockers = new Set<UpdateBlocker>();
+    for (const campaign of snapshot.campaigns) {
+      const countdown =
+        Boolean(campaign.countdown) ||
+        campaign.statusLabel.startsWith("Sends in");
+      if (countdown) blockers.add("countdown");
+      if (
+        campaign.syncStatus === "receiving" ||
+        (campaign.syncStatus === "sending" && !countdown)
+      )
+        blockers.add("transfer");
+      if (campaign.recovery === "conflict") blockers.add("conflict");
+    }
+    snapshot.updates.installBlockers =
+      scenario === "update-blocked"
+        ? ["countdown", "transfer", "uncertain-submission", "conflict"]
+        : [...blockers];
+  };
+  projectUpdateBlockers(state);
   const listeners = new Set<(snapshot: Snapshot) => void>();
   const snapshot = () => structuredClone(state);
   return {
@@ -307,6 +348,44 @@ export function createDevelopmentCompanion(scenario: string): Companion {
         );
       };
       switch (command.type) {
+        case "set-update-channel":
+          if (next.updates.state === "installing") throw "not-available";
+          next.preferences.updateChannel = command.channel;
+          next.updates.state = "idle";
+          next.updates.version = null;
+          next.updates.offerId = null;
+          next.updates.detail = null;
+          break;
+        case "install-update":
+          if (
+            next.updates.state !== "available" ||
+            next.updates.offerId !== command.offerId ||
+            next.updates.installBlockers.length
+          )
+            throw "not-available";
+          next.updates.state = "installing";
+          next.updates.offerId = null;
+          next.updates.detail =
+            "Synthetic update confirmed. This development scenario does not install software or restart.";
+          break;
+        case "set-start-at-login":
+          if (!next.desktop.startAtLoginAvailable) throw "not-available";
+          next.preferences.startAtLogin = command.enabled;
+          break;
+        case "set-keep-running-in-tray":
+          if (!next.desktop.trayAvailable) throw "not-available";
+          next.preferences.keepRunningInTray = command.enabled;
+          break;
+        case "check-for-updates":
+          if (next.updates.state === "installing") throw "not-available";
+          next.updates.state = "available";
+          next.updates.version =
+            next.preferences.updateChannel === "stable"
+              ? "0.17.0"
+              : "0.18.0-beta.1";
+          next.updates.offerId = `development-${next.preferences.updateChannel}-${next.revision + 1}`;
+          next.updates.detail = null;
+          break;
         case "resolve-campaign": {
           const campaign = next.campaigns.find(
             (c) => c.id === command.campaignId,
@@ -515,7 +594,13 @@ export function createDevelopmentCompanion(scenario: string): Companion {
             furthestOnboardingStep = 0;
             next.onboarding.stage = "welcome";
             next.rootPath = null;
-            next.preferences = { theme: "system", automaticUploads: true };
+            next.preferences = {
+              theme: "system",
+              automaticUploads: true,
+              updateChannel: "stable",
+              startAtLogin: false,
+              keepRunningInTray: true,
+            };
             next.paused = false;
             next.campaigns = [];
             next.activity = [];
@@ -596,6 +681,7 @@ export function createDevelopmentCompanion(scenario: string): Companion {
         next.connection.state === "connected" &&
         !next.paused;
       next.readOnly = !next.onboarding.canSend;
+      projectUpdateBlockers(next);
       if (JSON.stringify(next) !== JSON.stringify(state)) {
         state = { ...next, revision: state.revision + 1 };
         for (const listener of listeners) listener(snapshot());

@@ -1,13 +1,17 @@
 use async_trait::async_trait;
+mod desktop;
 mod lifecycle;
+#[cfg(test)]
+mod native_tests;
 mod notifications;
 #[path = "../service_config.rs"]
 mod service_config;
+mod updater;
 use shadow_cloud_companion_engine::{
     AutomaticNotification, Command, CommandError, CompanionPlatform, CompanionRemote,
-    ConnectionState, DeviceCredentials, Engine, ExchangeOutcome, Handoff, ObservedCampaign,
-    PublicationPage, ReceiveError, RemoteError, SavePublication, SecretVault, SessionState,
-    Snapshot, SubmissionReceipt, TurnSubmission, RELEASE,
+    ConnectionState, DesktopCapabilities, DeviceCredentials, Engine, ExchangeOutcome, Handoff,
+    ObservedCampaign, PublicationPage, ReceiveError, RemoteError, SavePublication, SecretVault,
+    SessionState, Snapshot, SubmissionReceipt, TurnSubmission, UpdateChannel, UpdateOffer, RELEASE,
 };
 use std::{
     path::PathBuf,
@@ -418,10 +422,27 @@ struct NativePlatform {
     app: tauri::AppHandle,
     notifications: notifications::Notifications,
     lifecycle: Arc<std::sync::OnceLock<lifecycle::Lifecycle>>,
+    desktop: Arc<desktop::Desktop>,
+    updates: updater::Updates,
 }
 
 #[async_trait]
 impl CompanionPlatform for NativePlatform {
+    fn desktop_capabilities(&self) -> DesktopCapabilities {
+        self.desktop.capabilities()
+    }
+    fn start_at_login_enabled(&self) -> Result<bool, ()> {
+        self.desktop.start_at_login_enabled()
+    }
+    fn set_start_at_login(&self, enabled: bool) -> Result<(), ()> {
+        self.desktop.set_start_at_login(enabled)
+    }
+    async fn check_update(&self, channel: UpdateChannel) -> Result<Option<UpdateOffer>, ()> {
+        self.updates.check(channel).await
+    }
+    async fn install_update(&self, offer_id: &str) -> Result<(), ()> {
+        self.updates.install(offer_id).await
+    }
     fn open_campaign(&self, number: u32) -> Result<(), ()> {
         let path = if number == 0 {
             "/games".to_owned()
@@ -475,30 +496,55 @@ impl CompanionPlatform for NativePlatform {
     }
 }
 
-struct SystemVault;
+struct SystemVault {
+    service: String,
+}
 
 impl SystemVault {
-    fn entry() -> Result<keyring::Entry, ()> {
+    fn new() -> Self {
         let service = if tauri::is_dev() {
             "com.shadowcloud.companion.development"
         } else {
             "com.shadowcloud.companion"
         };
-        keyring::Entry::new(service, "device-session-refresh").map_err(|_| ())
+        Self {
+            service: service.into(),
+        }
+    }
+    fn with_entry<T: Send>(
+        &self,
+        operation: impl FnOnce(keyring::Entry) -> Result<T, ()> + Send,
+    ) -> Result<T, ()> {
+        // The Linux synchronous provider initializes its own Tokio runtime.
+        // Keep initialization and calls off the async coordinator's thread.
+        // Joining bounds each synchronous request to one native worker and
+        // leaves no detached operation holding a rotating refresh secret.
+        std::thread::scope(|scope| {
+            std::thread::Builder::new()
+                .name("companion-vault".into())
+                .spawn_scoped(scope, || {
+                    let entry = keyring::Entry::new(&self.service, "device-session-refresh")
+                        .map_err(|_| ())?;
+                    operation(entry)
+                })
+                .map_err(|_| ())?
+                .join()
+                .map_err(|_| ())?
+        })
     }
 }
 
 impl SecretVault for SystemVault {
     fn load(&self) -> Result<Option<String>, ()> {
-        Self::entry()?.get_password().map(Some).map_err(|_| ())
+        self.with_entry(|entry| entry.get_password().map(Some).map_err(|_| ()))
     }
 
     fn store(&self, secret: &str) -> Result<(), ()> {
-        Self::entry()?.set_password(secret).map_err(|_| ())
+        self.with_entry(|entry| entry.set_password(secret).map_err(|_| ()))
     }
 
     fn clear(&self) -> Result<(), ()> {
-        Self::entry()?.delete_credential().map_err(|_| ())
+        self.with_entry(|entry| entry.delete_credential().map_err(|_| ()))
     }
 }
 
@@ -567,16 +613,33 @@ mod packaged_configuration_tests {
 }
 
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            desktop::show_main(app)
+        }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.unminimize();
-                let _ = window.set_focus();
+        .plugin(tauri_plugin_updater::Builder::new().build());
+    builder
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let app = window.app_handle();
+                if let (Some(desktop), Some(coordinator)) = (
+                    app.try_state::<Arc<desktop::Desktop>>(),
+                    app.try_state::<Coordinator>(),
+                ) {
+                    api.prevent_close();
+                    let keep_running = coordinator
+                        .snapshots
+                        .borrow()
+                        .preferences
+                        .keep_running_in_tray;
+                    if !desktop.close_to_tray(keep_running) {
+                        dispatch_desktop_action(app, desktop::Action::Quit);
+                    }
+                }
             }
-        }))
+        })
         .setup(|app| {
             let service_config::ServiceConfiguration {
                 api_base_url,
@@ -603,6 +666,15 @@ pub fn run() {
                 });
             });
             let lifecycle = Arc::new(std::sync::OnceLock::new());
+            let desktop_app = app.handle().clone();
+            let desktop = desktop::Desktop::new(
+                app.handle().clone(),
+                Arc::new(move |action| {
+                    dispatch_desktop_action(&desktop_app, action);
+                }),
+            );
+            let updates = updater::Updates::new(app.handle().clone(), interrupt_receive.clone())
+                .map_err(|_| std::io::Error::other("could not initialize the update client"))?;
             let engine = Engine::open(
                 &database_path,
                 remote,
@@ -611,8 +683,10 @@ pub fn run() {
                     app: app.handle().clone(),
                     notifications,
                     lifecycle: lifecycle.clone(),
+                    desktop: desktop.clone(),
+                    updates,
                 }),
-                Arc::new(SystemVault),
+                Arc::new(SystemVault::new()),
             )?;
             let mut revisions = engine.subscribe();
             app.manage(Coordinator {
@@ -620,6 +694,19 @@ pub fn run() {
                 snapshots: revisions.clone(),
                 interrupt_receive: interrupt_receive.clone(),
             });
+            app.manage(desktop.clone());
+            desktop.update(&app.state::<Coordinator>().snapshots.borrow());
+            let capability_app = app.handle().clone();
+            let capability_interrupt = interrupt_receive.clone();
+            desktop.start_monitor(Arc::new(move || {
+                let pending = PendingCommand::new(capability_interrupt.clone());
+                let app = capability_app.clone();
+                tauri::async_runtime::spawn(async move {
+                    let state = app.state::<Coordinator>();
+                    let mut engine = pending.acquire(&state.engine).await;
+                    engine.refresh_desktop_capabilities();
+                });
+            }));
 
             let lifecycle_app = app.handle().clone();
             let lifecycle_interrupt = interrupt_receive.clone();
@@ -637,6 +724,7 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 while revisions.changed().await.is_ok() {
                     let snapshot = revisions.borrow_and_update().clone();
+                    events.state::<Arc<desktop::Desktop>>().update(&snapshot);
                     let _ = events.emit("companion:snapshot", snapshot);
                 }
             });
@@ -705,6 +793,33 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("could not start Shadow Cloud Companion");
+}
+
+fn dispatch_desktop_action(app: &tauri::AppHandle, action: desktop::Action) {
+    if matches!(action, desktop::Action::Open) {
+        desktop::show_main(app);
+        return;
+    }
+    let Some(coordinator) = app.try_state::<Coordinator>() else {
+        return;
+    };
+    let pending = PendingCommand::new(coordinator.interrupt_receive.clone());
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let state = app.state::<Coordinator>();
+        let mut engine = pending.acquire(&state.engine).await;
+        match action {
+            desktop::Action::PauseAll => {
+                let command = desktop::pause_command(&engine.snapshot());
+                let _ = engine.command(command).await;
+            }
+            desktop::Action::Quit => {
+                engine.resume();
+                app.exit(0);
+            }
+            desktop::Action::Open => {}
+        }
+    });
 }
 
 #[cfg(test)]

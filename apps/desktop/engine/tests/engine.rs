@@ -2550,12 +2550,56 @@ async fn an_unaccepted_request_retries_immutable_staging_with_the_same_key_and_p
 
 #[derive(Default)]
 struct AutomaticPlatform {
+    update_checks: Mutex<Vec<shadow_cloud_companion_engine::UpdateChannel>>,
+    update_installs: Mutex<Vec<String>>,
+    start_at_login: std::sync::atomic::AtomicBool,
+    startup_cleanup_fails: std::sync::atomic::AtomicBool,
+
     clock: std::sync::atomic::AtomicU64,
     notifications: Mutex<Vec<shadow_cloud_companion_engine::AutomaticNotification>>,
     selected: PathBuf,
 }
 #[async_trait]
 impl CompanionPlatform for AutomaticPlatform {
+    fn desktop_capabilities(&self) -> shadow_cloud_companion_engine::DesktopCapabilities {
+        shadow_cloud_companion_engine::DesktopCapabilities {
+            tray_available: true,
+            start_at_login_available: true,
+        }
+    }
+    fn start_at_login_enabled(&self) -> Result<bool, ()> {
+        Ok(self
+            .start_at_login
+            .load(std::sync::atomic::Ordering::SeqCst))
+    }
+    fn set_start_at_login(&self, enabled: bool) -> Result<(), ()> {
+        self.start_at_login
+            .store(enabled, std::sync::atomic::Ordering::SeqCst);
+        if self
+            .startup_cleanup_fails
+            .load(std::sync::atomic::Ordering::SeqCst)
+        {
+            Err(())
+        } else {
+            Ok(())
+        }
+    }
+    async fn check_update(
+        &self,
+        channel: shadow_cloud_companion_engine::UpdateChannel,
+    ) -> Result<Option<shadow_cloud_companion_engine::UpdateOffer>, ()> {
+        let mut checks = self.update_checks.lock().unwrap();
+        checks.push(channel);
+        Ok(Some(shadow_cloud_companion_engine::UpdateOffer {
+            offer_id: format!("offer-{}", checks.len()),
+            version: "0.17.0".into(),
+        }))
+    }
+    async fn install_update(&self, offer_id: &str) -> Result<(), ()> {
+        self.update_installs.lock().unwrap().push(offer_id.into());
+        Ok(())
+    }
+
     fn now_millis(&self) -> u64 {
         self.clock.load(std::sync::atomic::Ordering::SeqCst)
     }
@@ -3373,4 +3417,340 @@ async fn changes_during_conflict_preservation_keep_both_sides_until_another_revi
             }
         );
     }
+}
+
+#[tokio::test]
+async fn updater_requires_explicit_consent_for_the_current_offer_and_never_installs_on_check() {
+    use shadow_cloud_companion_engine::{UpdateChannel, UpdateState};
+    let (temp, mut engine, remote, platform, vault, _file) = automatic_engine_fixture().await;
+    engine
+        .command(Command::SetAutomaticUploads { enabled: false })
+        .await
+        .unwrap();
+    assert!(engine
+        .command(Command::InstallUpdate {
+            offer_id: "invented".into()
+        })
+        .await
+        .is_err());
+    let snapshot = engine.command(Command::CheckForUpdates).await.unwrap();
+    assert_eq!(snapshot.updates.state, UpdateState::Available);
+    assert!(platform.update_installs.lock().unwrap().is_empty());
+    let old = snapshot.updates.offer_id.unwrap();
+    engine
+        .command(Command::SetUpdateChannel {
+            channel: UpdateChannel::Preview,
+        })
+        .await
+        .unwrap();
+    assert!(engine
+        .command(Command::InstallUpdate { offer_id: old })
+        .await
+        .is_err());
+    let snapshot = engine.command(Command::CheckForUpdates).await.unwrap();
+    let id = snapshot.updates.offer_id.unwrap();
+    engine
+        .command(Command::InstallUpdate {
+            offer_id: id.clone(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(*platform.update_installs.lock().unwrap(), vec![id.clone()]);
+    assert!(engine
+        .command(Command::InstallUpdate { offer_id: id })
+        .await
+        .is_err());
+    drop(engine);
+    let mut engine = Engine::open(
+        &temp.path().join("state/db"),
+        remote,
+        platform.clone(),
+        vault,
+    )
+    .unwrap();
+    assert_eq!(
+        engine.snapshot().preferences.update_channel,
+        UpdateChannel::Preview
+    );
+    assert!(engine.snapshot().updates.offer_id.is_none());
+    assert_eq!(platform.update_installs.lock().unwrap().len(), 1);
+    engine.observe_protocol(Ok("0.17.0".into()));
+    assert_eq!(
+        engine
+            .command(Command::CheckForUpdates)
+            .await
+            .unwrap()
+            .updates
+            .state,
+        UpdateState::Available
+    );
+}
+
+#[tokio::test]
+async fn updater_blocks_a_countdown_then_preserves_the_cancelled_candidate_across_install_and_restart(
+) {
+    use shadow_cloud_companion_engine::UpdateBlocker;
+    let (temp, mut engine, remote, platform, vault, file) = automatic_engine_fixture().await;
+    let snapshot = engine.command(Command::CheckForUpdates).await.unwrap();
+    assert!(snapshot
+        .updates
+        .install_blockers
+        .contains(&UpdateBlocker::Countdown));
+    let offer_id = snapshot.updates.offer_id.unwrap();
+    assert!(engine
+        .command(Command::InstallUpdate {
+            offer_id: offer_id.clone()
+        })
+        .await
+        .is_err());
+    assert!(platform.update_installs.lock().unwrap().is_empty());
+    engine
+        .command(Command::CancelAutomaticSend {
+            campaign_id: "campaign-1".into(),
+            authorization_id: snapshot.campaigns[0]
+                .countdown
+                .as_ref()
+                .unwrap()
+                .authorization_id
+                .clone(),
+        })
+        .await
+        .unwrap();
+    engine
+        .command(Command::InstallUpdate { offer_id })
+        .await
+        .unwrap();
+    drop(engine);
+    let mut engine = Engine::open(&temp.path().join("state/db"), remote, platform, vault).unwrap();
+    engine.observe_protocol(Ok(RELEASE.into()));
+    engine.restore_session().await.unwrap();
+    engine.reconcile().await.unwrap();
+    let snapshot = engine.reconcile().await.unwrap();
+    assert!(snapshot.campaigns[0].candidates[0].can_send);
+    assert!(snapshot.campaigns[0].countdown.is_none());
+    assert_eq!(fs::read(file).unwrap(), b"my turn");
+}
+
+#[tokio::test]
+async fn updater_cannot_hide_uncertain_submissions_or_conflicts_by_signing_out_or_resetting() {
+    use shadow_cloud_companion_engine::{CandidateAction, UpdateBlocker};
+    use std::sync::atomic::Ordering;
+    for conflict in [false, true] {
+        let (temp, mut engine, remote, platform, vault, file) = automatic_engine_fixture().await;
+        engine
+            .command(Command::SetAutomaticUploads { enabled: false })
+            .await
+            .unwrap();
+        let blocker = if conflict {
+            remote.publish(b"another device turn");
+            engine.reconcile().await.unwrap();
+            UpdateBlocker::Conflict
+        } else {
+            remote.offline_submission_once.store(true, Ordering::SeqCst);
+            let hash = engine.snapshot().campaigns[0].candidates[0]
+                .content_hash
+                .clone();
+            engine
+                .command(Command::CandidateAction {
+                    campaign_id: "campaign-1".into(),
+                    content_hash: hash,
+                    action: CandidateAction::Send,
+                })
+                .await
+                .unwrap();
+            UpdateBlocker::UncertainSubmission
+        };
+        for action in [None, Some(Command::SignOut), Some(Command::ResetCompanion)] {
+            if let Some(action) = action {
+                engine.command(action).await.unwrap();
+            }
+            let snapshot = engine.command(Command::CheckForUpdates).await.unwrap();
+            assert!(
+                snapshot.updates.install_blockers.contains(&blocker),
+                "{blocker:?}"
+            );
+            assert!(engine
+                .command(Command::InstallUpdate {
+                    offer_id: snapshot.updates.offer_id.unwrap()
+                })
+                .await
+                .is_err());
+        }
+        drop(engine);
+        let mut engine = Engine::open(
+            &temp.path().join("state/db"),
+            remote,
+            platform.clone(),
+            vault,
+        )
+        .unwrap();
+        engine.observe_protocol(Ok("0.17.0".into()));
+        let snapshot = engine.command(Command::CheckForUpdates).await.unwrap();
+        assert!(snapshot.updates.install_blockers.contains(&blocker));
+        assert!(engine
+            .command(Command::InstallUpdate {
+                offer_id: snapshot.updates.offer_id.unwrap()
+            })
+            .await
+            .is_err());
+        assert!(platform.update_installs.lock().unwrap().is_empty());
+        assert_eq!(fs::read(file).unwrap(), b"my turn");
+    }
+}
+
+#[tokio::test]
+async fn updater_requires_interrupted_receiving_to_finish_before_installation() {
+    use shadow_cloud_companion_engine::{CandidateAction, UpdateBlocker};
+    let (temp, mut engine, remote, platform, _vault, file) = automatic_engine_fixture().await;
+    let hash = engine.snapshot().campaigns[0].candidates[0]
+        .content_hash
+        .clone();
+    engine
+        .command(Command::CandidateAction {
+            campaign_id: "campaign-1".into(),
+            content_hash: hash,
+            action: CandidateAction::Ignore,
+        })
+        .await
+        .unwrap();
+    let database = rusqlite::Connection::open(temp.path().join("state/db")).unwrap();
+    database.execute_batch("CREATE TRIGGER fail_transfer BEFORE UPDATE OF cursor ON receive_campaigns BEGIN SELECT RAISE(FAIL,'injected'); END;").unwrap();
+    remote.publish(b"new cloud save");
+    engine.reconcile().await.unwrap();
+    let snapshot = engine.command(Command::CheckForUpdates).await.unwrap();
+    assert!(snapshot
+        .updates
+        .install_blockers
+        .contains(&UpdateBlocker::Transfer));
+    let offer_id = snapshot.updates.offer_id.unwrap();
+    assert!(engine
+        .command(Command::InstallUpdate {
+            offer_id: offer_id.clone()
+        })
+        .await
+        .is_err());
+    engine
+        .command(Command::SetPaused { paused: true })
+        .await
+        .unwrap();
+    assert!(engine
+        .command(Command::InstallUpdate {
+            offer_id: offer_id.clone()
+        })
+        .await
+        .is_err());
+    database
+        .execute_batch("DROP TRIGGER fail_transfer;")
+        .unwrap();
+    engine
+        .command(Command::SetPaused { paused: false })
+        .await
+        .unwrap();
+    engine.reconcile().await.unwrap();
+    engine
+        .command(Command::InstallUpdate { offer_id })
+        .await
+        .unwrap();
+    assert_eq!(platform.update_installs.lock().unwrap().len(), 1);
+    assert_eq!(fs::read(file).unwrap(), b"my turn");
+}
+
+#[tokio::test]
+async fn updater_publishes_the_transfer_blocker_before_download_and_clears_it_after_completion() {
+    use shadow_cloud_companion_engine::{CandidateAction, UpdateBlocker};
+    let (_temp, mut engine, remote, _platform, _vault, _file) = automatic_engine_fixture().await;
+    let hash = engine.snapshot().campaigns[0].candidates[0]
+        .content_hash
+        .clone();
+    engine
+        .command(Command::CandidateAction {
+            campaign_id: "campaign-1".into(),
+            content_hash: hash,
+            action: CandidateAction::Ignore,
+        })
+        .await
+        .unwrap();
+    engine.command(Command::CheckForUpdates).await.unwrap();
+    let subscription = engine.subscribe();
+    *remote.during_download.lock().unwrap() = Some(Box::new(move || {
+        assert!(subscription
+            .borrow()
+            .updates
+            .install_blockers
+            .contains(&UpdateBlocker::Transfer));
+    }));
+    remote.publish(b"another turn");
+    let snapshot = engine.reconcile().await.unwrap();
+    assert!(snapshot.updates.install_blockers.is_empty());
+}
+
+#[tokio::test]
+async fn native_preferences_are_explicit_follow_actual_autostart_state_and_reset_with_setup() {
+    use shadow_cloud_companion_engine::UpdateChannel;
+    use std::sync::atomic::Ordering;
+    let (temp, mut engine, remote, platform, vault, file) = automatic_engine_fixture().await;
+    assert!(!platform.start_at_login.load(Ordering::SeqCst));
+    engine
+        .command(Command::SetStartAtLogin { enabled: true })
+        .await
+        .unwrap();
+    engine
+        .command(Command::SetKeepRunningInTray { enabled: false })
+        .await
+        .unwrap();
+    engine
+        .command(Command::SetUpdateChannel {
+            channel: UpdateChannel::Preview,
+        })
+        .await
+        .unwrap();
+    drop(engine);
+    let mut engine = Engine::open(
+        &temp.path().join("state/db"),
+        remote,
+        platform.clone(),
+        vault,
+    )
+    .unwrap();
+    assert!(engine.snapshot().preferences.start_at_login);
+    assert!(!engine.snapshot().preferences.keep_running_in_tray);
+    platform.start_at_login.store(false, Ordering::SeqCst);
+    assert!(
+        !engine
+            .refresh_desktop_capabilities()
+            .preferences
+            .start_at_login
+    );
+    engine
+        .command(Command::SetStartAtLogin { enabled: true })
+        .await
+        .unwrap();
+    let snapshot = engine.command(Command::ResetCompanion).await.unwrap();
+    assert!(!platform.start_at_login.load(Ordering::SeqCst));
+    assert!(!snapshot.preferences.start_at_login);
+    assert!(snapshot.preferences.keep_running_in_tray);
+    assert_eq!(snapshot.preferences.update_channel, UpdateChannel::Stable);
+    assert_eq!(fs::read(file).unwrap(), b"my turn");
+}
+
+#[tokio::test]
+async fn startup_registration_is_reobserved_after_partial_native_failure() {
+    use std::sync::atomic::Ordering;
+    let (_temp, mut engine, _remote, platform, _vault, _file) = automatic_engine_fixture().await;
+    engine
+        .command(Command::SetStartAtLogin { enabled: true })
+        .await
+        .unwrap();
+    assert!(engine.snapshot().preferences.start_at_login);
+    // Removing the native login registration can succeed before cleanup of an
+    // OS approval record fails. The UI must still show the remaining OS state.
+    platform.startup_cleanup_fails.store(true, Ordering::SeqCst);
+    let mut subscription = engine.subscribe();
+    assert!(engine
+        .command(Command::SetStartAtLogin { enabled: false })
+        .await
+        .is_err());
+    assert!(!engine.snapshot().preferences.start_at_login);
+    subscription.changed().await.unwrap();
+    assert!(!subscription.borrow().preferences.start_at_login);
 }

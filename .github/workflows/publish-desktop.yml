@@ -14,6 +14,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: companion-publish-${{ github.event.release.tag_name || inputs.release_tag }}
+  cancel-in-progress: false
+
 jobs:
   prepare:
     name: Validate desktop release
@@ -105,7 +109,7 @@ jobs:
             fi
             sleep 15
           done
-          sudo apt-get -o Acquire::Retries=3 install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+          sudo apt-get -o Acquire::Retries=3 install -y libwebkit2gtk-4.1-dev webkit2gtk-driver libayatana-appindicator3-dev librsvg2-dev patchelf xvfb dbus-daemon gnome-keyring python3-gi gir1.2-glib-2.0
 
       - name: Set up pnpm
         uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -133,7 +137,9 @@ jobs:
       - name: Cache Rust build artifacts
         uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          workspaces: apps/desktop/src-tauri -> target
+          workspaces: |
+            apps/desktop/src-tauri -> target
+            apps/desktop/engine -> target
 
       - name: Validate shared release and protocol version
         shell: bash
@@ -143,6 +149,22 @@ jobs:
 
       - name: Install desktop dependencies
         run: pnpm install --filter @shadow-cloud/desktop... --frozen-lockfile
+
+      - name: Test release source and native integration
+        run: |
+          pnpm --filter @shadow-cloud/desktop typecheck
+          pnpm --filter @shadow-cloud/desktop test
+          pnpm --filter @shadow-cloud/desktop test:engine
+          pnpm --filter @shadow-cloud/desktop build
+          cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
+
+      - name: Linux browser accessibility and acceptance
+        if: runner.os == 'Linux'
+        env:
+          COMPANION_BROWSER_OUTPUT: ${{ runner.temp }}/companion-browser
+        run: |
+          pnpm --filter @shadow-cloud/desktop exec playwright install --with-deps chromium
+          pnpm --filter @shadow-cloud/desktop test:browser
 
       - name: Build and upload desktop bundles
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0.0
@@ -158,7 +180,88 @@ jobs:
           releaseBody: Windows x64 NSIS, universal macOS DMG, and Linux x64 AppImage. OS publisher signing and notarization are deferred; updater artifacts retain their separate cryptographic signatures.
           releaseDraft: false
           prerelease: ${{ needs.prepare.outputs.prerelease }}
-          includeUpdaterJson: true
+          # Only the final job publishes complete metadata, after every target passes.
+          uploadUpdaterJson: false
+          uploadUpdaterSignatures: true
+          releaseAssetNamePattern: Shadow.Cloud.Companion_[version]_[platform]_[arch]_unsigned[setup][ext]
           updaterJsonPreferNsis: true
           tauriScript: pnpm tauri
           args: --config src-tauri/tauri.release.conf.json ${{ matrix.args }}
+
+      - name: Launch signed Linux updater artifact
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          mapfile -t bundles < <(find apps/desktop/src-tauri/target/x86_64-unknown-linux-gnu/release/bundle/appimage -maxdepth 1 -name '*.AppImage' -type f)
+          test "${#bundles[@]}" -eq 1
+          dbus-run-session -- xvfb-run -a node apps/desktop/scripts/smoke-native.mjs "${bundles[0]}" --appimage-extract-and-run
+      - name: Exercise the packaged Linux webview
+        if: runner.os == 'Linux'
+        env:
+          COMPANION_NATIVE_OUTPUT: ${{ runner.temp }}/companion-native
+        run: |
+          cargo install tauri-driver --version 2.0.6 --locked
+          xvfb-run -a node apps/desktop/scripts/native-webview.mjs apps/desktop/src-tauri/target/x86_64-unknown-linux-gnu/release/shadow-cloud-companion
+      - name: Exercise the native folder picker with an isolated synthetic account
+        if: runner.os == 'Linux'
+        env:
+          TAURI_CONFIG: '{"build":{"devUrl":"http://127.0.0.1:1437"}}'
+          SHADOW_CLOUD_API_URL: http://127.0.0.1:1460
+          SHADOW_CLOUD_WEB_URL: http://127.0.0.1:1460
+          COMPANION_NATIVE_OUTPUT: ${{ runner.temp }}/companion-native-picker
+        run: |
+          cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
+          xvfb-run -a node apps/desktop/scripts/native-webview.mjs apps/desktop/src-tauri/target/debug/shadow-cloud-companion --picker
+      - name: Verify universal macOS architectures and launch
+        if: runner.os == 'macOS'
+        run: |
+          lipo -verify_arch arm64 x86_64 "apps/desktop/src-tauri/target/universal-apple-darwin/release/bundle/macos/Shadow Cloud Companion.app/Contents/MacOS/shadow-cloud-companion"
+          node apps/desktop/scripts/smoke-native.mjs "apps/desktop/src-tauri/target/universal-apple-darwin/release/bundle/macos/Shadow Cloud Companion.app/Contents/MacOS/shadow-cloud-companion"
+      - name: Install and launch signed Windows updater artifact
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem apps/desktop/src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis -Filter *.exe)
+          if ($installers.Count -ne 1) { throw "Expected one NSIS installer" }
+          $companionInstall = Join-Path $env:RUNNER_TEMP 'companion-release-smoke'
+          $install = Start-Process -FilePath $installers[0].FullName -ArgumentList '/S', "/D=$companionInstall" -PassThru -Wait
+          if ($install.ExitCode -ne 0) { throw "NSIS installation failed: $($install.ExitCode)" }
+          node apps/desktop/scripts/smoke-native.mjs "$companionInstall/shadow-cloud-companion.exe"
+
+      - name: Retain Linux acceptance evidence
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: companion-release-linux-acceptance
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/companion-native
+            ${{ runner.temp }}/companion-native-picker
+            ${{ runner.temp }}/companion-browser
+
+  verify:
+    name: Verify all desktop artifacts before publishing updater metadata
+    needs: [prepare, publish-desktop]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.release_sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.20.0
+      - name: Install signature verifier
+        run: |
+          sudo apt-get -o APT::Update::Error-Mode=any update
+          sudo apt-get -o Acquire::Retries=3 install -y minisign
+      - name: Verify release gate tests
+        run: node --test apps/desktop/scripts/verify-release.test.mjs
+      - name: Verify signatures and publish complete metadata
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          node apps/desktop/scripts/verify-release.mjs --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" --version "$RELEASE_VERSION" --write-metadata "$RUNNER_TEMP/latest.json"
+          gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/latest.json" --clobber
+          node apps/desktop/scripts/verify-release.mjs --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" --version "$RELEASE_VERSION"

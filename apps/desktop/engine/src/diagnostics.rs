@@ -90,6 +90,12 @@ impl Engine {
             "credentialStorage": self.snapshot.session.credential_storage,
             "paused": self.snapshot.paused,
             "readOnly": self.snapshot.read_only,
+            "desktop": self.snapshot.desktop,
+            "updates": {
+                "state": self.snapshot.updates.state,
+                "channel": self.snapshot.preferences.update_channel,
+                "blockedBy": self.snapshot.updates.install_blockers,
+            },
             "counts": {
                 "campaigns": self.snapshot.campaigns.len(),
                 "turnCandidates": candidates.clone().count(),

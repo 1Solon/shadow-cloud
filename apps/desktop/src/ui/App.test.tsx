@@ -707,3 +707,124 @@ it("generates selectable diagnostics only when explicitly requested in Settings"
   expect(report).not.toHaveTextContent("~/Games/Shadow Cloud");
   expect(report).toHaveAttribute("tabindex", "0");
 });
+
+it("offers update checking during onboarding when protocol mismatch prevents sign-in", async () => {
+  const companion = createDevelopmentCompanion("update-required");
+  await companion.command({ type: "sign-out" });
+  const command = vi.spyOn(companion, "command");
+  render(<App companion={companion} development />);
+  expect(
+    await screen.findByText("UPDATE REQUIRED", { exact: true }),
+  ).toBeVisible();
+  expect(
+    screen.getByRole("heading", { name: "> CONNECT THIS DEVICE" }),
+  ).toBeVisible();
+  expect(
+    screen.queryByRole("button", { name: "SETTINGS" }),
+  ).not.toBeInTheDocument();
+  await userEvent.click(
+    screen.getByRole("button", { name: "CHECK FOR UPDATES" }),
+  );
+  expect(command).toHaveBeenCalledExactlyOnceWith({
+    type: "check-for-updates",
+  });
+  expect(screen.getByText("An update is available.")).toBeVisible();
+  expect((await companion.snapshot()).session.state).toBe("signed-out");
+});
+
+it("changes native startup and tray preferences through the engine", async () => {
+  const companion = createDevelopmentCompanion("active");
+  const command = vi.spyOn(companion, "command");
+  render(<App companion={companion} development />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "SETTINGS" }),
+  );
+  const startup = screen.getByRole("switch", { name: "Start at login" });
+  const tray = screen.getByRole("switch", { name: "Keep running in tray" });
+  expect(startup).not.toBeChecked();
+  expect(tray).toBeChecked();
+  await userEvent.click(startup);
+  expect(command).toHaveBeenLastCalledWith({
+    type: "set-start-at-login",
+    enabled: true,
+  });
+  expect(startup).toBeChecked();
+  await userEvent.click(tray);
+  expect(command).toHaveBeenLastCalledWith({
+    type: "set-keep-running-in-tray",
+    enabled: false,
+  });
+  expect(tray).not.toBeChecked();
+});
+
+it("disables native preference controls when the operating system integration is unavailable", async () => {
+  const companion = createDevelopmentCompanion("active");
+  const snapshot = await companion.snapshot();
+  snapshot.desktop = { trayAvailable: false, startAtLoginAvailable: false };
+  render(
+    <App
+      companion={{ ...companion, snapshot: async () => snapshot }}
+      development
+    />,
+  );
+  await userEvent.click(
+    await screen.findByRole("button", { name: "SETTINGS" }),
+  );
+  expect(screen.getByRole("switch", { name: "Start at login" })).toBeDisabled();
+  expect(
+    screen.getByRole("switch", { name: "Keep running in tray" }),
+  ).toBeDisabled();
+  expect(
+    screen.getByRole("switch", { name: "Keep running in tray" }),
+  ).not.toBeChecked();
+  expect(
+    screen.getByText("Start at login is unavailable on this system."),
+  ).toBeVisible();
+  expect(
+    screen.getByText("Tray controls are unavailable on this system."),
+  ).toBeVisible();
+});
+
+it("checks a selected update channel and installs only after confirmation while retaining ordinary candidates", async () => {
+  const companion = createDevelopmentCompanion("updates");
+  const command = vi.spyOn(companion, "command");
+  render(<App companion={companion} development />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "SETTINGS" }),
+  );
+  await userEvent.click(
+    screen.getByRole("button", { name: "CHECK FOR UPDATES" }),
+  );
+  await userEvent.click(screen.getByRole("button", { name: "REVIEW UPDATE" }));
+  await userEvent.click(
+    within(screen.getByRole("alertdialog")).getByRole("button", {
+      name: "CANCEL",
+    }),
+  );
+  expect(command).toHaveBeenCalledExactlyOnceWith({
+    type: "check-for-updates",
+  });
+  await userEvent.selectOptions(
+    screen.getByRole("combobox", { name: "Update channel" }),
+    "preview",
+  );
+  expect(screen.getByRole("button", { name: "REVIEW UPDATE" })).toBeDisabled();
+  await userEvent.click(
+    screen.getByRole("button", { name: "CHECK FOR UPDATES" }),
+  );
+  const offered = (await companion.snapshot()).updates.offerId;
+  await userEvent.click(screen.getByRole("button", { name: "REVIEW UPDATE" }));
+  expect(screen.getByRole("alertdialog")).toHaveTextContent("0.18.0-beta.1");
+  await userEvent.click(
+    screen.getByRole("button", { name: "INSTALL AND RESTART" }),
+  );
+  expect(command).toHaveBeenLastCalledWith({
+    type: "install-update",
+    offerId: offered,
+  });
+  expect(screen.getByRole("button", { name: "INSTALLING…" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "CANCEL" })).toBeDisabled();
+  const snapshot = await companion.snapshot();
+  expect(snapshot.updates.state).toBe("installing");
+  expect(snapshot.campaigns[0].candidates).toHaveLength(2);
+});

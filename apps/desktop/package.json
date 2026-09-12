@@ -8,11 +8,14 @@
     "build": "vite build && node scripts/check-bundle.mjs",
     "build:native": "pnpm tauri build",
     "build:release": "pnpm tauri build --config src-tauri/tauri.release.conf.json",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"scripts/**/*.mjs\" \"*.{ts,mjs}\" && cargo fmt --manifest-path src-tauri/Cargo.toml && cargo fmt --manifest-path engine/Cargo.toml",
-    "typecheck": "tsc --noEmit",
-    "lint": "prettier --check \"src/**/*.{ts,tsx,css}\" \"scripts/**/*.mjs\" \"*.ts\" && node scripts/check-release.mjs",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"scripts/**/*.mjs\" \"browser/**/*.ts\" \"*.{ts,mjs}\" && cargo fmt --manifest-path src-tauri/Cargo.toml && cargo fmt --manifest-path engine/Cargo.toml",
+    "typecheck": "tsc --noEmit && pnpm typecheck:browser",
+    "typecheck:browser": "tsc --ignoreConfig --noEmit --strict --skipLibCheck --types node --target ES2022 --module ESNext --moduleResolution Bundler --lib ES2022,DOM playwright.config.ts browser/acceptance.spec.ts",
+    "lint": "prettier --check \"src/**/*.{ts,tsx,css}\" \"scripts/**/*.mjs\" \"browser/**/*.ts\" \"*.ts\" && node scripts/check-release.mjs",
     "test": "vitest run",
-    "test:engine": "cargo test --manifest-path engine/Cargo.toml --locked"
+    "test:engine": "cargo test --manifest-path engine/Cargo.toml --locked",
+    "test:browser": "playwright test",
+    "test:browser:install": "playwright install chromium"
   },
   "dependencies": {
     "@tauri-apps/api": "2.11.1",
@@ -22,6 +25,7 @@
     "three": "0.185.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.63.0",
     "@tauri-apps/cli": "2.11.4",
     "@testing-library/jest-dom": "7.0.1",
     "@testing-library/react": "16.3.2",
@@ -31,6 +35,7 @@
     "@types/react-dom": "19.2.7",
     "@types/three": "0.185.0",
     "@vitejs/plugin-react": "6.1.1",
+    "axe-core": "4.12.1",
     "jsdom": "30.0.1",
     "prettier": "3.9.6",
     "typescript": "6.0.3",

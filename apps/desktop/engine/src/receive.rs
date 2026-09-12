@@ -707,19 +707,26 @@ impl Engine {
             .as_ref()
             .map(|s| s.access_token.clone())
             .unwrap_or_else(|| access.to_owned());
-        let bytes = match self.remote.download(&current_access, campaign, save).await {
-            Err(ReceiveError::Unauthorized) => {
-                let access = self.refresh_receive_access().await?;
-                self.remote.download(&access, campaign, save).await?
+        self.set_transfer_active(true);
+        let received = async {
+            let bytes = match self.remote.download(&current_access, campaign, save).await {
+                Err(ReceiveError::Unauthorized) => {
+                    let access = self.refresh_receive_access().await?;
+                    self.remote.download(&access, campaign, save).await?
+                }
+                result => result?,
+            };
+            if bytes.len() as u64 != save.size || content_hash(&bytes) != save.content_hash {
+                return Err(ReceiveError::InvalidResponse);
             }
-            result => result?,
-        };
-        if bytes.len() as u64 != save.size || content_hash(&bytes) != save.content_hash {
-            return Err(ReceiveError::InvalidResponse);
+            // Downloads are immutable and may remain valid after a newer cloud save
+            // appears. Check current identity again before exposing those bytes.
+            self.refresh_receive_identity(observation).await?;
+            Ok::<_, ReceiveError>(bytes)
         }
-        // Downloads are immutable and may remain valid after a newer cloud save
-        // appears. Check current identity again before exposing those bytes.
-        self.refresh_receive_identity(observation).await?;
+        .await;
+        self.set_transfer_active(false);
+        let bytes = received?;
         check_owned_folder(folder, campaign)?;
         let target = available_target(folder, &save.filename)?;
         let stage = unique_stage(folder)?;

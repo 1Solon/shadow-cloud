@@ -2165,3 +2165,60 @@ p {
   overflow-wrap: anywhere;
   user-select: text;
 }
+.updates-card {
+  align-items: stretch;
+  flex-direction: column;
+  gap: 14px;
+}
+.update-channel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+}
+.update-channel select {
+  min-height: 36px;
+  min-width: 120px;
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  padding: 0 8px;
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 12px;
+  letter-spacing: normal;
+}
+.update-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.update-explanation,
+.update-blockers {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.update-blockers {
+  margin-top: 12px;
+}
+.update-blockers strong {
+  color: var(--bright);
+  font-size: 10px;
+}
+.update-blockers ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+.onboarding-updates {
+  position: relative;
+  z-index: 1;
+  grid-column: 1 / -1;
+  min-width: 0;
+  background: var(--background);
+}
+.onboarding-updates .connection-notice {
+  margin: 0 0 14px;
+}

@@ -17,9 +17,13 @@ mod automatic;
 mod conflicts;
 mod diagnostics;
 mod recovery;
+mod updates;
 pub use automatic::{AutomaticMode, AutomaticNotification, Countdown};
 pub use conflicts::{RecoveryState, ResolutionAction};
 pub use submit::{CandidateAction, SubmissionReceipt, TurnCandidate, TurnSubmission};
+pub use updates::{
+    DesktopCapabilities, UpdateBlocker, UpdateChannel, UpdateOffer, UpdateSnapshot, UpdateState,
+};
 
 pub const RELEASE: &str = env!("COMPANION_RELEASE");
 const CAMPAIGN_MARKER: &str = ".shadow-cloud-campaign.json";
@@ -310,6 +314,9 @@ pub struct Connection {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Preferences {
+    pub update_channel: UpdateChannel,
+    pub start_at_login: bool,
+    pub keep_running_in_tray: bool,
     pub theme: Theme,
     pub automatic_uploads: bool,
 }
@@ -414,6 +421,8 @@ pub struct OnboardingSnapshot {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
+    pub desktop: DesktopCapabilities,
+    pub updates: UpdateSnapshot,
     pub diagnostics: Option<String>,
     pub revision: u32,
     pub app_version: String,
@@ -438,6 +447,19 @@ pub struct Snapshot {
     deny_unknown_fields
 )]
 pub enum Command {
+    CheckForUpdates,
+    SetUpdateChannel {
+        channel: UpdateChannel,
+    },
+    InstallUpdate {
+        offer_id: String,
+    },
+    SetStartAtLogin {
+        enabled: bool,
+    },
+    SetKeepRunningInTray {
+        enabled: bool,
+    },
     GenerateDiagnostics,
     SetCampaignPaused {
         campaign_id: String,
@@ -613,6 +635,22 @@ pub trait CompanionRemote: Send + Sync {
 
 #[async_trait]
 pub trait CompanionPlatform: Send + Sync {
+    fn desktop_capabilities(&self) -> DesktopCapabilities {
+        DesktopCapabilities::default()
+    }
+    fn start_at_login_enabled(&self) -> Result<bool, ()> {
+        Err(())
+    }
+    fn set_start_at_login(&self, _enabled: bool) -> Result<(), ()> {
+        Err(())
+    }
+    async fn check_update(&self, _channel: UpdateChannel) -> Result<Option<UpdateOffer>, ()> {
+        Err(())
+    }
+    async fn install_update(&self, _offer_id: &str) -> Result<(), ()> {
+        Err(())
+    }
+
     fn open_campaign(&self, _number: u32) -> Result<(), ()> {
         Err(())
     }
@@ -802,7 +840,7 @@ impl Store {
         transaction
             .execute_batch(
                 "DELETE FROM settings WHERE key IN (
-                   'theme', 'automatic_uploads', 'paused',
+                   'theme', 'automatic_uploads', 'paused', 'update_channel', 'keep_running_in_tray',
                    'onboarding_complete', 'companion_root'
                  );
                  INSERT INTO settings(key, value) VALUES ('session_restore_enabled', 'false')
@@ -873,6 +911,7 @@ impl SecretVault for UnavailableVault {
 
 /// One coordinator owns this value. No decision is made by the webview.
 pub struct Engine {
+    active_transfer: bool,
     countdowns: std::collections::HashMap<String, automatic::Authorization>,
     last_reconciliation: Option<u64>,
     retired_countdowns: std::collections::VecDeque<automatic::Authorization>,
@@ -951,7 +990,22 @@ impl Engine {
         } else {
             OnboardingStage::Welcome
         };
+        let update_channel = match store
+            .get("update_channel")
+            .map_err(|_| EngineOpenError)?
+            .as_deref()
+        {
+            Some("preview") => UpdateChannel::Preview,
+            _ => UpdateChannel::Stable,
+        };
+        let keep_running_in_tray = store
+            .get("keep_running_in_tray")
+            .map_err(|_| EngineOpenError)?
+            .as_deref()
+            != Some("false");
         let snapshot = Snapshot {
+            desktop: platform.desktop_capabilities(),
+            updates: UpdateSnapshot::default(),
             diagnostics: None,
             revision: 0,
             app_version: RELEASE.into(),
@@ -981,6 +1035,9 @@ impl Engine {
             display_name: None,
             root_path,
             preferences: Preferences {
+                update_channel,
+                start_at_login: platform.start_at_login_enabled().unwrap_or(false),
+                keep_running_in_tray,
                 theme,
                 automatic_uploads,
             },
@@ -989,6 +1046,7 @@ impl Engine {
         };
         let (revisions, _) = tokio::sync::watch::channel(snapshot.clone());
         Ok(Self {
+            active_transfer: false,
             snapshot,
             revisions,
             store,
@@ -1021,6 +1079,13 @@ impl Engine {
         let previous = self.snapshot.clone();
         let result: Result<(), CommandError> = async {
             match command {
+                Command::CheckForUpdates => self.check_for_updates().await?,
+                Command::SetUpdateChannel { channel } => self.set_update_channel(channel)?,
+                Command::InstallUpdate { offer_id } => self.install_update(&offer_id).await?,
+                Command::SetStartAtLogin { enabled } => self.set_start_at_login(enabled)?,
+                Command::SetKeepRunningInTray { enabled } => {
+                    self.set_keep_running_in_tray(enabled)?
+                }
                 Command::GenerateDiagnostics => self.generate_diagnostics()?,
                 Command::SetCampaignPaused {
                     campaign_id,
@@ -1154,10 +1219,20 @@ impl Engine {
                     self.snapshot.root_path = None;
                     self.snapshot.preferences.theme = Theme::System;
                     self.snapshot.preferences.automatic_uploads = true;
+                    self.snapshot.preferences.update_channel = UpdateChannel::Stable;
+                    self.snapshot.preferences.keep_running_in_tray = true;
+                    self.snapshot.updates = UpdateSnapshot::default();
                     self.snapshot.paused = false;
                     self.snapshot.campaigns.clear();
                     self.snapshot.activity.clear();
                     self.snapshot.diagnostics = None;
+                    if self
+                        .platform
+                        .start_at_login_enabled()
+                        .unwrap_or(self.snapshot.preferences.start_at_login)
+                    {
+                        self.set_start_at_login(false)?;
+                    }
                 }
                 Command::SetTheme { theme } => {
                     self.store.set("theme", theme.storage_value())?;
@@ -1472,6 +1547,14 @@ impl Engine {
             && self.snapshot.connection.state == ConnectionState::Connected
             && !self.snapshot.paused;
         self.snapshot.read_only = !self.snapshot.onboarding.can_send;
+        if self.refresh_update_blockers().is_err() {
+            self.snapshot.updates.install_blockers = vec![
+                UpdateBlocker::Transfer,
+                UpdateBlocker::UncertainSubmission,
+                UpdateBlocker::Conflict,
+            ];
+            self.snapshot.updates.detail=Some("The recovery database is unavailable. Update installation is blocked until it can be read.".into());
+        }
         self.record_activity(previous);
         if &self.snapshot != previous {
             self.snapshot.revision = self

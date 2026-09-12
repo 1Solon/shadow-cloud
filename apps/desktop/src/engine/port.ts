@@ -1,6 +1,9 @@
 // The UI's only application boundary. Kept in step with engine/src/lib.rs.
 export type Theme = "dark" | "light" | "system";
 export type AutomaticMode = "inherit" | "automatic" | "manual";
+export type UpdateChannel = "stable" | "preview";
+export type UpdateBlocker =
+  "countdown" | "transfer" | "uncertain-submission" | "conflict";
 export type SyncStatus =
   | "conflict"
   | "sending"
@@ -57,6 +60,15 @@ export interface Campaign {
 }
 
 export interface Snapshot {
+  desktop: { trayAvailable: boolean; startAtLoginAvailable: boolean };
+  updates: {
+    state:
+      "idle" | "checking" | "current" | "available" | "installing" | "error";
+    version: string | null;
+    offerId: string | null;
+    installBlockers: UpdateBlocker[];
+    detail: string | null;
+  };
   diagnostics?: string | null;
   revision: number;
   appVersion: string;
@@ -81,7 +93,13 @@ export interface Snapshot {
   paused: boolean;
   displayName: string | null;
   rootPath: string | null;
-  preferences: { theme: Theme; automaticUploads: boolean };
+  preferences: {
+    theme: Theme;
+    automaticUploads: boolean;
+    updateChannel: UpdateChannel;
+    startAtLogin: boolean;
+    keepRunningInTray: boolean;
+  };
   campaigns: Campaign[];
   activity: {
     id: string;
@@ -92,6 +110,11 @@ export interface Snapshot {
 }
 
 export type Command =
+  | { type: "check-for-updates" }
+  | { type: "set-update-channel"; channel: UpdateChannel }
+  | { type: "install-update"; offerId: string }
+  | { type: "set-start-at-login"; enabled: boolean }
+  | { type: "set-keep-running-in-tray"; enabled: boolean }
   | { type: "generate-diagnostics" }
   | {
       type: "resolve-campaign";

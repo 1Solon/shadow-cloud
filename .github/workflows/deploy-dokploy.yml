@@ -22,10 +22,12 @@ concurrency:
 jobs:
   prepare:
     name: Validate release
+    if: github.event_name != 'release' || github.event.release.prerelease == false
     runs-on: ubuntu-latest
     outputs:
       image_namespace: ${{ steps.release.outputs.image_namespace }}
       release_sha: ${{ steps.release.outputs.release_sha }}
+      release_tag: ${{ steps.release.outputs.release_tag }}
       version: ${{ steps.release.outputs.version }}
     steps:
       - name: Check out deployment branch
@@ -67,15 +69,40 @@ jobs:
           fi
           export RELEASE_VERSION="$version"
 
+          git checkout --detach "$release_sha"
           node apps/desktop/scripts/check-release.mjs
 
           echo "image_namespace=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
           echo "release_sha=$release_sha" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  desktop-ready:
+    name: Require complete signed desktop release before server publication
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.prepare.outputs.release_sha }}
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.20.0
+      - name: Install signature verifier
+        run: |
+          sudo apt-get -o APT::Update::Error-Mode=any update
+          sudo apt-get -o Acquire::Retries=3 install -y minisign
+      - name: Wait at most 30 minutes for the exact release artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.prepare.outputs.release_tag }}
+          RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+        run: node apps/desktop/scripts/verify-release.mjs --repository "$GITHUB_REPOSITORY" --tag "$RELEASE_TAG" --version "$RELEASE_VERSION" --stable-only --wait-seconds 1800
 
   build:
     name: Build and publish ${{ matrix.service }}
-    needs: prepare
+    needs: [prepare, desktop-ready]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -133,6 +160,7 @@ jobs:
     name: Trigger Dokploy deployment
     needs:
       - prepare
+      - desktop-ready
       - build
     runs-on: ubuntu-latest
     steps:
@@ -149,6 +177,7 @@ jobs:
           DOKPLOY_DEPLOY_URL: ${{ secrets.DOKPLOY_DEPLOY_URL }}
           RELEASE_NAME: ${{ github.event_name == 'release' && github.event.release.name || inputs.release_tag }}
           RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
+          RELEASE_SHA: ${{ needs.prepare.outputs.release_sha }}
         run: |
           set -euo pipefail
 
@@ -158,6 +187,11 @@ jobs:
           fi
 
           deployment_sha="$(git rev-parse HEAD)"
+          remote_sha="$(git ls-remote origin "refs/heads/$DEFAULT_BRANCH" | cut -f1)"
+          if [[ "$deployment_sha" != "$RELEASE_SHA" || "$remote_sha" != "$RELEASE_SHA" ]]; then
+            echo "Deployment branch moved beyond the verified release. Refusing to activate an unreleased server protocol." >&2
+            exit 1
+          fi
           repository_files="$(git ls-tree -r --name-only HEAD)"
           modified_json="$(printf '%s\n' "$repository_files" | jq -R 'select(length > 0)' | jq -s '.')"
           payload="$(jq -n \

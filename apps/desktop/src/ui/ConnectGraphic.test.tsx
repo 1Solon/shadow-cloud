@@ -74,7 +74,7 @@ it("keeps the damaged lower-right QTT segment and both exact warning callouts af
   const fractured = damage?.innerHTML;
   for (const [name, warning] of [
     ["energy", "Warning: Low LE, Refuel Needed!"],
-    ["maintenance", "Warning: Maintenance window exceeded by NaN!"],
+    ["maintenance", "Warning: Maintenance overdue!"],
   ]) {
     const callout = view.container.querySelector(
       `.connect-system-warning--${name}`,

@@ -205,7 +205,7 @@ export function ConnectSystemDiagram({ connected }: { connected: boolean }) {
           <circle cx="650" cy="400" r="3" />
           <path d="M650 400 L688 456 V469 H446" />
           <text x="446" y="492">
-            Warning: Maintenance window exceeded by NaN!
+            Warning: Maintenance overdue!
           </text>
         </g>
       </g>

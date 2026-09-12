@@ -267,6 +267,21 @@ mod platform {
             }
         }
     }
+
+    #[cfg(test)]
+    #[test]
+    fn native_power_service_accepts_and_releases_suspend_resume_registrations() {
+        for _ in 0..3 {
+            let lifecycle = Lifecycle::new(|| {});
+            assert!(
+                lifecycle.ready(),
+                "Windows must accept the real power registration"
+            );
+            drop(lifecycle);
+        }
+        // Delivery requires a real OS power transition; do not manufacture one
+        // by calling power() or suspend a developer/CI machine to claim coverage.
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -336,5 +351,40 @@ mod platform {
                 *callback = None;
             }
         }
+    }
+
+    #[cfg(test)]
+    #[test]
+    fn native_workspace_sleep_and_wake_delivery_and_observer_teardown() {
+        use std::sync::atomic::AtomicUsize;
+        let received = Arc::new(AtomicUsize::new(0));
+        let events = received.clone();
+        let lifecycle = Lifecycle::new(move || {
+            events.fetch_add(1, Ordering::SeqCst);
+        });
+        let center = NSWorkspace::sharedWorkspace().notificationCenter();
+        assert!(lifecycle.ready());
+        // SAFETY: immutable AppKit names and nil object. Foundation performs real
+        // selector delivery to the installed observer; no direct callback call.
+        unsafe {
+            center.postNotificationName_object(NSWorkspaceWillSleepNotification, None);
+        }
+        assert!(!lifecycle.ready());
+        assert_eq!(received.load(Ordering::SeqCst), 1);
+        unsafe {
+            center.postNotificationName_object(NSWorkspaceDidWakeNotification, None);
+        }
+        assert!(lifecycle.ready());
+        assert_eq!(received.load(Ordering::SeqCst), 2);
+        drop(lifecycle);
+        unsafe {
+            center.postNotificationName_object(NSWorkspaceWillSleepNotification, None);
+            center.postNotificationName_object(NSWorkspaceDidWakeNotification, None);
+        }
+        assert_eq!(
+            received.load(Ordering::SeqCst),
+            2,
+            "teardown removes native observation"
+        );
     }
 }

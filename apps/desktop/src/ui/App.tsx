@@ -7,6 +7,7 @@ import { ResetCompanion } from "./ResetCompanion";
 import { ReviewGraphic } from "./ReviewGraphic";
 import { ROOT_RELEASE_DURATION_MS, RootGraphic } from "./RootGraphic";
 import { TurnModeGraphic } from "./TurnModeGraphic";
+import { Updates } from "./Updates";
 import {
   WelcomeNodeField,
   type WelcomeNodeFieldHandle,
@@ -173,6 +174,18 @@ function Onboarding({
           className="onboarding-page"
           data-welcome-transition={openingSetup || undefined}
         >
+          {snapshot.connection.state === "update-required" && (
+            <div className="onboarding-updates">
+              <ConnectionNotice snapshot={snapshot} />
+              <Updates
+                snapshot={snapshot}
+                send={send}
+                pending={pending}
+                error={error}
+                dismissError={dismissError}
+              />
+            </div>
+          )}
           <div
             className="onboarding-progress"
             aria-label={"Step " + step + " of 5"}
@@ -663,6 +676,13 @@ export function App({
             <section className="utility-page">
               <h1>{"> SETTINGS"}</h1>
               <div className="settings-list">
+                <Updates
+                  snapshot={snapshot}
+                  send={send}
+                  pending={pending}
+                  error={error}
+                  dismissError={dismissError}
+                />
                 <div className="settings-card">
                   <div>
                     <small>APPEARANCE</small>
@@ -748,6 +768,87 @@ export function App({
                     onClick={() => void send({ type: "sign-out" })}
                   >
                     SIGN OUT
+                  </button>
+                </div>
+                <div className="settings-card">
+                  <div>
+                    <small>STARTUP</small>
+                    <h2>START AT LOGIN</h2>
+                    <p>
+                      Open the Companion when you sign in to your computer. Your
+                      system's login-item settings can prevent startup even when
+                      this is enabled.
+                    </p>
+                    {!snapshot.desktop.startAtLoginAvailable && (
+                      <p>Start at login is unavailable on this system.</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="outline-button"
+                    role="switch"
+                    aria-label="Start at login"
+                    aria-checked={
+                      snapshot.desktop.startAtLoginAvailable &&
+                      snapshot.preferences.startAtLogin
+                    }
+                    disabled={
+                      pending ||
+                      !snapshot.desktop.startAtLoginAvailable ||
+                      snapshot.updates.state === "installing"
+                    }
+                    onClick={() =>
+                      void send({
+                        type: "set-start-at-login",
+                        enabled: !snapshot.preferences.startAtLogin,
+                      })
+                    }
+                  >
+                    {!snapshot.desktop.startAtLoginAvailable
+                      ? "UNAVAILABLE"
+                      : snapshot.preferences.startAtLogin
+                        ? "ENABLED"
+                        : "DISABLED"}
+                  </button>
+                </div>
+                <div className="settings-card">
+                  <div>
+                    <small>BACKGROUND OPERATION</small>
+                    <h2>KEEP RUNNING IN TRAY</h2>
+                    <p>
+                      Closing the window keeps synchronization running. Open the
+                      Companion or quit from the tray menu.
+                    </p>
+                    {!snapshot.desktop.trayAvailable && (
+                      <p>Tray controls are unavailable on this system.</p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="outline-button"
+                    role="switch"
+                    aria-label="Keep running in tray"
+                    aria-checked={
+                      snapshot.desktop.trayAvailable &&
+                      snapshot.preferences.keepRunningInTray
+                    }
+                    disabled={
+                      pending ||
+                      !snapshot.desktop.trayAvailable ||
+                      snapshot.updates.state === "installing"
+                    }
+                    onClick={() =>
+                      void send({
+                        type: "set-keep-running-in-tray",
+                        enabled: !snapshot.preferences.keepRunningInTray,
+                      })
+                    }
+                  >
+                    {!snapshot.desktop.trayAvailable
+                      ? "UNAVAILABLE"
+                      : snapshot.preferences.keepRunningInTray
+                        ? "ENABLED"
+                        : "DISABLED"}
                   </button>
                 </div>
                 <div className="settings-card diagnostics-card">

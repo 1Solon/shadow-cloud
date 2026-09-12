@@ -2,8 +2,7 @@
 
 The greenfield Tauri 2 application lives here. Its identity is
 `com.shadowcloud.companion`; it does not import the previous desktop application's
-state, tokens, or sync implementation. User save folders are never migrated or
-removed by this foundation.
+state, tokens, or sync implementation. Existing user save folders are preserved.
 
 The accepted interface is Variant A at `0abb6c9` on `prototype/sol-30`, recorded in
 [SOL-30](https://linear.app/1solon/issue/SOL-30/01-prototype-and-approve-the-companion-interface).
@@ -11,26 +10,15 @@ That branch remains a disposable design reference. Production has one compact
 web-style card layout, not the prototype's variants or switcher. Application
 icons are generated from `apps/web/src/app/favicon.ico`.
 
-## Current slice
+## Capabilities
 
-SOL-32 added the Companion's Device-session sign-in, durable non-secret
-preferences, explicit Companion-root onboarding, and immutable Campaign-folder
-ownership. Browser handoff and one-use pasted tokens both exchange for a scoped,
-rotating Device session. The refresh secret lives in the operating-system vault;
-when that vault is unavailable, the session is deliberately memory-only. SQLite
-never stores credentials.
-
-SOL-33 adds campaign discovery and automatic save reception after the final setup
-review. Activation starts with the current Canonical save; later publications
-are received in order, including turns published while this Companion was
-offline or paused. Campaign cards show reception progress, actionable failures,
-and cumulative archive content received. A missing current save can be explicitly
-redownloaded. SOL-34 adds content provenance and explicit manual Turn submission.
-SOL-35 adds cancellable automatic submission and native notifications.
-SOL-36 adds explicit conflict preservation, stale-turn review, paused recovery,
-receipt lookup after access loss, and redacted diagnostics. Tray, autostart, updater
-installation, and full native acceptance remain in SOL-37 under
-[SOL-29](https://linear.app/1solon/issue/SOL-29/spec-rebuild-shadow-cloud-companion-as-a-greenfield-cross-platform-app).
+The Companion signs in with a scoped Device session, owns identified Campaign
+folders, receives Save publications in order, and supports explicit or cancellable
+automatic Turn submission. Conflict preservation, stale-turn review, receipt
+recovery, and redacted diagnostics keep local work reviewable after failures.
+Rust also owns tray operation, opt-in startup at login, and consent-based signed
+updates through Stable and Preview channels. Native acceptance coverage and its
+remaining platform limits are described below.
 
 ## Development
 
@@ -73,9 +61,11 @@ pnpm --filter @shadow-cloud/desktop dev:ui
 ```
 
 Open `http://127.0.0.1:1420/?scenario=onboarding`, `active`, `receiving`, `offline`,
-`paused`, `manual`, `automatic`, `conflict`, `stale`, or `update-required`. These explicitly labelled, synthetic engine adapters
-exercise the production React boundary without real accounts, files, or
-transfers. No query parameter activates them in a production build;
+`paused`, `manual`, `automatic`, `conflict`, `stale`, `update-required`, `updates`,
+`update-blocked`, `onboarding-update-required`, or `native-unavailable`. These
+explicitly labelled, synthetic engine adapters exercise the production React
+boundary without real accounts, files, transfers, or update installation. No query
+parameter activates them in a production build;
 `check-bundle.mjs` verifies that their code and campaign fixtures are absent.
 
 ## Device sessions and onboarding
@@ -223,7 +213,48 @@ Native Cancel callbacks carry the exact authorization and interrupt work before
 waiting for the coordinator. No webview timer or notification handler can send a
 file directly.
 
+## Tray, startup, and updates
+
+**Start at login** is opt-in and defaults off. Settings reads the operating
+system's actual startup registration; unavailable integrations disable the
+control. Linux registers the AppImage path in an owned autostart entry and keeps
+development registration separate. Windows uses a quoted, owned Run entry and
+respects its Task Manager approval state. macOS writes an owned, serialized
+LaunchAgent plist; its setting reflects valid registration, not the separate
+`launchctl` disabled override or proof of execution at the next login. System
+login-item settings can prevent startup even when registration is enabled.
+
+**Keep running in tray** defaults on and takes effect only when a tray host is
+available. Closing the window then leaves the Rust engine running. The tray shows
+connection status and the number of Campaigns needing action, with **Open
+Companion**, **Pause all / Resume all**, and **Quit** actions. A second launch
+focuses the original window. On Linux, losing the tray host restores a hidden
+window; without tray availability, closing the window quits.
+
+Updates are available in Settings and during onboarding when the protocol needs
+an update. **Check for updates** only discovers an offer. Stable follows regular
+releases; opt-in Preview discovers newer published prereleases with updater
+metadata. Changing channels invalidates the previous offer. **Review update**
+opens a confirmation focused on **Cancel**; **Install and restart** authorizes
+only the reviewed offer. The native updater rechecks the exact artifact and
+verifies its signature before installation. A replaced or expired offer requires
+another check and review. Ordinary Turn candidates are preserved.
+
+Installation is blocked by automatic-send countdowns, active or unfinished
+transfers, uncertain submission receipts, and Save conflicts. Durable blockers
+cover every account stored by this installation, including after Pause, Sign out,
+Reset Companion, or restart. A database that cannot be read also blocks install.
+Resolve the affected work with its account and a compatible server before
+updating; an unknown receipt cannot be guessed away or discarded to bypass the
+blocker. A protocol mismatch continues to disable transfers until versions match.
+
+Tauri updater signatures are mandatory. OS publisher signing and macOS
+notarization are deferred, and distributed installers are labelled unsigned by
+an OS publisher.
+
 ## Checks and distributions
+
+Run from the repository root after installing dependencies:
 
 ```sh
 pnpm --filter @shadow-cloud/desktop test
@@ -231,24 +262,88 @@ pnpm --filter @shadow-cloud/desktop test:engine
 pnpm --filter @shadow-cloud/desktop typecheck
 pnpm --filter @shadow-cloud/desktop build
 node apps/desktop/scripts/check-release.mjs
-cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
+cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
+node --test apps/desktop/scripts/verify-release.test.mjs
+pnpm --filter @shadow-cloud/desktop test:browser:install
+pnpm --filter @shadow-cloud/desktop test:browser
+```
+
+The engine suite uses temporary SQLite databases and files with deterministic
+remote adapters, including multiple devices and large histories. Native tests
+exercise OS adapters, real local HTTPS and minisign verification, an isolated
+GNOME Secret Service and tray bus on Linux, and temporary autostart entries.
+Linux native tests require `gnome-keyring-daemon` and `dbus-daemon`.
+The release-validator tests require `minisign` and generate disposable signing
+keys; they never publish artifacts or use the release private key.
+
+Chromium acceptance starts its own synthetic Vite server on port 1425, rejects
+external requests, and covers keyboard interaction, recovery, diagnostics,
+update consent, themes, reduced motion, forced colors, and 200%-equivalent CSS
+reflow. Set `COMPANION_BROWSER_EXECUTABLE` to use an installed Chromium binary.
+Evidence goes to the system temporary directory, overridable with
+`COMPANION_BROWSER_OUTPUT`. Browser coverage does not establish native zoom or
+operating-system behavior.
+
+For the actual Linux Tauri/WebKitGTK window and native tray:
+
+```sh
 pnpm --filter @shadow-cloud/desktop build:native --bundles appimage
+cargo install tauri-driver --version 2.0.6 --locked
+xvfb-run -a node apps/desktop/scripts/native-webview.mjs apps/desktop/src-tauri/target/release/shadow-cloud-companion
+```
+
+This runner requires the native build libraries, `WebKitWebDriver`, Xvfb,
+`dbus-daemon`, Python with Gio introspection, and X11 libraries. It creates
+fresh XDG application directories and a private session bus that cannot activate
+the player's credential service. It controls the packaged application without
+signing in: onboarding, compact rendering and axe, tray actions, close-to-tray,
+single-instance focus, and tray-host loss. Screenshots and failure logs remain in
+a temporary directory or `COMPANION_NATIVE_OUTPUT`. The runner stops its child
+processes and uses no live Campaign data.
+
+The native picker check uses a separately built development executable and an
+isolated synthetic HTTP server. It exercises sign-in and the memory-only vault
+fallback, opens the actual GTK folder picker, cancels it, and verifies the
+Companion root stays unchanged. Ports 1437 and 1460 must be free:
+
+```sh
+TAURI_CONFIG='{"build":{"devUrl":"http://127.0.0.1:1437"}}' \
+SHADOW_CLOUD_API_URL=http://127.0.0.1:1460 \
+SHADOW_CLOUD_WEB_URL=http://127.0.0.1:1460 \
+cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml --locked
+xvfb-run -a node apps/desktop/scripts/native-webview.mjs apps/desktop/src-tauri/target/debug/shadow-cloud-companion --picker
 ```
 
 `build` produces the frontend without requiring native libraries, keeping the
 monorepo build portable. `build:native` packages the application. The native CI
 matrix targets Windows x64 NSIS, universal macOS DMG, and Linux x64 AppImage on
-Ubuntu 22.04. Native process startup checks do not claim installer UX, rendering,
-tray, vault, notification, or game compatibility coverage; full native acceptance
-remains SOL-37.
+Ubuntu 22.04. Local acceptance exercises the actual Linux webview and targeted
+native integrations. Windows/macOS CI builds, installation/startup smoke checks,
+and native tests are configured; execution of that matrix remains pending. Local
+Linux results do not establish completed cross-platform or game compatibility.
+Windows/macOS notification Cancel and file-picker interactions still need actual
+desktop execution; registration tests and synthetic event delivery do not
+establish those OS interactions. Native CI does not yet provision macOS
+notification/Accessibility permissions or an interactive Windows toast shell.
 
-OS publisher signing and macOS notarization are deferred. Release updater
-artifacts still require the existing separate Tauri signing key; this does not
-make the application publisher-signed. Publication validates, rather than
-rewrites, the release version. Bump the root manifest and native Cargo manifest
-and lockfile together before tagging. Publish all matching desktop artifacts
-before activating the matching server protocol; rollout gating is completed in
-the release milestone, not by this foundation.
+Publication validates the shared release version. Bump the root manifest and
+native Cargo manifest and lockfile together before tagging. The desktop workflow
+builds and checks every target, then a final job validates the complete artifact
+set, downloads each updater package, verifies its signature, and publishes
+`latest.json`. The server workflow waits for that exact Stable release and repeats
+verification before publishing containers or deploying. It rejects Preview
+releases and a deployment branch that has moved beyond the verified release.
+
+To check an already published Stable release without publishing or deploying:
+
+```sh
+companion_release_version="$(node -p 'require("./package.json").version')"
+node apps/desktop/scripts/verify-release.mjs --repository 1Solon/shadow-cloud --tag "v${companion_release_version}" --version "$companion_release_version" --stable-only
+```
+
+Use the intended release checkout; omit `--stable-only` when verifying a
+Preview release. The validator reads the configured updater public key and uses
+`minisign`. `--wait-seconds 1800` permits a bounded wait for all release artifacts.
 
 AppImages built on a newer rolling-release host are local smoke artifacts, not
 proof of Ubuntu 22.04 compatibility. The baseline distribution must be built on
