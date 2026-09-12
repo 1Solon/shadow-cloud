@@ -31,6 +31,7 @@ describe("/api/auth/companion", () => {
     expect(body).toContain('action="/api/auth/signin/discord"');
     expect(body).toContain("/api/auth/companion?handoff=abc123");
     expect(body).toContain('name="csrfToken"');
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
     expect(response.headers.get("content-security-policy")).toContain(
       "form-action 'self' https://discord.com",
     );
@@ -49,6 +50,7 @@ describe("/api/auth/companion", () => {
 
     expect(body).toContain("APPROVE DEVICE SESSION");
     expect(body).toContain("cannot administer Campaigns or your account");
+    expect(response.headers.get("referrer-policy")).toBe("same-origin");
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
@@ -80,19 +82,22 @@ describe("/api/auth/companion", () => {
     );
   });
 
-  it("rejects approval posts from another origin", async () => {
-    mockedGetServerAuthSession.mockResolvedValue({
-      user: { id: "user-1" },
-    } as Awaited<ReturnType<typeof getServerAuthSession>>);
+  it.each(["https://evil.example", "null", undefined])(
+    "rejects approval posts with an untrusted or missing origin (%s)",
+    async (origin) => {
+      mockedGetServerAuthSession.mockResolvedValue({
+        user: { id: "user-1" },
+      } as Awaited<ReturnType<typeof getServerAuthSession>>);
 
-    const response = await POST(
-      new Request("http://localhost:3200/api/auth/companion?handoff=abc123", {
-        method: "POST",
-        headers: { origin: "https://evil.example" },
-      }),
-    );
+      const response = await POST(
+        new Request("http://localhost:3200/api/auth/companion?handoff=abc123", {
+          method: "POST",
+          headers: origin ? { origin } : {},
+        }),
+      );
 
-    expect(response.status).toBe(403);
-    expect(globalThis.fetch).not.toHaveBeenCalled();
-  });
+      expect(response.status).toBe(403);
+      expect(globalThis.fetch).not.toHaveBeenCalled();
+    },
+  );
 });

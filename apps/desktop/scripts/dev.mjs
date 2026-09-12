@@ -7,11 +7,6 @@ await loadRootEnv();
 const child = spawn("pnpm", ["tauri", "dev"], {
   stdio: "inherit",
   shell: process.platform === "win32",
-  env: {
-    ...process.env,
-    SHADOW_CLOUD_API_URL:
-      process.env.SHADOW_CLOUD_API_URL ?? "http://127.0.0.1:3001",
-  },
 });
 for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => child.kill(signal));

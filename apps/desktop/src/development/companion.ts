@@ -1,10 +1,25 @@
 // COMPANION_DEVELOPMENT_FIXTURE — imported only behind import.meta.env.DEV.
 import rootPackage from "../../../../package.json";
-import type { Campaign, Companion, Snapshot } from "../engine/port";
+import type {
+  Campaign,
+  Companion,
+  OnboardingStage,
+  Snapshot,
+} from "../engine/port";
+
+const onboardingStages: OnboardingStage[] = [
+  "welcome",
+  "sign-in",
+  "companion-root",
+  "automatic-uploads",
+  "review",
+  "complete",
+];
 
 export function createDevelopmentCompanion(scenario: string): Companion {
   const startsOnboarding = scenario === "onboarding";
   let onboardingComplete = !startsOnboarding;
+  let furthestOnboardingStep = startsOnboarding ? 0 : 5;
   const campaigns: Campaign[] = [
     {
       id: "black-glass",
@@ -104,6 +119,7 @@ export function createDevelopmentCompanion(scenario: string): Companion {
     },
     onboarding: {
       stage: startsOnboarding ? "welcome" : "complete",
+      availableSteps: startsOnboarding ? ["welcome"] : [],
       canSend:
         !startsOnboarding &&
         scenario !== "offline" &&
@@ -172,9 +188,32 @@ export function createDevelopmentCompanion(scenario: string): Companion {
         case "continue-onboarding":
           if (next.onboarding.stage === "welcome")
             next.onboarding.stage = "sign-in";
-          else if (next.onboarding.stage === "automatic-uploads")
+          else if (
+            next.onboarding.stage === "sign-in" &&
+            next.session.state === "signed-in"
+          )
+            next.onboarding.stage =
+              onboardingComplete && next.rootPath
+                ? "complete"
+                : "companion-root";
+          else if (
+            next.onboarding.stage === "companion-root" &&
+            next.session.state === "signed-in" &&
+            next.rootPath
+          )
+            next.onboarding.stage = "automatic-uploads";
+          else if (
+            next.onboarding.stage === "automatic-uploads" &&
+            next.session.state === "signed-in" &&
+            next.rootPath
+          )
             next.onboarding.stage = "review";
           else throw "invalid-onboarding-step";
+          break;
+        case "navigate-onboarding":
+          if (!next.onboarding.availableSteps.includes(command.stage))
+            throw "invalid-onboarding-step";
+          next.onboarding.stage = command.stage;
           break;
         case "start-browser-sign-in":
           requireCompatibleServer();
@@ -206,21 +245,14 @@ export function createDevelopmentCompanion(scenario: string): Companion {
             handoffExpiresAt: null,
             credentialStorage: "vault",
           };
-          next.onboarding.stage =
-            onboardingComplete && next.rootPath
-              ? "complete"
-              : next.rootPath
-                ? "automatic-uploads"
-                : "companion-root";
           break;
         case "choose-companion-root":
           if (next.session.state !== "signed-in")
             throw "invalid-onboarding-step";
           next.rootPath = "~/Games/Shadow Cloud";
-          next.onboarding.stage =
-            next.onboarding.stage === "complete"
-              ? "complete"
-              : "automatic-uploads";
+          next.onboarding.stage = onboardingComplete
+            ? "complete"
+            : "companion-root";
           break;
         case "complete-onboarding":
           if (
@@ -232,6 +264,7 @@ export function createDevelopmentCompanion(scenario: string): Companion {
           onboardingComplete = true;
           next.onboarding.stage = "complete";
           break;
+        case "reset-companion":
         case "sign-out":
           next.displayName = null;
           next.session = {
@@ -240,7 +273,18 @@ export function createDevelopmentCompanion(scenario: string): Companion {
             handoffExpiresAt: null,
             credentialStorage: null,
           };
-          next.onboarding.stage = "sign-in";
+          if (command.type === "reset-companion") {
+            onboardingComplete = false;
+            furthestOnboardingStep = 0;
+            next.onboarding.stage = "welcome";
+            next.rootPath = null;
+            next.preferences = { theme: "system", automaticUploads: true };
+            next.paused = false;
+            next.campaigns = [];
+            next.activity = [];
+          } else {
+            next.onboarding.stage = "sign-in";
+          }
           break;
         case "set-theme":
           next.preferences.theme = command.theme;
@@ -256,7 +300,26 @@ export function createDevelopmentCompanion(scenario: string): Companion {
           if (!state.onboarding.canSend) throw "onboarding-incomplete";
           throw "not-available";
       }
+      furthestOnboardingStep = Math.max(
+        furthestOnboardingStep,
+        onboardingStages.indexOf(next.onboarding.stage),
+      );
+      next.onboarding.availableSteps =
+        next.onboarding.stage === "complete"
+          ? []
+          : onboardingStages.filter((stage, index) => {
+              if (stage === "complete" || index > furthestOnboardingStep)
+                return false;
+              if (stage === "companion-root")
+                return next.session.state === "signed-in";
+              if (stage === "automatic-uploads" || stage === "review")
+                return (
+                  next.session.state === "signed-in" && Boolean(next.rootPath)
+                );
+              return true;
+            });
       next.onboarding.canSend =
+        onboardingComplete &&
         next.onboarding.stage === "complete" &&
         next.session.state === "signed-in" &&
         Boolean(next.rootPath) &&

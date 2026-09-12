@@ -33,14 +33,33 @@ From the repository root:
 
 ```sh
 pnpm install --frozen-lockfile
+pnpm run dev
+```
+
+Keep the API, WebUI, and bot running, then start the Companion in another terminal:
+
+```sh
 pnpm --filter @shadow-cloud/desktop dev
 ```
 
-The native shell starts even if the API is unavailable. Its development launcher
-loads the root environment and defaults `SHADOW_CLOUD_API_URL` to
-`http://127.0.0.1:3001`. Release builds use HTTPS and the hosted service unless a
-different HTTPS base URL is supplied at compile time. React does not receive
-that URL, access credentials, touch files, or make HTTP requests.
+The native shell starts even if the API is unavailable. Tauri development mode
+uses the same root `.env` as `pnpm run dev`, including when launched directly with
+`pnpm tauri dev` from this directory. API requests use `SHADOW_CLOUD_API_URL`, or
+`http://localhost:<PORT or API_PORT or 3001>`. Browser approval uses
+`SHADOW_CLOUD_WEB_URL`, then `AUTH_URL`, then `http://localhost:<WEB_PORT or 3000>`.
+Restart Tauri dev after changing these settings. Only the resolved service URLs
+are embedded in development builds, not other root environment values.
+
+Packaged builds always use `https://shadow-cloud.solonsstuff.com` for both the API
+and browser approval, ignore development URL overrides, and require HTTPS. This
+follows Tauri's dev/build mode rather than Rust's debug/release optimization mode:
+`tauri build --debug` still uses the hosted service. React does not receive these
+URLs, access credentials, touch files, or make HTTP requests.
+
+Development keeps its database under `development/` in the app data directory and
+uses a separate operating-system vault entry, so local and hosted sessions cannot
+be reused across environments. Existing packaged state and credentials are left
+untouched; development signs in separately.
 
 For deterministic Linux browser checks:
 
@@ -70,6 +89,14 @@ Companion root, owned Campaign folders, saves, and non-secret preferences. If a
 vault deletion fails, later protocol checks retry it without ever restoring the
 retained secret. If the vault is unavailable at sign-in, a banner explains that
 the session lasts only until the process exits.
+
+Settings also offers **Reset Companion**, with a confirmation step. It signs out
+this Device session, forgets the selected Companion root, restores default
+preferences, and returns to Welcome. Local saves, Campaign-folder ownership,
+other sync-tracking records, and cloud campaigns are retained. Setup must be
+completed again before transfers can resume. The settings reset and signed-out
+intent commit in one SQLite transaction; a failed write leaves setup unchanged,
+and a failed vault deletion cannot restore the previous session after restart.
 
 ## Campaign-folder ownership
 

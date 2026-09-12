@@ -46,6 +46,12 @@ Notes to verify the committed value. Removing the session cookie must remove
 the SSR editing control and make the same proxy return 401 without forwarding
 another mutation. No browser request interception or mocked router is involved.
 
+`companion-auth.spec.ts` clicks the real Companion approval form with an isolated
+browser session. It checks that the browser sends a same-origin approval POST,
+the route forwards a signed internal request, and the success page shows a
+synthetic one-use token. Cross-site, opaque and missing origins remain rejected.
+The real Device session exchange and persistence are covered by the API tests.
+
 `responsive-workspace.spec.ts` verifies the campaign list, latest-save action,
 collapsed long notes, stacked mobile history, and configuration entry at 400px
 and either side of the 640px, 768px, and 1280px breakpoints, plus 1440px. It
@@ -149,8 +155,9 @@ an explicit user reload. This is a per-test in-process control, not an HTTP
 failure-injection endpoint. Recovery tests cover both same-route page failures
 and renumbered layout/page failures, with no transfer replay during read retries.
 
-The adapter intentionally implements only campaign list, detail, metadata and
-transfer HTTP endpoints. It has no remotely accessible fixture-control route,
+The adapter intentionally implements only the campaign HTTP endpoints and the
+single Companion approval endpoint needed by these browser cases. It has no
+remotely accessible fixture-control route,
 database, production failure-injection hook or generic scenario framework.
 It models only what these browser cases need, not all API validation or turn
 rules. It is **not proof of Prisma/SQLite behavior**. SOL-10 uses it to verify

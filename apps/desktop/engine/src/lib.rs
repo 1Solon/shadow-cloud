@@ -370,7 +370,7 @@ pub struct SessionSnapshot {
     pub credential_storage: Option<CredentialStorage>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum OnboardingStage {
     Welcome,
@@ -385,6 +385,7 @@ pub enum OnboardingStage {
 #[serde(rename_all = "camelCase")]
 pub struct OnboardingSnapshot {
     pub stage: OnboardingStage,
+    pub available_steps: Vec<OnboardingStage>,
     pub can_send: bool,
 }
 
@@ -415,6 +416,9 @@ pub struct Snapshot {
 )]
 pub enum Command {
     ContinueOnboarding,
+    NavigateOnboarding {
+        stage: OnboardingStage,
+    },
     StartBrowserSignIn,
     SubmitHandoffToken {
         token: String,
@@ -422,6 +426,7 @@ pub enum Command {
     ChooseCompanionRoot,
     CompleteOnboarding,
     SignOut,
+    ResetCompanion,
     SetTheme {
         theme: Theme,
     },
@@ -630,6 +635,29 @@ impl Store {
             .map_err(|_| CommandError::StorageUnavailable)
     }
 
+    fn reset_setup(&mut self) -> Result<(), CommandError> {
+        let transaction = self
+            .connection
+            .transaction()
+            .map_err(|_| CommandError::StorageUnavailable)?;
+        // Forget setup, not folder ownership or save/operation provenance.
+        // The signed-out tombstone must commit with the reset: an unavailable
+        // vault must never silently restore the previous account on restart.
+        transaction
+            .execute_batch(
+                "DELETE FROM settings WHERE key IN (
+                   'theme', 'automatic_uploads', 'paused',
+                   'onboarding_complete', 'companion_root'
+                 );
+                 INSERT INTO settings(key, value) VALUES ('session_restore_enabled', 'false')
+                 ON CONFLICT(key) DO UPDATE SET value = excluded.value;",
+            )
+            .map_err(|_| CommandError::StorageUnavailable)?;
+        transaction
+            .commit()
+            .map_err(|_| CommandError::StorageUnavailable)
+    }
+
     fn remember_campaign_folder(&self, campaign_id: &str, path: &Path) -> Result<(), CommandError> {
         let value = path.to_str().ok_or(CommandError::StorageUnavailable)?;
         self.connection
@@ -698,6 +726,7 @@ pub struct Engine {
     pending_handoff: Option<PendingHandoff>,
     secrets: Option<SessionSecrets>,
     onboarding_complete: bool,
+    furthest_onboarding_stage: OnboardingStage,
     session_restore_enabled: bool,
 }
 
@@ -779,7 +808,12 @@ impl Engine {
                 credential_storage: None,
             },
             onboarding: OnboardingSnapshot {
-                stage: onboarding_stage,
+                stage: onboarding_stage.clone(),
+                available_steps: if onboarding_complete {
+                    vec![OnboardingStage::Welcome, OnboardingStage::SignIn]
+                } else {
+                    vec![OnboardingStage::Welcome]
+                },
                 can_send: false,
             },
             read_only: true,
@@ -804,6 +838,7 @@ impl Engine {
             pending_handoff: None,
             secrets: None,
             onboarding_complete,
+            furthest_onboarding_stage: onboarding_stage,
             session_restore_enabled,
         })
     }
@@ -823,11 +858,36 @@ impl Engine {
                 OnboardingStage::Welcome => {
                     self.snapshot.onboarding.stage = OnboardingStage::SignIn
                 }
-                OnboardingStage::AutomaticUploads => {
+                OnboardingStage::SignIn
+                    if self.snapshot.session.state == SessionState::SignedIn =>
+                {
+                    self.snapshot.onboarding.stage =
+                        if self.onboarding_complete && self.snapshot.root_path.is_some() {
+                            OnboardingStage::Complete
+                        } else {
+                            OnboardingStage::CompanionRoot
+                        }
+                }
+                OnboardingStage::CompanionRoot
+                    if self.snapshot.session.state == SessionState::SignedIn
+                        && self.snapshot.root_path.is_some() =>
+                {
+                    self.snapshot.onboarding.stage = OnboardingStage::AutomaticUploads
+                }
+                OnboardingStage::AutomaticUploads
+                    if self.snapshot.session.state == SessionState::SignedIn
+                        && self.snapshot.root_path.is_some() =>
+                {
                     self.snapshot.onboarding.stage = OnboardingStage::Review
                 }
                 _ => return Err(CommandError::InvalidOnboardingStep),
             },
+            Command::NavigateOnboarding { stage } => {
+                if !self.snapshot.onboarding.available_steps.contains(&stage) {
+                    return Err(CommandError::InvalidOnboardingStep);
+                }
+                self.snapshot.onboarding.stage = stage;
+            }
             Command::StartBrowserSignIn => self.start_browser_sign_in().await?,
             Command::SubmitHandoffToken { token } => {
                 if self.snapshot.onboarding.stage != OnboardingStage::SignIn
@@ -862,7 +922,7 @@ impl Engine {
                 self.snapshot.onboarding.stage = if self.onboarding_complete {
                     OnboardingStage::Complete
                 } else {
-                    OnboardingStage::AutomaticUploads
+                    OnboardingStage::CompanionRoot
                 };
             }
             Command::CompleteOnboarding => {
@@ -884,6 +944,22 @@ impl Engine {
                     self.finish_change(&previous);
                     return Err(error);
                 }
+            }
+            Command::ResetCompanion => {
+                // A failed transaction leaves the current setup and session
+                // intact. Once committed, remote/vault failures cannot undo it.
+                self.store.reset_setup()?;
+                self.session_restore_enabled = false;
+                self.clear_device_session().await;
+                self.onboarding_complete = false;
+                self.furthest_onboarding_stage = OnboardingStage::Welcome;
+                self.snapshot.onboarding.stage = OnboardingStage::Welcome;
+                self.snapshot.root_path = None;
+                self.snapshot.preferences.theme = Theme::System;
+                self.snapshot.preferences.automatic_uploads = true;
+                self.snapshot.paused = false;
+                self.snapshot.campaigns.clear();
+                self.snapshot.activity.clear();
             }
             Command::SetTheme { theme } => {
                 self.store.set("theme", theme.storage_value())?;
@@ -958,7 +1034,14 @@ impl Engine {
             return Ok(self.snapshot());
         };
         match self.remote.refresh(&refresh_token).await {
-            Ok(credentials) => self.accept_credentials(credentials)?,
+            Ok(credentials) => {
+                self.accept_credentials(credentials)?;
+                // A saved, completed setup resumes normally on startup. An
+                // interactive sign-in never navigates away from Connect.
+                if self.onboarding_complete && self.snapshot.root_path.is_some() {
+                    self.snapshot.onboarding.stage = OnboardingStage::Complete;
+                }
+            }
             Err(RemoteError::Offline) => return Ok(self.snapshot()),
             Err(RemoteError::Rejected) => {
                 let _ = self.vault.clear();
@@ -1072,14 +1155,6 @@ impl Engine {
             handoff_expires_at: None,
             credential_storage: Some(storage),
         };
-        self.snapshot.onboarding.stage =
-            if self.onboarding_complete && self.snapshot.root_path.is_some() {
-                OnboardingStage::Complete
-            } else if self.snapshot.root_path.is_some() {
-                OnboardingStage::AutomaticUploads
-            } else {
-                OnboardingStage::CompanionRoot
-            };
         Ok(())
     }
 
@@ -1089,6 +1164,12 @@ impl Engine {
         // from being restored after an offline sign-out or process restart.
         self.session_restore_enabled = false;
         let tombstone = self.store.set("session_restore_enabled", "false");
+        self.clear_device_session().await;
+        self.snapshot.onboarding.stage = OnboardingStage::SignIn;
+        tombstone
+    }
+
+    async fn clear_device_session(&mut self) {
         let refresh_token = self
             .secrets
             .take()
@@ -1101,8 +1182,6 @@ impl Engine {
         self.pending_handoff = None;
         self.snapshot.session = signed_out_session();
         self.snapshot.display_name = None;
-        self.snapshot.onboarding.stage = OnboardingStage::SignIn;
-        tombstone
     }
 
     fn require_compatible_server(&self) -> Result<(), CommandError> {
@@ -1114,6 +1193,37 @@ impl Engine {
     }
 
     fn finish_change(&mut self, previous: &Snapshot) {
+        // Navigation must not forget reached steps or bypass their prerequisites.
+        if self.snapshot.onboarding.stage > self.furthest_onboarding_stage {
+            self.furthest_onboarding_stage = self.snapshot.onboarding.stage.clone();
+        }
+        self.snapshot.onboarding.available_steps =
+            if self.snapshot.onboarding.stage == OnboardingStage::Complete {
+                vec![]
+            } else {
+                [
+                    OnboardingStage::Welcome,
+                    OnboardingStage::SignIn,
+                    OnboardingStage::CompanionRoot,
+                    OnboardingStage::AutomaticUploads,
+                    OnboardingStage::Review,
+                ]
+                .into_iter()
+                .filter(|stage| {
+                    stage <= &self.furthest_onboarding_stage
+                        && match stage {
+                            OnboardingStage::CompanionRoot => {
+                                self.snapshot.session.state == SessionState::SignedIn
+                            }
+                            OnboardingStage::AutomaticUploads | OnboardingStage::Review => {
+                                self.snapshot.session.state == SessionState::SignedIn
+                                    && self.snapshot.root_path.is_some()
+                            }
+                            _ => true,
+                        }
+                })
+                .collect()
+            };
         self.snapshot.onboarding.can_send = self.onboarding_complete
             && self.snapshot.onboarding.stage == OnboardingStage::Complete
             && self.snapshot.session.state == SessionState::SignedIn

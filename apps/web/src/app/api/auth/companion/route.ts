@@ -114,12 +114,16 @@ function signInPage(handoffId: string) {
 
 function approvalPage(handoffId: string) {
   const action = escapeHtml(callbackPath(handoffId));
-  return page(
+  const response = page(
     "Approve Shadow Cloud Companion",
     `<h1>&gt; APPROVE COMPANION</h1>
     <p>This creates a revocable Device session limited to observing Campaigns and transferring your seated turns. It cannot administer Campaigns or your account.</p>
     <form method="POST" action="${action}"><button type="submit">APPROVE DEVICE SESSION</button></form>`,
   );
+  // Native form posts need their Origin for the cross-site approval check.
+  // Keep the handoff URL private when navigating to any other origin.
+  response.headers.set("referrer-policy", "same-origin");
+  return response;
 }
 
 function successPage(pasteToken: string) {

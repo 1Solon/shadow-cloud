@@ -242,13 +242,73 @@ async fn browser_handoff_enters_onboarding_without_exposing_credentials_to_sqlit
         signed_in.session.credential_storage,
         Some(CredentialStorage::Vault)
     );
-    assert_eq!(signed_in.onboarding.stage, OnboardingStage::CompanionRoot);
+    assert_eq!(signed_in.onboarding.stage, OnboardingStage::SignIn);
+    assert!(!signed_in.onboarding.can_send);
+    // Background polling and session recovery must not undo the user's step.
+    assert_eq!(engine.poll_browser_sign_in().await.unwrap(), signed_in);
+    assert_eq!(engine.restore_session().await.unwrap(), signed_in);
+    let continued = engine.command(Command::ContinueOnboarding).await.unwrap();
+    assert_eq!(continued.onboarding.stage, OnboardingStage::CompanionRoot);
     assert_eq!(
         vault.secret.lock().unwrap().as_deref(),
         Some("device.rotating-refresh-secret")
     );
     let sqlite_bytes = fs::read(database).unwrap();
     assert!(!String::from_utf8_lossy(&sqlite_bytes).contains("rotating-refresh-secret"));
+}
+
+#[tokio::test]
+async fn pasted_token_sign_in_waits_for_continue_including_after_a_completed_setup() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let platform = Arc::new(FakePlatform::default());
+    *platform.selected.lock().unwrap() = Some(root.path().to_path_buf());
+    let mut engine = Engine::open(
+        &temp.path().join("companion.sqlite3"),
+        Arc::new(ApprovedRemote),
+        platform,
+        Arc::new(FakeVault::default()),
+    )
+    .unwrap();
+    engine.observe_protocol(Ok(RELEASE.into()));
+    engine.command(Command::ContinueOnboarding).await.unwrap();
+    let signed_in = engine
+        .command(Command::SubmitHandoffToken {
+            token: "one-use-token".into(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(signed_in.session.state, SessionState::SignedIn);
+    assert_eq!(signed_in.onboarding.stage, OnboardingStage::SignIn);
+    assert!(!signed_in.onboarding.can_send);
+    let continued = engine.command(Command::ContinueOnboarding).await.unwrap();
+    assert_eq!(continued.onboarding.stage, OnboardingStage::CompanionRoot);
+    let selected_root = engine.command(Command::ChooseCompanionRoot).await.unwrap();
+    assert_eq!(
+        selected_root.onboarding.stage,
+        OnboardingStage::CompanionRoot
+    );
+    assert!(selected_root.root_path.is_some());
+    engine.command(Command::ContinueOnboarding).await.unwrap();
+    engine.command(Command::ContinueOnboarding).await.unwrap();
+    let completed = engine.command(Command::CompleteOnboarding).await.unwrap();
+    assert!(completed.onboarding.can_send);
+
+    engine.command(Command::SignOut).await.unwrap();
+    let reauthenticated = engine
+        .command(Command::SubmitHandoffToken {
+            token: "another-one-use-token".into(),
+        })
+        .await
+        .unwrap();
+    assert_eq!(reauthenticated.session.state, SessionState::SignedIn);
+    assert_eq!(reauthenticated.onboarding.stage, OnboardingStage::SignIn);
+    assert!(!reauthenticated.onboarding.can_send);
+    assert_eq!(engine.restore_session().await.unwrap(), reauthenticated);
+    let resumed = engine.command(Command::ContinueOnboarding).await.unwrap();
+    assert_eq!(resumed.onboarding.stage, OnboardingStage::Complete);
+    assert_eq!(resumed.root_path, completed.root_path);
+    assert!(resumed.onboarding.can_send);
 }
 
 #[tokio::test]
@@ -315,6 +375,181 @@ async fn an_authenticated_device_cannot_replace_its_session_with_a_new_handoff()
 }
 
 #[tokio::test]
+async fn setup_steps_can_be_revisited_without_losing_choices_or_enabling_transfers() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let platform = Arc::new(FakePlatform::default());
+    *platform.selected.lock().unwrap() = Some(root.path().to_path_buf());
+    let mut engine = Engine::open(
+        &temp.path().join("companion.sqlite3"),
+        Arc::new(ApprovedRemote),
+        platform,
+        Arc::new(FakeVault::default()),
+    )
+    .unwrap();
+    engine.observe_protocol(Ok(RELEASE.into()));
+    engine.command(Command::ContinueOnboarding).await.unwrap();
+    engine
+        .command(Command::SubmitHandoffToken {
+            token: "one-use-token".into(),
+        })
+        .await
+        .unwrap();
+    engine.command(Command::ChooseCompanionRoot).await.unwrap();
+    engine
+        .command(Command::SetAutomaticUploads { enabled: false })
+        .await
+        .unwrap();
+    engine.command(Command::ContinueOnboarding).await.unwrap();
+    engine.command(Command::ContinueOnboarding).await.unwrap();
+    let ready = engine.snapshot();
+    let steps = vec![
+        OnboardingStage::Welcome,
+        OnboardingStage::SignIn,
+        OnboardingStage::CompanionRoot,
+        OnboardingStage::AutomaticUploads,
+        OnboardingStage::Review,
+    ];
+
+    // Previously reached steps stay available even after moving backwards.
+    for stage in &steps {
+        let revisited = engine
+            .command(Command::NavigateOnboarding {
+                stage: stage.clone(),
+            })
+            .await
+            .unwrap();
+        assert_eq!(&revisited.onboarding.stage, stage);
+        assert_eq!(revisited.onboarding.available_steps, steps);
+        assert_eq!(revisited.session, ready.session);
+        assert_eq!(revisited.display_name, ready.display_name);
+        assert_eq!(revisited.root_path, ready.root_path);
+        assert_eq!(revisited.preferences, ready.preferences);
+        assert!(!revisited.onboarding.can_send);
+        assert!(revisited.read_only);
+    }
+
+    assert!(
+        engine
+            .command(Command::CompleteOnboarding)
+            .await
+            .unwrap()
+            .onboarding
+            .can_send
+    );
+}
+
+#[tokio::test]
+async fn revisited_connection_and_root_can_continue_with_the_saved_choices() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let platform = Arc::new(FakePlatform::default());
+    *platform.selected.lock().unwrap() = Some(root.path().to_path_buf());
+    let mut engine = Engine::open(
+        &temp.path().join("companion.sqlite3"),
+        Arc::new(ApprovedRemote),
+        platform.clone(),
+        Arc::new(FakeVault::default()),
+    )
+    .unwrap();
+    engine.observe_protocol(Ok(RELEASE.into()));
+    engine.command(Command::ContinueOnboarding).await.unwrap();
+    engine
+        .command(Command::SubmitHandoffToken {
+            token: "one-use-token".into(),
+        })
+        .await
+        .unwrap();
+    engine.command(Command::ChooseCompanionRoot).await.unwrap();
+    // Neither another authentication request nor another directory pick is needed.
+    *platform.selected.lock().unwrap() = None;
+    engine.observe_protocol(Err(()));
+    engine
+        .command(Command::NavigateOnboarding {
+            stage: OnboardingStage::SignIn,
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        engine
+            .command(Command::ContinueOnboarding)
+            .await
+            .unwrap()
+            .onboarding
+            .stage,
+        OnboardingStage::CompanionRoot,
+    );
+    assert_eq!(
+        engine
+            .command(Command::ContinueOnboarding)
+            .await
+            .unwrap()
+            .onboarding
+            .stage,
+        OnboardingStage::AutomaticUploads,
+    );
+    assert!(!engine.snapshot().onboarding.can_send);
+}
+
+#[tokio::test]
+async fn returning_to_welcome_is_not_undone_by_a_pending_browser_approval() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut engine = Engine::open(
+        &temp.path().join("companion.sqlite3"),
+        Arc::new(ApprovedRemote),
+        Arc::new(FakePlatform::default()),
+        Arc::new(FakeVault::default()),
+    )
+    .unwrap();
+    engine.observe_protocol(Ok(RELEASE.into()));
+    engine.command(Command::ContinueOnboarding).await.unwrap();
+    engine.command(Command::StartBrowserSignIn).await.unwrap();
+    engine
+        .command(Command::NavigateOnboarding {
+            stage: OnboardingStage::Welcome,
+        })
+        .await
+        .unwrap();
+
+    let approved = engine.poll_browser_sign_in().await.unwrap();
+    assert_eq!(approved.session.state, SessionState::SignedIn);
+    assert_eq!(approved.onboarding.stage, OnboardingStage::Welcome);
+    assert_eq!(
+        approved.onboarding.available_steps,
+        vec![OnboardingStage::Welcome, OnboardingStage::SignIn]
+    );
+    assert!(!approved.onboarding.can_send);
+}
+
+#[tokio::test]
+async fn setup_navigation_rejects_unreached_steps_without_changing_state() {
+    let mut engine = Engine::new();
+    for stage in [
+        OnboardingStage::SignIn,
+        OnboardingStage::CompanionRoot,
+        OnboardingStage::AutomaticUploads,
+        OnboardingStage::Review,
+        OnboardingStage::Complete,
+    ] {
+        let before = engine.snapshot();
+        assert_eq!(
+            engine.command(Command::NavigateOnboarding { stage }).await,
+            Err(CommandError::InvalidOnboardingStep)
+        );
+        assert_eq!(engine.snapshot(), before);
+    }
+    engine.command(Command::ContinueOnboarding).await.unwrap();
+    assert_eq!(
+        engine.command(Command::ContinueOnboarding).await,
+        Err(CommandError::InvalidOnboardingStep)
+    );
+    assert_eq!(
+        engine.snapshot().onboarding.available_steps,
+        vec![OnboardingStage::Welcome, OnboardingStage::SignIn,]
+    );
+}
+
+#[tokio::test]
 async fn no_campaign_action_is_enabled_until_the_final_onboarding_review() {
     let temp = tempfile::tempdir().unwrap();
     let root = tempfile::tempdir().unwrap();
@@ -337,10 +572,20 @@ async fn no_campaign_action_is_enabled_until_the_final_onboarding_review() {
         campaign_id: "campaign".into(),
         action: shadow_cloud_companion_engine::CampaignAction::OpenFolder,
     };
+    // Having a root does not mean the user has reached Review yet.
+    assert_eq!(
+        engine
+            .command(Command::NavigateOnboarding {
+                stage: OnboardingStage::Review
+            })
+            .await,
+        Err(CommandError::InvalidOnboardingStep)
+    );
     assert_eq!(
         engine.command(action()).await,
         Err(CommandError::OnboardingIncomplete)
     );
+    engine.command(Command::ContinueOnboarding).await.unwrap();
     engine.command(Command::ContinueOnboarding).await.unwrap();
     assert_eq!(engine.snapshot().onboarding.stage, OnboardingStage::Review);
     assert_eq!(
@@ -351,6 +596,15 @@ async fn no_campaign_action_is_enabled_until_the_final_onboarding_review() {
     let completed = engine.command(Command::CompleteOnboarding).await.unwrap();
     assert!(completed.onboarding.can_send);
     assert!(!completed.read_only);
+    assert!(completed.onboarding.available_steps.is_empty());
+    assert_eq!(
+        engine
+            .command(Command::NavigateOnboarding {
+                stage: OnboardingStage::Welcome
+            })
+            .await,
+        Err(CommandError::InvalidOnboardingStep)
+    );
     assert_eq!(
         engine.command(action()).await,
         Err(CommandError::NotAvailable)
@@ -415,6 +669,7 @@ async fn sign_out_revokes_online_but_preserves_the_root_database_and_save_files(
     engine.poll_browser_sign_in().await.unwrap();
     engine.command(Command::ChooseCompanionRoot).await.unwrap();
     engine.command(Command::ContinueOnboarding).await.unwrap();
+    engine.command(Command::ContinueOnboarding).await.unwrap();
     engine.command(Command::CompleteOnboarding).await.unwrap();
     let folder = engine
         .ensure_campaign_folder(&CampaignIdentity {
@@ -476,6 +731,292 @@ async fn sign_out_clears_credentials_even_when_its_sqlite_tombstone_cannot_be_wr
     assert_eq!(
         revoked.lock().unwrap().as_slice(),
         ["device.rotating-refresh-secret"]
+    );
+}
+
+fn reset_command() -> Command {
+    serde_json::from_str(r#"{"type":"reset-companion"}"#).unwrap()
+}
+
+#[tokio::test]
+async fn reset_restarts_setup_and_preferences_but_preserves_campaign_ownership_and_saves() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let database = temp.path().join("companion.sqlite3");
+    let revoked = Arc::new(Mutex::new(Vec::new()));
+    let platform = Arc::new(FakePlatform::default());
+    *platform.selected.lock().unwrap() = Some(root.path().to_path_buf());
+    let vault = Arc::new(FakeVault::default());
+    let mut engine = Engine::open(
+        &database,
+        Arc::new(RecordingRemote {
+            revoked: revoked.clone(),
+        }),
+        platform.clone(),
+        vault.clone(),
+    )
+    .unwrap();
+    engine.observe_protocol(Ok(RELEASE.into()));
+    engine.command(Command::ContinueOnboarding).await.unwrap();
+    engine
+        .command(Command::SubmitHandoffToken {
+            token: "one-use".into(),
+        })
+        .await
+        .unwrap();
+    engine.command(Command::ChooseCompanionRoot).await.unwrap();
+    engine.command(Command::ContinueOnboarding).await.unwrap();
+    engine.command(Command::ContinueOnboarding).await.unwrap();
+    engine.command(Command::CompleteOnboarding).await.unwrap();
+    engine
+        .command(Command::SetTheme {
+            theme: Theme::Light,
+        })
+        .await
+        .unwrap();
+    engine
+        .command(Command::SetAutomaticUploads { enabled: false })
+        .await
+        .unwrap();
+    engine
+        .command(Command::SetPaused { paused: true })
+        .await
+        .unwrap();
+    let identity = CampaignIdentity {
+        id: "campaign_01J8Y5QH97FFM2D9M5WJ6R4N8P".into(),
+        number: 42,
+        name: "Black Glass".into(),
+    };
+    let folder = engine.ensure_campaign_folder(&identity).unwrap();
+    let save = folder.path.join("turn-42.se1");
+    fs::write(&save, b"player work").unwrap();
+    let marker = folder.path.join(".shadow-cloud-campaign.json");
+    let ownership = fs::read(&marker).unwrap();
+    let before = engine.snapshot();
+    let mut subscriber = engine.subscribe();
+    subscriber.borrow_and_update();
+
+    let reset = engine.command(reset_command()).await.unwrap();
+
+    assert_eq!(reset.onboarding.stage, OnboardingStage::Welcome);
+    assert_eq!(reset.onboarding.available_steps, [OnboardingStage::Welcome]);
+    assert!(!reset.onboarding.can_send);
+    assert!(reset.read_only);
+    assert!(!reset.paused);
+    assert_eq!(reset.session.state, SessionState::SignedOut);
+    assert_eq!(reset.display_name, None);
+    assert_eq!(reset.root_path, None);
+    assert_eq!(reset.preferences.theme, Theme::System);
+    assert!(reset.preferences.automatic_uploads);
+    assert_eq!(reset.connection, before.connection);
+    assert!(reset.revision > before.revision);
+    assert!(subscriber.has_changed().unwrap());
+    assert_eq!(subscriber.borrow_and_update().clone(), reset);
+    assert_eq!(vault.secret.lock().unwrap().as_deref(), None);
+    assert_eq!(
+        revoked.lock().unwrap().as_slice(),
+        ["device.rotating-refresh-secret"]
+    );
+    assert_eq!(fs::read(&save).unwrap(), b"player work");
+    assert_eq!(fs::read(&marker).unwrap(), ownership);
+    let connection = rusqlite::Connection::open(&database).unwrap();
+    let recorded_folder: String = connection
+        .query_row(
+            "SELECT path FROM campaign_folders WHERE campaign_id = ?1",
+            [&identity.id],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(PathBuf::from(recorded_folder), folder.path);
+    drop(engine);
+
+    let mut restarted = Engine::open(&database, Arc::new(ApprovedRemote), platform, vault).unwrap();
+    restarted.observe_protocol(Ok(RELEASE.into()));
+    restarted.restore_session().await.unwrap();
+    let fresh = restarted.snapshot();
+    assert_eq!(fresh.onboarding.stage, OnboardingStage::Welcome);
+    assert_eq!(fresh.session.state, SessionState::SignedOut);
+    assert_eq!(fresh.root_path, None);
+    assert_eq!(fresh.preferences.theme, Theme::System);
+    assert!(fresh.preferences.automatic_uploads);
+    assert!(!fresh.paused);
+    assert_eq!(
+        restarted.command(Command::CompleteOnboarding).await,
+        Err(CommandError::InvalidOnboardingStep)
+    );
+    restarted
+        .command(Command::ContinueOnboarding)
+        .await
+        .unwrap();
+    restarted
+        .command(Command::SubmitHandoffToken {
+            token: "new-one-use".into(),
+        })
+        .await
+        .unwrap();
+    restarted
+        .command(Command::ChooseCompanionRoot)
+        .await
+        .unwrap();
+    assert_eq!(
+        restarted.ensure_campaign_folder(&identity).unwrap().path,
+        folder.path
+    );
+    assert!(!restarted.snapshot().onboarding.can_send);
+    restarted
+        .command(Command::ContinueOnboarding)
+        .await
+        .unwrap();
+    restarted
+        .command(Command::ContinueOnboarding)
+        .await
+        .unwrap();
+    let completed = restarted
+        .command(Command::CompleteOnboarding)
+        .await
+        .unwrap();
+    assert!(completed.onboarding.can_send);
+    assert_eq!(fs::read(save).unwrap(), b"player work");
+}
+
+#[tokio::test]
+async fn reset_is_available_offline_or_mismatched_and_an_uncleared_vault_cannot_restore() {
+    for protocol in [Err(()), Ok("999.0.0".into())] {
+        let temp = tempfile::tempdir().unwrap();
+        let database = temp.path().join("companion.sqlite3");
+        let vault = Arc::new(RetainingVault {
+            secret: Mutex::new(Some("stored-refresh".into())),
+        });
+        let mut engine = Engine::open(
+            &database,
+            Arc::new(OfflineRemote),
+            Arc::new(FakePlatform::default()),
+            vault.clone(),
+        )
+        .unwrap();
+        engine.observe_protocol(protocol);
+
+        let reset = engine.command(reset_command()).await.unwrap();
+        assert_eq!(reset.session.state, SessionState::SignedOut);
+        assert_eq!(reset.onboarding.stage, OnboardingStage::Welcome);
+        assert!(!reset.onboarding.can_send);
+        drop(engine);
+
+        let mut restarted = Engine::open(
+            &database,
+            Arc::new(ApprovedRemote),
+            Arc::new(FakePlatform::default()),
+            vault.clone(),
+        )
+        .unwrap();
+        restarted.observe_protocol(Ok(RELEASE.into()));
+        restarted.restore_session().await.unwrap();
+        assert_eq!(restarted.snapshot().session.state, SessionState::SignedOut);
+        assert_eq!(
+            restarted.snapshot().onboarding.available_steps,
+            [OnboardingStage::Welcome]
+        );
+        assert_eq!(
+            vault.secret.lock().unwrap().as_deref(),
+            Some("stored-refresh")
+        );
+    }
+}
+
+#[tokio::test]
+async fn reset_cancels_a_pending_browser_handoff() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut engine = Engine::open(
+        &temp.path().join("companion.sqlite3"),
+        Arc::new(ApprovedRemote),
+        Arc::new(FakePlatform::default()),
+        Arc::new(FakeVault::default()),
+    )
+    .unwrap();
+    engine.observe_protocol(Ok(RELEASE.into()));
+    engine.command(Command::ContinueOnboarding).await.unwrap();
+    engine.command(Command::StartBrowserSignIn).await.unwrap();
+
+    let reset = engine.command(reset_command()).await.unwrap();
+    assert_eq!(reset.session.authorization_url, None);
+    assert_eq!(reset.session.handoff_expires_at, None);
+    assert_eq!(engine.poll_browser_sign_in().await.unwrap(), reset);
+}
+
+#[tokio::test]
+async fn a_failed_reset_rolls_back_settings_and_leaves_the_session_usable_for_retry() {
+    let temp = tempfile::tempdir().unwrap();
+    let database = temp.path().join("companion.sqlite3");
+    let revoked = Arc::new(Mutex::new(Vec::new()));
+    let vault = Arc::new(FakeVault::default());
+    let mut engine = Engine::open(
+        &database,
+        Arc::new(RecordingRemote {
+            revoked: revoked.clone(),
+        }),
+        Arc::new(FakePlatform::default()),
+        vault.clone(),
+    )
+    .unwrap();
+    engine.observe_protocol(Ok(RELEASE.into()));
+    engine.command(Command::ContinueOnboarding).await.unwrap();
+    engine
+        .command(Command::SubmitHandoffToken {
+            token: "one-use".into(),
+        })
+        .await
+        .unwrap();
+    engine
+        .command(Command::SetTheme {
+            theme: Theme::Light,
+        })
+        .await
+        .unwrap();
+    let before = engine.snapshot();
+    let connection = rusqlite::Connection::open(&database).unwrap();
+    connection
+        .execute_batch(
+            "CREATE TRIGGER reject_reset BEFORE INSERT ON settings
+         WHEN NEW.key = 'session_restore_enabled' AND NEW.value = 'false'
+         BEGIN SELECT RAISE(ABORT, 'simulated write failure'); END;",
+        )
+        .unwrap();
+
+    assert_eq!(
+        engine.command(reset_command()).await,
+        Err(CommandError::StorageUnavailable)
+    );
+
+    assert_eq!(engine.snapshot(), before);
+    assert!(revoked.lock().unwrap().is_empty());
+    assert!(vault.secret.lock().unwrap().is_some());
+    let theme: String = connection
+        .query_row(
+            "SELECT value FROM settings WHERE key = 'theme'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(theme, "light");
+    let restore: String = connection
+        .query_row(
+            "SELECT value FROM settings WHERE key = 'session_restore_enabled'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(restore, "true");
+    connection
+        .execute_batch("DROP TRIGGER reject_reset")
+        .unwrap();
+    assert_eq!(
+        engine
+            .command(reset_command())
+            .await
+            .unwrap()
+            .onboarding
+            .stage,
+        OnboardingStage::Welcome
     );
 }
 
@@ -639,6 +1180,7 @@ async fn durable_non_secret_onboarding_state_is_recovered_with_a_vault_session()
         })
         .await
         .unwrap();
+    engine.command(Command::ContinueOnboarding).await.unwrap();
     engine.command(Command::ContinueOnboarding).await.unwrap();
     engine.command(Command::CompleteOnboarding).await.unwrap();
     drop(engine);

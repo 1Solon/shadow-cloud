@@ -79,6 +79,42 @@ export async function startUpstream(secret: string) {
       response.end(JSON.stringify(body));
     };
     try {
+      if (
+        method === "POST" &&
+        path === "/v1/auth/companion-handoffs/browser-handoff/approve"
+      ) {
+        let subject: string | undefined;
+        try {
+          const { payload } = await jwtVerify(
+            (request.headers.authorization ?? "").replace(/^Bearer /, ""),
+            new TextEncoder().encode(secret),
+            {
+              algorithms: ["HS256"],
+              requiredClaims: ["sub", "iat", "exp"],
+              issuer: "shadow-cloud-web",
+              audience: "shadow-cloud-internal",
+              subject: "discord-identity-sync",
+            },
+          );
+          subject = payload.sub;
+        } catch {
+          reply(401, { message: "Invalid fixture internal token." });
+          return;
+        }
+        let raw = "";
+        for await (const chunk of request) raw += chunk;
+        const body = JSON.parse(raw);
+        if (body.userId !== "browser-overlord") {
+          reply(400, { message: "Unknown fixture user." });
+          return;
+        }
+        upstream.requests.push({ method, path, subject, body });
+        reply(201, {
+          status: "approved",
+          pasteToken: "browser-handoff.synthetic-paste-proof",
+        });
+        return;
+      }
       const base = `/v1/games/${upstream.game.gameNumber}`;
       if (method === "GET" && path === "/v1/games") {
         const game = upstream.game;

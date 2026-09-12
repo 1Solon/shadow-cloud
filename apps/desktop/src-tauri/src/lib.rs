@@ -1,4 +1,6 @@
 use async_trait::async_trait;
+#[path = "../service_config.rs"]
+mod service_config;
 use shadow_cloud_companion_engine::{
     Command, CommandError, CompanionPlatform, CompanionRemote, ConnectionState, DeviceCredentials,
     Engine, ExchangeOutcome, Handoff, RemoteError, SecretVault, SessionState, Snapshot,
@@ -54,7 +56,7 @@ impl HttpRemote {
             client: reqwest::Client::builder()
                 .timeout(Duration::from_secs(10))
                 .redirect(reqwest::redirect::Policy::none())
-                .https_only(!cfg!(debug_assertions))
+                .https_only(!tauri::is_dev())
                 .build()?,
             api_base_url: api_base_url.trim_end_matches('/').into(),
             web_base_url: web_base_url.trim_end_matches('/').into(),
@@ -203,7 +205,12 @@ struct SystemVault;
 
 impl SystemVault {
     fn entry() -> Result<keyring::Entry, ()> {
-        keyring::Entry::new("com.shadowcloud.companion", "device-session-refresh").map_err(|_| ())
+        let service = if tauri::is_dev() {
+            "com.shadowcloud.companion.development"
+        } else {
+            "com.shadowcloud.companion"
+        };
+        keyring::Entry::new(service, "device-session-refresh").map_err(|_| ())
     }
 }
 
@@ -234,19 +241,54 @@ async fn check_protocol(client: &reqwest::Client, url: &str) -> Result<String, (
     Ok(protocol.protocol_version)
 }
 
-fn configured_url(variable: &str, fallback: &str) -> String {
-    #[cfg(debug_assertions)]
-    if let Ok(url) = std::env::var(variable) {
-        return url;
+fn service_configuration() -> service_config::ServiceConfiguration {
+    // Tauri's mode distinguishes `tauri dev` from even a debug packaged build.
+    service_config::ServiceConfiguration::resolve(tauri::is_dev(), |variable| {
+        std::env::var(variable).ok().or_else(|| {
+            match variable {
+                "SHADOW_CLOUD_API_URL" => option_env!("SHADOW_CLOUD_DEV_API_URL"),
+                "SHADOW_CLOUD_WEB_URL" => option_env!("SHADOW_CLOUD_DEV_WEB_URL"),
+                _ => None,
+            }
+            .map(str::to_owned)
+        })
+    })
+}
+
+#[cfg(all(test, not(dev)))]
+mod packaged_configuration_tests {
+    use super::*;
+
+    #[test]
+    fn native_packaged_runtime_selects_the_hosted_api_and_webui() {
+        let configuration = service_configuration();
+        assert_eq!(
+            configuration.api_base_url,
+            "https://shadow-cloud.solonsstuff.com"
+        );
+        assert_eq!(
+            configuration.web_base_url,
+            "https://shadow-cloud.solonsstuff.com"
+        );
     }
-    match variable {
-        "SHADOW_CLOUD_API_URL" => option_env!("SHADOW_CLOUD_API_URL")
-            .unwrap_or(fallback)
-            .into(),
-        "SHADOW_CLOUD_WEB_URL" => option_env!("SHADOW_CLOUD_WEB_URL")
-            .unwrap_or(fallback)
-            .into(),
-        _ => fallback.into(),
+
+    #[tokio::test]
+    async fn packaged_http_client_rejects_plain_http_even_in_a_debug_build() {
+        let remote = HttpRemote::new(
+            "http://localhost:3101".into(),
+            "http://localhost:3200".into(),
+        )
+        .unwrap();
+        let error = remote
+            .client
+            .get("http://localhost:3101/v1/companion/protocol")
+            .send()
+            .await
+            .unwrap_err();
+        assert!(
+            error.is_builder(),
+            "plain HTTP must be rejected before any request is sent"
+        );
     }
 }
 
@@ -262,16 +304,16 @@ pub fn run() {
             }
         }))
         .setup(|app| {
-            let api_base_url = configured_url(
-                "SHADOW_CLOUD_API_URL",
-                "https://shadow-cloud.solonsstuff.com",
-            );
-            let web_base_url = configured_url(
-                "SHADOW_CLOUD_WEB_URL",
-                "https://shadow-cloud.solonsstuff.com",
-            );
+            let service_config::ServiceConfiguration {
+                api_base_url,
+                web_base_url,
+            } = service_configuration();
             let remote = Arc::new(HttpRemote::new(api_base_url.clone(), web_base_url)?);
-            let database_path = app.path().app_data_dir()?.join("companion.sqlite3");
+            let mut data_directory = app.path().app_data_dir()?;
+            if tauri::is_dev() {
+                data_directory = data_directory.join("development");
+            }
+            let database_path = data_directory.join("companion.sqlite3");
             let engine = Engine::open(
                 &database_path,
                 remote,
@@ -294,7 +336,7 @@ pub fn run() {
             let protocol_client = reqwest::Client::builder()
                 .timeout(Duration::from_secs(10))
                 .redirect(reqwest::redirect::Policy::none())
-                .https_only(!cfg!(debug_assertions))
+                .https_only(!tauri::is_dev())
                 .build()?;
             let protocol_url = format!(
                 "{}/v1/companion/protocol",

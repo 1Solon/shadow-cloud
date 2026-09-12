@@ -41,7 +41,11 @@ export interface Snapshot {
     handoffExpiresAt: string | null;
     credentialStorage: "vault" | "memory-only" | null;
   };
-  onboarding: { stage: OnboardingStage; canSend: boolean };
+  onboarding: {
+    stage: OnboardingStage;
+    availableSteps: OnboardingStage[];
+    canSend: boolean;
+  };
   readOnly: boolean;
   paused: boolean;
   displayName: string | null;
@@ -58,11 +62,13 @@ export interface Snapshot {
 
 export type Command =
   | { type: "continue-onboarding" }
+  | { type: "navigate-onboarding"; stage: OnboardingStage }
   | { type: "start-browser-sign-in" }
   | { type: "submit-handoff-token"; token: string }
   | { type: "choose-companion-root" }
   | { type: "complete-onboarding" }
   | { type: "sign-out" }
+  | { type: "reset-companion" }
   | { type: "set-theme"; theme: Theme }
   | { type: "set-automatic-uploads"; enabled: boolean }
   | { type: "set-paused"; paused: boolean }
