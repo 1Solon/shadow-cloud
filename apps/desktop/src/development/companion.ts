@@ -92,8 +92,40 @@ export function createDevelopmentCompanion(scenario: string): Companion {
       actions: [],
     },
   ];
-  for (const campaign of campaigns)
+  for (const campaign of campaigns) {
     campaign.automaticMode = campaign.automaticUploads ? "inherit" : "manual";
+    campaign.paused = false;
+    campaign.recovery = campaign.syncStatus === "conflict" ? "conflict" : null;
+    campaign.recoveryToken = campaign.recovery ? "development-cloud-1" : null;
+  }
+  if (scenario === "conflict" || scenario === "stale") {
+    campaigns.splice(1);
+    Object.assign(campaigns[0], {
+      activeLord: "You",
+      actions: ["resolve-conflict", "open-folder", "open-web"],
+      candidates: [
+        {
+          contentHash: "sha256:development-local",
+          filename: "local-turn.se1",
+          size: 204800,
+          modifiedAt: Date.parse("2026-09-12T14:20:00Z"),
+          stable: true,
+          ignored: false,
+          canSend: false,
+        },
+      ],
+    });
+    if (scenario === "stale")
+      Object.assign(campaigns[0], {
+        recovery: "stale",
+        recoveryToken: "development-turn-1",
+        syncStatus: "needs-attention",
+        statusLabel: "Turn review required",
+        detail:
+          "The active Seat changed while your Turn candidate was waiting. Review the current turn before sending.",
+        actions: ["open-folder", "open-web"],
+      });
+  }
   if (scenario === "automatic" || scenario === "countdown") {
     campaigns.splice(0, 1);
     campaigns.splice(1);
@@ -126,6 +158,8 @@ export function createDevelopmentCompanion(scenario: string): Companion {
       activeLord: "You",
       automaticUploads: false,
       automaticMode: "manual",
+      recovery: null,
+      recoveryToken: null,
       detail:
         "Select the completed turn to send. Your original files stay in this folder.",
       actions: ["open-folder"],
@@ -155,6 +189,8 @@ export function createDevelopmentCompanion(scenario: string): Companion {
     campaigns[0] = {
       ...campaigns[0],
       syncStatus: "needs-attention",
+      recovery: null,
+      recoveryToken: null,
       statusLabel: "Current save missing",
       detail:
         "The current received save was deleted. Redownload it when needed.",
@@ -169,6 +205,7 @@ export function createDevelopmentCompanion(scenario: string): Companion {
     };
   }
   let state: Snapshot = {
+    diagnostics: null,
     revision: 0,
     appVersion: rootPackage.version,
     protocolVersion: rootPackage.version,
@@ -256,7 +293,7 @@ export function createDevelopmentCompanion(scenario: string): Companion {
         mismatch &&
         ((command.type === "set-paused" && !command.paused) ||
           (command.type === "set-automatic-uploads" && command.enabled) ||
-          command.type === "campaign-action")
+          (command.type === "campaign-action" && command.action !== "open-web"))
       )
         throw "update-required";
       const next = snapshot();
@@ -270,6 +307,76 @@ export function createDevelopmentCompanion(scenario: string): Companion {
         );
       };
       switch (command.type) {
+        case "resolve-campaign": {
+          const campaign = next.campaigns.find(
+            (c) => c.id === command.campaignId,
+          );
+          if (!campaign) throw "not-available";
+          if (command.action === "keep-local-and-pause") {
+            campaign.paused = true;
+            campaign.countdown = null;
+            campaign.statusLabel = "Campaign paused";
+            break;
+          }
+          requireCompatibleServer();
+          if (
+            next.paused ||
+            campaign.paused ||
+            command.reviewToken !== campaign.recoveryToken
+          )
+            throw "not-available";
+          if (command.action === "use-latest") {
+            if (campaign.recovery !== "conflict") throw "not-available";
+            campaign.recovery = null;
+            campaign.recoveryToken = null;
+            campaign.candidates = [];
+            campaign.syncStatus = "synchronized";
+            campaign.statusLabel =
+              "Local work preserved; current cloud save received.";
+            campaign.detail = "Local work is available in the conflict area.";
+            campaign.actions = ["open-folder", "open-web"];
+          } else if (command.action === "review-current-turn") {
+            if (campaign.recovery !== "stale") throw "not-available";
+            campaign.recovery = null;
+            campaign.recoveryToken = null;
+            campaign.countdown = null;
+            campaign.statusLabel = "Turn candidates";
+            campaign.detail =
+              "Review complete. Select Send to authorize your completed Turn candidate.";
+            for (const candidate of campaign.candidates ?? [])
+              candidate.canSend = candidate.stable && !candidate.ignored;
+          }
+          break;
+        }
+        case "set-campaign-paused": {
+          const campaign = next.campaigns.find(
+            (c) => c.id === command.campaignId,
+          );
+          if (!campaign) throw "not-available";
+          if (!command.paused && mismatch) throw "update-required";
+          campaign.paused = command.paused;
+          if (command.paused) campaign.countdown = null;
+          campaign.statusLabel = command.paused
+            ? "Campaign paused"
+            : campaign.recovery === "conflict"
+              ? "Conflict"
+              : "Turn candidates";
+          break;
+        }
+        case "generate-diagnostics":
+          next.diagnostics = JSON.stringify(
+            {
+              schema: 1,
+              appVersion: next.appVersion,
+              connection: next.connection.state,
+              paused: next.paused,
+              campaigns: next.campaigns.length,
+              pendingSubmissions: 0,
+            },
+            null,
+            2,
+          );
+          break;
         case "cancel-automatic-send": {
           const campaign = next.campaigns.find(
             (c) => c.id === command.campaignId,
@@ -287,7 +394,13 @@ export function createDevelopmentCompanion(scenario: string): Companion {
           );
           if (!campaign || !candidate) throw "not-available";
           if (command.action === "send") {
-            if (!candidate.canSend) throw "not-available";
+            if (
+              !candidate.canSend ||
+              campaign.recovery ||
+              campaign.paused ||
+              next.readOnly
+            )
+              throw "not-available";
             campaign.candidates = campaign.candidates?.filter(
               (c) => c !== candidate,
             );
@@ -299,7 +412,11 @@ export function createDevelopmentCompanion(scenario: string): Companion {
             );
           } else {
             candidate.ignored = command.action === "ignore";
-            candidate.canSend = !candidate.ignored && candidate.stable;
+            candidate.canSend =
+              !candidate.ignored &&
+              candidate.stable &&
+              !campaign.recovery &&
+              !campaign.paused;
             if (campaign.countdown) cancelCountdown(campaign);
           }
           break;
@@ -385,6 +502,7 @@ export function createDevelopmentCompanion(scenario: string): Companion {
           break;
         case "reset-companion":
         case "sign-out":
+          next.diagnostics = null;
           next.displayName = null;
           next.session = {
             state: "signed-out",
@@ -437,6 +555,7 @@ export function createDevelopmentCompanion(scenario: string): Companion {
           break;
         // No file or network side effects, even in development.
         case "campaign-action":
+          if (command.action === "open-web") break;
           if (!state.onboarding.canSend) throw "onboarding-incomplete";
           if (command.action === "redownload-current") {
             const campaign = next.campaigns.find(

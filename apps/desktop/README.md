@@ -27,7 +27,8 @@ offline or paused. Campaign cards show reception progress, actionable failures,
 and cumulative archive content received. A missing current save can be explicitly
 redownloaded. SOL-34 adds content provenance and explicit manual Turn submission.
 SOL-35 adds cancellable automatic submission and native notifications.
-Conflict resolution and recovery remain in SOL-36; tray, autostart, updater
+SOL-36 adds explicit conflict preservation, stale-turn review, paused recovery,
+receipt lookup after access loss, and redacted diagnostics. Tray, autostart, updater
 installation, and full native acceptance remain in SOL-37 under
 [SOL-29](https://linear.app/1solon/issue/SOL-29/spec-rebuild-shadow-cloud-companion-as-a-greenfield-cross-platform-app).
 
@@ -72,7 +73,7 @@ pnpm --filter @shadow-cloud/desktop dev:ui
 ```
 
 Open `http://127.0.0.1:1420/?scenario=onboarding`, `active`, `receiving`, `offline`,
-`paused`, `manual`, `automatic`, or `update-required`. These explicitly labelled, synthetic engine adapters
+`paused`, `manual`, `automatic`, `conflict`, `stale`, or `update-required`. These explicitly labelled, synthetic engine adapters
 exercise the production React boundary without real accounts, files, or
 transfers. No query parameter activates them in a production build;
 `check-bundle.mjs` verifies that their code and campaign fixtures are absent.
@@ -252,3 +253,33 @@ the release milestone, not by this foundation.
 AppImages built on a newer rolling-release host are local smoke artifacts, not
 proof of Ubuntu 22.04 compatibility. The baseline distribution must be built on
 [the oldest supported Linux base](https://v2.tauri.app/distribute/appimage/).
+
+## Conflicts and recovery
+
+A changed cloud save after local work blocks both receiving and sending for that
+Campaign. **Resolve → Use latest** first copies every present Turn candidate to a
+marker-owned `.shadow-cloud-conflicts` area inside the Campaign folder, then
+receives the latest cloud publications. Existing files are retained. The choice
+is bound to the reviewed cloud identity; another change requires a new review.
+A crash can leave a preserved copy, and retry reuses matching completed copies.
+There is no force-send action. Restoring old ignored work reopens its conflict.
+
+If the save is unchanged but the turn, Seat, or permissions change, **Review
+current turn** requires a separate manual **Send** afterward. That review never
+restarts automatic sending, including when local contents change again.
+
+**Keep local and pause** stops file effects for one Campaign. Global Pause and
+Campaign Pause continue read-only observation and receipt lookup, then resume
+missed publications when unpaused. Missing roots and previously bound Campaign
+folders stay bound and are never silently recreated. Select the root again after
+repairing or moving it. An uncertain dispatched submission remains visible as
+**Checking submission receipt**, even after Campaign access is lost; its original
+operation key remains authoritative. Undispatched work requires fresh permission,
+turn identity, and unchanged local bytes before it may resume.
+
+Settings generates diagnostics only on request. The selectable report contains
+versions, capability/status facts, and counts; it excludes accounts, Campaign
+names, paths, credentials, content hashes, operation keys, and save contents.
+Activity shows the latest 100 entries for the current account, with a 500-entry
+installation limit. This bound applies only to presentation history: provenance,
+operation records, conflict copies, and user saves are retained.

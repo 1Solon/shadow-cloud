@@ -414,6 +414,7 @@ impl CompanionRemote for HttpRemote {
 }
 
 struct NativePlatform {
+    web_base_url: String,
     app: tauri::AppHandle,
     notifications: notifications::Notifications,
     lifecycle: Arc<std::sync::OnceLock<lifecycle::Lifecycle>>,
@@ -421,6 +422,19 @@ struct NativePlatform {
 
 #[async_trait]
 impl CompanionPlatform for NativePlatform {
+    fn open_campaign(&self, number: u32) -> Result<(), ()> {
+        let path = if number == 0 {
+            "/games".to_owned()
+        } else {
+            format!("/games/{number}")
+        };
+        self.open_url(&format!(
+            "{}{}",
+            self.web_base_url.trim_end_matches('/'),
+            path
+        ))
+    }
+
     async fn notify_automatic(&self, notification: AutomaticNotification) -> Result<(), ()> {
         if self
             .lifecycle
@@ -568,7 +582,7 @@ pub fn run() {
                 api_base_url,
                 web_base_url,
             } = service_configuration();
-            let remote = Arc::new(HttpRemote::new(api_base_url.clone(), web_base_url)?);
+            let remote = Arc::new(HttpRemote::new(api_base_url.clone(), web_base_url.clone())?);
             let mut data_directory = app.path().app_data_dir()?;
             if tauri::is_dev() {
                 data_directory = data_directory.join("development");
@@ -593,6 +607,7 @@ pub fn run() {
                 &database_path,
                 remote,
                 Arc::new(NativePlatform {
+                    web_base_url,
                     app: app.handle().clone(),
                     notifications,
                     lifecycle: lifecycle.clone(),

@@ -37,6 +37,8 @@ pub struct PublicationPage {
 }
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ReceiveError {
+    #[error("The cloud save changed after local work began. Resolve the Save conflict first.")]
+    SaveConflict,
     #[error("The turn changed. Review local work and authorize Send again.")]
     StaleSubmission,
     #[error("The submission was rejected. Review its filename and contents before trying again.")]
@@ -111,14 +113,26 @@ impl Engine {
                 .open_folder(&folder)
                 .map_err(|_| CommandError::NotAvailable);
         }
+        self.require_receive_effects(campaign)
+            .map_err(|_| CommandError::NotAvailable)?;
         let observations = self
             .observe_campaigns()
             .await
             .map_err(|_| CommandError::AuthenticationUnavailable)?;
-        let current = observations
+        let observation = observations
             .iter()
             .find(|c| c.id == campaign)
-            .and_then(|c| c.current.as_ref())
+            .ok_or(CommandError::NotAvailable)?;
+        self.scan_campaign(observation)
+            .await
+            .map_err(|_| CommandError::StorageUnavailable)?;
+        self.refresh_recovery(observation)
+            .map_err(|_| CommandError::StorageUnavailable)?;
+        self.require_receive_effects(campaign)
+            .map_err(|_| CommandError::NotAvailable)?;
+        let current = observation
+            .current
+            .as_ref()
             .ok_or(CommandError::NotAvailable)?;
         let secrets = self
             .secrets
@@ -139,7 +153,7 @@ impl Engine {
         if cursor != current.publication {
             return Err(CommandError::NotAvailable);
         }
-        self.receive_save(&account, &access, campaign, &folder, current, true)
+        self.receive_save(&account, &access, observation, &folder, current, true)
             .await
             .map_err(|_| CommandError::StorageUnavailable)?;
         self.reconcile().await?;
@@ -154,13 +168,6 @@ impl Engine {
             return Ok(self.snapshot());
         }
         let previous = self.snapshot.clone();
-        self.recover_submissions().await;
-        if self.snapshot.connection.state != ConnectionState::Connected
-            || self.snapshot.session.state != SessionState::SignedIn
-        {
-            self.finish_change(&previous);
-            return Ok(self.snapshot());
-        }
         let observed = match self.observe_campaigns().await {
             Ok(campaigns) => campaigns,
             Err(error) => {
@@ -169,9 +176,19 @@ impl Engine {
                 return Ok(self.snapshot());
             }
         };
+        self.recover_submissions(&observed).await;
+        if self.snapshot.connection.state != ConnectionState::Connected
+            || self.snapshot.session.state != SessionState::SignedIn
+        {
+            self.finish_change(&previous);
+            return Ok(self.snapshot());
+        }
         let mut campaigns = Vec::new();
         for observation in observed {
             let mut campaign = Campaign {
+                paused: self.campaign_paused(&observation.id),
+                recovery: None,
+                recovery_token: None,
                 countdown: None,
                 automatic_mode: self.campaign_automatic_mode(&observation.id)?,
                 candidates: vec![],
@@ -193,6 +210,8 @@ impl Engine {
                 && self.snapshot.onboarding.stage == OnboardingStage::Complete
             {
                 let scanned = self.scan_campaign(&observation).await;
+                self.refresh_recovery(&observation)
+                    .map_err(|_| CommandError::StorageUnavailable)?;
                 match self.receive_campaign(&observation).await {
                     Ok((current, missing)) => {
                         campaign.sync_status = if self.snapshot.paused {
@@ -275,6 +294,7 @@ impl Engine {
             if let Some(secrets) = &self.secrets {
                 campaign.archive_bytes=self.store.connection.query_row("SELECT COALESCE(SUM(size),0) FROM (SELECT hash,MAX(size) AS size FROM received_publications WHERE account=?1 AND campaign=?2 AND state='published' GROUP BY hash)",params![secrets.account_id,observation.id],|r|r.get::<_,i64>(0)).map_err(|_|CommandError::StorageUnavailable)? as u64;
             }
+            self.project_recovery(&mut campaign)?;
             campaign.automatic_uploads = self.automatic_enabled(&campaign.automatic_mode);
             campaigns.push(campaign);
             if self.snapshot.session.state != SessionState::SignedIn
@@ -282,6 +302,51 @@ impl Engine {
             {
                 break;
             }
+        }
+        for id in self
+            .pending_submission_campaigns()
+            .map_err(|_| CommandError::StorageUnavailable)?
+        {
+            if campaigns.iter().any(|campaign| campaign.id == id) {
+                continue;
+            }
+            let mut campaign = previous
+                .campaigns
+                .iter()
+                .find(|campaign| campaign.id == id)
+                .cloned()
+                .unwrap_or_else(|| Campaign {
+                    id: id.clone(),
+                    number: 0,
+                    name: "Unavailable Campaign".into(),
+                    round: 0,
+                    active_lord: "Unavailable".into(),
+                    candidates: vec![],
+                    countdown: None,
+                    automatic_mode: AutomaticMode::Manual,
+                    automatic_uploads: false,
+                    paused: false,
+                    recovery: None,
+                    recovery_token: None,
+                    sync_status: SyncStatus::Sending,
+                    status_label: String::new(),
+                    detail: String::new(),
+                    turn_started_at: None,
+                    last_transfer: "Unknown".into(),
+                    archive_bytes: 0,
+                    actions: vec![],
+                });
+            campaign.sync_status = SyncStatus::Sending;
+            campaign.status_label = "Checking submission receipt".into();
+            campaign.detail="Campaign access is unavailable. The original submission receipt is still being checked; no new send will start.".into();
+            campaign.countdown = None;
+            campaign.recovery = None;
+            campaign.recovery_token = None;
+            campaign.actions = vec![CampaignAction::OpenWeb];
+            for candidate in &mut campaign.candidates {
+                candidate.can_send = false;
+            }
+            campaigns.push(campaign);
         }
         self.snapshot.campaigns = if self.snapshot.session.state == SessionState::SignedIn {
             campaigns
@@ -363,6 +428,9 @@ impl Engine {
         if self.remote.receive_interrupted() {
             return Err(ReceiveError::Interrupted);
         }
+        if self.has_save_conflict(&campaign.id) {
+            return Err(ReceiveError::SaveConflict);
+        }
         let secrets = self.secrets.as_ref().ok_or(ReceiveError::Unauthorized)?;
         let account = secrets.account_id.clone();
         let mut access = secrets.access_token.clone();
@@ -389,9 +457,46 @@ impl Engine {
             params![account, campaign.id],
             |r| Ok((r.get(0)?, r.get(1)?)),
         )?;
-        if self.snapshot.paused {
+        if self.snapshot.paused || self.campaign_paused(&campaign.id) {
             return Ok((campaign.current.clone(), false));
         }
+        // The page can be newer than the observation used to classify local
+        // work. Establish a coherent identity before creating folders, cleaning
+        // stages, or publishing any received contents.
+        let page = match self
+            .remote
+            .publications(&access, &campaign.id, cursor)
+            .await
+        {
+            Err(ReceiveError::Unauthorized) => {
+                access = self.refresh_receive_access().await?;
+                self.remote
+                    .publications(&access, &campaign.id, cursor)
+                    .await?
+            }
+            result => result?,
+        };
+        if let Some(current) = &page.current {
+            validate(current)?;
+        }
+        let mut expected = cursor;
+        for publication in &page.publications {
+            validate(publication)?;
+            expected = expected
+                .checked_add(1)
+                .ok_or(ReceiveError::InvalidResponse)?;
+            if publication.publication != expected {
+                return Err(ReceiveError::InvalidResponse);
+            }
+        }
+        if page.current.as_ref().map_or(0, |save| save.publication) < expected {
+            return Err(ReceiveError::InvalidResponse);
+        }
+        if !same_publication_identity(page.current.as_ref(), campaign.current.as_ref()) {
+            self.refresh_receive_identity(campaign).await?;
+            return Err(ReceiveError::SaveChanged);
+        }
+        self.require_receive_effects(&campaign.id)?;
         let root = PathBuf::from(
             self.snapshot
                 .root_path
@@ -403,7 +508,12 @@ impl Engine {
             number: campaign.number,
             name: campaign.name.clone(),
         };
-        let folder = if binding.is_some() {
+        let previously_bound: bool = self.store.connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM campaign_folders WHERE campaign_id=?1)",
+            [&campaign.id],
+            |row| row.get(0),
+        )?;
+        let folder = if binding.is_some() || previously_bound {
             recover_folder(&root, &identity.id)?
         } else {
             ensure_campaign_folder(&root, &identity)
@@ -423,19 +533,6 @@ impl Engine {
             .map_err(|_| ReceiveError::Storage)?;
         self.cleanup_received_stages(&account, &identity.id, &folder)?;
         // One bounded page per tick keeps large catch-up work restartable.
-        let page = match self
-            .remote
-            .publications(&access, &campaign.id, cursor)
-            .await
-        {
-            Err(ReceiveError::Unauthorized) => {
-                access = self.refresh_receive_access().await?;
-                self.remote
-                    .publications(&access, &campaign.id, cursor)
-                    .await?
-            }
-            result => result?,
-        };
         for publication in &page.publications {
             if self.remote.receive_interrupted() {
                 return Err(ReceiveError::Interrupted);
@@ -444,7 +541,7 @@ impl Engine {
             if publication.publication != cursor + 1 {
                 return Err(ReceiveError::InvalidResponse);
             }
-            self.receive_save(&account, &access, &identity.id, &folder, publication, false)
+            self.receive_save(&account, &access, campaign, &folder, publication, false)
                 .await?;
             cursor = publication.publication;
         }
@@ -456,7 +553,7 @@ impl Engine {
             if current.publication > cursor {
                 return Err(ReceiveError::CatchingUp);
             }
-            self.receive_save(&account, &access, &identity.id, &folder, current, false)
+            self.receive_save(&account, &access, campaign, &folder, current, false)
                 .await?;
             let exists = self
                 .find_received_content(&account, &identity.id, &folder, &current.content_hash)
@@ -468,6 +565,38 @@ impl Engine {
             return Err(ReceiveError::InvalidResponse);
         }
         Ok((None, false))
+    }
+
+    fn require_receive_effects(&self, campaign: &str) -> Result<(), ReceiveError> {
+        if self.has_save_conflict(campaign) {
+            return Err(ReceiveError::SaveConflict);
+        }
+        if self.remote.receive_interrupted() || self.campaign_effects_blocked(campaign) {
+            return Err(ReceiveError::Interrupted);
+        }
+        Ok(())
+    }
+
+    async fn refresh_receive_identity(
+        &mut self,
+        previous: &ObservedCampaign,
+    ) -> Result<(), ReceiveError> {
+        self.require_receive_effects(&previous.id)?;
+        let observations = self.observe_campaigns().await?;
+        let current = observations
+            .iter()
+            .find(|campaign| campaign.id == previous.id)
+            .ok_or(ReceiveError::Forbidden)?;
+        if !same_publication_identity(previous.current.as_ref(), current.current.as_ref()) {
+            // Capture work created during the request against the identity that
+            // preceded it, never against the new canonical save.
+            self.scan_campaign(previous).await?;
+            self.refresh_recovery(current)?;
+            self.require_receive_effects(&previous.id)?;
+            return Err(ReceiveError::SaveChanged);
+        }
+        self.refresh_recovery(current)?;
+        self.require_receive_effects(&previous.id)
     }
 
     fn received_content_record(
@@ -531,11 +660,13 @@ impl Engine {
         &mut self,
         account: &str,
         access: &str,
-        campaign: &str,
+        observation: &ObservedCampaign,
         folder: &Path,
         save: &SavePublication,
         force: bool,
     ) -> Result<(), ReceiveError> {
+        let campaign = observation.id.as_str();
+        self.require_receive_effects(campaign)?;
         validate(save)?;
         let row: Option<(String, Option<String>, String)> = self.store.connection.query_row("SELECT path,stage,state FROM received_publications WHERE account=?1 AND campaign=?2 AND publication=?3 AND revision=?4", params![account,campaign,save.publication,save.content_revision], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?))).optional()?;
         check_owned_folder(folder, campaign)?;
@@ -586,9 +717,9 @@ impl Engine {
         if bytes.len() as u64 != save.size || content_hash(&bytes) != save.content_hash {
             return Err(ReceiveError::InvalidResponse);
         }
-        if self.remote.receive_interrupted() {
-            return Err(ReceiveError::Interrupted);
-        }
+        // Downloads are immutable and may remain valid after a newer cloud save
+        // appears. Check current identity again before exposing those bytes.
+        self.refresh_receive_identity(observation).await?;
         check_owned_folder(folder, campaign)?;
         let target = available_target(folder, &save.filename)?;
         let stage = unique_stage(folder)?;
@@ -605,6 +736,7 @@ impl Engine {
         // an owner and retry uses the same immutable publication, never skips it.
         tx.execute("INSERT INTO received_publications(account,campaign,publication,revision,hash,size,path,stage,state) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,'planned') ON CONFLICT(account,campaign,publication,revision) DO UPDATE SET path=excluded.path,stage=excluded.stage,state='planned'", params![account,campaign,save.publication,save.content_revision,save.content_hash,save.size as i64,path,stage_path])?;
         tx.commit()?;
+        self.require_receive_effects(campaign)?;
         check_owned_folder(folder, campaign)?;
         let mut staged = OpenOptions::new()
             .write(true)
@@ -627,6 +759,7 @@ impl Engine {
         path: &str,
         stage_path: &str,
     ) -> Result<(), ReceiveError> {
+        self.require_receive_effects(campaign)?;
         check_owned_folder(folder, campaign)?;
         let stage = checked_file_path(folder, stage_path)?;
         let mut target = checked_file_path(folder, path)?;
@@ -639,6 +772,7 @@ impl Engine {
             && file_hash(&target).is_ok_and(|hash| hash == save.content_hash))
         {
             loop {
+                self.require_receive_effects(campaign)?;
                 match fs::hard_link(&stage, &target) {
                     Ok(()) => break,
                     Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
@@ -667,6 +801,7 @@ impl Engine {
         campaign: &str,
         folder: &Path,
     ) -> Result<(), ReceiveError> {
+        self.require_receive_effects(campaign)?;
         check_owned_folder(folder, campaign)?;
         let mut query = self.store.connection.prepare(
             "SELECT path FROM receive_cleanup WHERE account=?1 AND campaign=?2 LIMIT 100",
@@ -675,6 +810,7 @@ impl Engine {
             .query_map(params![account, campaign], |r| r.get::<_, String>(0))?
             .collect::<Result<Vec<_>, _>>()?;
         for original in paths {
+            self.require_receive_effects(campaign)?;
             let path = checked_file_path(folder, &original)?;
             if !path
                 .file_name()
@@ -713,6 +849,22 @@ impl Engine {
         )?;
         tx.commit()?;
         Ok(())
+    }
+}
+
+fn same_publication_identity(
+    left: Option<&SavePublication>,
+    right: Option<&SavePublication>,
+) -> bool {
+    match (left, right) {
+        (Some(left), Some(right)) => {
+            left.publication == right.publication
+                && left.file_version_id == right.file_version_id
+                && left.content_revision == right.content_revision
+                && left.content_hash == right.content_hash
+        }
+        (None, None) => true,
+        _ => false,
     }
 }
 

@@ -38,6 +38,7 @@ const actionLabels = {
   "resolve-conflict": "> RESOLVE CONFLICT",
   "cancel-automatic-send": "> CANCEL SEND",
   "open-folder": "OPEN FOLDER",
+  "open-web": "OPEN WEB",
   "redownload-current": "REDOWNLOAD CURRENT SAVE",
 };
 
@@ -52,6 +53,9 @@ export function Campaigns({
 }) {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<Sort>("turn-newest");
+  const [conflictReviews, setConflictReviews] = useState<
+    Map<string, string | null>
+  >(() => new Map());
   const [visibleStatuses, setVisibleStatuses] = useState<Set<SyncStatus>>(
     () => new Set(statuses.map((status) => status.value)),
   );
@@ -279,7 +283,12 @@ export function Campaigns({
                           className="primary-button"
                           aria-label={`Send ${candidate.filename}`}
                           disabled={
-                            pending || snapshot.readOnly || !candidate.canSend
+                            pending ||
+                            snapshot.readOnly ||
+                            campaign.paused ||
+                            Boolean(campaign.recovery) ||
+                            campaign.syncStatus === "conflict" ||
+                            !candidate.canSend
                           }
                           onClick={() =>
                             void send({
@@ -314,6 +323,107 @@ export function Campaigns({
                 ))}
               </ul>
             )}
+            {conflictReviews.has(campaign.id) &&
+              (campaign.recovery === "conflict" ||
+                campaign.syncStatus === "conflict") && (
+                <section
+                  className="campaign-recovery"
+                  id={`conflict-review-${campaign.id}`}
+                  aria-label={`Resolve Save conflict for ${campaign.name}`}
+                >
+                  <h3>REVIEW SAVE CONFLICT</h3>
+                  <p>
+                    The cloud save changed after your local work began. Sending
+                    this Turn candidate is blocked.
+                  </p>
+                  <p>
+                    Use latest preserves your local work in a conflict area
+                    before receiving the current cloud save. Keep local and
+                    pause leaves both versions untouched while you decide.
+                  </p>
+                  {conflictReviews.get(campaign.id) !==
+                    (campaign.recoveryToken ?? null) && (
+                    <p role="status">
+                      The Campaign changed while this review was open. Close and
+                      reopen it to review the current state.
+                    </p>
+                  )}
+                  <div className="candidate-actions">
+                    <button
+                      type="button"
+                      className="primary-button"
+                      disabled={
+                        pending ||
+                        snapshot.readOnly ||
+                        snapshot.paused ||
+                        campaign.paused ||
+                        snapshot.connection.state !== "connected" ||
+                        conflictReviews.get(campaign.id) !==
+                          (campaign.recoveryToken ?? null)
+                      }
+                      onClick={() =>
+                        void send({
+                          type: "resolve-campaign",
+                          campaignId: campaign.id,
+                          action: "use-latest",
+                          reviewToken:
+                            conflictReviews.get(campaign.id) ?? undefined,
+                        })
+                      }
+                    >
+                      USE LATEST
+                    </button>
+                    <button
+                      type="button"
+                      className="outline-button"
+                      disabled={pending}
+                      onClick={() =>
+                        void send({
+                          type: "resolve-campaign",
+                          campaignId: campaign.id,
+                          action: "keep-local-and-pause",
+                        })
+                      }
+                    >
+                      KEEP LOCAL AND PAUSE
+                    </button>
+                  </div>
+                </section>
+              )}
+            {campaign.recovery === "stale" && (
+              <section
+                className="campaign-recovery"
+                aria-label={`Review current turn for ${campaign.name}`}
+              >
+                <h3>REVIEW CURRENT TURN</h3>
+                <p>
+                  The turn, Seat, or permissions changed while the cloud save
+                  stayed the same. Review the current turn, then select Send to
+                  authorize your completed Turn candidate again.
+                </p>
+                <button
+                  type="button"
+                  className="primary-button"
+                  disabled={
+                    pending ||
+                    snapshot.readOnly ||
+                    snapshot.paused ||
+                    campaign.paused ||
+                    snapshot.connection.state !== "connected"
+                  }
+                  onClick={() =>
+                    void send({
+                      type: "resolve-campaign",
+                      campaignId: campaign.id,
+                      action: "review-current-turn",
+                      reviewToken: campaign.recoveryToken ?? undefined,
+                    })
+                  }
+                >
+                  REVIEW CURRENT TURN
+                </button>
+              </section>
+            )}
             <div className="campaign-actions">
               <label className="campaign-automatic-mode">
                 AUTOMATIC SENDS
@@ -346,6 +456,26 @@ export function Campaigns({
                   <option value="manual">Manual</option>
                 </select>
               </label>
+              {campaign.paused && (
+                <button
+                  type="button"
+                  className="outline-button"
+                  disabled={
+                    pending ||
+                    snapshot.paused ||
+                    snapshot.connection.state === "update-required"
+                  }
+                  onClick={() =>
+                    void send({
+                      type: "set-campaign-paused",
+                      campaignId: campaign.id,
+                      paused: false,
+                    })
+                  }
+                >
+                  RESUME CAMPAIGN
+                </button>
+              )}
               {campaign.actions.map((action) => (
                 <button
                   key={action}
@@ -359,9 +489,32 @@ export function Campaigns({
                   type="button"
                   disabled={
                     pending ||
-                    (snapshot.readOnly && action !== "cancel-automatic-send")
+                    (snapshot.readOnly &&
+                      action !== "cancel-automatic-send" &&
+                      action !== "resolve-conflict" &&
+                      action !== "open-web")
                   }
-                  onClick={() =>
+                  aria-expanded={
+                    action === "resolve-conflict"
+                      ? conflictReviews.has(campaign.id)
+                      : undefined
+                  }
+                  aria-controls={
+                    action === "resolve-conflict"
+                      ? `conflict-review-${campaign.id}`
+                      : undefined
+                  }
+                  onClick={() => {
+                    if (action === "resolve-conflict") {
+                      setConflictReviews((current) => {
+                        const next = new Map(current);
+                        if (next.has(campaign.id)) next.delete(campaign.id);
+                        else
+                          next.set(campaign.id, campaign.recoveryToken ?? null);
+                        return next;
+                      });
+                      return;
+                    }
                     void send(
                       action === "cancel-automatic-send" && campaign.countdown
                         ? {
@@ -374,10 +527,13 @@ export function Campaigns({
                             campaignId: campaign.id,
                             action,
                           },
-                    )
-                  }
+                    );
+                  }}
                 >
-                  {actionLabels[action]}
+                  {action === "resolve-conflict" &&
+                  conflictReviews.has(campaign.id)
+                    ? "> CLOSE REVIEW"
+                    : actionLabels[action]}
                 </button>
               ))}
             </div>

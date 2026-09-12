@@ -1909,6 +1909,15 @@ async fn receiving_preserves_filename_collisions_and_catches_paused_publications
             b"second".to_vec()
         ]
     );
+    let snapshot = engine.reconcile().await.unwrap();
+    engine
+        .command(Command::CandidateAction {
+            campaign_id: "campaign-1".into(),
+            content_hash: snapshot.campaigns[0].candidates[0].content_hash.clone(),
+            action: shadow_cloud_companion_engine::CandidateAction::Ignore,
+        })
+        .await
+        .unwrap();
     let moved = root.join("moved");
     fs::rename(&folder, &moved).unwrap();
     remote.publish(b"third");
@@ -2004,15 +2013,20 @@ async fn a_player_edit_after_interrupted_publication_is_preserved_while_the_rece
     let folder = fs::read_dir(&root).unwrap().next().unwrap().unwrap().path();
     fs::write(folder.join("turn.se1"), b"local edit").unwrap();
     database.execute_batch("DROP TRIGGER fail_cursor;").unwrap();
-    remote.publish(b"second");
     engine.reconcile().await.unwrap();
     assert_eq!(
         received_files(&root),
-        vec![
-            b"first".to_vec(),
-            b"local edit".to_vec(),
-            b"second".to_vec()
-        ]
+        vec![b"first".to_vec(), b"local edit".to_vec()]
+    );
+    remote.publish(b"second");
+    let snapshot = engine.reconcile().await.unwrap();
+    assert_eq!(
+        snapshot.campaigns[0].recovery,
+        Some(shadow_cloud_companion_engine::RecoveryState::Conflict)
+    );
+    assert_eq!(
+        received_files(&root),
+        vec![b"first".to_vec(), b"local edit".to_vec()]
     );
 }
 
@@ -3049,4 +3063,314 @@ async fn cancel_queued_as_connection_drops_persists_the_exact_suppression_across
     assert!(snapshot.campaigns[0].countdown.is_none());
     assert!(snapshot.campaigns[0].candidates[0].can_send);
     assert!(!snapshot.campaigns[0].candidates[0].ignored);
+}
+
+#[tokio::test]
+async fn changed_cloud_save_preserves_local_work_and_blocks_receive_and_send_until_resolution() {
+    let (_temp, mut engine, remote, _platform, _vault, file) = automatic_engine_fixture().await;
+    remote.publish(b"new cloud save");
+    let snapshot = engine.reconcile().await.unwrap();
+    assert_eq!(
+        snapshot.campaigns[0].recovery,
+        Some(shadow_cloud_companion_engine::RecoveryState::Conflict)
+    );
+    assert_eq!(
+        snapshot.campaigns[0].sync_status,
+        shadow_cloud_companion_engine::SyncStatus::Conflict
+    );
+    assert!(!snapshot.campaigns[0].candidates[0].can_send);
+    assert!(snapshot.campaigns[0].countdown.is_none());
+    assert_eq!(
+        received_files(file.parent().unwrap().parent().unwrap()),
+        vec![b"my turn".to_vec(), b"received".to_vec()]
+    );
+    fs::write(&file, b"edited during conflict").unwrap();
+    engine.reconcile().await.unwrap();
+    let snapshot = engine.reconcile().await.unwrap();
+    assert_eq!(
+        snapshot.campaigns[0].recovery,
+        Some(shadow_cloud_companion_engine::RecoveryState::Conflict)
+    );
+    assert!(!snapshot.campaigns[0].candidates[0].can_send);
+    assert_eq!(fs::read(&file).unwrap(), b"edited during conflict");
+}
+
+#[tokio::test]
+async fn use_latest_preserves_exact_local_work_before_receiving_and_does_not_offer_force_send() {
+    use shadow_cloud_companion_engine::ResolutionAction;
+    let (_temp, mut engine, remote, _platform, _vault, file) = automatic_engine_fixture().await;
+    remote.publish(b"new cloud save");
+    let snapshot = engine.reconcile().await.unwrap();
+    let snapshot = engine
+        .command(Command::ResolveCampaign {
+            campaign_id: "campaign-1".into(),
+            action: ResolutionAction::UseLatest,
+            review_token: snapshot.campaigns[0].recovery_token.clone(),
+        })
+        .await
+        .unwrap();
+    assert!(snapshot.campaigns[0].recovery.is_none());
+    assert!(snapshot.campaigns[0].candidates[0].ignored);
+    assert!(!snapshot.campaigns[0].candidates[0].can_send);
+    assert_eq!(fs::read(&file).unwrap(), b"my turn");
+    let copies: Vec<_> = fs::read_dir(file.parent().unwrap().join(".shadow-cloud-conflicts"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().is_some_and(|ext| ext == "se1"))
+        .collect();
+    assert_eq!(copies.len(), 1);
+    assert_eq!(fs::read(&copies[0]).unwrap(), b"my turn");
+    assert_eq!(
+        received_files(file.parent().unwrap().parent().unwrap()),
+        vec![
+            b"my turn".to_vec(),
+            b"new cloud save".to_vec(),
+            b"received".to_vec()
+        ]
+    );
+    let hash = snapshot.campaigns[0].candidates[0].content_hash.clone();
+    engine
+        .command(Command::CandidateAction {
+            campaign_id: "campaign-1".into(),
+            content_hash: hash,
+            action: shadow_cloud_companion_engine::CandidateAction::Restore,
+        })
+        .await
+        .unwrap();
+    let snapshot = engine.reconcile().await.unwrap();
+    assert!(snapshot.campaigns[0].recovery.is_some());
+    assert!(!snapshot.campaigns[0].candidates[0].can_send);
+}
+
+#[tokio::test]
+async fn stale_turn_review_requires_a_separate_manual_send_even_if_local_contents_change() {
+    use shadow_cloud_companion_engine::{CandidateAction, RecoveryState, ResolutionAction};
+    use std::sync::atomic::Ordering;
+    let (_temp, mut engine, remote, _platform, _vault, file) = automatic_engine_fixture().await;
+    remote.turn_revision.store(1, Ordering::SeqCst);
+    let snapshot = engine.reconcile().await.unwrap();
+    assert_eq!(snapshot.campaigns[0].recovery, Some(RecoveryState::Stale));
+    let snapshot = engine
+        .command(Command::ResolveCampaign {
+            campaign_id: "campaign-1".into(),
+            action: ResolutionAction::ReviewCurrentTurn,
+            review_token: snapshot.campaigns[0].recovery_token.clone(),
+        })
+        .await
+        .unwrap();
+    assert!(snapshot.campaigns[0].recovery.is_none());
+    assert!(snapshot.campaigns[0].candidates[0].can_send);
+    assert!(snapshot.campaigns[0].countdown.is_none());
+    fs::write(file, b"my reviewed turn").unwrap();
+    engine.reconcile().await.unwrap();
+    let snapshot = engine.reconcile().await.unwrap();
+    assert!(snapshot.campaigns[0].countdown.is_none());
+    let hash = snapshot.campaigns[0].candidates[0].content_hash.clone();
+    assert_eq!(remote.dispatches.load(Ordering::SeqCst), 0);
+    engine
+        .command(Command::CandidateAction {
+            campaign_id: "campaign-1".into(),
+            content_hash: hash,
+            action: CandidateAction::Send,
+        })
+        .await
+        .unwrap();
+    assert_eq!(remote.dispatches.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        remote.saves.lock().unwrap().last().unwrap().1,
+        b"my reviewed turn"
+    );
+}
+
+#[tokio::test]
+async fn failed_conflict_commit_keeps_the_copy_and_can_resume_after_restart() {
+    use shadow_cloud_companion_engine::{RecoveryState, ResolutionAction};
+    let (temp, mut engine, remote, platform, vault, file) = automatic_engine_fixture().await;
+    remote.publish(b"new cloud save");
+    let snapshot = engine.reconcile().await.unwrap();
+    let database = rusqlite::Connection::open(temp.path().join("state/db")).unwrap();
+    database.execute_batch("CREATE TRIGGER fail_resolution BEFORE UPDATE OF ignored ON turn_candidates BEGIN SELECT RAISE(FAIL,'injected'); END;").unwrap();
+    assert!(engine
+        .command(Command::ResolveCampaign {
+            campaign_id: "campaign-1".into(),
+            action: ResolutionAction::UseLatest,
+            review_token: snapshot.campaigns[0].recovery_token.clone()
+        })
+        .await
+        .is_err());
+    assert_eq!(
+        engine.snapshot().campaigns[0].recovery,
+        Some(RecoveryState::Conflict)
+    );
+    assert_eq!(
+        received_files(file.parent().unwrap().parent().unwrap()).len(),
+        2
+    );
+    let area = file.parent().unwrap().join(".shadow-cloud-conflicts");
+    let copies: Vec<_> = fs::read_dir(&area)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().is_some_and(|ext| ext == "se1"))
+        .collect();
+    assert_eq!(copies.len(), 1);
+    assert_eq!(fs::read(&copies[0]).unwrap(), b"my turn");
+    database
+        .execute_batch("DROP TRIGGER fail_resolution;")
+        .unwrap();
+    drop(engine);
+    let mut engine = Engine::open(&temp.path().join("state/db"), remote, platform, vault).unwrap();
+    engine.observe_protocol(Ok(RELEASE.into()));
+    engine.restore_session().await.unwrap();
+    let snapshot = engine.reconcile().await.unwrap();
+    let snapshot = engine
+        .command(Command::ResolveCampaign {
+            campaign_id: "campaign-1".into(),
+            action: ResolutionAction::UseLatest,
+            review_token: snapshot.campaigns[0].recovery_token.clone(),
+        })
+        .await
+        .unwrap();
+    assert!(snapshot.campaigns[0].recovery.is_none());
+    assert_eq!(
+        fs::read_dir(area)
+            .unwrap()
+            .filter(|e| e
+                .as_ref()
+                .unwrap()
+                .path()
+                .extension()
+                .is_some_and(|ext| ext == "se1"))
+            .count(),
+        1
+    );
+    assert_eq!(fs::read(file).unwrap(), b"my turn");
+}
+
+#[tokio::test]
+async fn changed_review_identity_rejects_the_old_choice_and_publishes_a_fresh_review() {
+    use shadow_cloud_companion_engine::ResolutionAction;
+    let (_temp, mut engine, remote, _platform, _vault, file) = automatic_engine_fixture().await;
+    remote.publish(b"new cloud save");
+    let snapshot = engine.reconcile().await.unwrap();
+    let old = snapshot.campaigns[0].recovery_token.clone();
+    remote.publish(b"newer cloud save");
+    assert!(engine
+        .command(Command::ResolveCampaign {
+            campaign_id: "campaign-1".into(),
+            action: ResolutionAction::UseLatest,
+            review_token: old.clone()
+        })
+        .await
+        .is_err());
+    assert_ne!(engine.snapshot().campaigns[0].recovery_token, old);
+    assert_eq!(
+        received_files(file.parent().unwrap().parent().unwrap()).len(),
+        2
+    );
+    assert!(!file
+        .parent()
+        .unwrap()
+        .join(".shadow-cloud-conflicts")
+        .exists());
+}
+
+#[tokio::test]
+async fn missing_root_remains_bound_and_visible_after_restart() {
+    let (temp, engine, remote, platform, vault, file) = automatic_engine_fixture().await;
+    let root = file.parent().unwrap().parent().unwrap().to_owned();
+    let path = engine.snapshot().root_path.clone();
+    fs::rename(&root, temp.path().join("temporarily-unmounted")).unwrap();
+    drop(engine);
+    let mut engine = Engine::open(&temp.path().join("state/db"), remote, platform, vault).unwrap();
+    assert_eq!(engine.snapshot().root_path, path);
+    engine.observe_protocol(Ok(RELEASE.into()));
+    engine.restore_session().await.unwrap();
+    let snapshot = engine.reconcile().await.unwrap();
+    assert_eq!(snapshot.root_path, path);
+    assert!(!root.exists());
+    assert!(snapshot.campaigns[0].candidates.iter().all(|c| !c.can_send));
+}
+
+#[tokio::test]
+async fn failed_pause_persistence_stops_effects_in_the_running_session() {
+    for campaign_only in [false, true] {
+        let (temp, mut engine, remote, _platform, _vault, file) = automatic_engine_fixture().await;
+        let database = rusqlite::Connection::open(temp.path().join("state/db")).unwrap();
+        database.execute_batch(if campaign_only {"CREATE TRIGGER fail_pause BEFORE INSERT ON campaign_recovery BEGIN SELECT RAISE(FAIL,'injected'); END;"} else {"CREATE TRIGGER fail_pause BEFORE INSERT ON settings BEGIN SELECT RAISE(FAIL,'injected'); END;"}).unwrap();
+        let command = if campaign_only {
+            Command::SetCampaignPaused {
+                campaign_id: "campaign-1".into(),
+                paused: true,
+            }
+        } else {
+            Command::SetPaused { paused: true }
+        };
+        assert!(engine.command(command).await.is_err());
+        let snapshot = engine.snapshot();
+        assert!(if campaign_only {
+            snapshot.campaigns[0].paused
+        } else {
+            snapshot.paused
+        });
+        assert!(snapshot.campaigns[0].countdown.is_none());
+        remote.publish(b"new cloud save");
+        let _ = engine.reconcile().await;
+        assert_eq!(
+            received_files(file.parent().unwrap().parent().unwrap()).len(),
+            2
+        );
+    }
+}
+
+#[tokio::test]
+async fn changes_during_conflict_preservation_keep_both_sides_until_another_review() {
+    use shadow_cloud_companion_engine::{RecoveryState, ResolutionAction};
+    for change in ["cloud", "local"] {
+        let (_temp, mut engine, remote, _platform, _vault, file) = automatic_engine_fixture().await;
+        remote.publish(b"new cloud save");
+        let snapshot = engine.reconcile().await.unwrap();
+        let remote_next = remote.clone();
+        let remote_changed = remote.clone();
+        let local = file.clone();
+        *remote.during_observe.lock().unwrap() = Some(Box::new(move || {
+            *remote_next.during_observe.lock().unwrap() = Some(Box::new(move || {
+                if change == "cloud" {
+                    remote_changed.publish(b"newer cloud save");
+                } else {
+                    fs::write(local, b"local edit during preservation").unwrap();
+                }
+            }));
+        }));
+        assert!(engine
+            .command(Command::ResolveCampaign {
+                campaign_id: "campaign-1".into(),
+                action: ResolutionAction::UseLatest,
+                review_token: snapshot.campaigns[0].recovery_token.clone()
+            })
+            .await
+            .is_err());
+        assert_eq!(
+            engine.snapshot().campaigns[0].recovery,
+            Some(RecoveryState::Conflict)
+        );
+        let copies: Vec<_> = fs::read_dir(file.parent().unwrap().join(".shadow-cloud-conflicts"))
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .filter(|p| p.extension().is_some_and(|ext| ext == "se1"))
+            .collect();
+        assert_eq!(copies.len(), 1);
+        assert_eq!(fs::read(&copies[0]).unwrap(), b"my turn");
+        assert_eq!(
+            received_files(file.parent().unwrap().parent().unwrap()).len(),
+            2
+        );
+        assert_eq!(
+            fs::read(file).unwrap(),
+            if change == "cloud" {
+                b"my turn".to_vec()
+            } else {
+                b"local edit during preservation".to_vec()
+            }
+        );
+    }
 }

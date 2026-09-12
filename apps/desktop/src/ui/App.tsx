@@ -695,6 +695,10 @@ export function App({
                     <small>FILES</small>
                     <h2>COMPANION ROOT</h2>
                     <p>{snapshot.rootPath ?? "NOT CONFIGURED"}</p>
+                    <p>
+                      Select the existing root after moving it to reconnect your
+                      Campaign folders.
+                    </p>
                   </div>
                   <button
                     className="outline-button"
@@ -745,6 +749,34 @@ export function App({
                   >
                     SIGN OUT
                   </button>
+                </div>
+                <div className="settings-card diagnostics-card">
+                  <div>
+                    <small>SUPPORT</small>
+                    <h2>DIAGNOSTICS</h2>
+                    <p>
+                      Generate a redacted report to review and copy when needed.
+                      It is not sent automatically.
+                    </p>
+                  </div>
+                  <button
+                    className="outline-button"
+                    type="button"
+                    disabled={pending}
+                    onClick={() => void send({ type: "generate-diagnostics" })}
+                  >
+                    GENERATE DIAGNOSTICS
+                  </button>
+                  {snapshot.diagnostics && (
+                    <pre
+                      className="diagnostics-report"
+                      role="region"
+                      aria-label="Diagnostic report"
+                      tabIndex={0}
+                    >
+                      {snapshot.diagnostics}
+                    </pre>
+                  )}
                 </div>
                 <ResetCompanion
                   pending={pending}

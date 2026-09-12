@@ -108,6 +108,7 @@ impl Engine {
     }
     fn eligible_hash(&self, campaign: &Campaign) -> Option<String> {
         if self.snapshot.paused
+            || self.campaign_automatic_blocked(&campaign.id)
             || !self.onboarding_complete
             || self.snapshot.onboarding.stage != OnboardingStage::Complete
             || self.snapshot.connection.state != ConnectionState::Connected

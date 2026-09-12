@@ -14,7 +14,11 @@ mod receive;
 mod submit;
 pub use receive::{ObservedCampaign, PublicationPage, ReceiveError, SavePublication};
 mod automatic;
+mod conflicts;
+mod diagnostics;
+mod recovery;
 pub use automatic::{AutomaticMode, AutomaticNotification, Countdown};
+pub use conflicts::{RecoveryState, ResolutionAction};
 pub use submit::{CandidateAction, SubmissionReceipt, TurnCandidate, TurnSubmission};
 
 pub const RELEASE: &str = env!("COMPANION_RELEASE");
@@ -324,6 +328,9 @@ pub enum SyncStatus {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Campaign {
+    pub paused: bool,
+    pub recovery: Option<RecoveryState>,
+    pub recovery_token: Option<String>,
     pub countdown: Option<Countdown>,
     pub automatic_mode: AutomaticMode,
     pub candidates: Vec<TurnCandidate>,
@@ -345,6 +352,7 @@ pub struct Campaign {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CampaignAction {
+    OpenWeb,
     ResolveConflict,
     CancelAutomaticSend,
     OpenFolder,
@@ -406,6 +414,7 @@ pub struct OnboardingSnapshot {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
+    pub diagnostics: Option<String>,
     pub revision: u32,
     pub app_version: String,
     pub protocol_version: String,
@@ -429,6 +438,17 @@ pub struct Snapshot {
     deny_unknown_fields
 )]
 pub enum Command {
+    GenerateDiagnostics,
+    SetCampaignPaused {
+        campaign_id: String,
+        paused: bool,
+    },
+    ResolveCampaign {
+        campaign_id: String,
+        action: ResolutionAction,
+        #[serde(default)]
+        review_token: Option<String>,
+    },
     SetCampaignAutomaticUploads {
         campaign_id: String,
         mode: AutomaticMode,
@@ -593,6 +613,9 @@ pub trait CompanionRemote: Send + Sync {
 
 #[async_trait]
 pub trait CompanionPlatform: Send + Sync {
+    fn open_campaign(&self, _number: u32) -> Result<(), ()> {
+        Err(())
+    }
     fn now_millis(&self) -> u64 {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -684,6 +707,23 @@ impl Store {
                  CREATE TABLE IF NOT EXISTS settings (
                    key TEXT PRIMARY KEY NOT NULL,
                    value TEXT NOT NULL
+                 );
+                 CREATE TABLE IF NOT EXISTS recent_activity (
+                   id INTEGER PRIMARY KEY AUTOINCREMENT, account TEXT NOT NULL, scope TEXT NOT NULL,
+                   fingerprint TEXT NOT NULL, campaign_name TEXT NOT NULL, description TEXT NOT NULL, occurred_at TEXT NOT NULL
+                 );
+                 CREATE INDEX IF NOT EXISTS recent_activity_account ON recent_activity(account,id DESC);
+                 CREATE TABLE IF NOT EXISTS campaign_recovery (
+                   account TEXT NOT NULL, campaign TEXT NOT NULL, state TEXT NOT NULL DEFAULT '',
+                   baseline TEXT NOT NULL DEFAULT '', canonical TEXT NOT NULL DEFAULT '',
+                   token TEXT NOT NULL DEFAULT '', paused INTEGER NOT NULL DEFAULT 0,
+                   PRIMARY KEY(account,campaign)
+                 );
+                 CREATE TABLE IF NOT EXISTS conflict_preservations (
+                   account TEXT NOT NULL, campaign TEXT NOT NULL, token TEXT NOT NULL,
+                   hash TEXT NOT NULL, filename TEXT NOT NULL, size INTEGER NOT NULL,
+                   path TEXT NOT NULL DEFAULT '', state TEXT NOT NULL DEFAULT 'planned',
+                   PRIMARY KEY(account,campaign,token,hash)
                  );
                  CREATE TABLE IF NOT EXISTS candidate_scan_accounts (
                    campaign TEXT PRIMARY KEY NOT NULL, account TEXT NOT NULL
@@ -837,6 +877,7 @@ pub struct Engine {
     last_reconciliation: Option<u64>,
     retired_countdowns: std::collections::VecDeque<automatic::Authorization>,
     pending_cancellations: std::collections::HashSet<(String, String, String)>,
+    pending_campaign_pauses: std::collections::HashSet<(String, String)>,
     scan_observations: std::collections::HashMap<(String, String, String), submit::ScannedFile>,
     snapshot: Snapshot,
     revisions: tokio::sync::watch::Sender<Snapshot>,
@@ -904,16 +945,14 @@ impl Engine {
             .map_err(|_| EngineOpenError)?
             .as_deref()
             != Some("false");
-        let root_path = store
-            .get("companion_root")
-            .map_err(|_| EngineOpenError)?
-            .filter(|path| validate_root(Path::new(path)).is_ok());
+        let root_path = store.get("companion_root").map_err(|_| EngineOpenError)?;
         let onboarding_stage = if onboarding_complete {
             OnboardingStage::SignIn
         } else {
             OnboardingStage::Welcome
         };
         let snapshot = Snapshot {
+            diagnostics: None,
             revision: 0,
             app_version: RELEASE.into(),
             protocol_version: RELEASE.into(),
@@ -961,6 +1000,7 @@ impl Engine {
             last_reconciliation: None,
             retired_countdowns: Default::default(),
             pending_cancellations: Default::default(),
+            pending_campaign_pauses: Default::default(),
             pending_handoff: None,
             secrets: None,
             onboarding_complete,
@@ -979,169 +1019,206 @@ impl Engine {
 
     pub async fn command(&mut self, command: Command) -> Result<Snapshot, CommandError> {
         let previous = self.snapshot.clone();
-        match command {
-            Command::SetCampaignAutomaticUploads { campaign_id, mode } => {
-                self.set_campaign_automatic(&campaign_id, mode)?;
-            }
-            Command::CancelAutomaticSend {
-                campaign_id,
-                authorization_id,
-            } => {
-                self.cancel_automatic(&campaign_id, Some(&authorization_id))?;
-            }
-            Command::CandidateAction {
-                campaign_id,
-                content_hash,
-                action,
-            } => {
-                self.candidate_action(&campaign_id, &content_hash, action)
-                    .await?;
-            }
-            Command::ContinueOnboarding => match self.snapshot.onboarding.stage {
-                OnboardingStage::Welcome => {
-                    self.snapshot.onboarding.stage = OnboardingStage::SignIn
+        let result: Result<(), CommandError> = async {
+            match command {
+                Command::GenerateDiagnostics => self.generate_diagnostics()?,
+                Command::SetCampaignPaused {
+                    campaign_id,
+                    paused,
+                } => self.set_campaign_paused(&campaign_id, paused)?,
+                Command::ResolveCampaign {
+                    campaign_id,
+                    action,
+                    review_token,
+                } => {
+                    self.resolve_campaign(&campaign_id, action, review_token.as_deref())
+                        .await?
                 }
-                OnboardingStage::SignIn
-                    if self.snapshot.session.state == SessionState::SignedIn =>
-                {
-                    self.snapshot.onboarding.stage =
-                        if self.onboarding_complete && self.snapshot.root_path.is_some() {
-                            OnboardingStage::Complete
-                        } else {
-                            OnboardingStage::CompanionRoot
-                        }
+                Command::SetCampaignAutomaticUploads { campaign_id, mode } => {
+                    self.set_campaign_automatic(&campaign_id, mode)?;
                 }
-                OnboardingStage::CompanionRoot
-                    if self.snapshot.session.state == SessionState::SignedIn
-                        && self.snapshot.root_path.is_some() =>
-                {
-                    self.snapshot.onboarding.stage = OnboardingStage::AutomaticUploads
+                Command::CancelAutomaticSend {
+                    campaign_id,
+                    authorization_id,
+                } => {
+                    self.cancel_automatic(&campaign_id, Some(&authorization_id))?;
                 }
-                OnboardingStage::AutomaticUploads
-                    if self.snapshot.session.state == SessionState::SignedIn
-                        && self.snapshot.root_path.is_some() =>
-                {
-                    self.snapshot.onboarding.stage = OnboardingStage::Review
+                Command::CandidateAction {
+                    campaign_id,
+                    content_hash,
+                    action,
+                } => {
+                    self.candidate_action(&campaign_id, &content_hash, action)
+                        .await?;
                 }
-                _ => return Err(CommandError::InvalidOnboardingStep),
-            },
-            Command::NavigateOnboarding { stage } => {
-                if !self.snapshot.onboarding.available_steps.contains(&stage) {
-                    return Err(CommandError::InvalidOnboardingStep);
-                }
-                self.snapshot.onboarding.stage = stage;
-            }
-            Command::StartBrowserSignIn => self.start_browser_sign_in().await?,
-            Command::SubmitHandoffToken { token } => {
-                if self.snapshot.onboarding.stage != OnboardingStage::SignIn
-                    || self.snapshot.session.state == SessionState::SignedIn
-                {
-                    return Err(CommandError::InvalidOnboardingStep);
-                }
-                self.require_compatible_server()?;
-                let credentials = self
-                    .remote
-                    .exchange_token(token.trim())
-                    .await
-                    .map_err(map_remote_error)?;
-                self.accept_credentials(credentials)?;
-            }
-            Command::ChooseCompanionRoot => {
-                if self.snapshot.session.state != SessionState::SignedIn {
-                    return Err(CommandError::InvalidOnboardingStep);
-                }
-                let selected = self
-                    .platform
-                    .choose_directory()
-                    .map_err(|_| CommandError::InvalidCompanionRoot)?
-                    .ok_or(CommandError::FolderSelectionCancelled)?;
-                let canonical = validate_root(&selected)?;
-                let value = canonical
-                    .to_str()
-                    .ok_or(CommandError::InvalidCompanionRoot)?
-                    .to_owned();
-                self.store.set("companion_root", &value)?;
-                self.snapshot.root_path = Some(value);
-                self.snapshot.onboarding.stage = if self.onboarding_complete {
-                    OnboardingStage::Complete
-                } else {
+                Command::ContinueOnboarding => match self.snapshot.onboarding.stage {
+                    OnboardingStage::Welcome => {
+                        self.snapshot.onboarding.stage = OnboardingStage::SignIn
+                    }
+                    OnboardingStage::SignIn
+                        if self.snapshot.session.state == SessionState::SignedIn =>
+                    {
+                        self.snapshot.onboarding.stage =
+                            if self.onboarding_complete && self.snapshot.root_path.is_some() {
+                                OnboardingStage::Complete
+                            } else {
+                                OnboardingStage::CompanionRoot
+                            }
+                    }
                     OnboardingStage::CompanionRoot
-                };
-            }
-            Command::CompleteOnboarding => {
-                if self.snapshot.onboarding.stage != OnboardingStage::Review
-                    || self.snapshot.session.state != SessionState::SignedIn
-                    || self.snapshot.root_path.is_none()
-                {
-                    return Err(CommandError::InvalidOnboardingStep);
+                        if self.snapshot.session.state == SessionState::SignedIn
+                            && self.snapshot.root_path.is_some() =>
+                    {
+                        self.snapshot.onboarding.stage = OnboardingStage::AutomaticUploads
+                    }
+                    OnboardingStage::AutomaticUploads
+                        if self.snapshot.session.state == SessionState::SignedIn
+                            && self.snapshot.root_path.is_some() =>
+                    {
+                        self.snapshot.onboarding.stage = OnboardingStage::Review
+                    }
+                    _ => return Err(CommandError::InvalidOnboardingStep),
+                },
+                Command::NavigateOnboarding { stage } => {
+                    if !self.snapshot.onboarding.available_steps.contains(&stage) {
+                        return Err(CommandError::InvalidOnboardingStep);
+                    }
+                    self.snapshot.onboarding.stage = stage;
                 }
-                self.store.set("onboarding_complete", "true")?;
-                self.onboarding_complete = true;
-                self.snapshot.onboarding.stage = OnboardingStage::Complete;
-            }
-            Command::SignOut => {
-                if let Err(error) = self.sign_out().await {
-                    // Credential teardown is more important than reporting a
-                    // successful settings write. Publish the signed-out state
-                    // even when the durable tombstone could not be recorded.
-                    self.finish_change(&previous);
-                    return Err(error);
+                Command::StartBrowserSignIn => self.start_browser_sign_in().await?,
+                Command::SubmitHandoffToken { token } => {
+                    if self.snapshot.onboarding.stage != OnboardingStage::SignIn
+                        || self.snapshot.session.state == SessionState::SignedIn
+                    {
+                        return Err(CommandError::InvalidOnboardingStep);
+                    }
+                    self.require_compatible_server()?;
+                    let credentials = self
+                        .remote
+                        .exchange_token(token.trim())
+                        .await
+                        .map_err(map_remote_error)?;
+                    self.accept_credentials(credentials)?;
+                }
+                Command::ChooseCompanionRoot => {
+                    if self.snapshot.session.state != SessionState::SignedIn {
+                        return Err(CommandError::InvalidOnboardingStep);
+                    }
+                    let selected = self
+                        .platform
+                        .choose_directory()
+                        .map_err(|_| CommandError::InvalidCompanionRoot)?
+                        .ok_or(CommandError::FolderSelectionCancelled)?;
+                    let canonical = validate_root(&selected)?;
+                    let value = canonical
+                        .to_str()
+                        .ok_or(CommandError::InvalidCompanionRoot)?
+                        .to_owned();
+                    self.store.set("companion_root", &value)?;
+                    self.snapshot.root_path = Some(value);
+                    self.snapshot.onboarding.stage = if self.onboarding_complete {
+                        OnboardingStage::Complete
+                    } else {
+                        OnboardingStage::CompanionRoot
+                    };
+                }
+                Command::CompleteOnboarding => {
+                    if self.snapshot.onboarding.stage != OnboardingStage::Review
+                        || self.snapshot.session.state != SessionState::SignedIn
+                        || self.snapshot.root_path.is_none()
+                    {
+                        return Err(CommandError::InvalidOnboardingStep);
+                    }
+                    self.store.set("onboarding_complete", "true")?;
+                    self.onboarding_complete = true;
+                    self.snapshot.onboarding.stage = OnboardingStage::Complete;
+                }
+                Command::SignOut => {
+                    if let Err(error) = self.sign_out().await {
+                        // Credential teardown is more important than reporting a
+                        // successful settings write. Publish the signed-out state
+                        // even when the durable tombstone could not be recorded.
+                        self.finish_change(&previous);
+                        return Err(error);
+                    }
+                }
+                Command::ResetCompanion => {
+                    // A failed transaction leaves the current setup and session
+                    // intact. Once committed, remote/vault failures cannot undo it.
+                    self.store.reset_setup()?;
+                    self.session_restore_enabled = false;
+                    self.clear_device_session().await;
+                    self.onboarding_complete = false;
+                    self.furthest_onboarding_stage = OnboardingStage::Welcome;
+                    self.snapshot.onboarding.stage = OnboardingStage::Welcome;
+                    self.snapshot.root_path = None;
+                    self.snapshot.preferences.theme = Theme::System;
+                    self.snapshot.preferences.automatic_uploads = true;
+                    self.snapshot.paused = false;
+                    self.snapshot.campaigns.clear();
+                    self.snapshot.activity.clear();
+                    self.snapshot.diagnostics = None;
+                }
+                Command::SetTheme { theme } => {
+                    self.store.set("theme", theme.storage_value())?;
+                    self.snapshot.preferences.theme = theme;
+                }
+                Command::SetAutomaticUploads { enabled } => {
+                    if enabled && self.snapshot.connection.state == ConnectionState::UpdateRequired
+                    {
+                        return Err(CommandError::UpdateRequired);
+                    }
+                    self.store
+                        .set("automatic_uploads", if enabled { "true" } else { "false" })?;
+                    self.snapshot.preferences.automatic_uploads = enabled;
+                }
+                Command::SetPaused { paused } => {
+                    if !paused && self.snapshot.connection.state == ConnectionState::UpdateRequired
+                    {
+                        return Err(CommandError::UpdateRequired);
+                    }
+                    // Pause takes effect even if its durable preference cannot be written.
+                    // Resume is allowed only after its durable write succeeds.
+                    if paused {
+                        self.snapshot.paused = true;
+                    }
+                    self.store
+                        .set("paused", if paused { "true" } else { "false" })?;
+                    self.snapshot.paused = paused;
+                }
+                Command::CampaignAction {
+                    campaign_id,
+                    action,
+                } => {
+                    if !self.onboarding_complete
+                        || self.snapshot.session.state != SessionState::SignedIn
+                    {
+                        return Err(CommandError::OnboardingIncomplete);
+                    }
+                    if action == CampaignAction::OpenWeb {
+                        let number = self
+                            .snapshot
+                            .campaigns
+                            .iter()
+                            .find(|c| c.id == campaign_id)
+                            .ok_or(CommandError::NotAvailable)?
+                            .number;
+                        self.platform
+                            .open_campaign(number)
+                            .map_err(|_| CommandError::NotAvailable)?;
+                    } else if action == CampaignAction::CancelAutomaticSend {
+                        self.cancel_automatic(&campaign_id, None)?;
+                    } else {
+                        self.require_compatible_server()?;
+                        self.receive_action(&campaign_id, action).await?;
+                    }
                 }
             }
-            Command::ResetCompanion => {
-                // A failed transaction leaves the current setup and session
-                // intact. Once committed, remote/vault failures cannot undo it.
-                self.store.reset_setup()?;
-                self.session_restore_enabled = false;
-                self.clear_device_session().await;
-                self.onboarding_complete = false;
-                self.furthest_onboarding_stage = OnboardingStage::Welcome;
-                self.snapshot.onboarding.stage = OnboardingStage::Welcome;
-                self.snapshot.root_path = None;
-                self.snapshot.preferences.theme = Theme::System;
-                self.snapshot.preferences.automatic_uploads = true;
-                self.snapshot.paused = false;
-                self.snapshot.campaigns.clear();
-                self.snapshot.activity.clear();
-            }
-            Command::SetTheme { theme } => {
-                self.store.set("theme", theme.storage_value())?;
-                self.snapshot.preferences.theme = theme;
-            }
-            Command::SetAutomaticUploads { enabled } => {
-                if enabled && self.snapshot.connection.state == ConnectionState::UpdateRequired {
-                    return Err(CommandError::UpdateRequired);
-                }
-                self.store
-                    .set("automatic_uploads", if enabled { "true" } else { "false" })?;
-                self.snapshot.preferences.automatic_uploads = enabled;
-            }
-            Command::SetPaused { paused } => {
-                if !paused && self.snapshot.connection.state == ConnectionState::UpdateRequired {
-                    return Err(CommandError::UpdateRequired);
-                }
-                self.store
-                    .set("paused", if paused { "true" } else { "false" })?;
-                self.snapshot.paused = paused;
-            }
-            Command::CampaignAction {
-                campaign_id,
-                action,
-            } => {
-                if !self.onboarding_complete
-                    || self.snapshot.session.state != SessionState::SignedIn
-                {
-                    return Err(CommandError::OnboardingIncomplete);
-                }
-                self.require_compatible_server()?;
-                if action == CampaignAction::CancelAutomaticSend {
-                    self.cancel_automatic(&campaign_id, None)?;
-                } else {
-                    self.receive_action(&campaign_id, action).await?;
-                }
-            }
+            Ok(())
         }
+        .await;
         self.finish_change(&previous);
+        result?;
         Ok(self.snapshot())
     }
 
@@ -1335,6 +1412,7 @@ impl Engine {
         self.snapshot.display_name = None;
         self.snapshot.campaigns.clear();
         self.snapshot.activity.clear();
+        self.snapshot.diagnostics = None;
     }
 
     fn require_compatible_server(&self) -> Result<(), CommandError> {
@@ -1346,6 +1424,15 @@ impl Engine {
     }
 
     fn finish_change(&mut self, previous: &Snapshot) {
+        let mut campaigns = std::mem::take(&mut self.snapshot.campaigns);
+        for campaign in &mut campaigns {
+            if self.project_recovery(campaign).is_err() {
+                for candidate in &mut campaign.candidates {
+                    candidate.can_send = false;
+                }
+            }
+        }
+        self.snapshot.campaigns = campaigns;
         self.clear_invalid_countdowns();
         // Navigation must not forget reached steps or bypass their prerequisites.
         if self.snapshot.onboarding.stage > self.furthest_onboarding_stage {
@@ -1385,6 +1472,7 @@ impl Engine {
             && self.snapshot.connection.state == ConnectionState::Connected
             && !self.snapshot.paused;
         self.snapshot.read_only = !self.snapshot.onboarding.can_send;
+        self.record_activity(previous);
         if &self.snapshot != previous {
             self.snapshot.revision = self
                 .snapshot

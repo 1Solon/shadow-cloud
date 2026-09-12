@@ -12,6 +12,7 @@ export type CampaignAction =
   | "resolve-conflict"
   | "cancel-automatic-send"
   | "open-folder"
+  | "open-web"
   | "redownload-current";
 export type OnboardingStage =
   | "welcome"
@@ -22,6 +23,9 @@ export type OnboardingStage =
   | "complete";
 
 export interface Campaign {
+  paused?: boolean;
+  recovery?: "conflict" | "stale" | null;
+  recoveryToken?: string | null;
   countdown?: {
     authorizationId: string;
     contentHash: string;
@@ -53,6 +57,7 @@ export interface Campaign {
 }
 
 export interface Snapshot {
+  diagnostics?: string | null;
   revision: number;
   appVersion: string;
   protocolVersion: string;
@@ -87,6 +92,13 @@ export interface Snapshot {
 }
 
 export type Command =
+  | { type: "generate-diagnostics" }
+  | {
+      type: "resolve-campaign";
+      campaignId: string;
+      action: "use-latest" | "keep-local-and-pause" | "review-current-turn";
+      reviewToken?: string;
+    }
   | {
       type: "cancel-automatic-send";
       campaignId: string;
@@ -114,6 +126,7 @@ export type Command =
       mode: AutomaticMode;
     }
   | { type: "set-paused"; paused: boolean }
+  | { type: "set-campaign-paused"; campaignId: string; paused: boolean }
   | { type: "campaign-action"; campaignId: string; action: CampaignAction };
 
 export interface Companion {

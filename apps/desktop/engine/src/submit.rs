@@ -52,7 +52,7 @@ pub(super) struct ScannedFile {
     modified: u64,
 }
 
-fn canonical(campaign: &ObservedCampaign) -> String {
+pub(super) fn canonical(campaign: &ObservedCampaign) -> String {
     campaign
         .current
         .as_ref()
@@ -64,7 +64,7 @@ fn canonical(campaign: &ObservedCampaign) -> String {
         })
         .unwrap_or_default()
 }
-fn read_save(path: &Path) -> Result<(Vec<u8>, u64), ReceiveError> {
+pub(super) fn read_save(path: &Path) -> Result<(Vec<u8>, u64), ReceiveError> {
     if !regular_file(path) {
         return Err(ReceiveError::FileSystem);
     }
@@ -96,7 +96,7 @@ fn read_save(path: &Path) -> Result<(Vec<u8>, u64), ReceiveError> {
     Ok((bytes, modified))
 }
 
-async fn read_owned_save(
+pub(super) async fn read_owned_save(
     folder: PathBuf,
     campaign: String,
     filename: String,
@@ -117,7 +117,7 @@ impl Engine {
         &mut self,
         observation: &ObservedCampaign,
     ) -> Result<(), ReceiveError> {
-        if self.snapshot.paused {
+        if self.snapshot.paused || self.campaign_paused(&observation.id) {
             return Ok(());
         }
         let account = self
@@ -206,7 +206,7 @@ impl Engine {
         // New contents are still part of existing local work. A changed hash
         // must not silently acquire a newer turn/Seat baseline after it goes stale.
         let local_origin = {
-            let mut query = self.store.connection.prepare("SELECT hash,baseline,canonical FROM turn_candidates WHERE account=?1 AND campaign=?2 AND present=1 ORDER BY rowid")?;
+            let mut query = self.store.connection.prepare("SELECT hash,baseline,canonical FROM turn_candidates WHERE account=?1 AND campaign=?2 AND present=1 AND ignored=0 ORDER BY rowid")?;
             let rows = query.query_map(params![account, campaign], |row| {
                 Ok((
                     row.get::<_, String>(0)?,
@@ -285,7 +285,8 @@ impl Engine {
                     modified_at: r.get::<_, i64>(3)? as u64,
                     stable,
                     ignored,
-                    can_send: stable
+                    can_send: !self.campaign_sending_blocked(&observation.id)
+                        && stable
                         && !ignored
                         && !self.snapshot.paused
                         && observation.can_submit
@@ -330,7 +331,18 @@ impl Engine {
                 self.authorize_submission(campaign, hash, false).await?;
             }
             CandidateAction::Ignore | CandidateAction::Restore => {
-                self.store.connection.execute("UPDATE turn_candidates SET ignored=?4 WHERE account=?1 AND campaign=?2 AND hash=?3",params![account,campaign,hash,action==CandidateAction::Ignore]).map_err(|_|CommandError::StorageUnavailable)?;
+                let tx = self
+                    .store
+                    .connection
+                    .transaction()
+                    .map_err(|_| CommandError::StorageUnavailable)?;
+                tx.execute("UPDATE turn_candidates SET ignored=?4 WHERE account=?1 AND campaign=?2 AND hash=?3",params![account,campaign,hash,action==CandidateAction::Ignore]).map_err(|_|CommandError::StorageUnavailable)?;
+                if action == CandidateAction::Ignore {
+                    // Ignoring exact contents withdraws any authorization that has
+                    // not reached the server. Dispatched keys still need receipts.
+                    tx.execute("UPDATE turn_submissions SET state='abandoned' WHERE account=?1 AND campaign=?2 AND state IN ('planned','prepared') AND json_extract(submission,'$.contentHash')=?3",params![account,campaign,hash]).map_err(|_|CommandError::StorageUnavailable)?;
+                }
+                tx.commit().map_err(|_| CommandError::StorageUnavailable)?;
                 for c in &mut self.snapshot.campaigns {
                     if c.id == campaign {
                         for v in &mut c.candidates {
@@ -381,6 +393,8 @@ impl Engine {
             .ok_or(CommandError::NotAvailable)?;
         self.scan_campaign(observation)
             .await
+            .map_err(|_| CommandError::StorageUnavailable)?;
+        self.refresh_recovery(observation)
             .map_err(|_| CommandError::StorageUnavailable)?;
         let candidates = self
             .project_candidates(observation)
@@ -532,7 +546,7 @@ impl Engine {
         }
         Ok(())
     }
-    async fn dispatch_submission(
+    pub(super) async fn dispatch_submission(
         &mut self,
         account: &str,
         submission: &TurnSubmission,
@@ -583,7 +597,7 @@ impl Engine {
             }
         }
     }
-    fn accept_receipt(
+    pub(super) fn accept_receipt(
         &mut self,
         account: &str,
         submission: &TurnSubmission,
@@ -595,126 +609,13 @@ impl Engine {
         {
             return Err(ReceiveError::InvalidResponse);
         }
-        self.store.connection.execute(
+        let tx = self.store.connection.transaction()?;
+        tx.execute(
             "UPDATE turn_submissions SET state='accepted' WHERE account=?1 AND operation=?2",
             params![account, submission.operation_key],
         )?;
+        tx.execute("UPDATE campaign_recovery SET state='',token='' WHERE account=?1 AND campaign=?2 AND state='reviewed'", params![account,submission.campaign_id])?;
+        tx.commit()?;
         Ok(())
-    }
-    pub(super) async fn recover_submissions(&mut self) {
-        let Some(secrets) = &self.secrets else { return };
-        let account = secrets.account_id.clone();
-        // No request is dispatched from planned state. Prepared automatic
-        // work also needs a fresh countdown after a coordinator restart.
-        if self.store.connection.execute(
-            "UPDATE turn_submissions SET state='abandoned' WHERE account=?1 AND (state='planned' OR (state='prepared' AND EXISTS(SELECT 1 FROM automatic_submissions a WHERE a.account=turn_submissions.account AND a.operation=turn_submissions.operation)))",
-            [&account],
-        ).is_err() { return; }
-        let pending = (|| -> Result<Vec<(String, String)>, rusqlite::Error> {
-            let mut q=self.store.connection.prepare("SELECT submission,stage FROM turn_submissions WHERE account=?1 AND state IN ('prepared','dispatched') LIMIT 100")?;
-            let rows = q
-                .query_map([&account], |r| Ok((r.get(0)?, r.get(1)?)))?
-                .collect();
-            rows
-        })();
-        let Ok(pending) = pending else { return };
-        for (payload, stage) in pending {
-            if self.remote.receive_interrupted()
-                || self.snapshot.connection.state != ConnectionState::Connected
-            {
-                break;
-            }
-            let Ok(submission) = serde_json::from_str::<TurnSubmission>(&payload) else {
-                continue;
-            };
-            let Some(secrets) = &self.secrets else { return };
-            if secrets.account_id != account {
-                return;
-            }
-            let access = secrets.access_token.clone();
-            let mut result = self
-                .remote
-                .receipt(&access, &submission.operation_key)
-                .await;
-            if result == Err(ReceiveError::Unauthorized) {
-                if let Ok(access) = self.refresh_receive_access().await {
-                    result = self
-                        .remote
-                        .receipt(&access, &submission.operation_key)
-                        .await;
-                }
-            }
-            match result {
-                Ok(Some(receipt)) => {
-                    let _ = self.accept_receipt(&account, &submission, &receipt);
-                }
-                Ok(None) if !self.snapshot.paused => {
-                    let folder = self.snapshot.root_path.as_ref().and_then(|root| {
-                        recover_folder(Path::new(root), &submission.campaign_id).ok()
-                    });
-                    if let Some(folder) = folder {
-                        if let Some(filename) =
-                            Path::new(&stage).file_name().and_then(|n| n.to_str())
-                        {
-                            if let Ok((bytes, _, hash)) = read_owned_save(
-                                folder,
-                                submission.campaign_id.clone(),
-                                filename.to_owned(),
-                            )
-                            .await
-                            {
-                                if bytes.len() as u64 == submission.size
-                                    && hash == submission.content_hash
-                                {
-                                    self.dispatch_submission(&account, &submission, bytes).await;
-                                }
-                            }
-                        }
-                    }
-                }
-                Err(error) => {
-                    self.receive_connection_error(&error).await;
-                }
-                _ => {}
-            }
-        }
-        self.cleanup_submissions(&account);
-    }
-}
-
-impl Engine {
-    fn cleanup_submissions(&self, account: &str) {
-        if self.snapshot.paused {
-            return;
-        }
-        let Some(root) = &self.snapshot.root_path else {
-            return;
-        };
-        let rows = (|| -> Result<Vec<(String, String, String)>, rusqlite::Error> {
-            let mut q=self.store.connection.prepare("SELECT campaign,operation,stage FROM turn_submissions WHERE account=?1 AND state IN ('accepted','rejected','abandoned') AND stage<>'' LIMIT 100")?;
-            let rows = q
-                .query_map([account], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
-                .collect();
-            rows
-        })();
-        let Ok(rows) = rows else { return };
-        for (campaign, operation, stage) in rows {
-            let Ok(folder) = recover_folder(Path::new(root), &campaign) else {
-                continue;
-            };
-            let expected = format!(".shadow-cloud-send-{operation}");
-            if Path::new(&stage).file_name().and_then(|n| n.to_str()) != Some(&expected) {
-                continue;
-            }
-            match fs::remove_file(folder.join(expected)) {
-                Ok(()) => {}
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-                Err(_) => continue,
-            }
-            let _ = self.store.connection.execute(
-                "UPDATE turn_submissions SET stage='' WHERE account=?1 AND operation=?2",
-                params![account, operation],
-            );
-        }
     }
 }

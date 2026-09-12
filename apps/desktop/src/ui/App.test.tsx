@@ -422,10 +422,8 @@ it("keeps interface preferences in Settings and sends changes through the engine
   expect(screen.getByRole("heading", { name: "> SETTINGS" })).toBeVisible();
   expect(screen.queryByText("Preferences")).not.toBeInTheDocument();
   expect(
-    [...document.querySelectorAll(".settings-list p")].map(
-      (element) => element.textContent,
-    ),
-  ).toEqual(["~/Games/Shadow Cloud"]);
+    screen.getByText("~/Games/Shadow Cloud", { exact: true }),
+  ).toBeVisible();
   await user.click(screen.getByRole("button", { name: "LIGHT" }));
   expect((await companion.snapshot()).preferences.theme).toBe("light");
   expect(screen.getByRole("button", { name: "LIGHT" })).toHaveAttribute(
@@ -647,14 +645,16 @@ it.each([
   },
 );
 
-it("preserves campaign visibility during protocol mismatch and never optimistically performs an unavailable action", async () => {
+it("preserves Campaign visibility and safe conflict choices during protocol mismatch", async () => {
   const user = userEvent.setup();
   const companion = createDevelopmentCompanion("update-required");
   render(<App companion={companion} />);
   await screen.findByText("UPDATE REQUIRED");
+  await user.click(screen.getByRole("button", { name: "> RESOLVE CONFLICT" }));
+  expect(screen.getByRole("button", { name: "USE LATEST" })).toBeDisabled();
   expect(
-    screen.getByRole("button", { name: "> RESOLVE CONFLICT" }),
-  ).toBeDisabled();
+    screen.getByRole("button", { name: "KEEP LOCAL AND PAUSE" }),
+  ).toBeEnabled();
   expect(screen.getAllByRole("article")).toHaveLength(5);
   await user.click(screen.getByRole("button", { name: "PAUSE SYNC" }));
   expect(screen.getByRole("button", { name: "RESUME SYNC" })).toBeDisabled();
@@ -666,13 +666,44 @@ it("preserves campaign visibility during protocol mismatch and never optimistica
 
 it("shows rejected commands without pretending that a campaign changed", async () => {
   const user = userEvent.setup();
-  const companion = createDevelopmentCompanion("active");
+  const development = createDevelopmentCompanion("active");
+  const companion = {
+    ...development,
+    command: vi.fn(async () => {
+      throw "not-available";
+    }),
+  };
   render(<App companion={companion} />);
   await user.click(
     await screen.findByRole("button", { name: "> RESOLVE CONFLICT" }),
   );
+  expect(companion.command).not.toHaveBeenCalled();
+  await user.click(screen.getByRole("button", { name: "USE LATEST" }));
   expect(await screen.findByRole("alert")).toHaveTextContent(
     "This action is no longer available. Review the current Campaign status and try again.",
   );
   expect((await companion.snapshot()).campaigns[0].syncStatus).toBe("conflict");
+});
+
+it("generates selectable diagnostics only when explicitly requested in Settings", async () => {
+  const companion = createDevelopmentCompanion("offline");
+  const command = vi.spyOn(companion, "command");
+  render(<App companion={companion} development />);
+  await userEvent.click(
+    await screen.findByRole("button", { name: "SETTINGS" }),
+  );
+  expect(
+    screen.queryByRole("region", { name: "Diagnostic report" }),
+  ).not.toBeInTheDocument();
+  expect(command).not.toHaveBeenCalled();
+  await userEvent.click(
+    screen.getByRole("button", { name: "GENERATE DIAGNOSTICS" }),
+  );
+  expect(command).toHaveBeenCalledExactlyOnceWith({
+    type: "generate-diagnostics",
+  });
+  const report = screen.getByRole("region", { name: "Diagnostic report" });
+  expect(report).toHaveTextContent('"connection": "offline"');
+  expect(report).not.toHaveTextContent("~/Games/Shadow Cloud");
+  expect(report).toHaveAttribute("tabindex", "0");
 });
