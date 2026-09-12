@@ -35,3 +35,55 @@ it("shows receive failures and requests an explicit current-save redownload thro
     action: "redownload-current",
   });
 });
+
+it("shows candidate facts and sends only the exact candidate the player selected", async () => {
+  const snapshot = await createDevelopmentCompanion("active").snapshot();
+  snapshot.campaigns = [
+    {
+      ...snapshot.campaigns[0],
+      actions: [],
+      candidates: [
+        {
+          contentHash: "sha256:first",
+          filename: "first.se1",
+          size: 1024,
+          modifiedAt: 1000,
+          stable: true,
+          ignored: false,
+          canSend: true,
+        },
+        {
+          contentHash: "sha256:second",
+          filename: "second.se1",
+          size: 2048,
+          modifiedAt: 2000,
+          stable: false,
+          ignored: false,
+          canSend: false,
+        },
+      ],
+    },
+  ];
+  const send = vi.fn(async () => {});
+  render(<Campaigns snapshot={snapshot} send={send} pending={false} />);
+  expect(screen.getByText("first.se1")).toBeVisible();
+  expect(
+    screen.getByRole("button", { name: "Send second.se1" }),
+  ).toBeDisabled();
+  await userEvent.click(screen.getByRole("button", { name: "Send first.se1" }));
+  expect(send).toHaveBeenCalledWith({
+    type: "candidate-action",
+    campaignId: snapshot.campaigns[0].id,
+    contentHash: "sha256:first",
+    action: "send",
+  });
+  await userEvent.click(
+    screen.getByRole("button", { name: "Ignore first.se1" }),
+  );
+  expect(send).toHaveBeenLastCalledWith({
+    type: "candidate-action",
+    campaignId: snapshot.campaigns[0].id,
+    contentHash: "sha256:first",
+    action: "ignore",
+  });
+});

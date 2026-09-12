@@ -333,6 +333,27 @@ export async function uploadSave(
       await transaction.saveCleanup.delete({
         where: { storagePath: stored.storagePath },
       });
+      if (metadata.companionSubmission) {
+        const { operationKey, fingerprint } = metadata.companionSubmission;
+        await transaction.companionSubmission.create({
+          data: {
+            accountId: userId,
+            campaignId: game.id,
+            operationKey,
+            fingerprint,
+            receipt: JSON.stringify({
+              operationKey,
+              campaignId: game.id,
+              fileVersionId: fileVersion.id,
+              publication: versionNumber,
+              contentHash: fileVersion.contentHash,
+              filename: file.originalname,
+              size: file.size,
+              baseline: metadata.expectedSaveBaseline,
+            }),
+          },
+        });
+      }
       return { game, active, next, fileVersion, roundNumber, roundAdvanced };
     });
   } catch (error) {

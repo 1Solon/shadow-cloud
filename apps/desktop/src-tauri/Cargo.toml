@@ -22,6 +22,6 @@ tauri-plugin-opener = "=2.5.5"
 tauri-plugin-single-instance = "=2.4.4"
 shadow-cloud-companion-engine = { path = "../engine" }
 tokio = { version = "=1.52.3", features = ["sync", "time", "macros"] }
-reqwest = { version = "=0.13.4", default-features = false, features = ["rustls", "json", "system-proxy"] }
+reqwest = { version = "=0.13.4", default-features = false, features = ["rustls", "json", "system-proxy", "multipart"] }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"

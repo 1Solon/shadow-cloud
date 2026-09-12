@@ -11,7 +11,9 @@ use std::{
 };
 
 mod receive;
+mod submit;
 pub use receive::{ObservedCampaign, PublicationPage, ReceiveError, SavePublication};
+pub use submit::{CandidateAction, SubmissionReceipt, TurnCandidate, TurnSubmission};
 
 pub const RELEASE: &str = env!("COMPANION_RELEASE");
 const CAMPAIGN_MARKER: &str = ".shadow-cloud-campaign.json";
@@ -320,6 +322,7 @@ pub enum SyncStatus {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Campaign {
+    pub candidates: Vec<TurnCandidate>,
     pub id: String,
     pub number: u32,
     pub name: String,
@@ -422,6 +425,11 @@ pub struct Snapshot {
     deny_unknown_fields
 )]
 pub enum Command {
+    CandidateAction {
+        campaign_id: String,
+        content_hash: String,
+        action: CandidateAction,
+    },
     ContinueOnboarding,
     NavigateOnboarding {
         stage: OnboardingStage,
@@ -523,6 +531,21 @@ pub enum RemoteError {
 
 #[async_trait]
 pub trait CompanionRemote: Send + Sync {
+    async fn submit(
+        &self,
+        _access: &str,
+        _submission: &TurnSubmission,
+        _bytes: Vec<u8>,
+    ) -> Result<SubmissionReceipt, ReceiveError> {
+        Err(ReceiveError::Offline)
+    }
+    async fn receipt(
+        &self,
+        _access: &str,
+        _key: &str,
+    ) -> Result<Option<SubmissionReceipt>, ReceiveError> {
+        Err(ReceiveError::Offline)
+    }
     fn receive_interrupted(&self) -> bool {
         false
     }
@@ -638,6 +661,22 @@ impl Store {
                  CREATE TABLE IF NOT EXISTS settings (
                    key TEXT PRIMARY KEY NOT NULL,
                    value TEXT NOT NULL
+                 );
+                 CREATE TABLE IF NOT EXISTS turn_candidates (
+                   account TEXT NOT NULL, campaign TEXT NOT NULL, hash TEXT NOT NULL,
+                   filename TEXT NOT NULL, size INTEGER NOT NULL, modified INTEGER NOT NULL,
+                   baseline TEXT NOT NULL, canonical TEXT NOT NULL,
+                   stable INTEGER NOT NULL, ignored INTEGER NOT NULL DEFAULT 0, present INTEGER NOT NULL DEFAULT 1,
+                   PRIMARY KEY(account,campaign,hash)
+                 );
+                 CREATE TABLE IF NOT EXISTS turn_submissions (
+                   account TEXT NOT NULL, campaign TEXT NOT NULL, operation TEXT NOT NULL,
+                   submission TEXT NOT NULL, stage TEXT NOT NULL, state TEXT NOT NULL,
+                   PRIMARY KEY(account,operation)
+                 );
+                 CREATE TABLE IF NOT EXISTS observed_campaigns (
+                   account TEXT NOT NULL, campaign TEXT NOT NULL, baseline TEXT NOT NULL, canonical TEXT NOT NULL,
+                   PRIMARY KEY(account,campaign)
                  );
                  CREATE TABLE IF NOT EXISTS receive_campaigns (
                    account TEXT NOT NULL, campaign TEXT NOT NULL, cursor INTEGER NOT NULL,
@@ -761,6 +800,7 @@ impl SecretVault for UnavailableVault {
 
 /// One coordinator owns this value. No decision is made by the webview.
 pub struct Engine {
+    scan_observations: std::collections::HashMap<(String, String, String), submit::ScannedFile>,
     snapshot: Snapshot,
     revisions: tokio::sync::watch::Sender<Snapshot>,
     store: Store,
@@ -879,6 +919,7 @@ impl Engine {
             remote,
             platform,
             vault,
+            scan_observations: Default::default(),
             pending_handoff: None,
             secrets: None,
             onboarding_complete,
@@ -898,6 +939,14 @@ impl Engine {
     pub async fn command(&mut self, command: Command) -> Result<Snapshot, CommandError> {
         let previous = self.snapshot.clone();
         match command {
+            Command::CandidateAction {
+                campaign_id,
+                content_hash,
+                action,
+            } => {
+                self.candidate_action(&campaign_id, &content_hash, action)
+                    .await?;
+            }
             Command::ContinueOnboarding => match self.snapshot.onboarding.stage {
                 OnboardingStage::Welcome => {
                     self.snapshot.onboarding.stage = OnboardingStage::SignIn

@@ -101,6 +101,7 @@ export type UploadedSaveFile = {
 };
 
 export type UploadSaveSafetyMetadata = {
+  companionSubmission?: { operationKey: string; fingerprint: string };
   expectedSaveBaseline?: string;
   contentHash?: string;
   idempotencyKey?: string;

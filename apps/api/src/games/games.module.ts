@@ -17,6 +17,7 @@ import { TurnMutationsService } from './services/turn-mutations.service';
 @Module({
   imports: [AuthModule],
   controllers: [GamesController],
+  exports: [TurnMutationsService],
   providers: [
     GamesService,
     GamesFileService,

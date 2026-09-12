@@ -21,6 +21,15 @@ export type OnboardingStage =
   | "complete";
 
 export interface Campaign {
+  candidates?: {
+    contentHash: string;
+    filename: string;
+    size: number;
+    modifiedAt: number;
+    stable: boolean;
+    ignored: boolean;
+    canSend: boolean;
+  }[];
   id: string;
   number: number;
   name: string;
@@ -71,6 +80,12 @@ export interface Snapshot {
 }
 
 export type Command =
+  | {
+      type: "candidate-action";
+      campaignId: string;
+      contentHash: string;
+      action: "send" | "ignore" | "restore";
+    }
   | { type: "continue-onboarding" }
   | { type: "navigate-onboarding"; stage: OnboardingStage }
   | { type: "start-browser-sign-in" }

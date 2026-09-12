@@ -4,7 +4,8 @@ mod service_config;
 use shadow_cloud_companion_engine::{
     Command, CommandError, CompanionPlatform, CompanionRemote, ConnectionState, DeviceCredentials,
     Engine, ExchangeOutcome, Handoff, ObservedCampaign, PublicationPage, ReceiveError, RemoteError,
-    SavePublication, SecretVault, SessionState, Snapshot, RELEASE,
+    SavePublication, SecretVault, SessionState, Snapshot, SubmissionReceipt, TurnSubmission,
+    RELEASE,
 };
 use std::{
     path::PathBuf,
@@ -71,6 +72,35 @@ struct HttpRemote {
 }
 
 impl HttpRemote {
+    async fn submission_response(
+        &self,
+        request: reqwest::RequestBuilder,
+    ) -> Result<Option<SubmissionReceipt>, ReceiveError> {
+        // Submissions are never cancelled with read-only polling. Their durable
+        // operation key remains authoritative even if the HTTP response is lost.
+        let mut response = request.send().await.map_err(|_| ReceiveError::Offline)?;
+        match response.status().as_u16() {
+            200 | 201 => {}
+            404 => return Ok(None),
+            401 => return Err(ReceiveError::Unauthorized),
+            400 | 413 => return Err(ReceiveError::RejectedSubmission),
+            403 => return Err(ReceiveError::Forbidden),
+            409 => return Err(ReceiveError::StaleSubmission),
+            426 => return Err(ReceiveError::UpdateRequired),
+            500..=599 => return Err(ReceiveError::Offline),
+            _ => return Err(ReceiveError::InvalidResponse),
+        }
+        let mut bytes = Vec::new();
+        while let Some(chunk) = response.chunk().await.map_err(|_| ReceiveError::Offline)? {
+            if bytes.len() + chunk.len() > 64 * 1024 {
+                return Err(ReceiveError::InvalidResponse);
+            }
+            bytes.extend_from_slice(&chunk);
+        }
+        serde_json::from_slice(&bytes)
+            .map(Some)
+            .map_err(|_| ReceiveError::InvalidResponse)
+    }
     fn receive_request(
         &self,
         access: &str,
@@ -163,6 +193,55 @@ impl HttpRemote {
 
 #[async_trait]
 impl CompanionRemote for HttpRemote {
+    async fn submit(
+        &self,
+        access: &str,
+        submission: &TurnSubmission,
+        bytes: Vec<u8>,
+    ) -> Result<SubmissionReceipt, ReceiveError> {
+        let url = self
+            .receive_request(
+                access,
+                &[
+                    "campaigns",
+                    &submission.campaign_id,
+                    "submissions",
+                    &submission.operation_key,
+                ],
+                &[],
+            )?
+            .build()
+            .map_err(|_| ReceiveError::InvalidResponse)?
+            .url()
+            .clone();
+        let form = reqwest::multipart::Form::new()
+            .text("filename", submission.filename.clone())
+            .text("baseline", submission.baseline.clone())
+            .text("contentHash", submission.content_hash.clone())
+            .part(
+                "file",
+                reqwest::multipart::Part::bytes(bytes).file_name(submission.filename.clone()),
+            );
+        self.submission_response(
+            self.client
+                .post(url)
+                .bearer_auth(access)
+                .header("X-Companion-Protocol", RELEASE)
+                .multipart(form),
+        )
+        .await?
+        .ok_or(ReceiveError::InvalidResponse)
+    }
+    async fn receipt(
+        &self,
+        access: &str,
+        key: &str,
+    ) -> Result<Option<SubmissionReceipt>, ReceiveError> {
+        tokio::select! {
+            result=self.submission_response(self.receive_request(access,&["submissions",key],&[])?)=>result,
+            _=async {while !self.interrupt_receive.load(Ordering::SeqCst){tokio::time::sleep(Duration::from_millis(20)).await;}}=>Err(ReceiveError::Interrupted),
+        }
+    }
     fn receive_interrupted(&self) -> bool {
         self.interrupt_receive.load(Ordering::SeqCst)
     }
@@ -583,5 +662,98 @@ mod receive_transport_tests {
         .await
         .unwrap();
         assert_eq!(result.unwrap_err(), ReceiveError::Interrupted);
+    }
+}
+
+#[cfg(test)]
+mod submission_transport_tests {
+    use super::*;
+    use std::io::{Read, Write};
+    #[tokio::test]
+    async fn queued_commands_interrupt_stalled_receipt_lookups() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let mut remote =
+            HttpRemote::new(format!("http://{address}"), format!("http://{address}")).unwrap();
+        remote.client = reqwest::Client::new();
+        let interrupt = async {
+            tokio::time::sleep(Duration::from_millis(30)).await;
+            remote.interrupt_receive.store(true, Ordering::SeqCst);
+        };
+        let (result, ()) = tokio::time::timeout(Duration::from_millis(500), async {
+            tokio::join!(remote.receipt("synthetic", "operation-key"), interrupt)
+        })
+        .await
+        .unwrap();
+        assert_eq!(result.unwrap_err(), ReceiveError::Interrupted);
+    }
+    #[tokio::test]
+    async fn a_submission_posts_exact_staged_bytes_with_its_operation_key_and_baseline() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let submission = TurnSubmission {
+            operation_key: "operation-key-123456".into(),
+            campaign_id: "campaign".into(),
+            baseline: "campaign:1:2".into(),
+            content_hash: "sha256:synthetic".into(),
+            filename: "mine.se1".into(),
+            size: 11,
+        };
+        let receipt = SubmissionReceipt {
+            submission: submission.clone(),
+            file_version_id: "file".into(),
+            publication: 2,
+        };
+        let body = serde_json::to_string(&receipt).unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(3)))
+                .unwrap();
+            let mut bytes = Vec::new();
+            let mut buffer = [0u8; 4096];
+            loop {
+                let n = socket.read(&mut buffer).unwrap();
+                assert!(n > 0);
+                bytes.extend_from_slice(&buffer[..n]);
+                if let Some(end) = bytes.windows(4).position(|w| w == b"\r\n\r\n") {
+                    let headers = String::from_utf8_lossy(&bytes[..end]).to_lowercase();
+                    let length: usize = headers
+                        .lines()
+                        .find_map(|l| l.strip_prefix("content-length: "))
+                        .unwrap()
+                        .parse()
+                        .unwrap();
+                    if bytes.len() >= end + 4 + length {
+                        break;
+                    }
+                }
+            }
+            let request = String::from_utf8_lossy(&bytes);
+            assert!(request.starts_with(
+                "POST /v1/companion/campaigns/campaign/submissions/operation-key-123456"
+            ));
+            assert!(request.contains("campaign:1:2"));
+            assert!(request.contains("exact bytes"));
+            assert!(request.contains("mine.se1"));
+            write!(
+                socket,
+                "HTTP/1.1 201 Created\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            )
+            .unwrap();
+        });
+        let mut remote =
+            HttpRemote::new(format!("http://{address}"), format!("http://{address}")).unwrap();
+        remote.client = reqwest::Client::new();
+        assert_eq!(
+            remote
+                .submit("synthetic-access", &submission, b"exact bytes".to_vec())
+                .await
+                .unwrap(),
+            receipt
+        );
+        server.join().unwrap();
     }
 }

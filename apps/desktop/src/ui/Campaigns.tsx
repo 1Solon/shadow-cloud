@@ -100,8 +100,8 @@ export function Campaigns({
             )}
           </div>
           <p className="section-intro">
-            Shadow Cloud receives campaign saves into these folders. Sending
-            turns is coming in a later update.
+            Shadow Cloud receives campaign saves into these folders. Select a
+            completed Turn candidate to send, or ignore its exact contents.
           </p>
         </div>
         <div className="campaign-list-controls">
@@ -248,8 +248,70 @@ export function Campaigns({
               </dl>
             </div>
             {(campaign.syncStatus === "needs-attention" ||
+              campaign.syncStatus === "sending" ||
               campaign.syncStatus === "receiving") && (
               <p className="campaign-receive-detail">{campaign.detail}</p>
+            )}
+            {!!campaign.candidates?.length && (
+              <ul
+                className="turn-candidates"
+                aria-label={`Turn candidates for ${campaign.name}`}
+              >
+                {campaign.candidates.map((candidate) => (
+                  <li key={candidate.contentHash}>
+                    <div>
+                      <strong>{candidate.filename}</strong>
+                      <small>
+                        {(candidate.size / 1024).toFixed(1)} KiB · Modified{" "}
+                        {new Date(candidate.modifiedAt).toLocaleString()} ·{" "}
+                        {candidate.ignored
+                          ? "Ignored"
+                          : candidate.stable
+                            ? "Ready for review"
+                            : "Waiting for stable contents"}
+                      </small>
+                    </div>
+                    <div className="candidate-actions">
+                      {!candidate.ignored && (
+                        <button
+                          type="button"
+                          className="primary-button"
+                          aria-label={`Send ${candidate.filename}`}
+                          disabled={
+                            pending || snapshot.readOnly || !candidate.canSend
+                          }
+                          onClick={() =>
+                            void send({
+                              type: "candidate-action",
+                              campaignId: campaign.id,
+                              contentHash: candidate.contentHash,
+                              action: "send",
+                            })
+                          }
+                        >
+                          SEND
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="outline-button"
+                        aria-label={`${candidate.ignored ? "Restore" : "Ignore"} ${candidate.filename}`}
+                        disabled={pending || snapshot.paused}
+                        onClick={() =>
+                          void send({
+                            type: "candidate-action",
+                            campaignId: campaign.id,
+                            contentHash: candidate.contentHash,
+                            action: candidate.ignored ? "restore" : "ignore",
+                          })
+                        }
+                      >
+                        {candidate.ignored ? "RESTORE" : "IGNORE"}
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             )}
             {campaign.actions.length > 0 && (
               <div className="campaign-actions">

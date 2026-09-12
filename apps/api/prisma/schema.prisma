@@ -296,6 +296,18 @@ model SaveCleanup {
   createdAt   DateTime @default(now())
 }
 
+// Immutable acceptance proof survives canonical replacements and campaign removal.
+model CompanionSubmission {
+  accountId    String
+  operationKey String
+  campaignId   String
+  fingerprint  String
+  receipt      String
+  createdAt    DateTime @default(now())
+
+  @@id([accountId, operationKey])
+}
+
 model AuditEvent {
   id        String         @id @default(cuid())
   gameId    String

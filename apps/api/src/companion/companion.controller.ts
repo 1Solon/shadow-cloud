@@ -1,15 +1,19 @@
 import {
   BadRequestException,
+  Body,
   Controller,
   ForbiddenException,
   Get,
   Header,
   HttpException,
   Param,
+  Post,
   Query,
   Req,
   StreamableFile,
   UseGuards,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
 import {
   CompanionAuthGuard,
@@ -17,6 +21,9 @@ import {
 } from '../auth/companion-auth.guard';
 import { CompanionService } from './companion.service';
 import { CompanionProtocolController } from './protocol.controller';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { MAX_ARCHIVE_BYTES } from '../save-format';
+import type { UploadedSaveFile } from '../games/support/game-payload.types';
 
 function authorize(request: CompanionAuthenticatedRequest, scope: string) {
   if (
@@ -41,6 +48,46 @@ function integer(value: string | undefined) {
 @UseGuards(CompanionAuthGuard)
 export class CompanionController {
   constructor(private readonly companion: CompanionService) {}
+
+  @Post('campaigns/:campaignId/submissions/:operationKey')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: {
+        fileSize: MAX_ARCHIVE_BYTES,
+        files: 1,
+        fields: 3,
+        fieldSize: 1024,
+      },
+    }),
+  )
+  submit(
+    @Req() request: CompanionAuthenticatedRequest,
+    @Param('campaignId') campaignId: string,
+    @Param('operationKey') operationKey: string,
+    @Body() body: Record<string, string>,
+    @UploadedFile() file: UploadedSaveFile,
+  ) {
+    return this.companion.submit(
+      authorize(request, 'turns:submit'),
+      campaignId,
+      operationKey,
+      body.baseline,
+      body.contentHash,
+      file && { ...file, originalname: body.filename ?? file.originalname },
+    );
+  }
+
+  @Get('submissions/:operationKey')
+  @Header('Cache-Control', 'no-store')
+  receipt(
+    @Req() request: CompanionAuthenticatedRequest,
+    @Param('operationKey') operationKey: string,
+  ) {
+    return this.companion.receipt(
+      authorize(request, 'turns:submit'),
+      operationKey,
+    );
+  }
 
   @Get('campaigns')
   @Header('Cache-Control', 'no-store')

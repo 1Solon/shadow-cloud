@@ -1490,6 +1490,17 @@ fn typed_commands_reject_unknown_fields_and_never_offer_force_send() {
 
 #[derive(Default)]
 struct PublicationRemote {
+    offline_submission_once: std::sync::atomic::AtomicBool,
+    submission_mismatch: std::sync::atomic::AtomicBool,
+    submitted_keys: Mutex<Vec<String>>,
+
+    turn_revision: std::sync::atomic::AtomicU32,
+    switch_account: std::sync::atomic::AtomicBool,
+    can_submit: std::sync::atomic::AtomicBool,
+    lose_submission_response: std::sync::atomic::AtomicBool,
+    dispatches: std::sync::atomic::AtomicU32,
+    receipts:
+        Mutex<std::collections::HashMap<String, shadow_cloud_companion_engine::SubmissionReceipt>>,
     publications_unauthorized_once: std::sync::atomic::AtomicBool,
     download_unauthorized_once: std::sync::atomic::AtomicBool,
     expired: std::sync::atomic::AtomicBool,
@@ -1519,6 +1530,56 @@ impl PublicationRemote {
 }
 #[async_trait]
 impl CompanionRemote for PublicationRemote {
+    async fn submit(
+        &self,
+        _: &str,
+        submission: &shadow_cloud_companion_engine::TurnSubmission,
+        bytes: Vec<u8>,
+    ) -> Result<
+        shadow_cloud_companion_engine::SubmissionReceipt,
+        shadow_cloud_companion_engine::ReceiveError,
+    > {
+        use std::sync::atomic::Ordering;
+        self.dispatches.fetch_add(1, Ordering::SeqCst);
+        self.submitted_keys
+            .lock()
+            .unwrap()
+            .push(submission.operation_key.clone());
+        if self.submission_mismatch.load(Ordering::SeqCst) {
+            return Err(shadow_cloud_companion_engine::ReceiveError::UpdateRequired);
+        }
+        if self.offline_submission_once.swap(false, Ordering::SeqCst) {
+            return Err(shadow_cloud_companion_engine::ReceiveError::Offline);
+        }
+        let mut receipts = self.receipts.lock().unwrap();
+        if let Some(receipt) = receipts.get(&submission.operation_key) {
+            return Ok(receipt.clone());
+        }
+        assert_eq!(bytes.len() as u64, submission.size);
+        self.publish(&bytes);
+        let save = self.saves.lock().unwrap().last().unwrap().0.clone();
+        let receipt = shadow_cloud_companion_engine::SubmissionReceipt {
+            submission: submission.clone(),
+            file_version_id: save.file_version_id,
+            publication: save.publication,
+        };
+        receipts.insert(submission.operation_key.clone(), receipt.clone());
+        if self.lose_submission_response.swap(false, Ordering::SeqCst) {
+            return Err(shadow_cloud_companion_engine::ReceiveError::Offline);
+        }
+        Ok(receipt)
+    }
+    async fn receipt(
+        &self,
+        _: &str,
+        key: &str,
+    ) -> Result<
+        Option<shadow_cloud_companion_engine::SubmissionReceipt>,
+        shadow_cloud_companion_engine::ReceiveError,
+    > {
+        Ok(self.receipts.lock().unwrap().get(key).cloned())
+    }
+
     async fn create_handoff(&self) -> Result<Handoff, RemoteError> {
         ApprovedRemote.create_handoff().await
     }
@@ -1530,7 +1591,16 @@ impl CompanionRemote for PublicationRemote {
         ApprovedRemote.exchange_browser(id, secret).await
     }
     async fn exchange_token(&self, token: &str) -> Result<DeviceCredentials, RemoteError> {
-        ApprovedRemote.exchange_token(token).await
+        {
+            let mut credentials = ApprovedRemote.exchange_token(token).await?;
+            if self
+                .switch_account
+                .load(std::sync::atomic::Ordering::SeqCst)
+            {
+                credentials.device_session.user.id = "other-account".into();
+            }
+            Ok(credentials)
+        }
     }
     async fn refresh(&self, token: &str) -> Result<DeviceCredentials, RemoteError> {
         if self.revoked.load(std::sync::atomic::Ordering::SeqCst) {
@@ -1558,6 +1628,12 @@ impl CompanionRemote for PublicationRemote {
             return Err(shadow_cloud_companion_engine::ReceiveError::Unauthorized);
         }
         Ok(vec![shadow_cloud_companion_engine::ObservedCampaign {
+            baseline: format!(
+                "baseline-{}:{}",
+                self.saves.lock().unwrap().len(),
+                self.turn_revision.load(std::sync::atomic::Ordering::SeqCst)
+            ),
+            can_submit: self.can_submit.load(std::sync::atomic::Ordering::SeqCst),
             id: "campaign-1".into(),
             number: 42,
             name: "Campaign".into(),
@@ -2090,7 +2166,7 @@ async fn a_replacement_cleans_superseded_staging_and_preserves_an_oversized_play
     database.execute_batch("DROP TRIGGER fail_cursor;").unwrap();
     assert_eq!(
         engine.reconcile().await.unwrap().campaigns[0].status_label,
-        "Synchronized"
+        "Folder scan incomplete"
     );
     assert_eq!(
         fs::metadata(folder.join("turn.se1")).unwrap().len(),
@@ -2108,11 +2184,336 @@ async fn a_replacement_cleans_superseded_staging_and_preserves_an_oversized_play
     database.execute_batch("DROP TRIGGER fail_cursor;").unwrap();
     assert_eq!(
         engine.reconcile().await.unwrap().campaigns[0].status_label,
-        "Synchronized"
+        "Folder scan incomplete"
     );
     assert!(!fs::read_dir(folder).unwrap().any(|e| e
         .unwrap()
         .file_name()
         .to_string_lossy()
         .starts_with(".shadow-cloud-receive-")));
+}
+
+#[tokio::test]
+async fn manual_candidates_require_two_complete_scans_and_ignore_exact_contents_across_renames() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("root");
+    fs::create_dir(&root).unwrap();
+    let remote = Arc::new(PublicationRemote::default());
+    remote.publish(b"received");
+    let mut engine = receiving_engine(
+        &root,
+        &temp.path().join("state/db"),
+        remote,
+        Arc::new(FakeVault::default()),
+    )
+    .await;
+    engine.reconcile().await.unwrap();
+    let folder = fs::read_dir(&root).unwrap().next().unwrap().unwrap().path();
+    fs::copy(folder.join("turn.se1"), folder.join("copy.se1")).unwrap();
+    fs::write(folder.join("mine.se1"), b"local work").unwrap();
+    let first = engine.reconcile().await.unwrap();
+    assert_eq!(first.campaigns[0].candidates.len(), 1);
+    assert!(!first.campaigns[0].candidates[0].stable);
+    let second = engine.reconcile().await.unwrap();
+    let candidate = &second.campaigns[0].candidates[0];
+    assert!(candidate.stable);
+    assert_eq!(candidate.filename, "mine.se1");
+    assert_eq!(candidate.size, 10);
+    let hash = candidate.content_hash.clone();
+    engine
+        .command(Command::CandidateAction {
+            campaign_id: "campaign-1".into(),
+            content_hash: hash.clone(),
+            action: shadow_cloud_companion_engine::CandidateAction::Ignore,
+        })
+        .await
+        .unwrap();
+    fs::rename(folder.join("mine.se1"), folder.join("renamed.se1")).unwrap();
+    let snapshot = engine.reconcile().await.unwrap();
+    assert!(snapshot.campaigns[0].candidates[0].ignored);
+    fs::write(folder.join("renamed.se1"), b"changed work").unwrap();
+    let snapshot = engine.reconcile().await.unwrap();
+    assert_eq!(snapshot.campaigns[0].candidates.len(), 1);
+    assert!(!snapshot.campaigns[0].candidates[0].ignored);
+    assert_ne!(snapshot.campaigns[0].candidates[0].content_hash, hash);
+}
+
+#[tokio::test]
+async fn manual_submission_recovers_a_lost_response_after_restart_without_sending_twice_or_changing_the_original(
+) {
+    use std::sync::atomic::Ordering;
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("root");
+    fs::create_dir(&root).unwrap();
+    let db = temp.path().join("state/db");
+    let vault = Arc::new(FakeVault::default());
+    let remote = Arc::new(PublicationRemote::default());
+    remote.publish(b"received");
+    remote.can_submit.store(true, Ordering::SeqCst);
+    let mut engine = receiving_engine(&root, &db, remote.clone(), vault.clone()).await;
+    engine.reconcile().await.unwrap();
+    let folder = fs::read_dir(&root).unwrap().next().unwrap().unwrap().path();
+    let original = folder.join("mine.se1");
+    fs::write(&original, b"my exact turn").unwrap();
+    engine.reconcile().await.unwrap();
+    let snapshot = engine.reconcile().await.unwrap();
+    let candidate = &snapshot.campaigns[0].candidates[0];
+    assert!(candidate.can_send);
+    remote
+        .lose_submission_response
+        .store(true, Ordering::SeqCst);
+    let snapshot = engine
+        .command(Command::CandidateAction {
+            campaign_id: "campaign-1".into(),
+            content_hash: candidate.content_hash.clone(),
+            action: shadow_cloud_companion_engine::CandidateAction::Send,
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        snapshot.campaigns[0].status_label,
+        "Checking submission receipt"
+    );
+    assert_eq!(fs::read(&original).unwrap(), b"my exact turn");
+    drop(engine);
+    let mut engine = Engine::open(
+        &db,
+        remote.clone(),
+        Arc::new(FakePlatform::default()),
+        vault,
+    )
+    .unwrap();
+    engine.observe_protocol(Ok(RELEASE.into()));
+    engine.restore_session().await.unwrap();
+    let snapshot = engine.reconcile().await.unwrap();
+    assert_eq!(remote.dispatches.load(Ordering::SeqCst), 1);
+    assert_eq!(remote.saves.lock().unwrap().len(), 2);
+    assert!(snapshot.campaigns[0].candidates.is_empty());
+    assert_eq!(received_files(&root).len(), 2);
+    assert_eq!(fs::read(&original).unwrap(), b"my exact turn");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_partial_scan_keeps_candidates_visible_but_blocks_send_until_two_complete_observations() {
+    use std::sync::atomic::Ordering;
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("root");
+    fs::create_dir(&root).unwrap();
+    let remote = Arc::new(PublicationRemote::default());
+    remote.publish(b"received");
+    remote.can_submit.store(true, Ordering::SeqCst);
+    let mut engine = receiving_engine(
+        &root,
+        &temp.path().join("state/db"),
+        remote,
+        Arc::new(FakeVault::default()),
+    )
+    .await;
+    engine.reconcile().await.unwrap();
+    let folder = fs::read_dir(&root).unwrap().next().unwrap().unwrap().path();
+    fs::write(folder.join("mine.se1"), b"local").unwrap();
+    engine.reconcile().await.unwrap();
+    engine.reconcile().await.unwrap();
+    std::os::unix::fs::symlink("absent", folder.join("incomplete.se1")).unwrap();
+    let snapshot = engine.reconcile().await.unwrap();
+    assert_eq!(snapshot.campaigns[0].candidates.len(), 1);
+    assert!(!snapshot.campaigns[0].candidates[0].can_send);
+    fs::remove_file(folder.join("incomplete.se1")).unwrap();
+    assert!(!engine.reconcile().await.unwrap().campaigns[0].candidates[0].can_send);
+    assert!(engine.reconcile().await.unwrap().campaigns[0].candidates[0].can_send);
+}
+
+#[tokio::test]
+async fn manual_send_never_silently_rebinds_a_reviewed_candidate_to_a_new_turn_revision() {
+    use std::sync::atomic::Ordering;
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("root");
+    fs::create_dir(&root).unwrap();
+    let remote = Arc::new(PublicationRemote::default());
+    remote.publish(b"received");
+    remote.can_submit.store(true, Ordering::SeqCst);
+    let mut engine = receiving_engine(
+        &root,
+        &temp.path().join("state/db"),
+        remote.clone(),
+        Arc::new(FakeVault::default()),
+    )
+    .await;
+    engine.reconcile().await.unwrap();
+    let folder = fs::read_dir(&root).unwrap().next().unwrap().unwrap().path();
+    fs::write(folder.join("mine.se1"), b"local").unwrap();
+    engine.reconcile().await.unwrap();
+    let snapshot = engine.reconcile().await.unwrap();
+    let hash = snapshot.campaigns[0].candidates[0].content_hash.clone();
+    remote.turn_revision.store(1, Ordering::SeqCst);
+    assert!(engine
+        .command(Command::CandidateAction {
+            campaign_id: "campaign-1".into(),
+            content_hash: hash,
+            action: shadow_cloud_companion_engine::CandidateAction::Send
+        })
+        .await
+        .is_err());
+    assert_eq!(remote.dispatches.load(Ordering::SeqCst), 0);
+}
+#[tokio::test]
+async fn a_new_publication_before_the_first_local_scan_does_not_rebase_existing_work() {
+    use std::sync::atomic::Ordering;
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("root");
+    fs::create_dir(&root).unwrap();
+    let remote = Arc::new(PublicationRemote::default());
+    remote.publish(b"received");
+    remote.can_submit.store(true, Ordering::SeqCst);
+    let mut engine = receiving_engine(
+        &root,
+        &temp.path().join("state/db"),
+        remote.clone(),
+        Arc::new(FakeVault::default()),
+    )
+    .await;
+    engine.reconcile().await.unwrap();
+    let folder = fs::read_dir(&root).unwrap().next().unwrap().unwrap().path();
+    fs::write(folder.join("mine.se1"), b"old baseline work").unwrap();
+    remote.publish(b"changed remote");
+    engine.reconcile().await.unwrap();
+    let snapshot = engine.reconcile().await.unwrap();
+    assert!(!snapshot.campaigns[0].candidates[0].can_send);
+}
+#[tokio::test]
+async fn switching_accounts_retains_campaign_content_provenance_without_sharing_ignore_authorization(
+) {
+    use std::sync::atomic::Ordering;
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("root");
+    fs::create_dir(&root).unwrap();
+    let remote = Arc::new(PublicationRemote::default());
+    remote.publish(b"historical");
+    remote.can_submit.store(true, Ordering::SeqCst);
+    let mut engine = receiving_engine(
+        &root,
+        &temp.path().join("state/db"),
+        remote.clone(),
+        Arc::new(FakeVault::default()),
+    )
+    .await;
+    engine.reconcile().await.unwrap();
+    let folder = fs::read_dir(&root).unwrap().next().unwrap().unwrap().path();
+    fs::write(folder.join("mine.se1"), b"local work").unwrap();
+    engine.reconcile().await.unwrap();
+    let snapshot = engine.reconcile().await.unwrap();
+    let hash = snapshot.campaigns[0].candidates[0].content_hash.clone();
+    engine
+        .command(Command::CandidateAction {
+            campaign_id: "campaign-1".into(),
+            content_hash: hash,
+            action: shadow_cloud_companion_engine::CandidateAction::Ignore,
+        })
+        .await
+        .unwrap();
+    engine.command(Command::SignOut).await.unwrap();
+    remote.switch_account.store(true, Ordering::SeqCst);
+    remote.publish(b"new current");
+    engine
+        .command(Command::SubmitHandoffToken {
+            token: "other-account".into(),
+        })
+        .await
+        .unwrap();
+    engine.command(Command::ContinueOnboarding).await.unwrap();
+    engine.reconcile().await.unwrap();
+    let snapshot = engine.reconcile().await.unwrap();
+    assert_eq!(snapshot.campaigns[0].candidates.len(), 1);
+    assert_eq!(snapshot.campaigns[0].candidates[0].filename, "mine.se1");
+    assert!(!snapshot.campaigns[0].candidates[0].ignored);
+}
+
+#[tokio::test]
+async fn unsupported_submission_filenames_remain_local_and_never_create_an_uncertain_upload() {
+    use std::sync::atomic::Ordering;
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("root");
+    fs::create_dir(&root).unwrap();
+    let remote = Arc::new(PublicationRemote::default());
+    remote.publish(b"received");
+    remote.can_submit.store(true, Ordering::SeqCst);
+    let mut engine = receiving_engine(
+        &root,
+        &temp.path().join("state/db"),
+        remote.clone(),
+        Arc::new(FakeVault::default()),
+    )
+    .await;
+    engine.reconcile().await.unwrap();
+    let folder = fs::read_dir(&root).unwrap().next().unwrap().unwrap().path();
+    fs::write(folder.join(format!("{}.se1", "a".repeat(200))), b"local").unwrap();
+    engine.reconcile().await.unwrap();
+    let snapshot = engine.reconcile().await.unwrap();
+    let candidate = &snapshot.campaigns[0].candidates[0];
+    assert!(!candidate.can_send);
+    assert!(engine
+        .command(Command::CandidateAction {
+            campaign_id: "campaign-1".into(),
+            content_hash: candidate.content_hash.clone(),
+            action: shadow_cloud_companion_engine::CandidateAction::Send
+        })
+        .await
+        .is_err());
+    assert_eq!(remote.dispatches.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn an_unaccepted_request_retries_immutable_staging_with_the_same_key_and_protocol_mismatch_stops_effects(
+) {
+    use std::sync::atomic::Ordering;
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("root");
+    fs::create_dir(&root).unwrap();
+    let remote = Arc::new(PublicationRemote::default());
+    remote.publish(b"received");
+    remote.can_submit.store(true, Ordering::SeqCst);
+    let mut engine = receiving_engine(
+        &root,
+        &temp.path().join("state/db"),
+        remote.clone(),
+        Arc::new(FakeVault::default()),
+    )
+    .await;
+    engine.reconcile().await.unwrap();
+    let folder = fs::read_dir(&root).unwrap().next().unwrap().unwrap().path();
+    fs::write(folder.join("mine.se1"), b"authorized").unwrap();
+    engine.reconcile().await.unwrap();
+    let snapshot = engine.reconcile().await.unwrap();
+    remote.offline_submission_once.store(true, Ordering::SeqCst);
+    engine
+        .command(Command::CandidateAction {
+            campaign_id: "campaign-1".into(),
+            content_hash: snapshot.campaigns[0].candidates[0].content_hash.clone(),
+            action: shadow_cloud_companion_engine::CandidateAction::Send,
+        })
+        .await
+        .unwrap();
+    fs::write(folder.join("mine.se1"), b"changed while offline").unwrap();
+    engine.observe_protocol(Ok(RELEASE.into()));
+    remote.submission_mismatch.store(true, Ordering::SeqCst);
+    let snapshot = engine.reconcile().await.unwrap();
+    assert_eq!(snapshot.connection.state, ConnectionState::UpdateRequired);
+    assert!(snapshot.read_only);
+    assert_eq!(remote.saves.lock().unwrap().len(), 1);
+    remote.submission_mismatch.store(false, Ordering::SeqCst);
+    engine.observe_protocol(Ok(RELEASE.into()));
+    let snapshot = engine.reconcile().await.unwrap();
+    assert_eq!(
+        remote.saves.lock().unwrap().last().unwrap().1,
+        b"authorized"
+    );
+    let keys = remote.submitted_keys.lock().unwrap();
+    assert_eq!(keys.len(), 3);
+    assert!(keys.iter().all(|k| k == &keys[0]));
+    assert_eq!(
+        fs::read(folder.join("mine.se1")).unwrap(),
+        b"changed while offline"
+    );
+    assert_eq!(snapshot.campaigns[0].candidates.len(), 1);
 }

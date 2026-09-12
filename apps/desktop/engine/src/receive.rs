@@ -3,7 +3,7 @@ use rusqlite::params;
 use std::io::Read;
 
 // HTTP transport facts stay inside Rust. React receives only Campaign projections.
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SavePublication {
     pub publication: u32,
@@ -17,6 +17,10 @@ pub struct SavePublication {
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ObservedCampaign {
+    #[serde(default)]
+    pub baseline: String,
+    #[serde(default)]
+    pub can_submit: bool,
     pub id: String,
     pub number: u32,
     pub name: String,
@@ -33,6 +37,10 @@ pub struct PublicationPage {
 }
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum ReceiveError {
+    #[error("The turn changed. Review local work and authorize Send again.")]
+    StaleSubmission,
+    #[error("The submission was rejected. Review its filename and contents before trying again.")]
+    RejectedSubmission,
     #[error("Receiving interrupted by a user command.")]
     Interrupted,
     #[error("Offline; receiving will retry.")]
@@ -145,6 +153,13 @@ impl Engine {
             return Ok(self.snapshot());
         }
         let previous = self.snapshot.clone();
+        self.recover_submissions().await;
+        if self.snapshot.connection.state != ConnectionState::Connected
+            || self.snapshot.session.state != SessionState::SignedIn
+        {
+            self.finish_change(&previous);
+            return Ok(self.snapshot());
+        }
         let observed = match self.observe_campaigns().await {
             Ok(campaigns) => campaigns,
             Err(error) => {
@@ -156,6 +171,7 @@ impl Engine {
         let mut campaigns = Vec::new();
         for observation in observed {
             let mut campaign = Campaign {
+                candidates: vec![],
                 id: observation.id.clone(),
                 number: observation.number,
                 name: observation.name.clone(),
@@ -173,6 +189,7 @@ impl Engine {
             if self.onboarding_complete
                 && self.snapshot.onboarding.stage == OnboardingStage::Complete
             {
+                let scanned = self.scan_campaign(&observation).await;
                 match self.receive_campaign(&observation).await {
                     Ok((current, missing)) => {
                         campaign.sync_status = if self.snapshot.paused {
@@ -222,6 +239,35 @@ impl Engine {
                         campaign.detail = error.to_string();
                     }
                 }
+                if scanned.is_ok() {
+                    campaign.candidates = self
+                        .project_candidates(&observation)
+                        .map_err(|_| CommandError::StorageUnavailable)?;
+                } else {
+                    campaign.candidates = self
+                        .project_candidates(&observation)
+                        .map_err(|_| CommandError::StorageUnavailable)?;
+                    for candidate in &mut campaign.candidates {
+                        candidate.can_send = false;
+                        candidate.stable = false;
+                    }
+                    if campaign.sync_status != SyncStatus::NeedsAttention {
+                        campaign.sync_status = SyncStatus::NeedsAttention;
+                        campaign.status_label = "Folder scan incomplete".into();
+                    }
+                    campaign.detail = "The folder scan is incomplete. Local work is preserved; sending is blocked.".into();
+                }
+                if self
+                    .has_pending_submission(&observation.id)
+                    .map_err(|_| CommandError::StorageUnavailable)?
+                {
+                    campaign.sync_status = SyncStatus::Sending;
+                    campaign.status_label = "Checking submission receipt".into();
+                    campaign.detail="The exact submission is retained. Checking its server receipt before any new send.".into();
+                    for candidate in &mut campaign.candidates {
+                        candidate.can_send = false;
+                    }
+                }
             }
             if let Some(secrets) = &self.secrets {
                 campaign.archive_bytes=self.store.connection.query_row("SELECT COALESCE(SUM(size),0) FROM (SELECT hash,MAX(size) AS size FROM received_publications WHERE account=?1 AND campaign=?2 AND state='published' GROUP BY hash)",params![secrets.account_id,observation.id],|r|r.get::<_,i64>(0)).map_err(|_|CommandError::StorageUnavailable)? as u64;
@@ -242,7 +288,9 @@ impl Engine {
         Ok(self.snapshot())
     }
 
-    async fn observe_campaigns(&mut self) -> Result<Vec<ObservedCampaign>, ReceiveError> {
+    pub(super) async fn observe_campaigns(
+        &mut self,
+    ) -> Result<Vec<ObservedCampaign>, ReceiveError> {
         let access = self
             .secrets
             .as_ref()
@@ -258,7 +306,7 @@ impl Engine {
         }
     }
 
-    async fn refresh_receive_access(&mut self) -> Result<String, ReceiveError> {
+    pub(super) async fn refresh_receive_access(&mut self) -> Result<String, ReceiveError> {
         let secrets = self.secrets.as_ref().ok_or(ReceiveError::Unauthorized)?;
         let account = secrets.account_id.clone();
         let credentials = self
@@ -285,7 +333,7 @@ impl Engine {
             .clone())
     }
 
-    async fn receive_connection_error(&mut self, error: &ReceiveError) {
+    pub(super) async fn receive_connection_error(&mut self, error: &ReceiveError) {
         match error {
             ReceiveError::Unauthorized => {
                 let _ = self.sign_out().await;
@@ -415,6 +463,15 @@ impl Engine {
         Ok((None, false))
     }
 
+    fn received_content_record(
+        &self,
+        account: &str,
+        campaign: &str,
+        hash: &str,
+    ) -> Result<Option<(String, i64)>, ReceiveError> {
+        Ok(self.store.connection.query_row("SELECT path,size FROM received_publications WHERE campaign=?2 AND hash=?3 AND state='published' UNION ALL SELECT json_extract(submission,'$.filename'),json_extract(submission,'$.size') FROM turn_submissions WHERE campaign=?2 AND state='accepted' AND json_extract(submission,'$.contentHash')=?3 LIMIT 1",params![account,campaign,hash],|r|Ok((r.get(0)?,r.get(1)?))).optional()?)
+    }
+
     async fn find_received_content(
         &mut self,
         account: &str,
@@ -422,12 +479,11 @@ impl Engine {
         folder: &Path,
         hash: &str,
     ) -> Result<Option<PathBuf>, ReceiveError> {
-        let known: bool = self.store.connection.query_row("SELECT EXISTS(SELECT 1 FROM received_publications WHERE account=?1 AND campaign=?2 AND hash=?3 AND state='published')", params![account,campaign,hash], |r| r.get(0))?;
-        if !known {
+        let Some((preferred, expected_size)) =
+            self.received_content_record(account, campaign, hash)?
+        else {
             return Ok(None);
-        }
-        let expected_size: i64=self.store.connection.query_row("SELECT size FROM received_publications WHERE account=?1 AND campaign=?2 AND hash=?3 AND state='published' LIMIT 1",params![account,campaign,hash],|r|r.get(0))?;
-        let preferred: String=self.store.connection.query_row("SELECT path FROM received_publications WHERE account=?1 AND campaign=?2 AND hash=?3 AND state='published' ORDER BY publication DESC LIMIT 1",params![account,campaign,hash],|r|r.get(0))?;
+        };
         let preferred = checked_file_path(folder, &preferred)?;
         let folder = folder.to_owned();
         let hash = hash.to_owned();
@@ -495,7 +551,9 @@ impl Engine {
                 // Preserve user contents; authorize a fresh staging copy below.
             }
         }
-        let known_path: Option<String> = self.store.connection.query_row("SELECT path FROM received_publications WHERE account=?1 AND campaign=?2 AND hash=?3 AND state='published' LIMIT 1", params![account,campaign,save.content_hash], |r| r.get(0)).optional()?;
+        let known_path = self
+            .received_content_record(account, campaign, &save.content_hash)?
+            .map(|r| r.0);
         if !force {
             if let Some(old) = known_path {
                 let path = self
@@ -662,19 +720,22 @@ fn validate(save: &SavePublication) -> Result<(), ReceiveError> {
     {
         return Err(ReceiveError::InvalidResponse);
     }
-    if save.filename.is_empty()
-        || save.filename.starts_with('.')
-        || save.filename.len() > 180
-        || save
-            .filename
-            .contains(['/', '\\', ':', '<', '>', '"', '|', '?', '*'])
-        || save.filename.chars().any(char::is_control)
-        || save.filename.ends_with(['.', ' '])
-    {
+    if !valid_save_filename(&save.filename) {
         return Err(ReceiveError::InvalidResponse);
     }
-    let stem = save
-        .filename
+    Ok(())
+}
+pub(super) fn valid_save_filename(filename: &str) -> bool {
+    if filename.is_empty()
+        || filename.starts_with('.')
+        || filename.len() > 180
+        || filename.contains(['/', '\\', ':', '<', '>', '"', '|', '?', '*'])
+        || filename.chars().any(char::is_control)
+        || filename.ends_with(['.', ' '])
+    {
+        return false;
+    }
+    let stem = filename
         .split('.')
         .next()
         .unwrap_or_default()
@@ -685,14 +746,14 @@ fn validate(save: &SavePublication) -> Result<(), ReceiveError> {
     ]
     .contains(&stem.as_str())
     {
-        return Err(ReceiveError::InvalidResponse);
+        return false;
     }
-    Ok(())
+    true
 }
-fn content_hash(bytes: &[u8]) -> String {
+pub(super) fn content_hash(bytes: &[u8]) -> String {
     format!("sha256:{:x}", Sha256::digest(bytes))
 }
-fn regular_file(path: &Path) -> bool {
+pub(super) fn regular_file(path: &Path) -> bool {
     fs::symlink_metadata(path).is_ok_and(|m| m.is_file() && !m.file_type().is_symlink())
 }
 fn file_hash(path: &Path) -> Result<String, ReceiveError> {
@@ -726,7 +787,7 @@ fn checked_file_path(folder: &Path, path: &str) -> Result<PathBuf, ReceiveError>
         .ok_or(ReceiveError::FileSystem)?;
     Ok(folder.join(name))
 }
-fn recover_folder(root: &Path, campaign: &str) -> Result<PathBuf, ReceiveError> {
+pub(super) fn recover_folder(root: &Path, campaign: &str) -> Result<PathBuf, ReceiveError> {
     if !fs::symlink_metadata(root)?.is_dir() || fs::symlink_metadata(root)?.file_type().is_symlink()
     {
         return Err(ReceiveError::FileSystem);
@@ -785,7 +846,7 @@ fn available_target(folder: &Path, filename: &str) -> Result<PathBuf, ReceiveErr
     Err(ReceiveError::FileSystem)
 }
 
-fn check_owned_folder(folder: &Path, campaign: &str) -> Result<(), ReceiveError> {
+pub(super) fn check_owned_folder(folder: &Path, campaign: &str) -> Result<(), ReceiveError> {
     let metadata = fs::symlink_metadata(folder)?;
     if !metadata.is_dir()
         || metadata.file_type().is_symlink()

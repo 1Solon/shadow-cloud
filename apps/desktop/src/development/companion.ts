@@ -92,6 +92,38 @@ export function createDevelopmentCompanion(scenario: string): Companion {
       actions: [],
     },
   ];
+  if (scenario === "manual") {
+    campaigns.splice(1);
+    Object.assign(campaigns[0], {
+      syncStatus: "needs-attention",
+      statusLabel: "Turn candidates",
+      activeLord: "You",
+      automaticUploads: false,
+      detail:
+        "Select the completed turn to send. Your original files stay in this folder.",
+      actions: ["open-folder"],
+      candidates: [
+        {
+          contentHash: "sha256:development-first",
+          filename: "completed-turn.se1",
+          size: 204800,
+          modifiedAt: Date.parse("2026-09-12T14:20:00Z"),
+          stable: true,
+          ignored: false,
+          canSend: true,
+        },
+        {
+          contentHash: "sha256:development-second",
+          filename: "work-in-progress.se1",
+          size: 102400,
+          modifiedAt: Date.parse("2026-09-12T14:22:00Z"),
+          stable: false,
+          ignored: false,
+          canSend: false,
+        },
+      ],
+    });
+  }
   if (scenario === "receiving") {
     campaigns[0] = {
       ...campaigns[0],
@@ -202,6 +234,27 @@ export function createDevelopmentCompanion(scenario: string): Companion {
         throw "update-required";
       const next = snapshot();
       switch (command.type) {
+        case "candidate-action": {
+          const campaign = next.campaigns.find(
+            (c) => c.id === command.campaignId,
+          );
+          const candidate = campaign?.candidates?.find(
+            (c) => c.contentHash === command.contentHash,
+          );
+          if (!campaign || !candidate) throw "not-available";
+          if (command.action === "send") {
+            if (!candidate.canSend) throw "not-available";
+            campaign.candidates = campaign.candidates?.filter(
+              (c) => c !== candidate,
+            );
+            campaign.statusLabel = "Submission accepted";
+            campaign.syncStatus = "synchronized";
+          } else {
+            candidate.ignored = command.action === "ignore";
+            candidate.canSend = !candidate.ignored && candidate.stable;
+          }
+          break;
+        }
         case "continue-onboarding":
           if (next.onboarding.stage === "welcome")
             next.onboarding.stage = "sign-in";

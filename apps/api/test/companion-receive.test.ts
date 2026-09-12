@@ -218,3 +218,144 @@ it('binds downloads to replacement revision and content while enforcing protocol
   await sessions.revoke(refreshToken);
   expect((await fetch(`${base}/campaigns`, { headers })).status).toBe(401);
 });
+
+it('accepts an immutable submission once and recovers its receipt after replacement and membership loss', async () => {
+  const observation = (
+    await (await fetch(`${base}/campaigns`, { headers })).json()
+  ).campaigns[0];
+  const operation = '4c11e8ba-2b55-4cdf-809f-12a23d61a241';
+  const { createHash } = await import('node:crypto');
+  const content = 'completed turn';
+  const hash = `sha256:${createHash('sha256').update(content).digest('hex')}`;
+  const submit = (filename = 'my-turn.se1') => {
+    const body = new FormData();
+    body.set('baseline', observation.baseline ?? 'missing');
+    body.set('contentHash', hash);
+    body.set('file', new Blob([content]), filename);
+    return fetch(`${base}/campaigns/campaign/submissions/${operation}`, {
+      method: 'POST',
+      headers,
+      body,
+    });
+  };
+  const first = await submit();
+  expect(first.status).toBe(201);
+  const receipt = await first.json();
+  expect(receipt).toMatchObject({
+    operationKey: operation,
+    campaignId: 'campaign',
+    contentHash: hash,
+    filename: 'my-turn.se1',
+    publication: 1,
+  });
+  expect(await (await submit()).json()).toEqual(receipt);
+  expect((await submit('different.se1')).status).toBe(409);
+  await fixture.db.fileVersion.update({
+    where: { id: receipt.fileVersionId },
+    data: {
+      contentRevision: { increment: 1 },
+      contentHash: 'sha256:' + 'f'.repeat(64),
+    },
+  });
+  await fixture.db.game.update({
+    where: { id: 'campaign' },
+    data: { organizerId: 'other' },
+  });
+  await fixture.db.gamePlayer.update({
+    where: { id: 'seat' },
+    data: { userId: 'outsider' },
+  });
+  expect(
+    await (await fetch(`${base}/submissions/${operation}`, { headers })).json(),
+  ).toEqual(receipt);
+  const history = await upload('other', 'next turn');
+  expect(history.versionNumber).toBe(2);
+});
+
+it('binds submission keys to exact bytes and baseline, and rejects stale or unauthorized new work', async () => {
+  const campaign = (
+    await (await fetch(`${base}/campaigns`, { headers })).json()
+  ).campaigns[0];
+  expect(campaign.canSubmit).toBe(true);
+  const { createHash } = await import('node:crypto');
+  const submit = (
+    key: string,
+    baseline: string,
+    content: string,
+    hashContent = content,
+    requestHeaders = headers,
+  ) => {
+    const body = new FormData();
+    body.set('baseline', baseline);
+    body.set(
+      'contentHash',
+      `sha256:${createHash('sha256').update(hashContent).digest('hex')}`,
+    );
+    body.set('file', new Blob([content]), 'mine.se1');
+    return fetch(`${base}/campaigns/campaign/submissions/${key}`, {
+      method: 'POST',
+      headers: requestHeaders,
+      body,
+    });
+  };
+  expect(
+    (
+      await submit(
+        'invalid-bytes-key',
+        campaign.baseline,
+        'altered',
+        'original',
+      )
+    ).status,
+  ).toBe(400);
+  expect(
+    (
+      await submit('invalid-protocol', campaign.baseline, 'turn', 'turn', {
+        ...headers,
+        'x-companion-protocol': 'old',
+      })
+    ).status,
+  ).toBe(426);
+  const [first, replay] = await Promise.all([
+    submit('same-operation-key', campaign.baseline, 'turn'),
+    submit('same-operation-key', campaign.baseline, 'turn'),
+  ]);
+  expect(first.status).toBe(201);
+  expect(replay.status).toBe(201);
+  expect(await first.json()).toEqual(await replay.json());
+  expect(
+    (await submit('same-operation-key', campaign.baseline, 'other')).status,
+  ).toBe(409);
+  expect(
+    (await submit('not-my-turn-key-1', campaign.baseline, 'next')).status,
+  ).toBe(403);
+  await upload('other', 'second');
+  expect(
+    (await submit('stale-baseline-key', campaign.baseline, 'next')).status,
+  ).toBe(409);
+  expect(
+    (await fetch(`${base}/submissions/never-accepted-key`, { headers })).status,
+  ).toBe(404);
+});
+
+it('retains a Unicode filename exactly in the immutable receipt', async () => {
+  const campaign = (
+    await (await fetch(`${base}/campaigns`, { headers })).json()
+  ).campaigns[0];
+  const { createHash } = await import('node:crypto');
+  const content = 'unicode turn';
+  const body = new FormData();
+  body.set('baseline', campaign.baseline);
+  body.set(
+    'contentHash',
+    `sha256:${createHash('sha256').update(content).digest('hex')}`,
+  );
+  body.set('filename', 'été.se1');
+  body.set('file', new Blob([content]), 'été.se1');
+  const response = await fetch(
+    `${base}/campaigns/campaign/submissions/unicode-operation-key`,
+    { method: 'POST', headers, body },
+  );
+  expect(response.status).toBe(201);
+  expect((await response.json()).filename).toBe('été.se1');
+});

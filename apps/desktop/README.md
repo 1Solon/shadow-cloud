@@ -25,7 +25,8 @@ review. Activation starts with the current Canonical save; later publications
 are received in order, including turns published while this Companion was
 offline or paused. Campaign cards show reception progress, actionable failures,
 and cumulative archive content received. A missing current save can be explicitly
-redownloaded. Sending and local edit reconciliation remain in SOL-34 and SOL-35.
+redownloaded. SOL-34 adds content provenance and explicit manual Turn submission.
+Automatic sending remains in SOL-35.
 Tray, autostart, notifications, and updater installation remain in SOL-36 and
 SOL-37 under
 [SOL-29](https://linear.app/1solon/issue/SOL-29/spec-rebuild-shadow-cloud-companion-as-a-greenfield-cross-platform-app).
@@ -71,7 +72,7 @@ pnpm --filter @shadow-cloud/desktop dev:ui
 ```
 
 Open `http://127.0.0.1:1420/?scenario=onboarding`, `active`, `receiving`, `offline`,
-`paused`, or `update-required`. These explicitly labelled, synthetic engine adapters
+`paused`, `manual`, or `update-required`. These explicitly labelled, synthetic engine adapters
 exercise the production React boundary without real accounts, files, or
 transfers. No query parameter activates them in a production build;
 `check-bundle.mjs` verifies that their code and campaign fixtures are absent.
@@ -170,6 +171,33 @@ Pause and other commands interrupt read-only receive requests and scans; rotatin
 credential exchanges finish before the next command. Missing or changed owned
 folders require player attention. Signing out removes campaign projections and
 stops reception while preserving files and durable receive history.
+
+## Manual Turn submission
+
+Complete scans classify `.se1` files by SHA-256 identity. Received or accepted
+contents remain known after a rename, copy, or account change in the same Campaign
+folder. Ignore decisions, authorization, cursors, and pending operations remain
+account-specific. Two matching complete observations and a full read establish
+stability; an incomplete scan preserves candidates and blocks sending. Candidate
+cards show filename, modification time, size, and explicit Send, Ignore, or Restore.
+
+Send rechecks the reviewed Campaign baseline and exact contents, records a random
+operation key, and flushes immutable staging bytes before dispatch. The API commits
+an immutable receipt in the same transaction as the Save publication and turn
+advance. Replays bind account, Campaign, baseline, filename, size, and content hash;
+replacement of the Canonical save cannot alter that receipt. A lost response is
+resolved through authenticated read-only receipt lookup, with any retry retaining
+the original operation key and staging bytes. A queued command interrupts receipt
+lookups and prevents starting another POST; an already dispatched POST finishes.
+Only resolved engine staging copies are reclaimed. Original player files remain
+in place, including files edited while a submission is in flight.
+
+The receive observation includes `baseline` and `canSubmit` facts owned by Rust.
+Submission uses multipart `POST /v1/companion/campaigns/:id/submissions/:operationKey`
+with `baseline`, `contentHash`, UTF-8 `filename`, and `file`. Receipt recovery uses
+`GET /v1/companion/submissions/:operationKey`, including after Campaign membership
+loss. The forward `companion_submission_receipts` migration is required for these
+endpoints; historical migrations remain intact.
 
 ## Checks and distributions
 

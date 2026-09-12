@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  BadRequestException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -9,11 +10,16 @@ import type { FileVersion, Prisma, PrismaClient } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { FileStorageService } from '../games/file-storage.service';
 import { MAX_ARCHIVE_BYTES } from '../save-format';
+import { TurnMutationsService } from '../games/services/turn-mutations.service';
+import { TurnRecordsService } from '../games/services/turn-records.service';
+import { saveBaseline } from '../games/support/save-baseline';
+import type { UploadedSaveFile } from '../games/support/game-payload.types';
 
 const membership = (userId: string) => ({
   OR: [{ organizerId: userId }, { players: { some: { userId } } }],
 });
 const gameInclude = {
+  players: true,
   turnState: { include: { activePlayer: true } },
   fileVersions: { orderBy: { versionNumber: 'desc' }, take: 1 },
 } satisfies Prisma.GameInclude;
@@ -24,10 +30,99 @@ const gameInclude = {
  */
 @Injectable()
 export class CompanionService {
+  private readonly mutations: TurnMutationsService;
   constructor(
     private readonly database: PrismaClient,
     private readonly storage: FileStorageService,
-  ) {}
+    mutations?: TurnMutationsService,
+  ) {
+    this.mutations =
+      mutations ??
+      new TurnMutationsService(database, new TurnRecordsService(), {
+        fileStorage: storage,
+      });
+  }
+
+  async receipt(accountId: string, operationKey: string) {
+    const record = await this.database.companionSubmission.findUnique({
+      where: { accountId_operationKey: { accountId, operationKey } },
+    });
+    if (!record) throw new NotFoundException({ code: 'receipt-absent' });
+    return JSON.parse(record.receipt) as Record<string, unknown>;
+  }
+
+  async submit(
+    accountId: string,
+    campaignId: string,
+    operationKey: string,
+    baseline: string,
+    contentHash: string,
+    file: UploadedSaveFile,
+  ) {
+    if (
+      !/^[a-zA-Z0-9_-]{16,128}$/.test(operationKey) ||
+      typeof baseline !== 'string' ||
+      baseline.length > 512 ||
+      !baseline ||
+      typeof contentHash !== 'string' ||
+      !/^sha256:[a-f0-9]{64}$/.test(contentHash) ||
+      !file?.buffer?.length ||
+      file.buffer.length > MAX_ARCHIVE_BYTES ||
+      !/^[^/\\]{1,180}\.se1$/i.test(file.originalname) ||
+      Buffer.byteLength(file.originalname, 'utf8') > 180 ||
+      file.originalname.startsWith('.') ||
+      /[<>:"|?*\p{Cc}]/u.test(file.originalname) ||
+      /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])\./i.test(file.originalname) ||
+      digest(file.buffer) !== contentHash
+    )
+      throw new BadRequestException({ code: 'invalid-submission' });
+    const fingerprint = digest(
+      Buffer.from(
+        JSON.stringify([
+          accountId,
+          campaignId,
+          baseline,
+          contentHash,
+          file.originalname,
+          file.buffer.length,
+        ]),
+      ),
+    );
+    const replay = async () => {
+      const row = await this.database.companionSubmission.findUnique({
+        where: { accountId_operationKey: { accountId, operationKey } },
+      });
+      if (!row) return null;
+      if (row.fingerprint !== fingerprint)
+        throw new ConflictException({ code: 'operation-key-reused' });
+      return JSON.parse(row.receipt) as Record<string, unknown>;
+    };
+    const existing = await replay();
+    if (existing) return existing;
+    try {
+      await this.mutations.uploadSave(
+        campaignId,
+        accountId,
+        { ...file, size: file.buffer.length },
+        {
+          expectedSaveBaseline: baseline,
+          companionSubmission: { operationKey, fingerprint },
+        },
+      );
+    } catch (error) {
+      const committed = await replay();
+      if (committed) return committed;
+      if (error instanceof ConflictException)
+        throw new ConflictException({ code: 'stale-submission' });
+      if (
+        error instanceof ForbiddenException ||
+        error instanceof NotFoundException
+      )
+        throw new ForbiddenException({ code: 'submission-not-authorized' });
+      throw error;
+    }
+    return this.receipt(accountId, operationKey);
+  }
 
   private async bytes(file: FileVersion) {
     try {
@@ -78,6 +173,16 @@ export class CompanionService {
       const campaigns = [];
       for (const game of games) {
         campaigns.push({
+          baseline: saveBaseline(game),
+          canSubmit:
+            game.turnState?.activePlayerId === userId &&
+            game.players
+              .filter((seat) =>
+                game.turnState?.activePlayerEntryId
+                  ? seat.id === game.turnState.activePlayerEntryId
+                  : seat.userId === userId,
+              )
+              .filter((seat) => seat.userId === userId).length === 1,
           id: game.id,
           number: game.gameNumber,
           name: game.name,
