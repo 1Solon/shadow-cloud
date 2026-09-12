@@ -1487,3 +1487,632 @@ fn typed_commands_reject_unknown_fields_and_never_offer_force_send() {
         assert!(serde_json::from_str::<Command>(command).is_err());
     }
 }
+
+#[derive(Default)]
+struct PublicationRemote {
+    publications_unauthorized_once: std::sync::atomic::AtomicBool,
+    download_unauthorized_once: std::sync::atomic::AtomicBool,
+    expired: std::sync::atomic::AtomicBool,
+    revoked: std::sync::atomic::AtomicBool,
+    refreshed: std::sync::atomic::AtomicU32,
+    during_download: Mutex<Option<Box<dyn FnOnce() + Send>>>,
+    saves: Mutex<Vec<(shadow_cloud_companion_engine::SavePublication, Vec<u8>)>>,
+}
+impl PublicationRemote {
+    fn publish(&self, content: &[u8]) {
+        use sha2::{Digest, Sha256};
+        let mut saves = self.saves.lock().unwrap();
+        let publication = saves.len() as u32 + 1;
+        saves.push((
+            shadow_cloud_companion_engine::SavePublication {
+                publication,
+                file_version_id: format!("file-{publication}"),
+                content_revision: 0,
+                content_hash: format!("sha256:{:x}", Sha256::digest(content)),
+                size: content.len() as u64,
+                filename: "turn.se1".into(),
+                published_at: "2026-09-12T12:00:00Z".into(),
+            },
+            content.to_vec(),
+        ));
+    }
+}
+#[async_trait]
+impl CompanionRemote for PublicationRemote {
+    async fn create_handoff(&self) -> Result<Handoff, RemoteError> {
+        ApprovedRemote.create_handoff().await
+    }
+    async fn exchange_browser(
+        &self,
+        id: &str,
+        secret: &str,
+    ) -> Result<ExchangeOutcome, RemoteError> {
+        ApprovedRemote.exchange_browser(id, secret).await
+    }
+    async fn exchange_token(&self, token: &str) -> Result<DeviceCredentials, RemoteError> {
+        ApprovedRemote.exchange_token(token).await
+    }
+    async fn refresh(&self, token: &str) -> Result<DeviceCredentials, RemoteError> {
+        if self.revoked.load(std::sync::atomic::Ordering::SeqCst) {
+            return Err(RemoteError::Rejected);
+        }
+        self.expired
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+        self.refreshed
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        ApprovedRemote.refresh(token).await
+    }
+    async fn revoke(&self, token: &str) -> Result<(), RemoteError> {
+        ApprovedRemote.revoke(token).await
+    }
+    async fn observe(
+        &self,
+        _: &str,
+    ) -> Result<
+        Vec<shadow_cloud_companion_engine::ObservedCampaign>,
+        shadow_cloud_companion_engine::ReceiveError,
+    > {
+        if self.expired.load(std::sync::atomic::Ordering::SeqCst)
+            || self.revoked.load(std::sync::atomic::Ordering::SeqCst)
+        {
+            return Err(shadow_cloud_companion_engine::ReceiveError::Unauthorized);
+        }
+        Ok(vec![shadow_cloud_companion_engine::ObservedCampaign {
+            id: "campaign-1".into(),
+            number: 42,
+            name: "Campaign".into(),
+            round: 1,
+            active_lord: "Solon".into(),
+            turn_started_at: None,
+            current: self.saves.lock().unwrap().last().map(|s| s.0.clone()),
+        }])
+    }
+    async fn publications(
+        &self,
+        _: &str,
+        _: &str,
+        after: u32,
+    ) -> Result<
+        shadow_cloud_companion_engine::PublicationPage,
+        shadow_cloud_companion_engine::ReceiveError,
+    > {
+        if self
+            .publications_unauthorized_once
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
+            return Err(shadow_cloud_companion_engine::ReceiveError::Unauthorized);
+        }
+        let saves = self.saves.lock().unwrap();
+        Ok(shadow_cloud_companion_engine::PublicationPage {
+            current: saves.last().map(|s| s.0.clone()),
+            publications: saves
+                .iter()
+                .filter(|s| s.0.publication > after)
+                .take(100)
+                .map(|s| s.0.clone())
+                .collect(),
+        })
+    }
+    async fn download(
+        &self,
+        _: &str,
+        _: &str,
+        save: &shadow_cloud_companion_engine::SavePublication,
+    ) -> Result<Vec<u8>, shadow_cloud_companion_engine::ReceiveError> {
+        if self
+            .download_unauthorized_once
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
+            return Err(shadow_cloud_companion_engine::ReceiveError::Unauthorized);
+        }
+        let bytes = self
+            .saves
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|s| &s.0 == save)
+            .map(|s| s.1.clone())
+            .ok_or(shadow_cloud_companion_engine::ReceiveError::SaveChanged);
+        if let Some(action) = self.during_download.lock().unwrap().take() {
+            action();
+        }
+        bytes
+    }
+}
+
+async fn receiving_engine(
+    root: &std::path::Path,
+    database: &std::path::Path,
+    remote: Arc<PublicationRemote>,
+    vault: Arc<FakeVault>,
+) -> Engine {
+    let mut engine = Engine::open(
+        database,
+        remote,
+        Arc::new(FakePlatform {
+            selected: Mutex::new(Some(root.into())),
+            ..Default::default()
+        }),
+        vault,
+    )
+    .unwrap();
+    engine.observe_protocol(Ok(RELEASE.into()));
+    engine.command(Command::ContinueOnboarding).await.unwrap();
+    engine
+        .command(Command::SubmitHandoffToken {
+            token: "token".into(),
+        })
+        .await
+        .unwrap();
+    engine.command(Command::ContinueOnboarding).await.unwrap();
+    engine.command(Command::ChooseCompanionRoot).await.unwrap();
+    engine.command(Command::ContinueOnboarding).await.unwrap();
+    engine.command(Command::ContinueOnboarding).await.unwrap();
+    engine.command(Command::CompleteOnboarding).await.unwrap();
+    engine
+}
+fn received_files(root: &std::path::Path) -> Vec<Vec<u8>> {
+    let mut contents = Vec::new();
+    for entry in fs::read_dir(root).unwrap() {
+        let folder = entry.unwrap().path();
+        if folder.is_dir() {
+            for file in fs::read_dir(folder).unwrap() {
+                let path = file.unwrap().path();
+                if path.extension().is_some_and(|e| e == "se1") {
+                    contents.push(fs::read(path).unwrap());
+                }
+            }
+        }
+    }
+    contents.sort();
+    contents
+}
+#[tokio::test]
+async fn activation_receives_only_current_then_catches_every_future_publication_after_restart() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("root");
+    fs::create_dir(&root).unwrap();
+    let db = temp.path().join("state/companion.sqlite3");
+    let remote = Arc::new(PublicationRemote::default());
+    let vault = Arc::new(FakeVault::default());
+    remote.publish(b"old");
+    remote.publish(b"current");
+    let mut engine = receiving_engine(&root, &db, remote.clone(), vault.clone()).await;
+    engine.reconcile().await.unwrap();
+    assert_eq!(received_files(&root), vec![b"current".to_vec()]);
+    drop(engine);
+    remote.publish(b"third");
+    remote.publish(b"fourth");
+    let mut restarted =
+        Engine::open(&db, remote, Arc::new(FakePlatform::default()), vault).unwrap();
+    restarted.observe_protocol(Ok(RELEASE.into()));
+    restarted.restore_session().await.unwrap();
+    let snapshot = restarted.reconcile().await.unwrap();
+    assert_eq!(snapshot.campaigns[0].status_label, "Synchronized");
+    assert_eq!(
+        received_files(&root),
+        vec![b"current".to_vec(), b"fourth".to_vec(), b"third".to_vec()]
+    );
+}
+
+#[tokio::test]
+async fn identical_publications_share_received_contents_and_deletion_requires_explicit_redownload()
+{
+    use shadow_cloud_companion_engine::CampaignAction;
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("root");
+    fs::create_dir(&root).unwrap();
+    let remote = Arc::new(PublicationRemote::default());
+    remote.publish(b"same");
+    let mut engine = receiving_engine(
+        &root,
+        &temp.path().join("state/db"),
+        remote.clone(),
+        Arc::new(FakeVault::default()),
+    )
+    .await;
+    engine.reconcile().await.unwrap();
+    let folder = fs::read_dir(&root).unwrap().next().unwrap().unwrap().path();
+    fs::rename(folder.join("turn.se1"), folder.join("renamed.se1")).unwrap();
+    remote.publish(b"same");
+    engine.reconcile().await.unwrap();
+    assert_eq!(received_files(&root), vec![b"same".to_vec()]);
+    fs::remove_file(folder.join("renamed.se1")).unwrap();
+    let snapshot = engine.reconcile().await.unwrap();
+    assert!(received_files(&root).is_empty());
+    assert!(snapshot.campaigns[0]
+        .actions
+        .contains(&CampaignAction::RedownloadCurrent));
+    engine
+        .command(Command::CampaignAction {
+            campaign_id: "campaign-1".into(),
+            action: CampaignAction::RedownloadCurrent,
+        })
+        .await
+        .unwrap();
+    assert_eq!(received_files(&root), vec![b"same".to_vec()]);
+    remote.publish(b"new");
+    engine.reconcile().await.unwrap();
+    fs::remove_file(folder.join("turn.se1")).unwrap();
+    engine.reconcile().await.unwrap();
+    assert_eq!(received_files(&root), vec![b"new".to_vec()]);
+}
+
+#[tokio::test]
+async fn a_failed_cursor_commit_recovers_published_files_without_duplicates_or_skipping_later_turns(
+) {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("root");
+    fs::create_dir(&root).unwrap();
+    let db = temp.path().join("state/db");
+    let remote = Arc::new(PublicationRemote::default());
+    let vault = Arc::new(FakeVault::default());
+    remote.publish(b"first");
+    let mut engine = receiving_engine(&root, &db, remote.clone(), vault.clone()).await;
+    let database = rusqlite::Connection::open(&db).unwrap();
+    database.execute_batch("CREATE TRIGGER fail_cursor BEFORE UPDATE OF cursor ON receive_campaigns BEGIN SELECT RAISE(ABORT,'disk unavailable'); END;").unwrap();
+    let snapshot = engine.reconcile().await.unwrap();
+    assert_eq!(
+        snapshot.campaigns[0].status_label,
+        "Receive needs attention"
+    );
+    assert_eq!(received_files(&root), vec![b"first".to_vec()]);
+    drop(engine);
+    database.execute_batch("DROP TRIGGER fail_cursor;").unwrap();
+    remote.publish(b"second");
+    let mut engine = Engine::open(&db, remote, Arc::new(FakePlatform::default()), vault).unwrap();
+    engine.observe_protocol(Ok(RELEASE.into()));
+    engine.restore_session().await.unwrap();
+    engine.reconcile().await.unwrap();
+    assert_eq!(
+        received_files(&root),
+        vec![b"first".to_vec(), b"second".to_vec()]
+    );
+}
+
+#[tokio::test]
+async fn receiving_preserves_filename_collisions_and_catches_paused_publications_without_recreating_missing_folders(
+) {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("root");
+    fs::create_dir(&root).unwrap();
+    let folder = ensure_campaign_folder(
+        &root,
+        &CampaignIdentity {
+            id: "campaign-1".into(),
+            number: 42,
+            name: "Campaign".into(),
+        },
+    )
+    .unwrap()
+    .path;
+    fs::write(folder.join("turn.se1"), b"local work").unwrap();
+    let remote = Arc::new(PublicationRemote::default());
+    remote.publish(b"first");
+    let mut engine = receiving_engine(
+        &root,
+        &temp.path().join("state/db"),
+        remote.clone(),
+        Arc::new(FakeVault::default()),
+    )
+    .await;
+    engine
+        .command(Command::SetPaused { paused: true })
+        .await
+        .unwrap();
+    engine.reconcile().await.unwrap();
+    remote.publish(b"second");
+    engine.reconcile().await.unwrap();
+    assert_eq!(received_files(&root), vec![b"local work".to_vec()]);
+    engine
+        .command(Command::SetPaused { paused: false })
+        .await
+        .unwrap();
+    engine.reconcile().await.unwrap();
+    assert_eq!(
+        received_files(&root),
+        vec![
+            b"first".to_vec(),
+            b"local work".to_vec(),
+            b"second".to_vec()
+        ]
+    );
+    let moved = root.join("moved");
+    fs::rename(&folder, &moved).unwrap();
+    remote.publish(b"third");
+    engine.reconcile().await.unwrap();
+    assert!(received_files(&root).contains(&b"third".to_vec()));
+    fs::rename(&moved, temp.path().join("outside")).unwrap();
+    remote.publish(b"fourth");
+    assert_eq!(
+        engine.reconcile().await.unwrap().campaigns[0].status_label,
+        "Receive needs attention"
+    );
+    assert!(received_files(&root).is_empty());
+}
+
+#[tokio::test]
+async fn corrupt_downloads_never_become_visible_and_retry_does_not_skip_them() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("root");
+    fs::create_dir(&root).unwrap();
+    let remote = Arc::new(PublicationRemote::default());
+    remote.publish(b"first");
+    let mut engine = receiving_engine(
+        &root,
+        &temp.path().join("state/db"),
+        remote.clone(),
+        Arc::new(FakeVault::default()),
+    )
+    .await;
+    remote.saves.lock().unwrap()[0].1 = b"wrong".to_vec();
+    assert_eq!(
+        engine.reconcile().await.unwrap().campaigns[0].status_label,
+        "Receive needs attention"
+    );
+    assert!(received_files(&root).is_empty());
+    remote.saves.lock().unwrap()[0].1 = b"first".to_vec();
+    remote.publish(b"second");
+    engine.reconcile().await.unwrap();
+    assert_eq!(
+        received_files(&root),
+        vec![b"first".to_vec(), b"second".to_vec()]
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn folder_substitution_during_download_cannot_write_outside_the_owned_campaign() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("root");
+    fs::create_dir(&root).unwrap();
+    let outside = temp.path().join("outside");
+    fs::create_dir(&outside).unwrap();
+    let remote = Arc::new(PublicationRemote::default());
+    remote.publish(b"first");
+    let mut engine = receiving_engine(
+        &root,
+        &temp.path().join("state/db"),
+        remote.clone(),
+        Arc::new(FakeVault::default()),
+    )
+    .await;
+    let copied_root = root.clone();
+    let copied_outside = outside.clone();
+    *remote.during_download.lock().unwrap() = Some(Box::new(move || {
+        let folder = fs::read_dir(&copied_root)
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        fs::rename(&folder, copied_root.join("moved")).unwrap();
+        std::os::unix::fs::symlink(copied_outside, &folder).unwrap();
+    }));
+    assert_eq!(
+        engine.reconcile().await.unwrap().campaigns[0].status_label,
+        "Receive needs attention"
+    );
+    assert_eq!(fs::read_dir(outside).unwrap().count(), 0);
+}
+
+#[tokio::test]
+async fn a_player_edit_after_interrupted_publication_is_preserved_while_the_receive_retries() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("root");
+    fs::create_dir(&root).unwrap();
+    let db = temp.path().join("state/db");
+    let remote = Arc::new(PublicationRemote::default());
+    remote.publish(b"first");
+    let mut engine =
+        receiving_engine(&root, &db, remote.clone(), Arc::new(FakeVault::default())).await;
+    let database = rusqlite::Connection::open(db).unwrap();
+    database.execute_batch("CREATE TRIGGER fail_cursor BEFORE UPDATE OF cursor ON receive_campaigns BEGIN SELECT RAISE(ABORT,'disk unavailable'); END;").unwrap();
+    engine.reconcile().await.unwrap();
+    let folder = fs::read_dir(&root).unwrap().next().unwrap().unwrap().path();
+    fs::write(folder.join("turn.se1"), b"local edit").unwrap();
+    database.execute_batch("DROP TRIGGER fail_cursor;").unwrap();
+    remote.publish(b"second");
+    engine.reconcile().await.unwrap();
+    assert_eq!(
+        received_files(&root),
+        vec![
+            b"first".to_vec(),
+            b"local edit".to_vec(),
+            b"second".to_vec()
+        ]
+    );
+}
+
+#[tokio::test]
+async fn access_expiry_refreshes_before_receiving_and_revocation_clears_account_state_without_file_effects(
+) {
+    use std::sync::atomic::Ordering;
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("root");
+    fs::create_dir(&root).unwrap();
+    let remote = Arc::new(PublicationRemote::default());
+    remote.publish(b"first");
+    let mut engine = receiving_engine(
+        &root,
+        &temp.path().join("state/db"),
+        remote.clone(),
+        Arc::new(FakeVault::default()),
+    )
+    .await;
+    remote.expired.store(true, Ordering::SeqCst);
+    engine.reconcile().await.unwrap();
+    assert_eq!(remote.refreshed.load(Ordering::SeqCst), 1);
+    assert_eq!(received_files(&root), vec![b"first".to_vec()]);
+    remote.revoked.store(true, Ordering::SeqCst);
+    remote.publish(b"second");
+    let snapshot = engine.reconcile().await.unwrap();
+    assert_eq!(snapshot.session.state, SessionState::SignedOut);
+    assert!(snapshot.campaigns.is_empty());
+    assert_eq!(received_files(&root), vec![b"first".to_vec()]);
+}
+
+#[tokio::test]
+async fn a_large_backlog_reports_progress_and_receives_all_pages_in_order() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("root");
+    fs::create_dir(&root).unwrap();
+    let remote = Arc::new(PublicationRemote::default());
+    remote.publish(b"first");
+    let mut engine = receiving_engine(
+        &root,
+        &temp.path().join("state/db"),
+        remote.clone(),
+        Arc::new(FakeVault::default()),
+    )
+    .await;
+    engine.reconcile().await.unwrap();
+    for n in 0u32..104 {
+        remote.publish(&n.to_be_bytes());
+    }
+    let first = engine.reconcile().await.unwrap();
+    assert_eq!(first.campaigns[0].status_label, "Receiving publications");
+    assert_eq!(received_files(&root).len(), 101);
+    let finished = engine.reconcile().await.unwrap();
+    assert_eq!(finished.campaigns[0].status_label, "Synchronized");
+    assert_eq!(finished.campaigns[0].archive_bytes, 421);
+    assert_eq!(received_files(&root).len(), 105);
+}
+
+#[tokio::test]
+async fn a_same_publication_replacement_preserves_both_contents_and_large_unrelated_files() {
+    use sha2::{Digest, Sha256};
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("root");
+    fs::create_dir(&root).unwrap();
+    let remote = Arc::new(PublicationRemote::default());
+    remote.publish(b"first");
+    let mut engine = receiving_engine(
+        &root,
+        &temp.path().join("state/db"),
+        remote.clone(),
+        Arc::new(FakeVault::default()),
+    )
+    .await;
+    engine.reconcile().await.unwrap();
+    let folder = fs::read_dir(&root).unwrap().next().unwrap().unwrap().path();
+    fs::File::create(folder.join("unrelated.bin"))
+        .unwrap()
+        .set_len(30 * 1024 * 1024)
+        .unwrap();
+    {
+        let mut saves = remote.saves.lock().unwrap();
+        saves[0].0.content_revision = 1;
+        saves[0].0.content_hash = format!("sha256:{:x}", Sha256::digest(b"fixed"));
+        saves[0].1 = b"fixed".to_vec();
+    }
+    let snapshot = engine.reconcile().await.unwrap();
+    assert_eq!(snapshot.campaigns[0].status_label, "Synchronized");
+    assert_eq!(
+        received_files(&root),
+        vec![b"first".to_vec(), b"fixed".to_vec()]
+    );
+    assert_eq!(
+        fs::metadata(folder.join("unrelated.bin")).unwrap().len(),
+        30 * 1024 * 1024
+    );
+}
+
+#[tokio::test]
+async fn access_expiry_during_publication_poll_rotates_the_session_without_skipping_saves() {
+    use std::sync::atomic::Ordering;
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("root");
+    fs::create_dir(&root).unwrap();
+    let remote = Arc::new(PublicationRemote::default());
+    remote.publish(b"first");
+    let mut engine = receiving_engine(
+        &root,
+        &temp.path().join("state/db"),
+        remote.clone(),
+        Arc::new(FakeVault::default()),
+    )
+    .await;
+    remote
+        .publications_unauthorized_once
+        .store(true, Ordering::SeqCst);
+    let snapshot = engine.reconcile().await.unwrap();
+    assert_eq!(snapshot.session.state, SessionState::SignedIn);
+    assert_eq!(remote.refreshed.load(Ordering::SeqCst), 1);
+    assert_eq!(received_files(&root), vec![b"first".to_vec()]);
+}
+
+#[tokio::test]
+async fn access_expiry_during_download_rotates_the_session_and_retries_without_signing_out() {
+    use std::sync::atomic::Ordering;
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("root");
+    fs::create_dir(&root).unwrap();
+    let remote = Arc::new(PublicationRemote::default());
+    remote.publish(b"first");
+    let mut engine = receiving_engine(
+        &root,
+        &temp.path().join("state/db"),
+        remote.clone(),
+        Arc::new(FakeVault::default()),
+    )
+    .await;
+    remote
+        .download_unauthorized_once
+        .store(true, Ordering::SeqCst);
+    let snapshot = engine.reconcile().await.unwrap();
+    assert_eq!(snapshot.session.state, SessionState::SignedIn);
+    assert_eq!(remote.refreshed.load(Ordering::SeqCst), 1);
+    assert_eq!(received_files(&root), vec![b"first".to_vec()]);
+}
+
+#[tokio::test]
+async fn a_replacement_cleans_superseded_staging_and_preserves_an_oversized_player_edit() {
+    use sha2::{Digest, Sha256};
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("root");
+    fs::create_dir(&root).unwrap();
+    let db = temp.path().join("state/db");
+    let remote = Arc::new(PublicationRemote::default());
+    remote.publish(b"first");
+    let mut engine =
+        receiving_engine(&root, &db, remote.clone(), Arc::new(FakeVault::default())).await;
+    let database = rusqlite::Connection::open(db).unwrap();
+    database.execute_batch("CREATE TRIGGER fail_cursor BEFORE UPDATE OF cursor ON receive_campaigns BEGIN SELECT RAISE(ABORT,'disk unavailable'); END;").unwrap();
+    engine.reconcile().await.unwrap();
+    let folder = fs::read_dir(&root).unwrap().next().unwrap().unwrap().path();
+    fs::OpenOptions::new()
+        .write(true)
+        .open(folder.join("turn.se1"))
+        .unwrap()
+        .set_len(30 * 1024 * 1024)
+        .unwrap();
+    database.execute_batch("DROP TRIGGER fail_cursor;").unwrap();
+    assert_eq!(
+        engine.reconcile().await.unwrap().campaigns[0].status_label,
+        "Synchronized"
+    );
+    assert_eq!(
+        fs::metadata(folder.join("turn.se1")).unwrap().len(),
+        30 * 1024 * 1024
+    );
+    remote.publish(b"later");
+    database.execute_batch("CREATE TRIGGER fail_cursor BEFORE UPDATE OF cursor ON receive_campaigns BEGIN SELECT RAISE(ABORT,'disk unavailable'); END;").unwrap();
+    engine.reconcile().await.unwrap();
+    {
+        let mut saves = remote.saves.lock().unwrap();
+        saves[1].0.content_revision = 1;
+        saves[1].0.content_hash = format!("sha256:{:x}", Sha256::digest(b"fixed"));
+        saves[1].1 = b"fixed".to_vec();
+    }
+    database.execute_batch("DROP TRIGGER fail_cursor;").unwrap();
+    assert_eq!(
+        engine.reconcile().await.unwrap().campaigns[0].status_label,
+        "Synchronized"
+    );
+    assert!(!fs::read_dir(folder).unwrap().any(|e| e
+        .unwrap()
+        .file_name()
+        .to_string_lossy()
+        .starts_with(".shadow-cloud-receive-")));
+}

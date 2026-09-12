@@ -13,16 +13,19 @@ icons are generated from `apps/web/src/app/favicon.ico`.
 
 ## Current slice
 
-SOL-32 adds the Companion's Device-session sign-in, durable non-secret
+SOL-32 added the Companion's Device-session sign-in, durable non-secret
 preferences, explicit Companion-root onboarding, and immutable Campaign-folder
 ownership. Browser handoff and one-use pasted tokens both exchange for a scoped,
 rotating Device session. The refresh secret lives in the operating-system vault;
 when that vault is unavailable, the session is deliberately memory-only. SQLite
 never stores credentials.
 
-Campaign observation and save transfer are still deferred. The interface remains
-truthfully empty after onboarding, and its transfer controls remain unavailable
-until the observation and reconciliation slices land in SOL-33 through SOL-35.
+SOL-33 adds campaign discovery and automatic save reception after the final setup
+review. Activation starts with the current Canonical save; later publications
+are received in order, including turns published while this Companion was
+offline or paused. Campaign cards show reception progress, actionable failures,
+and cumulative archive content received. A missing current save can be explicitly
+redownloaded. Sending and local edit reconciliation remain in SOL-34 and SOL-35.
 Tray, autostart, notifications, and updater installation remain in SOL-36 and
 SOL-37 under
 [SOL-29](https://linear.app/1solon/issue/SOL-29/spec-rebuild-shadow-cloud-companion-as-a-greenfield-cross-platform-app).
@@ -67,8 +70,8 @@ For deterministic Linux browser checks:
 pnpm --filter @shadow-cloud/desktop dev:ui
 ```
 
-Open `http://127.0.0.1:1420/?scenario=onboarding`, `active`, `offline`, `paused`,
-or `update-required`. These explicitly labelled, synthetic engine adapters
+Open `http://127.0.0.1:1420/?scenario=onboarding`, `active`, `receiving`, `offline`,
+`paused`, or `update-required`. These explicitly labelled, synthetic engine adapters
 exercise the production React boundary without real accounts, files, or
 transfers. No query parameter activates them in a production build;
 `check-bundle.mjs` verifies that their code and campaign fixtures are absent.
@@ -117,7 +120,8 @@ on Linux, macOS, and Windows.
 ## Ownership and protocol
 
 `engine/` is a webview-independent Rust crate. A single native coordinator holds
-it under a mutex; snapshot queries and typed commands use the same state owner.
+it under a mutex; typed commands use that state owner, while snapshot queries
+read its latest published projection without waiting for network or file work.
 Its watch subscription retains the latest full snapshot instead of growing an
 unbounded event queue. React listens before requesting its initial snapshot,
 accepts only newer revisions, and unsubscribes on unmount.
@@ -132,8 +136,40 @@ The root `package.json` release is the protocol source for both the Rust build
 and `GET /v1/companion/protocol`. Only an exact match connects. Missing or invalid
 responses fail closed; a known mismatch remains read-only through later network
 failures. A match never silently resumes a paused application or changes upload
-preferences. The endpoint is not an authorization mechanism; future transfer
-endpoints must enforce device scopes and the same protocol gate server-side.
+preferences. Campaign observation, ordered publication polling, and exact save
+downloads enforce device scopes, campaign membership, and the same protocol gate
+server-side. Access-token expiry refreshes the session once before retrying;
+revocation requires sign-in again.
+
+## Receiving saves
+
+The API exposes `GET /v1/companion/campaigns`,
+`GET /v1/companion/campaigns/:id/publications?after=N`, and an exact-content
+download at `GET /v1/companion/campaigns/:id/saves/:fileId?revision=N&hash=...`.
+File versions supply durable publication order independently of the website's
+display retention limit. A replacement keeps its publication number and changes
+the content revision. Pages contain at most 100 publications; each receive tick
+handles one page per campaign and reports progress while a backlog remains.
+
+Before receiving, SQLite records the activation baseline, publication identity,
+content hash, and staging intent. Downloaded bytes must match the declared size
+and SHA-256 digest. The engine flushes the staged file before atomically linking
+it to a collision-free visible filename, then commits reception and the cursor
+together. Interrupted work can resume from its durable intent; cleanup of hidden
+staging aliases is also durable and retryable. Existing saves are never replaced.
+
+Identical content can reuse a received file even after the player renames it.
+Publication history remains in SQLite, so deleting an older file does not cause
+it to reappear. Only the explicit current-save action restores deleted current
+content. The archive figure counts distinct bytes received over time, including
+content subsequently deleted by the player; it is not current disk usage. The
+Companion does not prune player files.
+
+Reception runs in Rust, with content discovery and hashing on a native worker.
+Pause and other commands interrupt read-only receive requests and scans; rotating
+credential exchanges finish before the next command. Missing or changed owned
+folders require player attention. Signing out removes campaign projections and
+stops reception while preserving files and durable receive history.
 
 ## Checks and distributions
 

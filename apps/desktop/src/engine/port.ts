@@ -1,8 +1,17 @@
 // The UI's only application boundary. Kept in step with engine/src/lib.rs.
 export type Theme = "dark" | "light" | "system";
-export type SyncStatus = "conflict" | "sending" | "synchronized" | "archived";
+export type SyncStatus =
+  | "conflict"
+  | "sending"
+  | "synchronized"
+  | "archived"
+  | "receiving"
+  | "needs-attention";
 export type CampaignAction =
-  "resolve-conflict" | "cancel-automatic-send" | "open-folder";
+  | "resolve-conflict"
+  | "cancel-automatic-send"
+  | "open-folder"
+  | "redownload-current";
 export type OnboardingStage =
   | "welcome"
   | "sign-in"
@@ -23,6 +32,7 @@ export interface Campaign {
   automaticUploads: boolean;
   turnStartedAt: string | null;
   lastTransfer: string;
+  archiveBytes?: number;
   actions: CampaignAction[];
 }
 

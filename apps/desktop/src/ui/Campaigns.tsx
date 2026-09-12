@@ -4,6 +4,8 @@ import type { Campaign, Command, Snapshot, SyncStatus } from "../engine/port";
 
 const statuses: { value: SyncStatus; label: string }[] = [
   { value: "conflict", label: "Conflict" },
+  { value: "receiving", label: "Receiving" },
+  { value: "needs-attention", label: "Needs attention" },
   { value: "sending", label: "Sending" },
   { value: "synchronized", label: "Synchronized" },
   { value: "archived", label: "Archived" },
@@ -36,6 +38,7 @@ const actionLabels = {
   "resolve-conflict": "> RESOLVE CONFLICT",
   "cancel-automatic-send": "> CANCEL SEND",
   "open-folder": "OPEN FOLDER",
+  "redownload-current": "REDOWNLOAD CURRENT SAVE",
 };
 
 export function Campaigns({
@@ -69,7 +72,9 @@ export function Campaigns({
   // Overall actionable state must survive a visibility-only filter.
   const attention = snapshot.campaigns.filter(
     (campaign) =>
-      campaign.syncStatus === "conflict" || campaign.syncStatus === "sending",
+      campaign.syncStatus === "conflict" ||
+      campaign.syncStatus === "sending" ||
+      campaign.syncStatus === "needs-attention",
   ).length;
   const statusSummary =
     visibleStatuses.size === statuses.length
@@ -95,8 +100,8 @@ export function Campaigns({
             )}
           </div>
           <p className="section-intro">
-            Shadow Cloud watches these folders and handles new campaign saves
-            for you.
+            Shadow Cloud receives campaign saves into these folders. Sending
+            turns is coming in a later update.
           </p>
         </div>
         <div className="campaign-list-controls">
@@ -221,6 +226,8 @@ export function Campaigns({
                 </h2>
                 <small>
                   Turn {campaign.round} · Updated {campaign.lastTransfer}
+                  {campaign.archiveBytes !== undefined &&
+                    ` · Archive: ${(campaign.archiveBytes / (1024 * 1024)).toFixed(1)} MiB received`}
                 </small>
               </div>
               <dl className="campaign-facts">
@@ -240,6 +247,10 @@ export function Campaigns({
                 </div>
               </dl>
             </div>
+            {(campaign.syncStatus === "needs-attention" ||
+              campaign.syncStatus === "receiving") && (
+              <p className="campaign-receive-detail">{campaign.detail}</p>
+            )}
             {campaign.actions.length > 0 && (
               <div className="campaign-actions">
                 {campaign.actions.map((action) => (
@@ -280,7 +291,7 @@ export function Campaigns({
               <p>
                 {snapshot.campaigns.length
                   ? "Change your search or show another sync status."
-                  : "Campaign discovery is not available in this build. No files are transferred."}
+                  : "Campaigns will appear after connecting to Shadow Cloud. Their saves are received once setup is complete."}
               </p>
             </div>
             {snapshot.campaigns.length > 0 && (

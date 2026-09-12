@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { CompanionModule } from './companion/companion.module';
 import { CompanionProtocolController } from './companion/protocol.controller';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
@@ -14,6 +15,7 @@ import { GamesModule } from './games/games.module';
     }),
     AuthModule,
     GamesModule,
+    CompanionModule,
   ],
   controllers: [AppController, CompanionProtocolController],
   providers: [AppService],

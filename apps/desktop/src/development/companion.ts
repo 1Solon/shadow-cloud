@@ -92,6 +92,23 @@ export function createDevelopmentCompanion(scenario: string): Companion {
       actions: [],
     },
   ];
+  if (scenario === "receiving") {
+    campaigns[0] = {
+      ...campaigns[0],
+      syncStatus: "needs-attention",
+      statusLabel: "Current save missing",
+      detail:
+        "The current received save was deleted. Redownload it when needed.",
+      actions: ["redownload-current", "open-folder"],
+    };
+    campaigns[1] = {
+      ...campaigns[1],
+      syncStatus: "receiving",
+      statusLabel: "Receiving publications",
+      detail: "Catching up saves received while this Companion was offline.",
+      actions: [],
+    };
+  }
   let state: Snapshot = {
     revision: 0,
     appVersion: rootPackage.version,
@@ -298,6 +315,17 @@ export function createDevelopmentCompanion(scenario: string): Companion {
         // No file or network side effects, even in development.
         case "campaign-action":
           if (!state.onboarding.canSend) throw "onboarding-incomplete";
+          if (command.action === "redownload-current") {
+            const campaign = next.campaigns.find(
+              (c) => c.id === command.campaignId,
+            );
+            if (!campaign) throw "not-available";
+            campaign.syncStatus = "synchronized";
+            campaign.statusLabel = "Synchronized";
+            campaign.detail = "Current save received and verified.";
+            campaign.actions = ["open-folder"];
+            break;
+          }
           throw "not-available";
       }
       furthestOnboardingStep = Math.max(

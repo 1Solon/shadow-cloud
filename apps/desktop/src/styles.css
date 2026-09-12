@@ -2075,3 +2075,11 @@ p {
     outline: 2px solid Highlight;
   }
 }
+
+.campaign-receive-detail {
+  margin: 0;
+  padding: 0 1rem 0.75rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}

@@ -10,6 +10,9 @@ use std::{
     sync::Arc,
 };
 
+mod receive;
+pub use receive::{ObservedCampaign, PublicationPage, ReceiveError, SavePublication};
+
 pub const RELEASE: &str = env!("COMPANION_RELEASE");
 const CAMPAIGN_MARKER: &str = ".shadow-cloud-campaign.json";
 
@@ -310,6 +313,8 @@ pub enum SyncStatus {
     Sending,
     Synchronized,
     Archived,
+    Receiving,
+    NeedsAttention,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -326,6 +331,7 @@ pub struct Campaign {
     pub automatic_uploads: bool,
     pub turn_started_at: Option<String>,
     pub last_transfer: String,
+    pub archive_bytes: u64,
     pub actions: Vec<CampaignAction>,
 }
 
@@ -335,6 +341,7 @@ pub enum CampaignAction {
     ResolveConflict,
     CancelAutomaticSend,
     OpenFolder,
+    RedownloadCurrent,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -516,6 +523,28 @@ pub enum RemoteError {
 
 #[async_trait]
 pub trait CompanionRemote: Send + Sync {
+    fn receive_interrupted(&self) -> bool {
+        false
+    }
+    async fn observe(&self, _access: &str) -> Result<Vec<ObservedCampaign>, ReceiveError> {
+        Err(ReceiveError::Offline)
+    }
+    async fn publications(
+        &self,
+        _access: &str,
+        _campaign: &str,
+        _after: u32,
+    ) -> Result<PublicationPage, ReceiveError> {
+        Err(ReceiveError::Offline)
+    }
+    async fn download(
+        &self,
+        _access: &str,
+        _campaign: &str,
+        _save: &SavePublication,
+    ) -> Result<Vec<u8>, ReceiveError> {
+        Err(ReceiveError::Offline)
+    }
     async fn create_handoff(&self) -> Result<Handoff, RemoteError>;
     async fn exchange_browser(
         &self,
@@ -528,6 +557,9 @@ pub trait CompanionRemote: Send + Sync {
 }
 
 pub trait CompanionPlatform: Send + Sync {
+    fn open_folder(&self, _path: &Path) -> Result<(), ()> {
+        Err(())
+    }
     fn open_url(&self, url: &str) -> Result<(), ()>;
     fn choose_directory(&self) -> Result<Option<PathBuf>, ()>;
 }
@@ -548,8 +580,8 @@ struct PendingHandoff {
 }
 
 struct SessionSecrets {
-    #[allow(dead_code)]
     access_token: String,
+    account_id: String,
     refresh_token: String,
 }
 
@@ -607,6 +639,18 @@ impl Store {
                    key TEXT PRIMARY KEY NOT NULL,
                    value TEXT NOT NULL
                  );
+                 CREATE TABLE IF NOT EXISTS receive_campaigns (
+                   account TEXT NOT NULL, campaign TEXT NOT NULL, cursor INTEGER NOT NULL,
+                   folder TEXT, PRIMARY KEY(account, campaign)
+                 );
+                 CREATE TABLE IF NOT EXISTS receive_cleanup (account TEXT NOT NULL, campaign TEXT NOT NULL, path TEXT PRIMARY KEY NOT NULL);
+                 CREATE TABLE IF NOT EXISTS received_publications (
+                   account TEXT NOT NULL, campaign TEXT NOT NULL, publication INTEGER NOT NULL,
+                   revision INTEGER NOT NULL, hash TEXT NOT NULL, size INTEGER NOT NULL,
+                   path TEXT NOT NULL, stage TEXT, state TEXT NOT NULL,
+                   PRIMARY KEY(account, campaign, publication, revision)
+                 );
+                 CREATE INDEX IF NOT EXISTS received_hash ON received_publications(account, campaign, hash);
                  CREATE TABLE IF NOT EXISTS campaign_folders (
                    campaign_id TEXT PRIMARY KEY NOT NULL,
                    path TEXT NOT NULL UNIQUE
@@ -981,14 +1025,17 @@ impl Engine {
                     .set("paused", if paused { "true" } else { "false" })?;
                 self.snapshot.paused = paused;
             }
-            Command::CampaignAction { .. } => {
+            Command::CampaignAction {
+                campaign_id,
+                action,
+            } => {
                 if !self.onboarding_complete
                     || self.snapshot.session.state != SessionState::SignedIn
                 {
                     return Err(CommandError::OnboardingIncomplete);
                 }
                 self.require_compatible_server()?;
-                return Err(CommandError::NotAvailable);
+                self.receive_action(&campaign_id, action).await?;
             }
         }
         self.finish_change(&previous);
@@ -1145,6 +1192,7 @@ impl Engine {
         };
         self.secrets = Some(SessionSecrets {
             access_token: credentials.access_token,
+            account_id: credentials.device_session.user.id.clone(),
             refresh_token: credentials.refresh_token,
         });
         self.pending_handoff = None;
@@ -1182,6 +1230,8 @@ impl Engine {
         self.pending_handoff = None;
         self.snapshot.session = signed_out_session();
         self.snapshot.display_name = None;
+        self.snapshot.campaigns.clear();
+        self.snapshot.activity.clear();
     }
 
     fn require_compatible_server(&self) -> Result<(), CommandError> {
