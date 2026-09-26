@@ -16,4 +16,14 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
+  projects: [
+    {
+      name: "transfer-recovery",
+      testMatch: ["transfer-recovery.spec.ts", "upstream.spec.ts"],
+    },
+    {
+      name: "campaign",
+      testIgnore: ["transfer-recovery.spec.ts", "upstream.spec.ts"],
+    },
+  ],
 });
