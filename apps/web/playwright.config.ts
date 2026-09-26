@@ -5,7 +5,7 @@ export default defineConfig({
   globalSetup: "./browser/global-setup.ts",
   testMatch: "**/*.spec.ts",
   fullyParallel: true,
-  workers: 4,
+  workers: 6,
   retries: 0,
   forbidOnly: Boolean(process.env.CI),
   timeout: 120_000,

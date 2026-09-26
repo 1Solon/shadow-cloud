@@ -94,10 +94,10 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          key: playwright-shell-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Install Chromium
-        run: pnpm --filter @shadow-cloud/web test:browser:install
+        run: pnpm --filter @shadow-cloud/web test:browser:install --only-shell
 
       - name: Test authenticated campaign in Chromium
         run: pnpm --filter @shadow-cloud/web test:browser
