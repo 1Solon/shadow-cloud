@@ -6,7 +6,7 @@
     ":maintainLockFilesWeekly"
   ],
   "labels": ["dependencies"],
-  "minimumReleaseAge": "1 day",
+  "ignorePresets": ["security:minimumReleaseAgeNpm"],
   "rangeStrategy": "pin",
   "prConcurrentLimit": 5,
   "prHourlyLimit": 5,
