@@ -44,11 +44,8 @@ jobs:
         run: pnpm test
 
   browser:
-    name: Browser (${{ matrix.shard }}/6)
+    name: Browser
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -76,4 +73,4 @@ jobs:
         run: pnpm --filter @shadow-cloud/web test:browser:install --with-deps
 
       - name: Test authenticated campaign in Chromium
-        run: pnpm --filter @shadow-cloud/web test:browser --shard=${{ matrix.shard }}/6
+        run: pnpm --filter @shadow-cloud/web test:browser

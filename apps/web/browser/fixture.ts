@@ -1,7 +1,7 @@
 import { test as base, expect } from "@playwright/test";
 import { fork, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { cp, mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { encode } from "next-auth/jwt";
@@ -26,34 +26,7 @@ export const test = base.extend<{
       let upstream: Awaited<ReturnType<typeof startUpstream>> | undefined;
       let logs = "";
       try {
-        const appRoot = path.join(snapshot, "apps/web");
-        await mkdir(appRoot, { recursive: true });
         await mkdir(path.join(snapshot, "home"));
-        // Allowlist, not a checkout copy: never copy .env*, build caches or sessions.
-        for (const entry of [
-          "src",
-          "public",
-          "package.json",
-          "tsconfig.json",
-          "next.config.ts",
-          "postcss.config.mjs",
-        ]) {
-          await cp(path.join(source, entry), path.join(appRoot, entry), {
-            recursive: true,
-            filter: (entry) => !path.basename(entry).startsWith(".env"),
-          });
-        }
-        for (const entry of ["package.json", "tsconfig.base.json"]) {
-          await cp(
-            path.join(source, "../..", entry),
-            path.join(snapshot, entry),
-          );
-        }
-        await symlink(
-          path.join(source, "node_modules"),
-          path.join(appRoot, "node_modules"),
-          "junction",
-        );
         upstream = await startUpstream(secret);
         if (privilegedNonOverlord) {
           upstream.game.organizerId = "browser-successor";
@@ -63,13 +36,13 @@ export const test = base.extend<{
           });
         }
         child = fork(path.join(source, "browser/next-server.mjs"), [], {
-          cwd: appRoot,
+          cwd: process.env.BROWSER_BUILD,
           execArgv: [],
           env: {
             PATH: process.env.PATH,
             HOME: path.join(snapshot, "home"),
             TMPDIR: snapshot,
-            NODE_ENV: "development",
+            NODE_ENV: "production",
             NEXT_TELEMETRY_DISABLED: "1",
             AUTH_SECRET: secret,
             DISCORD_CLIENT_ID: "browser-test-not-an-oauth-client",
