@@ -71,8 +71,11 @@ jobs:
         run: pnpm exec turbo run test --filter="${{ matrix.filter }}"
 
   browser:
-    name: Browser
+    name: Browser (${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        shard: [1, 2]
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -100,4 +103,4 @@ jobs:
         run: pnpm --filter @shadow-cloud/web test:browser:install --only-shell
 
       - name: Test authenticated campaign in Chromium
-        run: pnpm --filter @shadow-cloud/web test:browser
+        run: pnpm --filter @shadow-cloud/web test:browser --shard=${{ matrix.shard }}/2
