@@ -8,14 +8,16 @@ The API reads its UTF-8 value from `SHADOW_CLOUD_SAVE_ARCHIVE_KEY`; provision it
 through the server's secret configuration. No default key or credentials are
 stored in this repository. Missing configuration returns a safe 503 response.
 
-For Dokploy Compose deployments, set `SHADOW_CLOUD_SAVE_ARCHIVE_KEY` in the
-Compose project's environment. The repository's `docker-compose.yml` explicitly
+In production (Railway), set `SHADOW_CLOUD_SAVE_ARCHIVE_KEY` as a variable on the
+**api** service; saving the change redeploys it. For Docker Compose deployments, set
+it in the Compose environment. The repository's `docker-compose.yml` explicitly
 maps it into the **API** service; project-level variables are not automatically
-injected into every container. Redeploy/recreate the API container after changing
-the setting. The web and bot containers do not need this key. An unset value keeps
+injected into every container. Recreate the API container after changing the
+setting. The web and bot containers do not need this key. An unset value keeps
 inspection disabled without preventing the other application features from starting.
 
-To check the API container without displaying the secret, run in its terminal:
+To check the API container without displaying the secret, run in its terminal
+(on Railway, `railway ssh --service api`):
 
 ```sh
 node -e 'console.log(process.env.SHADOW_CLOUD_SAVE_ARCHIVE_KEY ? "Archive key is set" : "Archive key is missing or empty")'

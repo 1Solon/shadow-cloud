@@ -16,7 +16,7 @@ permissions:
   packages: write
 
 concurrency:
-  group: dokploy-production
+  group: railway-production
   cancel-in-progress: false
 
 jobs:
@@ -163,63 +163,21 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.cache_scope }}
 
   deploy:
-    name: Trigger Dokploy deployment
+    name: Deploy to Railway
     needs:
       - prepare
       - build
     runs-on: ubuntu-latest
     steps:
-      - name: Check out deployment branch
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.repository.default_branch }}
+      - name: Install Railway CLI
+        run: npm install --global @railway/cli@5.62.1
 
-      - name: Trigger Dokploy deployment
-        shell: bash
+      - name: Deploy release images
         env:
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          DOKPLOY_DEPLOY_URL: ${{ secrets.DOKPLOY_DEPLOY_URL }}
-          RELEASE_NAME: ${{ github.event_name == 'release' && github.event.release.name || inputs.release_tag }}
-          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
+          IMAGE_NAMESPACE: ${{ needs.prepare.outputs.image_namespace }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
-          set -euo pipefail
-
-          if [[ -z "$DOKPLOY_DEPLOY_URL" ]]; then
-            echo "The DOKPLOY_DEPLOY_URL repository secret is not configured." >&2
-            exit 1
-          fi
-
-          deployment_sha="$(git rev-parse HEAD)"
-          repository_files="$(git ls-tree -r --name-only HEAD)"
-          modified_json="$(printf '%s\n' "$repository_files" | jq -R 'select(length > 0)' | jq -s '.')"
-          payload="$(jq -n \
-            --arg ref "refs/heads/$DEFAULT_BRANCH" \
-            --arg id "$deployment_sha" \
-            --arg message "Deploy ${RELEASE_NAME:-$RELEASE_TAG}" \
-            --argjson modified "$modified_json" \
-            '{
-              ref: $ref,
-              after: $id,
-              commits: [{ id: $id, message: $message, modified: $modified }],
-              head_commit: { id: $id, message: $message, modified: $modified }
-            }')"
-
-          response_file="$(mktemp)"
-          status="$(curl \
-            --silent \
-            --show-error \
-            --output "$response_file" \
-            --write-out '%{http_code}' \
-            --request POST \
-            --header 'Content-Type: application/json' \
-            --header 'X-GitHub-Event: push' \
-            --data "$payload" \
-            "$DOKPLOY_DEPLOY_URL")"
-
-          cat "$response_file"
-
-          if [[ ! "$status" =~ ^2[0-9][0-9]$ ]]; then
-            echo "Dokploy returned HTTP $status." >&2
-            exit 1
-          fi
+          for service in api web bot; do
+            railway service source connect --service "$service" --image "$IMAGE_NAMESPACE/shadow-cloud/$service:$VERSION"
+          done
