@@ -63,8 +63,9 @@ pnpm --filter @shadow-cloud/web test:browser campaign.spec.ts --repeat-each=2
 pnpm --filter @shadow-cloud/web test:browser upstream.spec.ts
 ```
 
-The CI workflow installs Chromium **with OS dependencies** and runs
-`test:browser` in its own job, alongside the fast checks. Browser tests remain separate
+CI installs only Chromium's headless shell and runs each Playwright project
+(`campaign` and `transfer-recovery`) in its own job, alongside the fast checks.
+Tests within a project run on four workers. Browser tests remain separate
 from Vitest's `src/**/*.test.*` suite. Web lint/typecheck include this fixture.
 Failures retain a trace, screenshot and Next log in the ignored
 `apps/web/test-results/` directory; the next run replaces these diagnostics.
@@ -72,7 +73,9 @@ Failures retain a trace, screenshot and Next log in the ignored
 ## Isolation And Auth
 
 - Playwright's global setup copies a temporary source snapshot and runs one
-  webpack production build of it (`next build --webpack`) before any test.
+  webpack production build of it before any test. The build uses Next's
+  compile-only mode, so it skips type checking (covered by `typecheck`) and
+  static prerendering.
 - Each browser test gets a new browser context, random auth secret, in-memory
   upstream, temporary HOME/TMPDIR and two OS-assigned loopback ports, and
   starts its own Next production server on the shared build via the
