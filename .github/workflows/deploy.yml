@@ -16,7 +16,7 @@ permissions:
   packages: write
 
 concurrency:
-  group: dokploy-production
+  group: railway-production
   cancel-in-progress: false
 
 jobs:
@@ -163,63 +163,129 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.cache_scope }}
 
   deploy:
-    name: Trigger Dokploy deployment
+    name: Deploy to Railway
     needs:
       - prepare
       - build
     runs-on: ubuntu-latest
     steps:
-      - name: Check out deployment branch
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.repository.default_branch }}
-
-      - name: Trigger Dokploy deployment
+      - name: Deploy release images to Railway
         shell: bash
         env:
-          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-          DOKPLOY_DEPLOY_URL: ${{ secrets.DOKPLOY_DEPLOY_URL }}
-          RELEASE_NAME: ${{ github.event_name == 'release' && github.event.release.name || inputs.release_tag }}
-          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || inputs.release_tag }}
+          IMAGE_NAMESPACE: ${{ needs.prepare.outputs.image_namespace }}
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           set -euo pipefail
+          shopt -s inherit_errexit
 
-          if [[ -z "$DOKPLOY_DEPLOY_URL" ]]; then
-            echo "The DOKPLOY_DEPLOY_URL repository secret is not configured." >&2
+          if [[ -z "$RAILWAY_TOKEN" ]]; then
+            echo "The RAILWAY_TOKEN repository secret is not configured." >&2
             exit 1
           fi
 
-          deployment_sha="$(git rev-parse HEAD)"
-          repository_files="$(git ls-tree -r --name-only HEAD)"
-          modified_json="$(printf '%s\n' "$repository_files" | jq -R 'select(length > 0)' | jq -s '.')"
-          payload="$(jq -n \
-            --arg ref "refs/heads/$DEFAULT_BRANCH" \
-            --arg id "$deployment_sha" \
-            --arg message "Deploy ${RELEASE_NAME:-$RELEASE_TAG}" \
-            --argjson modified "$modified_json" \
-            '{
-              ref: $ref,
-              after: $id,
-              commits: [{ id: $id, message: $message, modified: $modified }],
-              head_commit: { id: $id, message: $message, modified: $modified }
-            }')"
+          # RAILWAY_TOKEN is a project token scoped to the production environment,
+          # so the project and environment are resolved from the token itself.
+          railway_graphql() {
+            local query="$1"
+            local variables="${2:-}"
+            local response
 
-          response_file="$(mktemp)"
-          status="$(curl \
-            --silent \
-            --show-error \
-            --output "$response_file" \
-            --write-out '%{http_code}' \
-            --request POST \
-            --header 'Content-Type: application/json' \
-            --header 'X-GitHub-Event: push' \
-            --data "$payload" \
-            "$DOKPLOY_DEPLOY_URL")"
+            if [[ -z "$variables" ]]; then
+              variables='{}'
+            fi
 
-          cat "$response_file"
+            response="$(curl \
+              --silent \
+              --show-error \
+              --fail-with-body \
+              --header "Project-Access-Token: $RAILWAY_TOKEN" \
+              --header 'Content-Type: application/json' \
+              --data "$(jq -n --arg query "$query" --argjson variables "$variables" '{query: $query, variables: $variables}')" \
+              https://backboard.railway.com/graphql/v2)"
 
-          if [[ ! "$status" =~ ^2[0-9][0-9]$ ]]; then
-            echo "Dokploy returned HTTP $status." >&2
-            exit 1
-          fi
+            if jq -e '(.errors // []) | length > 0' <<<"$response" >/dev/null; then
+              echo "Railway API error: $(jq -c '.errors' <<<"$response")" >&2
+              return 1
+            fi
+
+            jq '.data' <<<"$response"
+          }
+
+          token_scope="$(railway_graphql 'query { projectToken { projectId environmentId } }')"
+          project_id="$(jq -r '.projectToken.projectId' <<<"$token_scope")"
+          environment_id="$(jq -r '.projectToken.environmentId' <<<"$token_scope")"
+          services="$(railway_graphql \
+            'query($projectId: String!) { project(id: $projectId) { services { edges { node { id name } } } } }' \
+            "$(jq -n --arg projectId "$project_id" '{projectId: $projectId}')")"
+
+          start_deployment() {
+            local service_name="$1"
+            local image="$IMAGE_NAMESPACE/shadow-cloud/$service_name:$VERSION"
+            local service_id
+            local variables
+
+            service_id="$(jq -r --arg name "$service_name" '.project.services.edges[].node | select(.name == $name) | .id' <<<"$services")"
+            if [[ -z "$service_id" ]]; then
+              echo "Railway service $service_name was not found." >&2
+              return 1
+            fi
+
+            variables="$(jq -n \
+              --arg serviceId "$service_id" \
+              --arg environmentId "$environment_id" \
+              --arg image "$image" \
+              '{serviceId: $serviceId, environmentId: $environmentId, input: {source: {image: $image}}}')"
+            railway_graphql \
+              'mutation($serviceId: String!, $environmentId: String!, $input: ServiceInstanceUpdateInput!) { serviceInstanceUpdate(serviceId: $serviceId, environmentId: $environmentId, input: $input) }' \
+              "$variables" >/dev/null
+
+            railway_graphql \
+              'mutation($serviceId: String!, $environmentId: String!) { serviceInstanceDeployV2(serviceId: $serviceId, environmentId: $environmentId) }' \
+              "$(jq 'del(.input)' <<<"$variables")" | jq -r '.serviceInstanceDeployV2'
+          }
+
+          wait_for_deployment() {
+            local service_name="$1"
+            local deployment_id="$2"
+            local deadline=$((SECONDS + 900))
+            local status="UNKNOWN"
+
+            while (( SECONDS < deadline )); do
+              status="$(railway_graphql \
+                'query($id: String!) { deployment(id: $id) { status } }' \
+                "$(jq -n --arg id "$deployment_id" '{id: $id}')" | jq -r '.deployment.status')"
+
+              case "$status" in
+                SUCCESS)
+                  echo "$service_name deployed $VERSION."
+                  return 0
+                  ;;
+                FAILED | CRASHED | REMOVED | SKIPPED)
+                  echo "$service_name deployment $deployment_id ended with status $status." >&2
+                  return 1
+                  ;;
+              esac
+
+              sleep 10
+            done
+
+            echo "Timed out waiting for $service_name deployment $deployment_id (last status: $status)." >&2
+            return 1
+          }
+
+          # The API applies database migrations on startup, so it must be healthy
+          # before the web app and bot move to the new release.
+          api_deployment="$(start_deployment api)"
+          echo "Deploying api $VERSION ($api_deployment)."
+          wait_for_deployment api "$api_deployment"
+
+          web_deployment="$(start_deployment web)"
+          echo "Deploying web $VERSION ($web_deployment)."
+          bot_deployment="$(start_deployment bot)"
+          echo "Deploying bot $VERSION ($bot_deployment)."
+
+          failed=0
+          wait_for_deployment web "$web_deployment" || failed=1
+          wait_for_deployment bot "$bot_deployment" || failed=1
+          exit "$failed"
