@@ -41,8 +41,15 @@ jobs:
         run: pnpm typecheck
 
   test:
-    name: Test
+    name: Test (${{ matrix.name }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: api
+            filter: "@shadow-cloud/api"
+          - name: other apps
+            filter: "!@shadow-cloud/api"
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -61,7 +68,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Test
-        run: pnpm test
+        run: pnpm exec turbo run test --filter="${{ matrix.filter }}"
 
   browser:
     name: Browser
@@ -81,7 +88,7 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install workspace dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --filter "@shadow-cloud/web..."
 
       - name: Cache Chromium
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
