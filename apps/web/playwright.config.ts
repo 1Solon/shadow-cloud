@@ -2,9 +2,10 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./browser",
+  globalSetup: "./browser/global-setup.ts",
   testMatch: "**/*.spec.ts",
-  fullyParallel: false,
-  workers: 1,
+  fullyParallel: true,
+  workers: 6,
   retries: 0,
   forbidOnly: Boolean(process.env.CI),
   timeout: 120_000,

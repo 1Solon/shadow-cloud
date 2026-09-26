@@ -63,24 +63,28 @@ pnpm --filter @shadow-cloud/web test:browser campaign.spec.ts --repeat-each=2
 pnpm --filter @shadow-cloud/web test:browser upstream.spec.ts
 ```
 
-The existing CI workflow installs Chromium **with OS dependencies** and runs
-`test:browser` after the existing fast checks. Browser tests remain separate
+The CI workflow installs Chromium **with OS dependencies** and runs
+`test:browser` in its own job, alongside the fast checks. Browser tests remain separate
 from Vitest's `src/**/*.test.*` suite. Web lint/typecheck include this fixture.
 Failures retain a trace, screenshot and Next log in the ignored
 `apps/web/test-results/` directory; the next run replaces these diagnostics.
 
 ## Isolation And Auth
 
+- Playwright's global setup copies a temporary source snapshot and runs one
+  webpack production build of it (`next build --webpack`) before any test.
 - Each browser test gets a new browser context, random auth secret, in-memory
-  upstream, temporary source snapshot and two OS-assigned loopback ports.
-- Next runs via its custom-server API in development/webpack mode, using the
-  actual app config, layout, page, auth callbacks and route handlers. This
-  verifies route integration, not a production build or standalone deployment.
-- Only `src`, `public`, the app package/config files, root package version and
-  base tsconfig are copied. `.env*` files are excluded; no root personal env,
+  upstream, temporary HOME/TMPDIR and two OS-assigned loopback ports, and
+  starts its own Next production server on the shared build via the
+  custom-server API, using the actual app config, layout, page, auth callbacks
+  and route handlers. This does not verify the standalone deployment output.
+- Only `src`, `public`, the app package/config files, root package version,
+  base tsconfig and the `scripts/dev-env.mjs` module its tests import are
+  copied. `.env*` files are excluded; no root personal env,
   `.next`, database or developer session is copied. Installed `node_modules`
   are linked for resolution. Source changes are snapshotted as they exist in
-  the worktree, including the current `seatOrderBaseline` response contract.
+  the worktree when the run starts, including the current
+  `seatOrderBaseline` response contract.
 - The Next child receives an explicit environment allowlist, temporary HOME
   and TMPDIR, dummy OAuth identifiers, a fresh `AUTH_SECRET`, and the owned
   upstream URL. Inherited `NODE_OPTIONS`, database URLs, auth settings and
@@ -93,8 +97,8 @@ Failures retain a trace, screenshot and Next log in the ignored
   an HS256 API token; the upstream verifies its signature, expiry, required
   claims and current Overlord subject before accepting a mutation.
 - Fixture teardown waits for Next to exit, closes upstream connections and
-  deletes the snapshot, including `.next`, on success and assertion/setup
-  failure. The child also handles SIGTERM, SIGINT and parent IPC disconnect;
+  deletes the test's temporary directory on success and assertion/setup
+  failure. Global teardown deletes the build snapshot, including `.next`. The child also handles SIGTERM, SIGINT and parent IPC disconnect;
   teardown has a bounded hard-kill fallback. Playwright owns and closes its
   browser/context. Diagnostic artifacts are intentionally retained on failure.
   As with any process cleanup, simultaneous SIGKILL or machine failure cannot
