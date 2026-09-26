@@ -35,11 +35,10 @@ try {
   process.env.AUTH_URL = url;
   process.env.NEXTAUTH_URL = url;
   app = next({
-    dev: true,
+    dev: false,
     dir: process.cwd(),
     hostname: "127.0.0.1",
     port,
-    webpack: true,
   });
   await app.prepare();
   handler = app.getRequestHandler();

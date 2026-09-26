@@ -1,3 +1,4 @@
+import { writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -5,6 +6,21 @@ import Database from 'better-sqlite3';
 import { PrismaClient } from '@prisma/client';
 import { PrismaBetterSqlite3 } from '@prisma/adapter-better-sqlite3';
 import { applySqliteMigrations } from './sqlite-migrations';
+
+let migratedDatabase: Promise<Buffer> | undefined;
+
+function serializeMigratedDatabase() {
+  migratedDatabase ??= (async () => {
+    const database = new Database(':memory:');
+    try {
+      await applySqliteMigrations(database);
+      return database.serialize();
+    } finally {
+      database.close();
+    }
+  })();
+  return migratedDatabase;
+}
 
 export async function createSqliteFixture() {
   const directory = await mkdtemp(join(tmpdir(), 'shadow-cloud-turns-'));
@@ -20,12 +36,7 @@ export async function createSqliteFixture() {
   };
 
   try {
-    const database = new Database(path);
-    try {
-      await applySqliteMigrations(database);
-    } finally {
-      database.close();
-    }
+    writeFileSync(path, await serializeMigratedDatabase());
 
     const connect = () => {
       const client = new PrismaClient({
