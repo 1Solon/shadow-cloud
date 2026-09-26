@@ -153,11 +153,3 @@ To stop the stack:
 docker compose down
 ```
 
-### Production Deployment (Railway)
-
-Production runs on Railway as the `shadow-cloud` project, with `api`, `web`, and `bot` services deployed from the published GHCR images. The API's SQLite database and save files live on a volume mounted at `/data` on the `api` service. Services reach each other over Railway's private network (`api.railway.internal`, `bot.railway.internal`), and only `web` has a public domain.
-
-Publishing a GitHub release runs `.github/workflows/deploy.yml`, which builds and pushes the images and then points each Railway service at that release's image tag. The API is deployed first because it applies database migrations on startup; `web` and `bot` follow once it is healthy. The workflow fails if any deployment does not reach `SUCCESS`. It authenticates with the `RAILWAY_TOKEN` repository secret, a Railway project token scoped to the `production` environment.
-
-Runtime configuration lives in each service's Railway variables. `api`, `web`, and `bot` use the same variables as the Compose file, except that internal URLs use the Railway private hostnames (for example, `SHADOW_CLOUD_API_URL=http://api.railway.internal:3001`).
-
