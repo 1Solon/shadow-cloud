@@ -45,6 +45,8 @@ export default async function globalSetup() {
       path.join(source, "node_modules/next/dist/bin/next"),
       "build",
       "--webpack",
+      "--experimental-build-mode",
+      "compile",
     ],
     {
       cwd: appRoot,
