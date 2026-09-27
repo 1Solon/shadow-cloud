@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
 
 const retryIntervalMs = 60_000;
 
@@ -21,13 +22,14 @@ export default function CampaignListError({ retry }: { retry: () => void }) {
         <p>Campaigns could not be loaded.</p>
         <p>Retrying automatically every minute.</p>
       </div>
-      <button
-        className="mt-4 border border-orange-400/40 px-3 py-2"
+      <Button
+        className="mt-4"
         type="button"
+        variant="outline"
         onClick={() => retry()}
       >
         Retry now
-      </button>
+      </Button>
     </section>
   );
 }

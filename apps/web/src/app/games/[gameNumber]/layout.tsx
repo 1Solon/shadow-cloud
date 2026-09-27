@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getServerAuthSession } from "@/auth";
 import { TerminalClock } from "@/components/terminal-clock";
+import { Button } from "@/components/ui/button";
 import { UserBadge } from "@/components/user-badge";
 import { SignOutButton } from "@/components/sign-out-button";
 import { LoginButton } from "@/components/login-button";
@@ -41,9 +42,6 @@ export default async function GameLayout({
   const shellHeaderClassName = shadowOverrideEnabled
     ? "border-red-400"
     : "border-orange-400";
-  const shellLinkClassName = shadowOverrideEnabled
-    ? "border-red-400 text-red-400 hover:bg-red-400"
-    : "border-orange-400 text-orange-400 hover:bg-orange-400";
   const shellTitleClassName = shadowOverrideEnabled
     ? "text-red-300"
     : "text-orange-300";
@@ -63,12 +61,9 @@ export default async function GameLayout({
           className={`flex flex-wrap items-center justify-between gap-3 border-b pb-3 mb-4 shrink-0 ${shellHeaderClassName}`}
         >
           <div className="flex min-w-0 flex-1 basis-full items-center gap-3 sm:basis-0 sm:gap-4">
-            <Link
-              className={`inline-flex h-11 shrink-0 items-center rounded-md border px-3 text-sm font-mono transition-colors hover:text-black ${shellLinkClassName}`}
-              href="/"
-            >
-              &lt; BACK
-            </Link>
+            <Button asChild className="h-11 shrink-0 px-3" variant="outline">
+              <Link href="/">&lt; BACK</Link>
+            </Button>
             <div
               className={`min-w-0 break-words text-base sm:text-xl font-mono ${shellTitleClassName}`}
             >{`> ${game.gameNumber} : ${game.name}`}</div>

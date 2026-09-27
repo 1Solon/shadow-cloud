@@ -8,6 +8,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -162,9 +164,9 @@ export function CampaignList({
         <div className="font-mono text-lg text-orange-300">{`> ${title} (${campaignCount})`}</div>
         {campaigns.length > 0 ? (
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end sm:gap-3 xl:justify-end">
-            <label className="col-span-2 flex min-w-0 flex-col gap-1 text-xs uppercase tracking-[0.16em] text-orange-300/70 sm:w-56">
+            <Label className="col-span-2 flex min-w-0 flex-col gap-1 text-xs uppercase tracking-[0.16em] text-terminal-300/70 sm:w-56">
               Search
-              <input
+              <Input
                 type="search"
                 value={searchQuery}
                 onChange={(event) => {
@@ -172,10 +174,10 @@ export function CampaignList({
                 }}
                 placeholder="Number or name"
                 aria-label={`Search ${campaignListName} by campaign number or name`}
-                className="h-9 w-full rounded-md border border-orange-400 bg-black px-3 text-sm normal-case tracking-normal text-orange-300 shadow-xs outline-none placeholder:text-orange-300/40 focus-visible:ring-2 focus-visible:ring-orange-300"
+                className="h-9 border-input normal-case tracking-normal"
               />
-            </label>
-            <label className="flex min-w-0 flex-col gap-1 text-xs uppercase tracking-[0.16em] text-orange-300/70 sm:w-56">
+            </Label>
+            <Label className="flex min-w-0 flex-col gap-1 text-xs uppercase tracking-[0.16em] text-terminal-300/70 sm:w-56">
               Sort by
               <Select
                 value={sortOption}
@@ -197,9 +199,9 @@ export function CampaignList({
                   </SelectGroup>
                 </SelectContent>
               </Select>
-            </label>
+            </Label>
             {hasExtendedControls ? (
-              <label className="flex min-w-0 flex-col gap-1 text-xs uppercase tracking-[0.16em] text-orange-300/70 sm:w-52">
+              <Label className="flex min-w-0 flex-col gap-1 text-xs uppercase tracking-[0.16em] text-terminal-300/70 sm:w-52">
                 Turn status
                 <Select
                   value={turnFilter}
@@ -221,7 +223,7 @@ export function CampaignList({
                     </SelectGroup>
                   </SelectContent>
                 </Select>
-              </label>
+              </Label>
             ) : null}
           </div>
         ) : null}

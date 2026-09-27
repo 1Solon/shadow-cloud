@@ -216,13 +216,14 @@ export const UploadSaveForm = forwardRef<
           >
             {isPending ? "Uploading..." : "Upload save and advance turn"}
           </Button>
-          <button
-            className="text-sm text-orange-300/50 font-mono hover:text-orange-300 transition-colors"
-            onClick={clearFile}
+          <Button
+            className="h-auto p-0"
             type="button"
+            variant="ghost"
+            onClick={clearFile}
           >
             Clear
-          </button>
+          </Button>
         </div>
       ) : null}
 

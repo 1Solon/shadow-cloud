@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 type UserBadgeProps = {
   name: string;
@@ -7,36 +7,24 @@ type UserBadgeProps = {
 };
 
 export function UserBadge({ name, image, isSignedIn }: UserBadgeProps) {
+  const hasImage = isSignedIn && Boolean(image);
+
   return (
     <div className="flex items-center gap-2">
-      {isSignedIn && image ? (
-        <div className="relative shrink-0 h-8 w-8">
-          <Image
-            src={image}
-            alt={name}
-            fill
-            className="rounded-full border border-orange-400/60 object-cover"
-            sizes="32px"
-            loading="eager"
-            unoptimized
-          />
-          {/* CRT tint overlay */}
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 rounded-full pointer-events-none"
-            style={{
-              background: "rgba(251,146,60,0.15)",
-              mixBlendMode: "overlay",
-            }}
-          />
-        </div>
-      ) : (
-        <div className="shrink-0 h-8 w-8 rounded-full border border-orange-400/60 bg-orange-400/10 flex items-center justify-center">
-          <span className="text-[9px] font-mono text-orange-400/70 tracking-tight select-none">
-            USR
-          </span>
-        </div>
-      )}
+      <Avatar>
+        {hasImage ? (
+          <>
+            <AvatarImage src={image ?? undefined} alt={name} />
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 rounded-full bg-terminal-400/15 mix-blend-overlay"
+            />
+          </>
+        ) : null}
+        <AvatarFallback delayMs={hasImage ? 600 : undefined}>
+          USR
+        </AvatarFallback>
+      </Avatar>
 
       <div className="flex flex-col leading-none">
         {isSignedIn ? (

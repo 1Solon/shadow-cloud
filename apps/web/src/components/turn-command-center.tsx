@@ -221,7 +221,7 @@ export function TurnCommandCenter({
                   </p>
                 </div>
                 <DownloadSaveButton
-                  className="inline-flex min-h-11 shrink-0 items-center rounded-md border border-orange-400/70 bg-orange-400 px-3 text-xs font-medium text-black transition-colors hover:bg-orange-300"
+                  className="min-h-11 shrink-0 px-3 text-xs font-medium"
                   fileName={latestSave.originalName}
                   href={`/api/games/${gameNumber}/files/${latestSave.id}?revision=${latestSave.contentRevision}`}
                   label="Download latest save"

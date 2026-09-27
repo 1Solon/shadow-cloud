@@ -8,12 +8,15 @@ import {
   useRef,
   useState,
 } from "react";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import { cn } from "@/lib/utils";
 
 export type CampaignConfigurationSection =
@@ -95,14 +98,15 @@ export function CampaignConfigurationShell({
             </CardDescription>
           </div>
           <div className="shrink-0 self-start sm:self-stretch">
-            <button
-              type="button"
+            <Button
+              className="h-full px-3"
               disabled={isDirty}
-              className="inline-flex h-full items-center justify-center border border-orange-400/50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-orange-300 transition-colors hover:bg-orange-400/10 hover:text-orange-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+              type="button"
+              variant="command"
               onClick={onExit}
             >
               Exit configuration
-            </button>
+            </Button>
           </div>
         </div>
       </CardHeader>
@@ -120,16 +124,16 @@ export function CampaignConfigurationShell({
       >
         <div className="min-w-0 border-b border-orange-400/25 p-3 md:border-r md:border-b-0">
           <div className="md:hidden">
-            <label
+            <Label
               htmlFor="campaign-configuration-section"
-              className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-orange-300/75"
+              className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-terminal-300/70"
             >
               Configuration section
-            </label>
-            <select
+            </Label>
+            <NativeSelect
               id="campaign-configuration-section"
               aria-label="Configuration section"
-              className="h-10 w-full border border-orange-400/30 bg-black px-3 text-sm font-mono text-orange-200 outline-none transition focus:border-orange-300 disabled:cursor-not-allowed disabled:opacity-40 md:hidden"
+              className="md:hidden"
               disabled={isDirty}
               value={activeSection}
               onChange={(event) => {
@@ -144,7 +148,7 @@ export function CampaignConfigurationShell({
                   {section.label}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
 
           <nav

@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { SavePasswordReset } from "./save-password-reset";
 import { SavePasswordUndo } from "./save-password-undo";
 
@@ -41,9 +42,10 @@ export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
             </CardDescription>
           </div>
           {hasSave ? (
-            <button
-              className="inline-flex min-h-11 shrink-0 self-start items-center justify-center border border-orange-400/50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-orange-300 transition-colors hover:bg-orange-400/10 hover:text-orange-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+            <Button
+              className="min-h-11 shrink-0 self-start px-3"
               type="button"
+              variant="command"
               disabled={pending || inspecting || selected !== null}
               onClick={() => {
                 void workflow.inspect();
@@ -55,7 +57,7 @@ export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
                 : error
                   ? "Retry inspection"
                   : "Refresh"}
-            </button>
+            </Button>
           ) : null}
         </div>
       </CardHeader>
@@ -91,14 +93,15 @@ export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
                         : regime.reason}
                     </p>
                     {regime.eligible ? (
-                      <button
-                        className="max-w-full border border-orange-400 px-3 py-2 text-left"
+                      <Button
+                        className="max-w-full"
                         type="button"
+                        variant="outline"
                         disabled={pending || selected !== null}
                         onClick={() => workflow.selectRegime(regime.id)}
                       >
                         Edit Password
-                      </button>
+                      </Button>
                     ) : null}
                     {selected === regime.id ? (
                       <SavePasswordReset
@@ -128,14 +131,14 @@ export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
         {workflow.recoveryError && selected === null ? (
           <div>
             <p role="alert">{workflow.recoveryError}</p>
-            <button
+            <Button
               type="button"
-              className="border border-orange-400 px-3 py-2"
+              variant="outline"
               disabled={pending || workflow.recovering}
               onClick={() => void workflow.readRecovery()}
             >
               Retry recovery
-            </button>
+            </Button>
           </div>
         ) : null}
       </CardContent>

@@ -30,6 +30,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import {
   transferOutcomeMessage,
   isKnownRejectionStatus,
@@ -361,9 +365,6 @@ function buildMetadataPayload(
   return { ok: true as const, payload };
 }
 
-const controlClassName =
-  "h-10 w-full rounded-md border border-orange-400/30 bg-black px-3 text-sm font-mono text-orange-200 outline-none transition focus:border-orange-300 disabled:cursor-not-allowed disabled:opacity-50";
-
 function FieldRow({
   label,
   description,
@@ -376,14 +377,14 @@ function FieldRow({
   children: React.ReactNode;
 }) {
   return (
-    <label className="grid min-w-0 gap-2 border-b border-orange-400/15 py-3 text-sm font-mono text-orange-200 sm:grid-cols-[minmax(10rem,0.45fr)_minmax(0,1fr)] sm:items-center">
+    <Label className="grid min-w-0 gap-2 border-b border-terminal-400/20 py-3 text-sm font-mono text-terminal-200 sm:grid-cols-[minmax(10rem,0.45fr)_minmax(0,1fr)] sm:items-center">
       <span className="min-w-0">
-        <span className="block text-xs uppercase tracking-[0.16em] text-orange-300/75">
+        <span className="block text-xs uppercase tracking-[0.16em] text-terminal-300/70">
           {label}
         </span>
         {description ? (
           <span
-            className="mt-1 block min-w-0 text-xs leading-relaxed text-orange-200/60"
+            className="mt-1 block min-w-0 text-xs leading-relaxed text-terminal-200/70"
             id={descriptionId}
           >
             {description}
@@ -391,7 +392,7 @@ function FieldRow({
         ) : null}
       </span>
       {children}
-    </label>
+    </Label>
   );
 }
 
@@ -1002,8 +1003,7 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
                 progress.
               </p>
               <FieldRow label="Campaign number">
-                <input
-                  className={controlClassName}
+                <Input
                   disabled={isEditorDisabled}
                   min={1}
                   step={1}
@@ -1015,8 +1015,7 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
                 />
               </FieldRow>
               <FieldRow label="Campaign name">
-                <input
-                  className={controlClassName}
+                <Input
                   disabled={isEditorDisabled}
                   maxLength={100}
                   type="text"
@@ -1025,8 +1024,7 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
                 />
               </FieldRow>
               <FieldRow label="Round">
-                <input
-                  className={controlClassName}
+                <Input
                   disabled={isEditorDisabled}
                   min={1}
                   step={1}
@@ -1038,8 +1036,7 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
                 />
               </FieldRow>
               <FieldRow label="Player count">
-                <input
-                  className={controlClassName}
+                <Input
                   disabled={isEditorDisabled}
                   max={100}
                   min={1}
@@ -1080,10 +1077,9 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
                   Current Overlord: {props.organizerDisplayName}
                 </p>
                 <FieldRow label="Overlord">
-                  <select
+                  <NativeSelect
                     ref={organizerSelectRef}
                     aria-describedby={transferDescriptionId}
-                    className={controlClassName}
                     disabled={isEditorDisabled || organizerOptions.length === 0}
                     value={organizerEntryId}
                     onChange={(event) => {
@@ -1099,7 +1095,7 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
                         {`Seat ${player.turnOrder}: ${player.displayName ?? "Unknown player"}`}
                       </option>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </FieldRow>
               </div>
             </section>
@@ -1109,8 +1105,7 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
         {props.section === "world" ? (
           <div className="border-t border-orange-400/15">
             <FieldRow label="AI players">
-              <select
-                className={controlClassName}
+              <NativeSelect
                 disabled={isEditorDisabled}
                 value={draft.hasAiPlayers}
                 onChange={(event) =>
@@ -1120,21 +1115,19 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
                 <option value="">Select...</option>
                 <option value="false">None</option>
                 <option value="true">Included</option>
-              </select>
+              </NativeSelect>
             </FieldRow>
             <FieldRow label="DLC">
-              <select
-                className={controlClassName}
+              <NativeSelect
                 disabled={isEditorDisabled}
                 value={draft.dlcMode}
                 onChange={(event) => updateDraft("dlcMode", event.target.value)}
               >
                 <SelectOptions options={dlcOptions} />
-              </select>
+              </NativeSelect>
             </FieldRow>
             <FieldRow label="Game mode">
-              <select
-                className={controlClassName}
+              <NativeSelect
                 disabled={isEditorDisabled}
                 value={draft.gameMode}
                 onChange={(event) =>
@@ -1142,11 +1135,10 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
                 }
               >
                 <SelectOptions options={gameModeOptions} />
-              </select>
+              </NativeSelect>
             </FieldRow>
             <FieldRow label="Tech level">
-              <select
-                className={controlClassName}
+              <NativeSelect
                 disabled={isEditorDisabled}
                 value={draft.techLevel}
                 onChange={(event) =>
@@ -1159,11 +1151,10 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
                     {option}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </FieldRow>
             <FieldRow label="Zone count">
-              <select
-                className={controlClassName}
+              <NativeSelect
                 disabled={isEditorDisabled}
                 value={draft.zoneCount}
                 onChange={(event) =>
@@ -1171,11 +1162,10 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
                 }
               >
                 <SelectOptions options={zoneCountOptions} />
-              </select>
+              </NativeSelect>
             </FieldRow>
             <FieldRow label="Army count">
-              <select
-                className={controlClassName}
+              <NativeSelect
                 disabled={isEditorDisabled}
                 value={draft.armyCount}
                 onChange={(event) =>
@@ -1183,7 +1173,7 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
                 }
               >
                 <SelectOptions options={armyCountOptions} />
-              </select>
+              </NativeSelect>
             </FieldRow>
           </div>
         ) : null}
@@ -1204,10 +1194,9 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
               descriptionId={turnTargetHoursDescriptionId}
               label="Target turn hours"
             >
-              <input
+              <Input
                 aria-describedby={turnTargetHoursDescriptionId}
                 aria-label="Target turn hours"
-                className={controlClassName}
                 disabled={isEditorDisabled}
                 max={MAX_TURN_TIMING_HOURS}
                 min={1}
@@ -1224,10 +1213,9 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
               descriptionId={turnReminderGraceHoursDescriptionId}
               label="Reminder grace hours"
             >
-              <input
+              <Input
                 aria-describedby={turnReminderGraceHoursDescriptionId}
                 aria-label="Reminder grace hours"
-                className={controlClassName}
                 disabled={isEditorDisabled}
                 max={MAX_TURN_TIMING_HOURS}
                 min={1}
@@ -1244,10 +1232,9 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
               descriptionId={turnReminderRepeatHoursDescriptionId}
               label="Reminder repeat hours"
             >
-              <input
+              <Input
                 aria-describedby={turnReminderRepeatHoursDescriptionId}
                 aria-label="Reminder repeat hours"
-                className={controlClassName}
                 disabled={isEditorDisabled}
                 max={MAX_TURN_TIMING_HOURS}
                 min={1}
@@ -1264,15 +1251,13 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
               descriptionId={turnRemindersEnabledDescriptionId}
               label="Turn reminders enabled"
             >
-              <input
+              <Checkbox
                 aria-describedby={turnRemindersEnabledDescriptionId}
                 aria-label="Turn reminders enabled"
                 checked={draft.turnRemindersEnabled}
-                className="size-4 accent-orange-400 disabled:cursor-not-allowed disabled:opacity-50"
                 disabled={isEditorDisabled}
-                type="checkbox"
-                onChange={(event) =>
-                  updateDraft("turnRemindersEnabled", event.target.checked)
+                onCheckedChange={(checked) =>
+                  updateDraft("turnRemindersEnabled", checked === true)
                 }
               />
             </FieldRow>

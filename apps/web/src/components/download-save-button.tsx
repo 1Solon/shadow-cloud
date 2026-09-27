@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
 import {
   TerminalConfirmationModal,
   type TerminalConfirmationSpec,
 } from "@/components/terminal-confirmation-modal";
+import { Button } from "@/components/ui/button";
 
 type DownloadSaveButtonProps = {
-  className: string;
+  className?: string;
+  variant?: ComponentProps<typeof Button>["variant"];
   fileName: string;
   href: string;
   label?: string;
@@ -15,6 +17,7 @@ type DownloadSaveButtonProps = {
 
 export function DownloadSaveButton({
   className,
+  variant,
   fileName,
   href,
   label = "Download",
@@ -30,9 +33,10 @@ export function DownloadSaveButton({
           setConfirmation(null);
         }}
       />
-      <button
+      <Button
         className={className}
         type="button"
+        variant={variant}
         onClick={() => {
           setConfirmation({
             command: "save-download --dispatch",
@@ -53,7 +57,7 @@ export function DownloadSaveButton({
         }}
       >
         {label}
-      </button>
+      </Button>
     </>
   );
 }

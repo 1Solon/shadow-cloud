@@ -16,9 +16,13 @@ const buttonVariants = cva(
           "border border-primary bg-transparent text-primary hover:bg-primary hover:text-primary-foreground font-mono",
         destructive:
           "border border-destructive bg-transparent text-destructive hover:bg-destructive hover:text-primary-foreground font-mono",
+        command:
+          "rounded-none border border-terminal-400/60 bg-transparent text-xs font-semibold uppercase tracking-[0.14em] text-terminal-300 hover:bg-terminal-400/10 hover:text-terminal-200 disabled:opacity-40 font-mono",
+        ghost: "text-terminal-300/50 hover:text-terminal-300 font-mono",
       },
       size: {
         default: "h-10 px-4 py-2",
+        sm: "h-8 px-3 text-xs",
         lg: "h-11 px-6 text-sm",
       },
     },

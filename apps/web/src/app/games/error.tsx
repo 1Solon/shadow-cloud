@@ -1,6 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
+import { Button } from "@/components/ui/button";
 import { transferOutcomeMessage } from "@/lib/transfer-outcome";
 
 // This parent boundary also catches failures in the campaign's server layout.
@@ -17,13 +18,14 @@ export default function CampaignReadError() {
         <p>Campaign data could not be reloaded.</p>
         <p>Editing is unavailable until current ownership can be checked.</p>
       </div>
-      <button
-        className="mt-4 border border-orange-400/40 px-3 py-2"
+      <Button
+        className="mt-4"
         type="button"
+        variant="outline"
         onClick={() => window.location.reload()}
       >
         Reload campaign
-      </button>
+      </Button>
     </section>
   );
 }

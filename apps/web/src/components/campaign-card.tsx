@@ -9,7 +9,7 @@ import {
 import { useRouter } from "next/navigation";
 import { DownloadSaveButton } from "@/components/download-save-button";
 import { SaveUploadCard } from "@/components/save-upload-card";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { GameListItem } from "@/lib/shadow-cloud-api";
 import {
@@ -284,10 +284,8 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
               >
                 {game.latestSave ? (
                   <DownloadSaveButton
-                    className={cn(
-                      buttonVariants({ variant: "outline" }),
-                      "h-9 w-full px-2 text-xs sm:px-4 sm:text-sm",
-                    )}
+                    className="h-9 w-full px-2 text-xs sm:px-4 sm:text-sm"
+                    variant="outline"
                     fileName={game.latestSave.originalName}
                     href={`/api/games/${game.gameNumber}/files/${game.latestSave.id}?revision=${game.latestSave.contentRevision}`}
                     label="Download latest turn"

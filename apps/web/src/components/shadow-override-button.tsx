@@ -6,6 +6,7 @@ import {
   TerminalActionConfirmationDialog,
   type TerminalActionConfirmationSpec,
 } from "@/components/terminal-action-confirmation-dialog";
+import { Button } from "@/components/ui/button";
 
 type ShadowOverrideButtonProps = {
   enabled: boolean;
@@ -63,14 +64,16 @@ export function ShadowOverrideButton({ enabled }: ShadowOverrideButtonProps) {
         }}
         onConfirm={confirmOverrideChange}
       />
-      <button
-        type="button"
+      <Button
+        className="uppercase tracking-[0.18em]"
         disabled={isPending}
+        size="sm"
+        type="button"
+        variant={enabled ? "destructive" : "outline"}
         onClick={openOverrideConfirmation}
-        className={`inline-flex h-8 items-center rounded-md border px-3 text-xs font-mono uppercase tracking-[0.18em] transition-colors ${enabled ? "border-red-400/70 bg-red-400/10 text-red-300 hover:bg-red-400 hover:text-black" : "border-orange-400/60 bg-transparent text-orange-400/80 hover:bg-orange-400 hover:text-black"}`}
       >
         {isPending ? "Switching..." : enabled ? "Override Armed" : "Override"}
-      </button>
+      </Button>
     </>
   );
 }
