@@ -61,16 +61,20 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
     useState(false);
   const [relativeUpdatedAt, setRelativeUpdatedAt] = useState(game.updatedAt);
   const [now, setNow] = useState<Date | null>(null);
-  const elapsed = formatTurnDuration(
+  const elapsedMs =
     now && game.currentTurnStartedAt != null
       ? getTurnDurationMs(
           { startedAt: game.currentTurnStartedAt, endedAt: null },
           now,
         )
-      : null,
-  );
+      : null;
+  const elapsed = formatTurnDuration(elapsedMs);
   const targetHours = normalizeTurnTargetHours(game.turnTargetHours);
   const target = targetHours !== null ? `${targetHours}h` : "Unknown";
+  const overdueMs =
+    elapsedMs !== null && targetHours !== null
+      ? elapsedMs - targetHours * 3_600_000
+      : 0;
   const isUsersTurn = Boolean(
     currentUserId && game.activePlayerUserId === currentUserId,
   );
@@ -168,6 +172,11 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
                     : null,
                 )}
               >
+                {isUsersTurn ? (
+                  <span className="rounded-sm bg-orange-400 px-1.5 py-0.5 font-bold uppercase tracking-[0.16em] text-black">
+                    Your turn
+                  </span>
+                ) : null}
                 <span className="text-muted-foreground group-focus-visible:text-black/70">
                   Turn {game.roundNumber}
                 </span>
@@ -188,6 +197,11 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
                 </dt>
                 <dd className="text-sm font-medium text-orange-300 group-focus-visible:text-black">
                   {`${elapsed} / ${target}`}
+                  {overdueMs > 0 ? (
+                    <span className="text-red-300 group-focus-visible:text-black">
+                      {` · ${formatTurnDuration(overdueMs)} over`}
+                    </span>
+                  ) : null}
                 </dd>
               </div>
               <div className="min-w-0 px-1">

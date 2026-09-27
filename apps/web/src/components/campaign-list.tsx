@@ -32,6 +32,15 @@ function compareCampaignNames(left: GameListItem, right: GameListItem) {
   return nameComparison || left.gameNumber - right.gameNumber;
 }
 
+function isUsersTurn(
+  campaign: GameListItem,
+  currentUserId: string | undefined,
+) {
+  return Boolean(
+    currentUserId && campaign.activePlayerUserId === currentUserId,
+  );
+}
+
 function filterCampaigns(
   campaigns: GameListItem[],
   currentUserId: string | undefined,
@@ -48,12 +57,10 @@ function filterCampaigns(
       return false;
     }
 
-    const isUsersTurn = Boolean(
-      currentUserId && campaign.activePlayerUserId === currentUserId,
-    );
+    const usersTurn = isUsersTurn(campaign, currentUserId);
     if (
       turnFilter !== "all" &&
-      (turnFilter === "your-turn" ? !isUsersTurn : isUsersTurn)
+      (turnFilter === "your-turn" ? !usersTurn : usersTurn)
     ) {
       return false;
     }
@@ -77,6 +84,13 @@ export function sortAndFilterCampaigns(
   );
 
   return filteredCampaigns.sort((left, right) => {
+    const usersTurnComparison =
+      Number(isUsersTurn(right, currentUserId)) -
+      Number(isUsersTurn(left, currentUserId));
+    if (usersTurnComparison !== 0) {
+      return usersTurnComparison;
+    }
+
     if (sortOption === "name-asc") {
       return compareCampaignNames(left, right);
     }
