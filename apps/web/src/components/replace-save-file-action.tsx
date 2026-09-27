@@ -101,10 +101,10 @@ export function ReplaceSaveFileAction({
         onCancel={resetConfirmation}
         onConfirm={replaceFile}
       >
-        <div className="space-y-3 border-t border-orange-400/20 pt-4 text-sm text-orange-300/80">
+        <div className="space-y-3 border-t border-terminal-400/20 pt-4 text-sm text-terminal-300/70">
           <p>
             Replacing{" "}
-            <span className="text-orange-200">{canonicalFileName}</span>
+            <span className="text-terminal-200">{canonicalFileName}</span>
           </p>
           <Label className="block space-y-2">
             <span className="block text-xs uppercase tracking-[0.18em] text-terminal-300">
@@ -121,17 +121,19 @@ export function ReplaceSaveFileAction({
             />
           </Label>
           {selectedFile ? (
-            <p className="text-xs text-orange-300/70">
+            <p className="text-xs text-terminal-300/70">
               Selected: {selectedFile.name}
             </p>
           ) : null}
-          <p className="text-xs text-orange-300/70">Maximum file size: 25 MB</p>
-          <p className="text-xs text-orange-300/70">
+          <p className="text-xs text-terminal-300/70">
+            Maximum file size: 25 MB
+          </p>
+          <p className="text-xs text-terminal-300/70">
             Replacing this file will not advance the turn.
           </p>
           {errorMessage ? (
             <div
-              className="rounded-lg border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm text-red-300"
+              className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
               role="alert"
             >
               {errorMessage}

@@ -151,11 +151,11 @@ describe("WorldStateHistoryCard", () => {
     expect(rows[1]).toHaveClass(
       "h-16",
       "border-l-2",
-      "border-l-orange-400",
-      "bg-orange-400/10",
-      "text-orange-100",
+      "border-l-terminal-400",
+      "bg-terminal-400/10",
+      "text-terminal-100",
     );
-    expect(rows[2]).toHaveClass("h-16", "bg-orange-400/5", "text-orange-200");
+    expect(rows[2]).toHaveClass("h-16", "bg-terminal-400/5", "text-terminal-200");
     expect(within(rows[1]).getByText("Latest save")).toBeVisible();
     expect(within(rows[1]).getByText("Corrector")).toBeVisible();
     expect(within(rows[2]).getByText("None")).toBeVisible();

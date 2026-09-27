@@ -19,7 +19,7 @@ export function SavePasswordUndo({
 }) {
   const [confirmed, setConfirmed] = useState(false);
   return (
-    <div className="space-y-3 border-t border-orange-400/30 pt-4">
+    <div className="space-y-3 border-t border-terminal-400/30 pt-4">
       <form
         className="space-y-3"
         onSubmit={(event) => {

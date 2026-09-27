@@ -39,7 +39,7 @@ export function WorldStateHistoryCard({
       <CardContent className="p-4 pt-0 sm:p-5 sm:pt-0">
         {fileVersions.length === 0 ? (
           <div
-            className="rounded-lg border border-orange-400/20 bg-orange-400/5 px-4 py-4 text-sm font-mono text-orange-300"
+            className="rounded-lg border border-terminal-400/20 bg-terminal-400/5 px-4 py-4 text-sm font-mono text-terminal-300"
             role="status"
           >
             No campaign saves have been uploaded yet.
@@ -47,7 +47,7 @@ export function WorldStateHistoryCard({
         ) : (
           <div
             aria-label="Save history table"
-            className="overflow-x-auto rounded-lg border border-orange-400/20"
+            className="overflow-x-auto rounded-lg border border-terminal-400/20"
             role="region"
             tabIndex={0}
           >
@@ -57,7 +57,7 @@ export function WorldStateHistoryCard({
             >
               <caption className="sr-only">Campaign save history</caption>
               <thead
-                className="border-b border-orange-400/30 bg-orange-400/10 text-xs uppercase tracking-[0.18em] text-orange-300/80"
+                className="border-b border-terminal-400/30 bg-terminal-400/10 text-xs uppercase tracking-[0.18em] text-terminal-300/70"
                 role="rowgroup"
               >
                 <tr className="h-10" role="row">
@@ -113,8 +113,8 @@ export function WorldStateHistoryCard({
                       key={fileVersion.id}
                       className={
                         isMostRecent
-                          ? "h-16 border-b border-orange-400/30 border-l-2 border-l-orange-400 bg-orange-400/10 text-orange-100"
-                          : "h-16 border-b border-orange-400/20 bg-orange-400/5 text-orange-200"
+                          ? "h-16 border-b border-terminal-400/30 border-l-2 border-l-terminal-400 bg-terminal-400/10 text-terminal-100"
+                          : "h-16 border-b border-terminal-400/20 bg-terminal-400/5 text-terminal-200"
                       }
                       role="row"
                     >
@@ -125,7 +125,7 @@ export function WorldStateHistoryCard({
                       >
                         <div className="min-w-0">
                           {isMostRecent ? (
-                            <span className="mb-1 block text-[0.65rem] uppercase tracking-[0.16em] text-orange-300/70">
+                            <span className="mb-1 block text-[0.65rem] uppercase tracking-[0.16em] text-terminal-300/70">
                               Latest save
                             </span>
                           ) : null}

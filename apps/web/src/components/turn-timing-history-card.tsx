@@ -39,8 +39,8 @@ function TurnTimingHistoryRow({
     <tr
       className={
         isOpen
-          ? "h-16 border-b border-orange-400/30 border-l-2 border-l-orange-400 bg-orange-400/10 text-orange-100"
-          : "h-16 border-b border-orange-400/20 bg-orange-400/5 text-orange-200"
+          ? "h-16 border-b border-terminal-400/30 border-l-2 border-l-terminal-400 bg-terminal-400/10 text-terminal-100"
+          : "h-16 border-b border-terminal-400/20 bg-terminal-400/5 text-terminal-200"
       }
       role="row"
     >
@@ -50,7 +50,7 @@ function TurnTimingHistoryRow({
         role="cell"
       >
         <span className="block font-medium">Round {record.roundNumber}</span>
-        <span className="mt-1 block text-xs text-orange-300/70">
+        <span className="mt-1 block text-xs text-terminal-300/70">
           {record.seatNumber == null ? "No seat" : `Seat ${record.seatNumber}`}
         </span>
       </td>
@@ -68,13 +68,13 @@ function TurnTimingHistoryRow({
       >
         <div className="space-y-1">
           <div>
-            <span className="mr-2 text-[0.6rem] uppercase tracking-[0.14em] text-orange-300/60">
+            <span className="mr-2 text-[0.6rem] uppercase tracking-[0.14em] text-terminal-300/70">
               Started
             </span>
             <LocalTimestamp compact timestamp={record.startedAt} />
           </div>
           <div>
-            <span className="mr-2 text-[0.6rem] uppercase tracking-[0.14em] text-orange-300/60">
+            <span className="mr-2 text-[0.6rem] uppercase tracking-[0.14em] text-terminal-300/70">
               {record.endedAt ? "Completed" : "Status"}
             </span>
             {record.endedAt ? (
@@ -148,7 +148,7 @@ export function TurnTimingHistoryCard({
         {hasTurns ? (
           <div
             aria-label="Recent turn timing history table"
-            className="overflow-x-auto rounded-lg border border-orange-400/20"
+            className="overflow-x-auto rounded-lg border border-terminal-400/20"
             role="region"
             tabIndex={0}
           >
@@ -158,7 +158,7 @@ export function TurnTimingHistoryCard({
             >
               <caption className="sr-only">Recent turn timing history</caption>
               <thead
-                className="border-b border-orange-400/30 bg-orange-400/10 text-xs uppercase tracking-[0.18em] text-orange-300/80"
+                className="border-b border-terminal-400/30 bg-terminal-400/10 text-xs uppercase tracking-[0.18em] text-terminal-300/70"
                 role="rowgroup"
               >
                 <tr className="h-10" role="row">
@@ -223,7 +223,7 @@ export function TurnTimingHistoryCard({
           </div>
         ) : (
           <div
-            className="rounded-lg border border-orange-400/20 bg-orange-400/5 px-4 py-4 text-sm font-mono text-orange-300"
+            className="rounded-lg border border-terminal-400/20 bg-terminal-400/5 px-4 py-4 text-sm font-mono text-terminal-300"
             role="status"
           >
             No turn timings are available yet.
