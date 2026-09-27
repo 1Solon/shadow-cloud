@@ -1,0 +1,4 @@
+if grep -qiE "noreply@anthropic\.com|generated with \[?claude" "$1"; then
+  echo "Commit messages must not contain Claude attribution." >&2
+  exit 1
+fi
