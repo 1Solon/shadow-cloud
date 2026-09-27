@@ -10,5 +10,3 @@ allowBuilds:
   prisma: true
   sharp: true
   unrs-resolver: true
-
-minimumReleaseAge: 0
