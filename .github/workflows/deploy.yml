@@ -175,9 +175,10 @@ jobs:
       - name: Deploy release images
         env:
           IMAGE_NAMESPACE: ${{ needs.prepare.outputs.image_namespace }}
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+          RAILWAY_PROJECT_ID: b88929d8-5025-48c9-a827-36e1dc8eb201
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           for service in api web bot; do
-            railway service source connect --service "$service" --image "$IMAGE_NAMESPACE/shadow-cloud/$service:$VERSION"
+            railway service source connect --project "$RAILWAY_PROJECT_ID" --environment production --service "$service" --image "$IMAGE_NAMESPACE/shadow-cloud/$service:$VERSION"
           done
