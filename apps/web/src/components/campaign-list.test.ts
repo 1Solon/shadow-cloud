@@ -99,12 +99,12 @@ describe("campaign list sorting and filtering", () => {
       },
     ];
     expect(
-      sortAndFilterCampaigns(games, "user-1", "turn-newest", "all").map(
+      sortAndFilterCampaigns(games, undefined, "turn-newest", "all").map(
         (game) => game.id,
       ),
     ).toEqual(["future", "bravo", "tie", "zulu", "alpha", "invalid"]);
     expect(
-      sortAndFilterCampaigns(games, "user-1", "turn-oldest", "all").map(
+      sortAndFilterCampaigns(games, undefined, "turn-oldest", "all").map(
         (game) => game.id,
       ),
     ).toEqual(["tie", "zulu", "bravo", "future", "alpha", "invalid"]);
@@ -119,7 +119,17 @@ describe("campaign list sorting and filtering", () => {
   });
 
   it("sorts campaigns by name", () => {
-    expect(campaignIds("name-asc")).toEqual(["alpha", "bravo", "zulu"]);
+    expect(
+      sortAndFilterCampaigns(campaigns, undefined, "name-asc", "all").map(
+        (campaign) => campaign.id,
+      ),
+    ).toEqual(["alpha", "bravo", "zulu"]);
+  });
+
+  it("lists the current user's turns first under every sort", () => {
+    expect(campaignIds("name-asc")).toEqual(["bravo", "zulu", "alpha"]);
+    expect(campaignIds("turn-oldest")).toEqual(["zulu", "bravo", "alpha"]);
+    expect(campaignIds("turn-newest")).toEqual(["bravo", "zulu", "alpha"]);
   });
 
   it("filters campaigns by whether it is the current user's turn", () => {

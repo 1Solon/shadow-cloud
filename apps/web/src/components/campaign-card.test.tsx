@@ -106,6 +106,30 @@ describe("CampaignCard", () => {
     expect(screen.getByText("1h / 24h")).toBeVisible();
   });
 
+  it("shows how far the current turn has run past its target", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-11T00:00:00.000Z"));
+    render(<CampaignCard game={game} />);
+
+    expect(screen.getByText("1d / 24h")).toBeVisible();
+    expect(screen.queryByText(/ over$/)).not.toBeInTheDocument();
+
+    vi.setSystemTime(new Date("2026-07-11T05:59:00.000Z"));
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(screen.getByText("1d / 24h")).toBeVisible();
+    expect(screen.getByText("· 6h over")).toBeVisible();
+  });
+
+  it("marks the card when it is the current user's turn", () => {
+    const { rerender } = render(
+      <CampaignCard currentUserId="user-1" game={game} />,
+    );
+    expect(screen.getByText("Your turn")).toBeVisible();
+
+    rerender(<CampaignCard currentUserId="user-2" game={game} />);
+    expect(screen.queryByText("Your turn")).not.toBeInTheDocument();
+  });
+
   it("places the latest-turn download to the left of the upload action", async () => {
     const user = userEvent.setup();
     render(<CampaignCard currentUserId="user-1" game={game} />);

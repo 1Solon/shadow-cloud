@@ -1,4 +1,6 @@
+import type { Metadata } from "next";
 import { getServerAuthSession } from "@/auth";
+import { AutoRefresh } from "@/components/auto-refresh";
 import { CampaignList } from "@/components/campaign-list";
 import { TerminalClock } from "@/components/terminal-clock";
 import { UserBadge } from "@/components/user-badge";
@@ -9,10 +11,25 @@ import { listGames } from "@/lib/shadow-cloud-api";
 import { getShadowOverrideEnabled } from "@/lib/shadow-override";
 import { formatTerminalClock } from "@/lib/terminal-clock";
 import { componentVersionStatus } from "@/lib/component-versions";
-export const metadata = {
-  title: "Shadow-Cloud",
-  description: "Current Shadow Cloud PBEM campaigns and turn status.",
-};
+
+export async function generateMetadata(): Promise<Metadata> {
+  const [session, games] = await Promise.all([
+    getServerAuthSession(),
+    listGames().catch(() => []),
+  ]);
+  const userId = session?.user?.id;
+  const awaitingTurnCount = userId
+    ? games.filter((game) => game.activePlayerUserId === userId).length
+    : 0;
+
+  return {
+    title:
+      awaitingTurnCount > 0
+        ? `(${awaitingTurnCount}) Shadow-Cloud`
+        : "Shadow-Cloud",
+    description: "Current Shadow Cloud PBEM campaigns and turn status.",
+  };
+}
 
 export default async function Home() {
   const [session, games, shadowOverrideEnabled] = await Promise.all([
@@ -51,6 +68,7 @@ export default async function Home() {
     <main
       className={`min-h-dvh md:h-dvh md:overflow-hidden bg-black font-mono p-2 sm:p-4 flex flex-col ${shellTextClassName}`}
     >
+      <AutoRefresh />
       <div
         className={`flex-1 min-h-0 w-full rounded-lg border p-3 sm:p-6 bg-black/90 shadow-2xl flex flex-col md:overflow-hidden ${shellFrameClassName}`}
       >
