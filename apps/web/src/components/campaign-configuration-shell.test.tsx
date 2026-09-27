@@ -86,8 +86,8 @@ describe("CampaignConfigurationShell", () => {
     expect(region).toBeVisible();
     expect(region).toHaveClass(
       "rounded-lg",
-      "border-orange-400",
-      "bg-black/90",
+      "border-terminal-400",
+      "bg-card",
       "shadow-2xl",
     );
     expect(

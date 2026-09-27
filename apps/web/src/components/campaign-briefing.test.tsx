@@ -67,8 +67,8 @@ describe("CampaignBriefing", () => {
       screen.getByRole("region", { name: "Campaign briefing:" }),
     ).toHaveClass(
       "rounded-lg",
-      "border-orange-400",
-      "bg-black/90",
+      "border-terminal-400",
+      "bg-card",
       "shadow-2xl",
     );
 

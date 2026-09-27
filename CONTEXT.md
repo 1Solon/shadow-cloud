@@ -41,5 +41,13 @@ _Avoid_: Host, organizer
 **Overlord transfer**:
 Reassignment of campaign control to another eligible player in that campaign.
 
+**Shadow Lord**:
+A person who administers Shadow Cloud itself and may arm Shadow Override.
+_Avoid_: Administrator, admin, privileged user
+
+**Shadow Override**:
+A per-session mode in which a Shadow Lord holds an Overlord's authority in any campaign, plus the power to delete campaigns.
+_Avoid_: Override mode, admin mode
+
 **Registration preview**:
 An inert example of a registration response, matching its production presentation while using sample details and controls that cannot execute a registration decision.
