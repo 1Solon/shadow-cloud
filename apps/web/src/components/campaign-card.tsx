@@ -11,6 +11,12 @@ import { DownloadSaveButton } from "@/components/download-save-button";
 import { SaveUploadCard } from "@/components/save-upload-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogCloseButton,
+  DialogContent,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type { GameListItem } from "@/lib/shadow-cloud-api";
 import {
   formatTurnDuration,
@@ -95,24 +101,6 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
       window.clearInterval(intervalId);
     };
   }, [game.updatedAt]);
-
-  useEffect(() => {
-    if (!isUploadModalOpen) {
-      return;
-    }
-
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setIsUploadModalOpen(false);
-      }
-    }
-
-    window.addEventListener("keydown", handleEscape);
-
-    return () => {
-      window.removeEventListener("keydown", handleEscape);
-    };
-  }, [isUploadModalOpen]);
 
   function openUploadModal(event: MouseEvent<HTMLButtonElement>) {
     event.stopPropagation();
@@ -324,39 +312,28 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
         </Card>
       </div>
 
-      {isUploadModalOpen ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-card p-4 backdrop-blur-sm"
-          onClick={() => {
-            setIsUploadModalOpen(false);
-          }}
+      <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
+        <DialogContent
+          aria-describedby={undefined}
+          className="max-h-[calc(100dvh-2rem)] max-w-3xl overflow-y-auto rounded-none border-0 bg-transparent shadow-none"
         >
-          <div
-            className="relative w-full max-w-3xl"
-            onClick={(event) => {
-              event.stopPropagation();
+          <DialogTitle className="sr-only">Save upload</DialogTitle>
+          <DialogCloseButton
+            aria-label="Close save upload"
+            className="absolute top-4 right-4 z-10"
+            onClick={() => {
+              setIsUploadModalOpen(false);
             }}
-          >
-            <button
-              aria-label="Close save upload"
-              className="absolute right-4 top-4 z-10 text-terminal-300/70 transition-colors hover:text-terminal-200"
-              type="button"
-              onClick={() => {
-                setIsUploadModalOpen(false);
-              }}
-            >
-              X
-            </button>
-            <SaveUploadCard
-              saveBaseline={game.saveBaseline}
-              activePlayerDisplayName={game.activePlayerDisplayName}
-              gameNumber={game.gameNumber}
-              isActivePlayer={isUsersTurn}
-              isSignedIn={Boolean(currentUserId)}
-            />
-          </div>
-        </div>
-      ) : null}
+          />
+          <SaveUploadCard
+            saveBaseline={game.saveBaseline}
+            activePlayerDisplayName={game.activePlayerDisplayName}
+            gameNumber={game.gameNumber}
+            isActivePlayer={isUsersTurn}
+            isSignedIn={Boolean(currentUserId)}
+          />
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

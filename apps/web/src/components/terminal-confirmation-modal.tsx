@@ -11,7 +11,6 @@ export type TerminalConfirmationSpec = {
   title?: string;
   command: string;
   lines: string[];
-  titleTone?: "orange" | "green";
 };
 
 type TerminalConfirmationModalProps = {
@@ -71,8 +70,6 @@ function TerminalConfirmationSurface({
     return null;
   }
 
-  const titleToneClass =
-    confirmation.titleTone === "green" ? "text-success" : "text-terminal-200";
   const hasTitle = Boolean(confirmation.title);
   const isEntering = phase === "enter";
   const isVisible = phase === "visible";
@@ -95,11 +92,11 @@ function TerminalConfirmationSurface({
           className={`flex border-b border-terminal-400/20 bg-terminal-400/10 px-4 py-3 font-mono text-[11px] uppercase tracking-[0.28em] ${hasTitle ? "items-center justify-between" : "justify-end"}`}
         >
           {hasTitle ? (
-            <span className={titleToneClass}>{confirmation.title}</span>
+            <span className="text-terminal-200">{confirmation.title}</span>
           ) : null}
           <button
             aria-label="Close confirmation"
-            className="text-terminal-300/70 transition-colors hover:text-terminal-200"
+            className="rounded-sm text-terminal-300/70 transition-colors hover:text-terminal-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             type="button"
             onClick={closeConfirmation}
           >
@@ -139,7 +136,6 @@ export function TerminalConfirmationModal({
   const confirmationKey = [
     confirmation.title ?? "",
     confirmation.command,
-    confirmation.titleTone ?? "",
     ...confirmation.lines,
   ].join("|");
 

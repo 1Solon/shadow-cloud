@@ -413,7 +413,7 @@ function SelectOptions({
   );
 }
 
-function HostTransferConfirmationDialog({
+function OverlordTransferConfirmationDialog({
   target,
   errorMessage,
   isPending,
@@ -964,7 +964,7 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
         confirmation={confirmation}
         onClose={() => setConfirmation(null)}
       />
-      <HostTransferConfirmationDialog
+      <OverlordTransferConfirmationDialog
         target={pendingTransfer}
         errorMessage={transferErrorMessage}
         isPending={isTransferPending}

@@ -161,12 +161,13 @@ export function CampaignConfigurationShell({
 
                 return (
                   <li key={section.id}>
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
                       aria-current={isActive ? "page" : undefined}
                       disabled={isDirty && !isActive}
                       className={cn(
-                        "w-full border-l-2 px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-35",
+                        "h-auto w-full justify-start rounded-none border-l-2 px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] focus-visible:ring-inset focus-visible:ring-offset-0 disabled:opacity-35",
                         isActive
                           ? "border-terminal-400 bg-terminal-400/15 text-terminal-100"
                           : "border-transparent text-terminal-300/70 hover:border-terminal-400/60 hover:bg-terminal-400/10 hover:text-terminal-200",
@@ -174,7 +175,7 @@ export function CampaignConfigurationShell({
                       onClick={() => selectSection(section.id)}
                     >
                       {section.label}
-                    </button>
+                    </Button>
                   </li>
                 );
               })}
