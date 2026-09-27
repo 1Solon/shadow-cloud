@@ -41,7 +41,7 @@ function Metric({ label, value }: { label: string; value: string }) {
       <dt className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
         {label}
       </dt>
-      <dd className="mt-1 truncate text-sm font-semibold text-orange-100 sm:text-base">
+      <dd className="mt-1 truncate text-sm font-semibold text-terminal-100 sm:text-base">
         {value}
       </dd>
     </div>
@@ -110,7 +110,7 @@ export function TurnCommandCenter({
   return (
     <section
       aria-labelledby={headingId}
-      className="overflow-hidden rounded-lg border border-orange-400/40 bg-black font-mono text-orange-100"
+      className="overflow-hidden rounded-lg border border-terminal-400/30 bg-background font-mono text-terminal-100"
       onDragOver={(event) => {
         if (!event.defaultPrevented && containsFiles(event)) {
           event.preventDefault();
@@ -146,8 +146,8 @@ export function TurnCommandCenter({
       <div
         className={
           canUpload
-            ? "border-b border-orange-400 bg-orange-400 px-3 py-1.5 text-xs font-bold tracking-[0.2em] text-black"
-            : "border-b border-orange-400/40 bg-orange-400/10 px-3 py-1.5 text-xs font-bold tracking-[0.2em] text-orange-300"
+            ? "border-b border-terminal-400 bg-terminal-400 px-3 py-1.5 text-xs font-bold tracking-[0.2em] text-primary-foreground"
+            : "border-b border-terminal-400/30 bg-terminal-400/10 px-3 py-1.5 text-xs font-bold tracking-[0.2em] text-terminal-300"
         }
       >
         {canUpload ? "YOUR TURN" : "WAITING"}
@@ -179,12 +179,12 @@ export function TurnCommandCenter({
           </dl>
 
           <details
-            className="group border-t border-orange-400/20 pt-1"
+            className="group border-t border-terminal-400/20 pt-1"
             data-testid="campaign-notes"
             open={notesOpen}
             onToggle={(event) => setNotesOpen(event.currentTarget.open)}
           >
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-2 text-[0.65rem] uppercase tracking-[0.18em] text-orange-300/70 transition-colors hover:text-orange-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-2 text-[0.65rem] uppercase tracking-[0.18em] text-terminal-300/70 transition-colors hover:text-terminal-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
               <span>Campaign notes</span>
               <span className="shrink-0 text-muted-foreground">
                 {notesOpen ? "Hide −" : "Show +"}
@@ -197,7 +197,7 @@ export function TurnCommandCenter({
                   className="rounded-none border-0 bg-transparent px-0 py-0"
                 />
               ) : (
-                <p className="text-sm leading-6 text-orange-200/60">
+                <p className="text-sm leading-6 text-terminal-200/70">
                   No campaign notes recorded.
                 </p>
               )}
@@ -206,15 +206,15 @@ export function TurnCommandCenter({
         </div>
 
         {canUpload || latestSave ? (
-          <div className="flex min-h-0 flex-col border-t border-orange-400/20 pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
+          <div className="flex min-h-0 flex-col border-t border-terminal-400/20 pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
             {latestSave ? (
-              <div className="mb-3 flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-orange-400/30 bg-orange-400/5 px-3 py-2.5">
+              <div className="mb-3 flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-terminal-400/30 bg-terminal-400/5 px-3 py-2.5">
                 <div className="min-w-0">
-                  <p className="text-[0.65rem] uppercase tracking-[0.18em] text-orange-300/60">
+                  <p className="text-[0.65rem] uppercase tracking-[0.18em] text-terminal-300/70">
                     Latest save
                   </p>
                   <p
-                    className="mt-1 truncate text-sm text-orange-100"
+                    className="mt-1 truncate text-sm text-terminal-100"
                     title={latestSave.originalName}
                   >
                     {latestSave.originalName}
@@ -243,7 +243,7 @@ export function TurnCommandCenter({
       </div>
       {dropNotice ? (
         <p
-          className="border-t border-orange-400/30 bg-orange-400/10 px-3 py-2.5 text-sm text-orange-200 sm:px-4"
+          className="border-t border-terminal-400/30 bg-terminal-400/10 px-3 py-2.5 text-sm text-terminal-200 sm:px-4"
           role="status"
         >
           {dropNotice}

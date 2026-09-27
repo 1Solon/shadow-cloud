@@ -33,40 +33,16 @@ export default async function GameLayout({
     notFound();
   }
 
-  const shellTextClassName = shadowOverrideEnabled
-    ? "text-red-400"
-    : "text-orange-400";
-  const shellFrameClassName = shadowOverrideEnabled
-    ? "border-red-400 shadow-red-400/20"
-    : "border-orange-400 shadow-orange-400/20";
-  const shellHeaderClassName = shadowOverrideEnabled
-    ? "border-red-400"
-    : "border-orange-400";
-  const shellTitleClassName = shadowOverrideEnabled
-    ? "text-red-300"
-    : "text-orange-300";
-  const shellStatusClassName = shadowOverrideEnabled
-    ? "border-red-400 text-red-300/70"
-    : "border-orange-400 text-orange-300/70";
-
   return (
-    <main
-      className={`min-h-dvh md:h-dvh md:overflow-hidden bg-black font-mono p-2 sm:p-4 flex flex-col ${shellTextClassName}`}
-    >
-      <div
-        className={`flex-1 min-h-0 flex flex-col rounded-lg border p-3 sm:p-6 bg-black/90 shadow-2xl md:overflow-hidden ${shellFrameClassName}`}
-      >
+    <main className="min-h-dvh md:h-dvh md:overflow-hidden bg-background font-mono p-2 sm:p-4 flex flex-col text-terminal-400">
+      <div className="flex-1 min-h-0 flex flex-col rounded-lg border p-3 sm:p-6 bg-card shadow-2xl md:overflow-hidden border-terminal-400 shadow-terminal-400/20">
         {/* Terminal header bar */}
-        <div
-          className={`flex flex-wrap items-center justify-between gap-3 border-b pb-3 mb-4 shrink-0 ${shellHeaderClassName}`}
-        >
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3 mb-4 shrink-0 border-terminal-400">
           <div className="flex min-w-0 flex-1 basis-full items-center gap-3 sm:basis-0 sm:gap-4">
             <Button asChild className="h-11 shrink-0 px-3" variant="outline">
               <Link href="/">&lt; BACK</Link>
             </Button>
-            <div
-              className={`min-w-0 break-words text-base sm:text-xl font-mono ${shellTitleClassName}`}
-            >{`> ${game.gameNumber} : ${game.name}`}</div>
+            <div className="min-w-0 break-words text-base sm:text-xl font-mono text-terminal-300">{`> ${game.gameNumber} : ${game.name}`}</div>
           </div>
           <div className="flex w-full max-w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:gap-4">
             <div className={session?.user ? "min-w-0" : "hidden sm:block"}>
@@ -98,9 +74,7 @@ export default async function GameLayout({
         </div>
 
         {/* Status bar */}
-        <div
-          className={`mt-4 pt-3 border-t flex flex-wrap justify-between gap-2 text-xs shrink-0 ${shellStatusClassName}`}
-        >
+        <div className="mt-4 pt-3 border-t flex flex-wrap justify-between gap-2 text-xs shrink-0 border-terminal-400 text-terminal-300/70">
           <div>{componentVersionStatus}</div>
           <div>CAMPAIGN: {`#${game.gameNumber}`}</div>
         </div>

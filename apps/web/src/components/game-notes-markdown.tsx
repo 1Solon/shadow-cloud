@@ -39,7 +39,7 @@ export function GameNotesMarkdown({
   return (
     <div
       className={cn(
-        "rounded-lg border border-orange-400/20 bg-orange-400/5 px-4 py-4 text-sm font-mono text-orange-200",
+        "rounded-lg border border-terminal-400/20 bg-terminal-400/5 px-4 py-4 text-sm font-mono text-terminal-200",
         className,
       )}
     >
@@ -50,7 +50,7 @@ export function GameNotesMarkdown({
           h1: ({ className: headingClassName, ...props }) => (
             <h1
               className={cn(
-                "mt-5 mb-2 text-base font-semibold uppercase tracking-[0.18em] text-orange-100 first:mt-0",
+                "mt-5 mb-2 text-base font-semibold uppercase tracking-[0.18em] text-terminal-100 first:mt-0",
                 headingClassName,
               )}
               {...props}
@@ -59,7 +59,7 @@ export function GameNotesMarkdown({
           h2: ({ className: headingClassName, ...props }) => (
             <h2
               className={cn(
-                "mt-5 mb-2 text-sm font-semibold uppercase tracking-[0.14em] text-orange-100 first:mt-0",
+                "mt-5 mb-2 text-sm font-semibold uppercase tracking-[0.14em] text-terminal-100 first:mt-0",
                 headingClassName,
               )}
               {...props}
@@ -68,7 +68,7 @@ export function GameNotesMarkdown({
           h3: ({ className: headingClassName, ...props }) => (
             <h3
               className={cn(
-                "mt-4 mb-2 text-sm font-semibold text-orange-100 first:mt-0",
+                "mt-4 mb-2 text-sm font-semibold text-terminal-100 first:mt-0",
                 headingClassName,
               )}
               {...props}
@@ -86,7 +86,7 @@ export function GameNotesMarkdown({
           ul: ({ className: listClassName, ...props }) => (
             <ul
               className={cn(
-                "my-3 list-disc space-y-2 pl-6 marker:text-orange-300",
+                "my-3 list-disc space-y-2 pl-6 marker:text-terminal-300",
                 listClassName,
               )}
               {...props}
@@ -95,7 +95,7 @@ export function GameNotesMarkdown({
           ol: ({ className: listClassName, ...props }) => (
             <ol
               className={cn(
-                "my-3 list-decimal space-y-2 pl-6 marker:text-orange-300",
+                "my-3 list-decimal space-y-2 pl-6 marker:text-terminal-300",
                 listClassName,
               )}
               {...props}
@@ -116,7 +116,7 @@ export function GameNotesMarkdown({
                 target="_blank"
                 rel="noreferrer noopener"
                 className={cn(
-                  "text-orange-100 underline decoration-orange-300/60 underline-offset-4 transition-colors hover:text-orange-50",
+                  "text-terminal-100 underline decoration-terminal-300/70 underline-offset-4 transition-colors hover:text-terminal-50",
                   linkClassName,
                 )}
               />
@@ -125,7 +125,7 @@ export function GameNotesMarkdown({
           blockquote: ({ className: quoteClassName, ...props }) => (
             <blockquote
               className={cn(
-                "my-3 border-l-2 border-orange-300/40 pl-4 text-orange-200/85 italic",
+                "my-3 border-l-2 border-terminal-300/30 pl-4 text-terminal-200 italic",
                 quoteClassName,
               )}
               {...props}
@@ -133,7 +133,7 @@ export function GameNotesMarkdown({
           ),
           hr: ({ className: ruleClassName, ...props }) => (
             <hr
-              className={cn("my-4 border-orange-400/20", ruleClassName)}
+              className={cn("my-4 border-terminal-400/20", ruleClassName)}
               {...props}
             />
           ),
@@ -141,7 +141,7 @@ export function GameNotesMarkdown({
             <div className="my-4 overflow-x-auto">
               <table
                 className={cn(
-                  "min-w-full border-collapse border border-orange-400/20 text-left",
+                  "min-w-full border-collapse border border-terminal-400/20 text-left",
                   tableClassName,
                 )}
                 {...props}
@@ -150,14 +150,14 @@ export function GameNotesMarkdown({
           ),
           thead: ({ className: headClassName, ...props }) => (
             <thead
-              className={cn("bg-orange-400/10", headClassName)}
+              className={cn("bg-terminal-400/10", headClassName)}
               {...props}
             />
           ),
           th: ({ className: cellClassName, ...props }) => (
             <th
               className={cn(
-                "border border-orange-400/20 px-3 py-2 font-semibold text-orange-100",
+                "border border-terminal-400/20 px-3 py-2 font-semibold text-terminal-100",
                 cellClassName,
               )}
               {...props}
@@ -166,7 +166,7 @@ export function GameNotesMarkdown({
           td: ({ className: cellClassName, ...props }) => (
             <td
               className={cn(
-                "border border-orange-400/20 px-3 py-2 align-top text-orange-200/90",
+                "border border-terminal-400/20 px-3 py-2 align-top text-terminal-200",
                 cellClassName,
               )}
               {...props}
@@ -175,7 +175,7 @@ export function GameNotesMarkdown({
           pre: ({ className: preClassName, ...props }) => (
             <pre
               className={cn(
-                "my-4 overflow-x-auto rounded-md border border-orange-400/20 bg-black/70 px-3 py-3 text-orange-100",
+                "my-4 overflow-x-auto rounded-md border border-terminal-400/20 bg-surface/70 px-3 py-3 text-terminal-100",
                 preClassName,
               )}
               {...props}
@@ -187,7 +187,7 @@ export function GameNotesMarkdown({
             if (isBlock) {
               return (
                 <code
-                  className={cn("text-orange-100", codeClassName)}
+                  className={cn("text-terminal-100", codeClassName)}
                   {...props}
                 >
                   {children}
@@ -198,7 +198,7 @@ export function GameNotesMarkdown({
             return (
               <code
                 className={cn(
-                  "rounded bg-black/60 px-1.5 py-0.5 text-orange-100",
+                  "rounded bg-surface/70 px-1.5 py-0.5 text-terminal-100",
                   codeClassName,
                 )}
                 {...props}
