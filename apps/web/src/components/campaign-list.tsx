@@ -161,7 +161,7 @@ export function CampaignList({
   return (
     <section className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-        <div className="font-mono text-lg text-orange-300">{`> ${title} (${campaignCount})`}</div>
+        <div className="font-mono text-lg text-terminal-300">{`> ${title} (${campaignCount})`}</div>
         {campaigns.length > 0 ? (
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end sm:gap-3 xl:justify-end">
             <Label className="col-span-2 flex min-w-0 flex-col gap-1 text-xs uppercase tracking-[0.16em] text-terminal-300/70 sm:w-56">

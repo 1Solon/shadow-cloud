@@ -29,7 +29,7 @@ export function TerminalClock({ initialTime }: TerminalClockProps) {
   }, []);
 
   return (
-    <span className="text-orange-300 text-sm font-mono tabular-nums">
+    <span className="text-terminal-300 text-sm font-mono tabular-nums">
       {time}
     </span>
   );

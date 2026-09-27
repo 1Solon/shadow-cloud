@@ -32,7 +32,7 @@ export function UserBadge({ name, image, isSignedIn }: UserBadgeProps) {
             <span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-mono">
               Connected as
             </span>
-            <span className="text-sm font-mono text-orange-300 truncate max-w-[160px]">
+            <span className="text-sm font-mono text-terminal-300 truncate max-w-[160px]">
               {name}
             </span>
           </>
@@ -41,7 +41,7 @@ export function UserBadge({ name, image, isSignedIn }: UserBadgeProps) {
             <span className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-mono">
               Identity
             </span>
-            <span className="text-sm font-mono text-orange-400/60 tracking-widest">
+            <span className="text-sm font-mono text-terminal-400/70 tracking-widest">
               [GUEST]
             </span>
           </>

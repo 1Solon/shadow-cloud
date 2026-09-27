@@ -80,7 +80,7 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
   );
   const cardHighlightClassName = isUploadButtonHighlighted
     ? null
-    : "group-hover:bg-orange-400/10 group-hover:shadow-lg group-hover:shadow-orange-400/10";
+    : "group-hover:bg-terminal-400/10 group-hover:shadow-lg group-hover:shadow-terminal-400/10";
 
   useEffect(() => {
     function updateRelativeTimestamp() {
@@ -131,7 +131,7 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
   return (
     <>
       <div
-        className="group block h-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+        className="group block h-full rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         role="link"
         tabIndex={0}
         onClick={() => {
@@ -141,24 +141,24 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
       >
         <Card
           className={cn(
-            "h-full bg-black/50 border-orange-400 transition-all group-focus-visible:bg-orange-400 group-focus-visible:text-black group-focus-visible:shadow-lg group-focus-visible:shadow-orange-400/20",
+            "h-full bg-surface/50 border-terminal-400 transition-all group-focus-visible:bg-terminal-400 group-focus-visible:text-primary-foreground group-focus-visible:shadow-lg group-focus-visible:shadow-terminal-400/20",
             cardHighlightClassName,
           )}
         >
           <CardContent className="grid gap-4 p-4 sm:p-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)] md:items-center">
             <div
               className={cn(
-                "flex min-w-0 flex-col gap-1 border-b border-orange-400/20 pb-3 group-focus-visible:border-black/20 md:border-b-0 md:border-r md:pb-0 md:pr-5",
+                "flex min-w-0 flex-col gap-1 border-b border-terminal-400/20 pb-3 group-focus-visible:border-primary-foreground/20 md:border-b-0 md:border-r md:pb-0 md:pr-5",
                 !isUploadButtonHighlighted
-                  ? "group-hover:border-orange-300/30"
+                  ? "group-hover:border-terminal-300/30"
                   : null,
               )}
             >
               <div
                 className={cn(
-                  "text-lg font-semibold text-orange-300 group-focus-visible:text-black",
+                  "text-lg font-semibold text-terminal-300 group-focus-visible:text-primary-foreground",
                   !isUploadButtonHighlighted
-                    ? "group-hover:text-orange-200"
+                    ? "group-hover:text-terminal-200"
                     : null,
                 )}
               >
@@ -166,24 +166,24 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
               </div>
               <div
                 className={cn(
-                  "mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground group-focus-visible:text-black/70",
+                  "mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground group-focus-visible:text-primary-foreground/70",
                   !isUploadButtonHighlighted
-                    ? "group-hover:text-orange-200/70"
+                    ? "group-hover:text-terminal-200/70"
                     : null,
                 )}
               >
                 {isUsersTurn ? (
-                  <span className="rounded-sm bg-orange-400 px-1.5 py-0.5 font-bold uppercase tracking-[0.16em] text-black">
+                  <span className="rounded-sm bg-terminal-400 px-1.5 py-0.5 font-bold uppercase tracking-[0.16em] text-primary-foreground">
                     Your turn
                   </span>
                 ) : null}
-                <span className="text-muted-foreground group-focus-visible:text-black/70">
+                <span className="text-muted-foreground group-focus-visible:text-primary-foreground/70">
                   Turn {game.roundNumber}
                 </span>
                 <time
                   dateTime={game.updatedAt}
                   title={`Updated ${game.updatedAt}`}
-                  className="text-muted-foreground group-focus-visible:text-black/70"
+                  className="text-muted-foreground group-focus-visible:text-primary-foreground/70"
                 >
                   Updated {relativeUpdatedAt}
                 </time>
@@ -192,13 +192,13 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
 
             <dl className="grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 md:grid-cols-3 md:gap-x-4 md:pl-1">
               <div className="col-span-2 min-w-0 px-1 md:col-span-3">
-                <dt className="text-xs uppercase tracking-[0.16em] text-orange-300/70 group-focus-visible:text-black/70">
+                <dt className="text-xs uppercase tracking-[0.16em] text-terminal-300/70 group-focus-visible:text-primary-foreground/70">
                   Elapsed / target
                 </dt>
-                <dd className="text-sm font-medium text-orange-300 group-focus-visible:text-black">
+                <dd className="text-sm font-medium text-terminal-300 group-focus-visible:text-primary-foreground">
                   {`${elapsed} / ${target}`}
                   {overdueMs > 0 ? (
-                    <span className="text-red-300 group-focus-visible:text-black">
+                    <span className="text-destructive group-focus-visible:text-primary-foreground">
                       {` · ${formatTurnDuration(overdueMs)} over`}
                     </span>
                   ) : null}
@@ -207,9 +207,9 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
               <div className="min-w-0 px-1">
                 <dt
                   className={cn(
-                    "text-xs uppercase tracking-[0.16em] text-orange-300/70 group-focus-visible:text-black/70",
+                    "text-xs uppercase tracking-[0.16em] text-terminal-300/70 group-focus-visible:text-primary-foreground/70",
                     !isUploadButtonHighlighted
-                      ? "group-hover:text-orange-200/70"
+                      ? "group-hover:text-terminal-200/70"
                       : null,
                   )}
                 >
@@ -217,9 +217,9 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
                 </dt>
                 <dd
                   className={cn(
-                    "truncate text-sm font-medium text-orange-300 transition-all group-focus-visible:text-black",
+                    "truncate text-sm font-medium text-terminal-300 transition-all group-focus-visible:text-primary-foreground",
                     !isUploadButtonHighlighted
-                      ? "group-hover:text-orange-200"
+                      ? "group-hover:text-terminal-200"
                       : null,
                   )}
                 >
@@ -229,9 +229,9 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
               <div className="min-w-0 px-1">
                 <dt
                   className={cn(
-                    "text-xs uppercase tracking-[0.16em] text-orange-300/70 group-focus-visible:text-black/70",
+                    "text-xs uppercase tracking-[0.16em] text-terminal-300/70 group-focus-visible:text-primary-foreground/70",
                     !isUploadButtonHighlighted
-                      ? "group-hover:text-orange-200/70"
+                      ? "group-hover:text-terminal-200/70"
                       : null,
                   )}
                 >
@@ -239,9 +239,9 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
                 </dt>
                 <dd
                   className={cn(
-                    "text-sm font-medium text-orange-300 group-focus-visible:text-black",
+                    "text-sm font-medium text-terminal-300 group-focus-visible:text-primary-foreground",
                     !isUploadButtonHighlighted
-                      ? "group-hover:text-orange-200"
+                      ? "group-hover:text-terminal-200"
                       : null,
                   )}
                 >
@@ -251,9 +251,9 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
               <div className="min-w-0 px-1">
                 <dt
                   className={cn(
-                    "text-xs uppercase tracking-[0.16em] text-orange-300/70 group-focus-visible:text-black/70",
+                    "text-xs uppercase tracking-[0.16em] text-terminal-300/70 group-focus-visible:text-primary-foreground/70",
                     !isUploadButtonHighlighted
-                      ? "group-hover:text-orange-200/70"
+                      ? "group-hover:text-terminal-200/70"
                       : null,
                   )}
                 >
@@ -261,9 +261,9 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
                 </dt>
                 <dd
                   className={cn(
-                    "text-sm font-medium text-orange-300 group-focus-visible:text-black",
+                    "text-sm font-medium text-terminal-300 group-focus-visible:text-primary-foreground",
                     !isUploadButtonHighlighted
-                      ? "group-hover:text-orange-200"
+                      ? "group-hover:text-terminal-200"
                       : null,
                   )}
                 >
@@ -326,7 +326,7 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
 
       {isUploadModalOpen ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-card p-4 backdrop-blur-sm"
           onClick={() => {
             setIsUploadModalOpen(false);
           }}
@@ -339,7 +339,7 @@ export function CampaignCard({ currentUserId, game }: CampaignCardProps) {
           >
             <button
               aria-label="Close save upload"
-              className="absolute right-4 top-4 z-10 text-orange-300/70 transition-colors hover:text-orange-200"
+              className="absolute right-4 top-4 z-10 text-terminal-300/70 transition-colors hover:text-terminal-200"
               type="button"
               onClick={() => {
                 setIsUploadModalOpen(false);

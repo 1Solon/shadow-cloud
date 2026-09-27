@@ -48,37 +48,14 @@ export default async function Home() {
 
   const signedInIdentity =
     session?.user?.name ?? session?.user?.email ?? "Guest lord";
-  const shellTextClassName = shadowOverrideEnabled
-    ? "text-red-400"
-    : "text-orange-400";
-  const shellFrameClassName = shadowOverrideEnabled
-    ? "border-red-400 shadow-red-400/20"
-    : "border-orange-400 shadow-orange-400/20";
-  const shellHeaderClassName = shadowOverrideEnabled
-    ? "border-red-400"
-    : "border-orange-400";
-  const shellTitleClassName = shadowOverrideEnabled
-    ? "text-red-300"
-    : "text-orange-300";
-  const shellStatusClassName = shadowOverrideEnabled
-    ? "border-red-400 text-red-300/70"
-    : "border-orange-400 text-orange-300/70";
 
   return (
-    <main
-      className={`min-h-dvh md:h-dvh md:overflow-hidden bg-black font-mono p-2 sm:p-4 flex flex-col ${shellTextClassName}`}
-    >
+    <main className="min-h-dvh md:h-dvh md:overflow-hidden bg-background font-mono p-2 sm:p-4 flex flex-col text-terminal-400">
       <AutoRefresh />
-      <div
-        className={`flex-1 min-h-0 w-full rounded-lg border p-3 sm:p-6 bg-black/90 shadow-2xl flex flex-col md:overflow-hidden ${shellFrameClassName}`}
-      >
+      <div className="flex-1 min-h-0 w-full rounded-lg border p-3 sm:p-6 bg-card shadow-2xl flex flex-col md:overflow-hidden border-terminal-400 shadow-terminal-400/20">
         {/* Terminal header bar */}
-        <div
-          className={`flex flex-wrap items-center justify-between gap-3 border-b pb-3 mb-4 shrink-0 ${shellHeaderClassName}`}
-        >
-          <div
-            className={`terminal-title-effect whitespace-nowrap text-base sm:text-xl font-mono ${shellTitleClassName}`}
-          >
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3 mb-4 shrink-0 border-terminal-400">
+          <div className="terminal-title-effect whitespace-nowrap text-base sm:text-xl font-mono text-terminal-300">
             <span>{`> SHADOW-CLOUD`}</span>
             <span aria-hidden="true" className="terminal-title-cursor" />
           </div>
@@ -119,8 +96,9 @@ export default async function Home() {
             emptyTitle="No campaigns linked yet"
             emptyDescription={
               <>
-                Run <span className="font-mono text-orange-400">/init</span>{" "}
-                or <span className="font-mono text-orange-400">/register</span>{" "}
+                Run <span className="font-mono text-terminal-400">/init</span>{" "}
+                or{" "}
+                <span className="font-mono text-terminal-400">/register</span>{" "}
                 inside a forum thread to join your first Shadow Cloud Campaign.
               </>
             }
@@ -128,9 +106,7 @@ export default async function Home() {
           />
         </div>
         {/* Status bar */}
-        <div
-          className={`mt-4 pt-3 border-t flex flex-wrap justify-between gap-2 text-xs shrink-0 ${shellStatusClassName}`}
-        >
+        <div className="mt-4 pt-3 border-t flex flex-wrap justify-between gap-2 text-xs shrink-0 border-terminal-400 text-terminal-300/70">
           <div>{componentVersionStatus}</div>
           <div>CAMPAIGNS: {games.length} MONITORED</div>
         </div>
