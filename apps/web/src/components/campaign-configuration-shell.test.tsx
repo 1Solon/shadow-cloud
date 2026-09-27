@@ -312,7 +312,7 @@ describe("CampaignConfigurationShell", () => {
     );
     expect(screen.getByTestId("campaign-configuration-status")).toHaveClass(
       "border-t",
-      "border-orange-400/25",
+      "border-terminal-400/20",
     );
     const exitButton = screen.getByRole("button", {
       name: "Exit configuration",

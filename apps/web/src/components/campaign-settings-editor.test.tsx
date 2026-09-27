@@ -149,7 +149,7 @@ describe("CampaignSettingsEditor", () => {
     expect(metadata).toContainElement(screen.getByLabelText("Round"));
     expect(metadata).not.toContainElement(screen.getByLabelText("Overlord"));
     expect(transfer).toContainElement(screen.getByLabelText("Overlord"));
-    expect(transfer).toHaveClass("border-orange-300/50", "bg-orange-400/5");
+    expect(transfer).toHaveClass("border-terminal-300/60", "bg-terminal-400/5");
     expect(transfer).toHaveTextContent(
       "The selected occupied seat becomes the new Overlord and receives organizer-only controls.",
     );
