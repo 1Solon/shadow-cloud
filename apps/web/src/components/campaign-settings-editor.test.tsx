@@ -443,7 +443,7 @@ describe("CampaignSettingsEditor", () => {
     expect(screen.getByText("Confirm Overlord Transfer")).toBeInTheDocument();
     expect(screen.getByText(/Player Two will receive/)).toBeInTheDocument();
     await user.click(
-      within(screen.getByRole("dialog")).getByRole("button", {
+      within(screen.getByRole("alertdialog")).getByRole("button", {
         name: "Cancel",
       }),
     );
@@ -542,7 +542,7 @@ describe("CampaignSettingsEditor", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
     await user.click(screen.getByRole("button", { name: "Confirm" }));
 
-    const dialog = screen.getByRole("dialog");
+    const dialog = screen.getByRole("alertdialog");
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(
       "Transfer rejected.",
     );
@@ -577,7 +577,7 @@ describe("CampaignSettingsEditor", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
     await user.click(screen.getByRole("button", { name: "Confirm" }));
 
-    const dialog = screen.getByRole("dialog");
+    const dialog = screen.getByRole("alertdialog");
     await within(dialog).findByRole("alert");
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
     await user.click(screen.getByRole("button", { name: "Cancel" }));
@@ -603,7 +603,7 @@ describe("CampaignSettingsEditor", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
     await user.click(screen.getByRole("button", { name: "Confirm" }));
 
-    const dialog = screen.getByRole("dialog");
+    const dialog = screen.getByRole("alertdialog");
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(
       "Metadata rejected.",
     );
@@ -628,7 +628,7 @@ describe("CampaignSettingsEditor", () => {
     await user.click(screen.getByRole("button", { name: "Save" }));
     await user.click(screen.getByRole("button", { name: "Confirm" }));
 
-    const dialog = screen.getByRole("dialog");
+    const dialog = screen.getByRole("alertdialog");
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(
       "Transfer rejected.",
     );
@@ -698,7 +698,7 @@ describe("CampaignSettingsEditor", () => {
     await user.selectOptions(organizer, "seat-2");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
-    const dialog = screen.getByRole("dialog");
+    const dialog = screen.getByRole("alertdialog");
     await waitFor(() =>
       expect(dialog).toContainElement(
         document.activeElement as HTMLElement | null,
@@ -719,7 +719,7 @@ describe("CampaignSettingsEditor", () => {
     );
 
     await user.keyboard("{Escape}");
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(organizer).toHaveFocus();
   });
 
@@ -789,7 +789,7 @@ describe("CampaignSettingsEditor", () => {
         "Untrusted server failure",
       );
       expect(screen.getByRole("alert")).toHaveFocus();
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
       expect(screen.getByLabelText("Overlord")).toHaveValue("seat-1");
       expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
       expect(onDirtyChange).toHaveBeenLastCalledWith(true);
@@ -925,7 +925,7 @@ describe("CampaignSettingsEditor", () => {
       expect(await screen.findByRole("alert")).toHaveTextContent(
         "Campaign details could not be confirmed",
       );
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
       expect(fetchSpy).toHaveBeenCalledTimes(1);
     },

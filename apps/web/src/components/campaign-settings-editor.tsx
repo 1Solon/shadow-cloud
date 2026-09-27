@@ -18,6 +18,17 @@ import {
   TerminalConfirmationModal,
   type TerminalConfirmationSpec,
 } from "@/components/terminal-confirmation-modal";
+import {
+  AlertDialog,
+  AlertDialogBody,
+  AlertDialogCancel,
+  AlertDialogCloseButton,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   transferOutcomeMessage,
@@ -416,127 +427,69 @@ function HostTransferConfirmationDialog({
   onConfirm: () => void;
   returnFocusRef: RefObject<HTMLElement | null>;
 }) {
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const cancelButtonRef = useRef<HTMLButtonElement>(null);
-  const titleId = useId();
+  const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!target) {
-      return;
-    }
-
-    function containFocus(event: FocusEvent) {
-      if (
-        event.target instanceof Node &&
-        !dialogRef.current?.contains(event.target)
-      ) {
-        (isPending ? dialogRef.current : cancelButtonRef.current)?.focus();
-      }
-    }
-
-    const returnFocusElement = returnFocusRef.current;
     // Disabled buttons lose focus in real browsers while the request is pending.
-    (isPending ? dialogRef.current : cancelButtonRef.current)?.focus();
-    document.addEventListener("focusin", containFocus);
-    return () => {
-      document.removeEventListener("focusin", containFocus);
-      returnFocusElement?.focus();
-    };
-  }, [isPending, returnFocusRef, target]);
+    if (isPending) contentRef.current?.focus();
+  }, [isPending]);
 
   if (!target) {
     return null;
   }
 
-  function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-    if (event.key === "Escape" && !isPending) {
-      event.preventDefault();
-      onCancel();
-      return;
-    }
-
-    if (event.key !== "Tab") {
-      return;
-    }
-
-    const focusableElements = Array.from(
-      dialogRef.current?.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ) ?? [],
-    );
-    if (focusableElements.length === 0) {
-      event.preventDefault();
-      return;
-    }
-
-    const first = focusableElements[0];
-    const last = focusableElements.at(-1);
-    if (
-      (event.shiftKey && document.activeElement === first) ||
-      (!event.shiftKey && document.activeElement === last) ||
-      !dialogRef.current?.contains(document.activeElement)
-    ) {
-      event.preventDefault();
-      (event.shiftKey ? last : first)?.focus();
-    }
-  }
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6">
-      <div
-        ref={dialogRef}
-        role="dialog"
-        tabIndex={-1}
-        aria-labelledby={titleId}
-        aria-modal="true"
-        className="relative w-full max-w-md overflow-hidden rounded-2xl border border-orange-400/30 bg-[#0a0711] shadow-2xl shadow-orange-950/40"
-        onKeyDown={handleKeyDown}
+    <AlertDialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onCancel();
+      }}
+    >
+      <AlertDialogContent
+        ref={contentRef}
+        onEscapeKeyDown={(event) => {
+          if (isPending) event.preventDefault();
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          returnFocusRef.current?.focus();
+        }}
       >
-        <div className="flex items-center justify-between border-b border-orange-400/20 bg-orange-400/10 px-4 py-3 font-mono text-[11px] uppercase tracking-[0.28em] text-orange-200">
-          <span id={titleId}>Confirm Overlord Transfer</span>
-          <button
+        <AlertDialogHeader>
+          <AlertDialogTitle>Confirm Overlord Transfer</AlertDialogTitle>
+          <AlertDialogCloseButton
             aria-label="Close confirmation"
-            className="text-orange-300/70 transition-colors hover:text-orange-200"
             disabled={isPending}
-            type="button"
             onClick={onCancel}
-          >
-            X
-          </button>
-        </div>
-        <div className="bg-black/70 px-4 py-4 font-mono text-sm text-orange-300">
-          <div className="text-orange-200/85">
-            <div>&gt; overlord --transfer seat-{target.seatNumber}</div>
-            <div className="mt-1 whitespace-pre-wrap break-words leading-6">
-              {target.displayName} will receive campaign control and become the
-              new Overlord.
+          />
+        </AlertDialogHeader>
+        <AlertDialogBody className="text-sm">
+          <AlertDialogDescription asChild>
+            <div className="text-terminal-200">
+              <div>&gt; overlord --transfer seat-{target.seatNumber}</div>
+              <div className="mt-1 whitespace-pre-wrap break-words leading-6">
+                {target.displayName} will receive campaign control and become
+                the new Overlord.
+              </div>
             </div>
-          </div>
+          </AlertDialogDescription>
           {errorMessage ? (
             <div
               role="alert"
-              className="mt-4 border border-red-400/30 bg-red-400/10 px-3 py-2 text-red-300"
+              className="border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive"
             >
               {errorMessage}
             </div>
           ) : null}
-          <div className="mt-6 flex justify-end gap-2">
-            <Button
-              ref={cancelButtonRef}
-              disabled={isPending}
-              type="button"
-              variant="secondary"
-              onClick={onCancel}
-            >
-              Cancel
-            </Button>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
             <Button disabled={isPending} type="button" onClick={onConfirm}>
               {isPending ? "Transferring..." : "Confirm"}
             </Button>
-          </div>
-        </div>
-      </div>
-    </div>
+          </AlertDialogFooter>
+        </AlertDialogBody>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 

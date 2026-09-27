@@ -407,6 +407,16 @@ body {
   animation: terminal-scanin 260ms ease-out forwards;
 }
 
+.terminal-scan-lines {
+  background: repeating-linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--terminal-400) 12%, transparent) 0px,
+    color-mix(in oklab, var(--terminal-400) 12%, transparent) 1px,
+    transparent 1px,
+    transparent 4px
+  );
+}
+
 @keyframes terminal-title-cursor-blink {
   0%,
   46% {

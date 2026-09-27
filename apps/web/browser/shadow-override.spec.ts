@@ -58,7 +58,7 @@ test("Override reveals Regimes for a privileged non-Overlord and gates signed in
         exact: true,
       })
       .click();
-    const confirmation = page.getByRole("dialog", {
+    const confirmation = page.getByRole("alertdialog", {
       name: "Confirm override change",
     });
     await expect(confirmation).toBeVisible();

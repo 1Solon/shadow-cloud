@@ -28,7 +28,7 @@ test("same-number confirmed retry and later section edits never replay committed
     .selectOption("seat-successor");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await page.getByRole("button", { name: "Confirm", exact: true }).click();
-  await expect(page.getByRole("dialog").getByRole("alert")).toContainText(
+  await expect(page.getByRole("alertdialog").getByRole("alert")).toContainText(
     "Campaign details saved; Overlord transfer failed.",
   );
   await page.getByRole("button", { name: "Confirm", exact: true }).click();
@@ -40,7 +40,7 @@ test("same-number confirmed retry and later section edits never replay committed
         ).length,
     )
     .toBe(2);
-  await expect(page.getByRole("dialog").getByRole("alert")).toContainText(
+  await expect(page.getByRole("alertdialog").getByRole("alert")).toContainText(
     "Campaign details saved; Overlord transfer failed.",
   );
   await expect(
@@ -194,7 +194,7 @@ test("renumbered transfer failure cannot send a subsequent notes edit to the old
     }),
   ).toBeVisible();
   expect(await page.evaluate(() => history.length)).toBe(historyLength);
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
   await page.getByRole("tab", { name: "Campaign", exact: true }).click();
   await page
     .getByRole("button", { name: "Configure campaign", exact: true })
@@ -350,7 +350,7 @@ for (const renumber of [false, true]) {
           )
           .first(),
       ).toBeVisible();
-      await expect(page.getByRole("dialog")).toHaveCount(0);
+      await expect(page.getByRole("alertdialog")).toHaveCount(0);
       expect(new URL(page.url()).pathname).toBe(`/games/${number}`);
       await page.getByRole("tab", { name: "Campaign", exact: true }).click();
       if (committed) {
