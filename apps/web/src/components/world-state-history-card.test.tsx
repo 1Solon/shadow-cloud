@@ -10,26 +10,38 @@ vi.mock("@/components/download-save-button", () => ({
   DownloadSaveButton: ({
     fileName,
     href,
+    className,
+    label = "Download",
+    variant,
   }: {
     fileName: string;
     href: string;
-  }) => <a href={href}>{fileName}</a>,
+    className?: string;
+    label?: string;
+    variant?: string;
+  }) => (
+    <a
+      className={className}
+      data-label={label}
+      data-variant={variant}
+      href={href}
+    >
+      {fileName}
+    </a>
+  ),
 }));
 
 vi.mock("@/components/replace-save-file-action", () => ({
   ReplaceSaveFileAction: ({
     canonicalFileName,
     fileVersionId,
-    isMostRecent,
   }: {
     canonicalFileName: string;
     fileVersionId: string;
-    isMostRecent: boolean;
   }) => (
     <button
       aria-label={`Replace ${canonicalFileName}`}
       data-file-version-id={fileVersionId}
-      data-most-recent={String(isMostRecent)}
       type="button"
     >
       Replace
@@ -94,10 +106,10 @@ describe("WorldStateHistoryCard", () => {
 
     expect(
       screen.getByRole("button", { name: "Replace 42-T4-S3-Latest.se1" }),
-    ).toHaveAttribute("data-most-recent", "true");
+    ).toHaveAttribute("data-file-version-id", "version-latest");
     expect(
       screen.getByRole("button", { name: "Replace 42-T4-S2-Older.se1" }),
-    ).toHaveAttribute("data-most-recent", "false");
+    ).toHaveAttribute("data-file-version-id", "version-older");
     expect(
       screen.getByRole("link", { name: "42-T4-S3-Latest.se1" }),
     ).toHaveAttribute("href", "/api/games/42/files/version-latest?revision=4");
@@ -213,6 +225,28 @@ describe("WorldStateHistoryCard", () => {
     });
     expect(saveFileHeader).toHaveAttribute("scope", "col");
     expect(saveFileHeader.closest("tr")).toHaveClass("h-10");
+  });
+
+  it("labels and styles every download the same", () => {
+    renderHistory([
+      createFileVersion({
+        id: "version-latest",
+        originalName: "42-T4-S3-Latest.se1",
+      }),
+      createFileVersion({
+        id: "version-older",
+        originalName: "42-T4-S2-Older.se1",
+      }),
+    ]);
+
+    const latest = screen.getByRole("link", { name: "42-T4-S3-Latest.se1" });
+    const older = screen.getByRole("link", { name: "42-T4-S2-Older.se1" });
+    expect(latest).toHaveAttribute("data-label", "Download");
+    expect(older).toHaveAttribute("data-label", "Download");
+    expect(latest).toHaveAttribute("data-variant", "outline");
+    expect(older).toHaveAttribute("data-variant", "outline");
+    expect(latest).toHaveClass("min-h-11");
+    expect(older).toHaveClass("min-h-11");
   });
 
   it("renders replacement controls for an enabled Shadow override user", () => {

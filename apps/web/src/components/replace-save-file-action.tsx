@@ -6,14 +6,12 @@ import { TerminalActionConfirmationDialog } from "@/components/terminal-action-c
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
 
 type ReplaceSaveFileActionProps = {
   saveBaseline?: string;
   gameNumber: number;
   fileVersionId: string;
   canonicalFileName: string;
-  isMostRecent: boolean;
 };
 
 export function ReplaceSaveFileAction({
@@ -21,7 +19,6 @@ export function ReplaceSaveFileAction({
   gameNumber,
   fileVersionId,
   canonicalFileName,
-  isMostRecent,
 }: ReplaceSaveFileActionProps) {
   const router = useRouter();
   const [confirmationOpen, setConfirmationOpen] = useState(false);
@@ -142,10 +139,7 @@ export function ReplaceSaveFileAction({
         </div>
       </TerminalActionConfirmationDialog>
       <Button
-        className={cn(
-          "min-h-11 px-3 text-xs uppercase tracking-[0.14em]",
-          isMostRecent && "bg-terminal-400/10",
-        )}
+        className="min-h-11 px-3 text-xs uppercase tracking-[0.14em]"
         type="button"
         variant="outline"
         onClick={openConfirmation}

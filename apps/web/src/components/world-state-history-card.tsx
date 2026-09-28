@@ -172,13 +172,10 @@ export function WorldStateHistoryCard({
                       >
                         <div className="history-table-actions flex flex-wrap items-center justify-end gap-2 sm:gap-3">
                           <DownloadSaveButton
-                            className="h-9 px-3 text-xs uppercase tracking-[0.18em]"
+                            className="min-h-11 px-3 text-xs uppercase tracking-[0.18em]"
                             variant="outline"
                             fileName={fileVersion.originalName}
                             href={`/api/games/${gameNumber}/files/${fileVersion.id}?revision=${fileVersion.contentRevision}`}
-                            label={
-                              isMostRecent ? "Download latest save" : "Download"
-                            }
                           />
                           {canReplace ? (
                             <ReplaceSaveFileAction
@@ -186,7 +183,6 @@ export function WorldStateHistoryCard({
                               canonicalFileName={fileVersion.originalName}
                               fileVersionId={fileVersion.id}
                               gameNumber={gameNumber}
-                              isMostRecent={isMostRecent}
                             />
                           ) : null}
                         </div>

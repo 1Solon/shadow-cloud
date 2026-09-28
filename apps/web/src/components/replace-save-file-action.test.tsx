@@ -38,7 +38,6 @@ function renderAction() {
       fileVersionId="version-7"
       gameNumber={42}
       saveBaseline="campaign:2:3"
-      isMostRecent={false}
     />,
   );
 }
@@ -171,7 +170,6 @@ describe("ReplaceSaveFileAction", () => {
         gameNumber={42}
         fileVersionId="version-7"
         canonicalFileName="42-T4-S2-Other.se1"
-        isMostRecent={false}
         saveBaseline="campaign:2:4"
       />,
     );
