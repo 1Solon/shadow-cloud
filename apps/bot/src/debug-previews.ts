@@ -195,6 +195,7 @@ const previewFactories: Record<DebugPreviewName, DebugPreviewFactory> = {
           name: fixture.name,
           discordThreadId: fixture.discordThreadId,
         },
+        activePlayer: fixture.activePlayer,
         replacement: {
           contentRevision: 2,
           versionId: "debug-version",
