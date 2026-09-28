@@ -199,6 +199,20 @@ describe("CampaignDetailsWorkspace", () => {
     );
   });
 
+  it("gives the configuration the remaining height on wide screens", () => {
+    render(<CampaignDetailsWorkspace {...props} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Configure campaign" }));
+
+    expect(screen.getByTestId("campaign-configuration-entry")).toHaveClass(
+      "md:flex",
+      "md:min-h-128",
+      "md:grow",
+      "md:basis-0",
+      "md:flex-col",
+    );
+  });
+
   it.each(["identity", "world", "turn-protocol"] as const)(
     "maps %s to exactly one settings editor with the exact dirty callback",
     (section) => {

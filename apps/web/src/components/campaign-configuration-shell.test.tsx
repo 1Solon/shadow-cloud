@@ -289,6 +289,23 @@ describe("CampaignConfigurationShell", () => {
     expect(callbacks.at(-1)).toBe(initialCallback);
   });
 
+  it("fills its height on wide screens and scrolls a long section inside the card", () => {
+    render(<Harness />);
+
+    expect(
+      screen.getByRole("region", { name: "Configure campaign:" }),
+    ).toHaveClass("md:flex", "md:min-h-0", "md:grow", "md:flex-col");
+    expect(screen.getByTestId("campaign-configuration-layout")).toHaveClass(
+      "md:min-h-0",
+      "md:grow",
+      "md:grid-rows-[minmax(0,1fr)]",
+    );
+    expect(
+      screen.getByRole("heading", { level: 3, name: "Identity & Progress" })
+        .parentElement,
+    ).toHaveClass("md:overflow-y-auto");
+  });
+
   it("invokes exit while clean", async () => {
     const user = userEvent.setup();
     const onExit = vi.fn();

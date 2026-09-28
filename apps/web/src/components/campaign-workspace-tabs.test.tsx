@@ -305,7 +305,7 @@ describe("CampaignWorkspaceTabs", () => {
     const savesTab = screen.getByRole("tab", { name: "Saves" });
     const timingTab = screen.getByRole("tab", { name: "Timing" });
 
-    expect(root).toHaveClass("min-w-0");
+    expect(root).toHaveClass("min-w-0", "md:flex", "md:grow", "md:flex-col");
     expect(navigationWrapper).toHaveClass(
       "overflow-x-auto",
       "overflow-y-hidden",
@@ -329,6 +329,9 @@ describe("CampaignWorkspaceTabs", () => {
       expect(panel).toHaveClass(
         "min-w-0",
         "pt-4",
+        "md:flex",
+        "md:grow",
+        "md:flex-col",
         "focus-visible:outline-none",
         "focus-visible:ring-2",
       );

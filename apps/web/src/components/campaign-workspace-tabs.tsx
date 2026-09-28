@@ -58,7 +58,7 @@ export function CampaignWorkspaceTabs({
 
   return (
     <Tabs
-      className="min-w-0"
+      className="min-w-0 md:flex md:grow md:flex-col"
       value={activeTabId}
       onValueChange={(value) => selectTab(value as WorkspaceTabId)}
     >
@@ -77,7 +77,7 @@ export function CampaignWorkspaceTabs({
 
       {tabs.map((tab) => (
         <TabsContent
-          className="pt-4 sm:pt-6"
+          className="pt-4 sm:pt-6 md:flex md:grow md:flex-col"
           forceMount
           hidden={activeTabId !== tab.id}
           key={tab.id}

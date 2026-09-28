@@ -84,7 +84,7 @@ export function CampaignConfigurationShell({
   return (
     <Card
       aria-labelledby={configurationHeadingId}
-      className="min-w-0 overflow-hidden font-mono text-terminal-200"
+      className="min-w-0 overflow-hidden font-mono text-terminal-200 md:flex md:min-h-0 md:grow md:flex-col"
       role="region"
     >
       <CardHeader>
@@ -120,7 +120,7 @@ export function CampaignConfigurationShell({
 
       <div
         data-testid="campaign-configuration-layout"
-        className="grid min-w-0 md:grid-cols-[minmax(11rem,0.35fr)_minmax(0,1fr)]"
+        className="grid min-w-0 md:min-h-0 md:grow md:grid-cols-[minmax(11rem,0.35fr)_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)]"
       >
         <div className="min-w-0 border-b border-terminal-400/20 p-3 md:border-r md:border-b-0">
           <div className="md:hidden">
@@ -193,7 +193,10 @@ export function CampaignConfigurationShell({
           ) : null}
         </div>
 
-        <div key={activeSection} className="min-w-0 px-4 py-5 sm:px-6">
+        <div
+          key={activeSection}
+          className="min-w-0 px-4 py-5 sm:px-6 md:overflow-y-auto"
+        >
           <h3
             ref={editorHeadingRef}
             tabIndex={-1}
