@@ -111,6 +111,39 @@ export function TurnCommandCenter({
   const target = targetHours !== null ? `${targetHours}h` : "Unknown";
   const canUpload = isSignedIn && isActivePlayer;
   const hasNotes = notes.trim().length > 0;
+  const latestSaveCard = latestSave ? (
+    <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-terminal-400/30 bg-terminal-400/5 px-3 py-2.5">
+      <div className="min-w-0">
+        <p className="text-[0.65rem] uppercase tracking-[0.18em] text-terminal-300/70">
+          Latest save
+        </p>
+        <p
+          className="mt-1 truncate text-sm text-terminal-100"
+          title={latestSave.originalName}
+        >
+          {latestSave.originalName}
+        </p>
+      </div>
+      <div className="flex shrink-0 gap-2">
+        <DownloadSaveButton
+          className="min-h-11 shrink-0 px-3 text-xs font-medium"
+          fileName={latestSave.originalName}
+          href={`/api/games/${gameNumber}/files/${latestSave.id}?revision=${latestSave.contentRevision}`}
+          label="Download latest save"
+        />
+        {saveRejectionLabel ? (
+          <RejectSaveAction
+            fileName={latestSave.originalName}
+            fileVersionId={latestSave.id}
+            gameNumber={gameNumber}
+            label={saveRejectionLabel}
+            saveBaseline={saveBaseline}
+            uploaderDisplayName={latestSave.uploadedByDisplayName}
+          />
+        ) : null}
+      </div>
+    </div>
+  ) : null;
 
   return (
     <section
@@ -160,7 +193,7 @@ export function TurnCommandCenter({
 
       <div
         className={
-          canUpload || latestSave
+          canUpload
             ? "grid gap-4 p-3 sm:p-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]"
             : "p-3 sm:p-4"
         }
@@ -168,7 +201,7 @@ export function TurnCommandCenter({
       >
         <div className="flex min-w-0 flex-col gap-4">
           <dl
-            className={`grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4 ${canUpload || latestSave ? "lg:grid-cols-2" : ""}`}
+            className={`grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4 ${canUpload ? "lg:grid-cols-2" : ""}`}
           >
             <Metric label="Active lord" value={activePlayerDisplayName} />
             <Metric
@@ -182,6 +215,8 @@ export function TurnCommandCenter({
             <Metric label="Round" value={`Round ${roundNumber}`} />
             <Metric label="Elapsed / target" value={`${elapsed} / ${target}`} />
           </dl>
+
+          {canUpload ? null : latestSaveCard}
 
           <details
             className="group border-t border-terminal-400/20 pt-1"
@@ -210,51 +245,17 @@ export function TurnCommandCenter({
           </details>
         </div>
 
-        {canUpload || latestSave ? (
-          <div className="flex min-h-0 flex-col border-t border-terminal-400/20 pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
-            {latestSave ? (
-              <div className="mb-3 flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-terminal-400/30 bg-terminal-400/5 px-3 py-2.5">
-                <div className="min-w-0">
-                  <p className="text-[0.65rem] uppercase tracking-[0.18em] text-terminal-300/70">
-                    Latest save
-                  </p>
-                  <p
-                    className="mt-1 truncate text-sm text-terminal-100"
-                    title={latestSave.originalName}
-                  >
-                    {latestSave.originalName}
-                  </p>
-                </div>
-                <div className="flex shrink-0 gap-2">
-                  <DownloadSaveButton
-                    className="min-h-11 shrink-0 px-3 text-xs font-medium"
-                    fileName={latestSave.originalName}
-                    href={`/api/games/${gameNumber}/files/${latestSave.id}?revision=${latestSave.contentRevision}`}
-                    label="Download latest save"
-                  />
-                  {saveRejectionLabel ? (
-                    <RejectSaveAction
-                      fileName={latestSave.originalName}
-                      fileVersionId={latestSave.id}
-                      gameNumber={gameNumber}
-                      label={saveRejectionLabel}
-                      saveBaseline={saveBaseline}
-                      uploaderDisplayName={latestSave.uploadedByDisplayName}
-                    />
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
-            {canUpload ? (
-              <div className="min-h-0 flex-1">
-                <UploadSaveForm
-                  gameNumber={gameNumber}
-                  ref={uploadFormRef}
-                  saveBaseline={saveBaseline}
-                  presentation="compact"
-                />
-              </div>
-            ) : null}
+        {canUpload ? (
+          <div className="flex min-h-0 flex-col gap-3 border-t border-terminal-400/20 pt-4 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
+            {latestSaveCard}
+            <div className="min-h-0 flex-1">
+              <UploadSaveForm
+                gameNumber={gameNumber}
+                ref={uploadFormRef}
+                saveBaseline={saveBaseline}
+                presentation="compact"
+              />
+            </div>
           </div>
         ) : null}
       </div>
