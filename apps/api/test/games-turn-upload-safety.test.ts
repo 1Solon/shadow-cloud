@@ -252,10 +252,11 @@ describe('upload safety through the public mutation owner', () => {
         expectedRoundNumber: before.roundNumber,
         expectedLatestFileVersionId: before.fileVersions[0]?.id ?? null,
       };
+      const save = { ...file, buffer: Buffer.from(step.name) };
       const uploaded = await campaigns.uploadSave(
         '1',
         step.uploader,
-        file,
+        save,
         metadata,
       );
       expect(uploaded).toMatchObject({
@@ -315,7 +316,7 @@ describe('upload safety through the public mutation owner', () => {
       });
 
       expect(
-        await campaigns.uploadSave('game-1', step.uploader, file, metadata),
+        await campaigns.uploadSave('game-1', step.uploader, save, metadata),
       ).toMatchObject({
         fileVersionId: uploaded.fileVersionId,
         idempotentReplay: true,
