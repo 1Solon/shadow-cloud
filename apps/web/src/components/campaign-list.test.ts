@@ -126,8 +126,22 @@ describe("campaign list sorting and filtering", () => {
     ).toEqual(["alpha", "bravo", "zulu"]);
   });
 
+  it("sorts campaigns by number", () => {
+    const games = [
+      { ...campaigns[0], gameNumber: 10 },
+      { ...campaigns[1], gameNumber: 9 },
+      { ...campaigns[2], gameNumber: 1 },
+    ];
+    expect(
+      sortAndFilterCampaigns(games, undefined, "number-asc", "all").map(
+        (campaign) => campaign.id,
+      ),
+    ).toEqual(["bravo", "alpha", "zulu"]);
+  });
+
   it("lists the current user's turns first under every sort", () => {
     expect(campaignIds("name-asc")).toEqual(["bravo", "zulu", "alpha"]);
+    expect(campaignIds("number-asc")).toEqual(["bravo", "zulu", "alpha"]);
     expect(campaignIds("turn-oldest")).toEqual(["zulu", "bravo", "alpha"]);
     expect(campaignIds("turn-newest")).toEqual(["bravo", "zulu", "alpha"]);
   });
