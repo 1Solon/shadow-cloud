@@ -62,7 +62,7 @@ const campaigns = [
 ];
 
 it.each([false, true])(
-  "offers exactly Name, Turn (Oldest), Turn (Newest), defaulting to newest starts (extended controls: %s)",
+  "offers exactly Name, Number, Turn (Oldest), Turn (Newest), defaulting to newest starts (extended controls: %s)",
   async (hasExtendedControls) => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-07-11T00:00:00Z"));
@@ -94,6 +94,7 @@ it.each([false, true])(
     expect(sort).toHaveTextContent("Turn (Newest)");
     for (const [label, expected] of [
       ["Name", ["1 : Long", "3 : Short", "2 : Unknown"]],
+      ["Number", ["1 : Long", "2 : Unknown", "3 : Short"]],
       ["Turn (Oldest)", ["1 : Long", "3 : Short", "2 : Unknown"]],
       ["Turn (Newest)", ["3 : Short", "1 : Long", "2 : Unknown"]],
     ] as const) {
@@ -102,7 +103,7 @@ it.each([false, true])(
         (await screen.findAllByRole("option")).map(
           (option) => option.textContent,
         ),
-      ).toEqual(["Name", "Turn (Oldest)", "Turn (Newest)"]);
+      ).toEqual(["Name", "Number", "Turn (Oldest)", "Turn (Newest)"]);
       fireEvent.click(await screen.findByRole("option", { name: label }));
       expect(order()).toEqual(expected);
     }

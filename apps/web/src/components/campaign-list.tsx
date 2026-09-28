@@ -20,7 +20,8 @@ import {
 } from "@/components/ui/select";
 import type { GameListItem } from "@/lib/shadow-cloud-api";
 
-export type CampaignSortOption = "name-asc" | "turn-oldest" | "turn-newest";
+export type CampaignSortOption =
+  "name-asc" | "number-asc" | "turn-oldest" | "turn-newest";
 
 export type CampaignTurnFilter = "all" | "your-turn" | "waiting";
 
@@ -95,6 +96,10 @@ export function sortAndFilterCampaigns(
 
     if (sortOption === "name-asc") {
       return compareCampaignNames(left, right);
+    }
+
+    if (sortOption === "number-asc") {
+      return left.gameNumber - right.gameNumber;
     }
 
     const leftStart = Date.parse(left.currentTurnStartedAt ?? "");
@@ -194,6 +199,7 @@ export function CampaignList({
                 <SelectContent position="popper">
                   <SelectGroup>
                     <SelectItem value="name-asc">Name</SelectItem>
+                    <SelectItem value="number-asc">Number</SelectItem>
                     <SelectItem value="turn-oldest">Turn (Oldest)</SelectItem>
                     <SelectItem value="turn-newest">Turn (Newest)</SelectItem>
                   </SelectGroup>
