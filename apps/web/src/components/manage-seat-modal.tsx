@@ -1,7 +1,16 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useId, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogBody,
+  DialogCloseButton,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 export type ManageSeatModalSeat = {
@@ -46,15 +55,15 @@ function SeatAction({
       className={cn(
         "flex min-w-0 flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between",
         destructive
-          ? "border-red-400/20 bg-red-400/5"
-          : "border-orange-400/20 bg-orange-400/5",
+          ? "border-destructive/20 bg-destructive/5"
+          : "border-terminal-400/20 bg-terminal-400/5",
       )}
     >
       <div className="min-w-0">
         <div
           className={cn(
             "font-mono font-semibold",
-            destructive ? "text-red-200" : "text-orange-200",
+            destructive ? "text-destructive" : "text-terminal-200",
           )}
         >
           {title}
@@ -62,7 +71,7 @@ function SeatAction({
         <p
           className={cn(
             "mt-1 break-words text-sm leading-6",
-            destructive ? "text-red-200/70" : "text-orange-200/70",
+            destructive ? "text-destructive/70" : "text-terminal-200/70",
           )}
           id={descriptionId}
         >
@@ -71,16 +80,11 @@ function SeatAction({
       </div>
       <Button
         aria-describedby={descriptionId}
-        className={cn(
-          "w-full shrink-0 sm:w-32",
-          destructive
-            ? "border-red-400 text-red-300 hover:bg-red-400 hover:text-black"
-            : null,
-        )}
+        className="w-full shrink-0 sm:w-32"
         data-seat-action="true"
         disabled={disabled}
         type="button"
-        variant={destructive ? "outline" : "secondary"}
+        variant={destructive ? "destructive" : "secondary"}
         onClick={onClick}
       >
         {title}
@@ -97,35 +101,7 @@ export function ManageSeatModal({
   onClear,
   onRemove,
 }: ManageSeatModalProps) {
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const titleId = useId();
-  const seatId = seat?.id;
-
-  useEffect(() => {
-    if (!seatId) {
-      return;
-    }
-
-    function containFocus(event: FocusEvent) {
-      if (
-        event.target instanceof Node &&
-        !dialogRef.current?.contains(event.target)
-      ) {
-        closeButtonRef.current?.focus();
-      }
-    }
-
-    const firstAction = dialogRef.current?.querySelector<HTMLButtonElement>(
-      'button[data-seat-action="true"]:not([disabled])',
-    );
-    (firstAction ?? closeButtonRef.current)?.focus();
-    document.addEventListener("focusin", containFocus);
-
-    return () => {
-      document.removeEventListener("focusin", containFocus);
-    };
-  }, [seatId]);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   if (!seat) {
     return null;
@@ -149,72 +125,43 @@ export function ManageSeatModal({
         ? "This seat cannot be removed."
         : "Delete this empty seat and renumber the remaining seats.";
 
-  function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-    if (event.key === "Escape" && !isPending) {
-      event.preventDefault();
-      onClose();
-      return;
-    }
-
-    if (event.key !== "Tab") {
-      return;
-    }
-
-    const focusableElements = Array.from(
-      dialogRef.current?.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ) ?? [],
-    );
-    const first = focusableElements[0];
-    const last = focusableElements.at(-1);
-
-    if (!first || !last) {
-      event.preventDefault();
-      return;
-    }
-
-    if (
-      (event.shiftKey && document.activeElement === first) ||
-      (!event.shiftKey && document.activeElement === last) ||
-      !dialogRef.current?.contains(document.activeElement)
-    ) {
-      event.preventDefault();
-      (event.shiftKey ? last : first).focus();
-    }
-  }
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm"
-      onClick={(event) => {
-        if (event.target === event.currentTarget && !isPending) {
-          onClose();
-        }
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
       }}
     >
-      <div
-        aria-labelledby={titleId}
-        aria-modal="true"
-        className="relative max-h-[calc(100vh-3rem)] w-full max-w-xl overflow-y-auto rounded-2xl border border-orange-400/30 bg-[#0a0711] shadow-2xl shadow-orange-950/40"
-        ref={dialogRef}
-        role="dialog"
-        onKeyDown={handleKeyDown}
+      <DialogContent
+        ref={contentRef}
+        aria-describedby={undefined}
+        className="flex max-h-[calc(100vh-3rem)] max-w-xl flex-col"
+        onOpenAutoFocus={(event) => {
+          const firstAction = contentRef.current?.querySelector<HTMLElement>(
+            'button[data-seat-action="true"]:not([disabled])',
+          );
+          if (firstAction) {
+            event.preventDefault();
+            firstAction.focus();
+          }
+        }}
+        onEscapeKeyDown={(event) => {
+          if (isPending) event.preventDefault();
+        }}
+        onInteractOutside={(event) => {
+          if (isPending) event.preventDefault();
+        }}
       >
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-orange-400/20 bg-[#1f1110] px-4 py-3 font-mono text-[11px] uppercase tracking-[0.28em] text-orange-200">
-          <span id={titleId}>Manage seat {seat.seatNumber}</span>
-          <button
+        <DialogHeader>
+          <DialogTitle>Manage seat {seat.seatNumber}</DialogTitle>
+          <DialogCloseButton
             aria-label="Close manage seat"
-            className="text-orange-300/70 transition-colors hover:text-orange-200 disabled:opacity-50"
             disabled={isPending}
-            ref={closeButtonRef}
-            type="button"
             onClick={onClose}
-          >
-            X
-          </button>
-        </div>
-        <div className="space-y-4 bg-black/70 px-4 py-4 font-mono text-orange-300 sm:px-5 sm:py-5">
-          <div className="min-w-0 border-b border-orange-400/15 px-1 pb-4 text-xl font-semibold text-orange-300 [overflow-wrap:anywhere]">
+          />
+        </DialogHeader>
+        <DialogBody className="min-h-0 overflow-y-auto sm:px-5 sm:py-5">
+          <div className="min-w-0 border-b border-terminal-400/20 px-1 pb-4 text-xl font-semibold text-terminal-300 [overflow-wrap:anywhere]">
             {seat.playerLabel}
           </div>
           <div className="space-y-3">
@@ -238,7 +185,7 @@ export function ManageSeatModal({
               onClick={onRemove}
             />
           </div>
-          <div className="flex justify-end pt-1">
+          <DialogFooter>
             <Button
               disabled={isPending}
               type="button"
@@ -247,9 +194,9 @@ export function ManageSeatModal({
             >
               Close
             </Button>
-          </div>
-        </div>
-      </div>
-    </div>
+          </DialogFooter>
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -72,7 +72,7 @@ describe("ReplaceSaveFileAction", () => {
 
     await user.click(screen.getByRole("button", { name: "Replace" }));
 
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
     expect(screen.getByText("42-T4-S2-Other.se1")).toBeInTheDocument();
     expect(screen.getByText(/will not advance the turn/i)).toBeInTheDocument();
     expect(screen.getByText("Maximum file size: 25 MB")).toBeInTheDocument();
@@ -123,7 +123,7 @@ describe("ReplaceSaveFileAction", () => {
         screen.getByRole("button", { name: "Replace file" }),
       ).toBeEnabled();
     });
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
   });
 
   it("reports a network failure without closing the dialog", async () => {
@@ -144,7 +144,7 @@ describe("ReplaceSaveFileAction", () => {
         screen.getByRole("button", { name: "Replace file" }),
       ).toBeEnabled();
     });
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
   });
 
   it("keeps the selected file available after a conflict", async () => {
@@ -165,7 +165,7 @@ describe("ReplaceSaveFileAction", () => {
         screen.getByRole("button", { name: "Replace file" }),
       ).toBeEnabled();
     });
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
     view.rerender(
       <ReplaceSaveFileAction
         gameNumber={42}
@@ -202,7 +202,7 @@ describe("ReplaceSaveFileAction", () => {
 
     resolveRequest!(mockResponse(true));
     await waitFor(() => {
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     });
   });
 
@@ -215,7 +215,7 @@ describe("ReplaceSaveFileAction", () => {
     await user.click(screen.getByRole("button", { name: "Replace file" }));
 
     await waitFor(() => {
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     });
     expect(mockRouter.refresh).toHaveBeenCalledTimes(1);
     expect(mockRouter.replace).not.toHaveBeenCalled();

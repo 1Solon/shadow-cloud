@@ -147,7 +147,7 @@ describe("SeatOrderEditor", () => {
     await user.click(screen.getByRole("button", { name: "Manage seat 2" }));
     await user.click(screen.getByRole("button", { name: "Clear seat" }));
     await user.click(
-      within(screen.getByRole("dialog")).getByRole("button", {
+      within(screen.getByRole("alertdialog")).getByRole("button", {
         name: "Confirm",
       }),
     );
@@ -155,7 +155,7 @@ describe("SeatOrderEditor", () => {
     expect(screen.getByRole("button", { name: "Remove seat" })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "Remove seat" }));
     await user.click(
-      within(screen.getByRole("dialog")).getByRole("button", {
+      within(screen.getByRole("alertdialog")).getByRole("button", {
         name: "Confirm",
       }),
     );
@@ -365,7 +365,7 @@ describe("SeatOrderEditor", () => {
     await user.click(screen.getByRole("button", { name: "Manage seat 2" }));
     await user.click(screen.getByRole("button", { name: "Clear seat" }));
     await user.click(
-      within(screen.getByRole("dialog")).getByRole("button", {
+      within(screen.getByRole("alertdialog")).getByRole("button", {
         name: "Confirm",
       }),
     );
@@ -401,7 +401,7 @@ describe("SeatOrderEditor", () => {
     expect(screen.getByRole("button", { name: "Remove seat" })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "Remove seat" }));
     await user.click(
-      within(screen.getByRole("dialog")).getByRole("button", {
+      within(screen.getByRole("alertdialog")).getByRole("button", {
         name: "Confirm",
       }),
     );
@@ -483,6 +483,7 @@ describe("SeatOrderEditor", () => {
         }),
       ).toBeNull();
       expect(screen.queryByRole("dialog")).toBeNull();
+      expect(screen.queryByRole("alertdialog")).toBeNull();
       expect(onDirtyChange).toHaveBeenLastCalledWith(false);
     },
   );
@@ -503,6 +504,7 @@ describe("SeatOrderEditor", () => {
     };
     rerender(<SeatOrderEditor {...props} canEdit={false} />);
     expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
     rerender(<SeatOrderEditor {...props} canEdit />);
     expect(screen.getByText("Seat 1 · Overlord · Active")).toBeVisible();
     expect(screen.queryByText("Seat 2 · Active")).toBeNull();
@@ -659,7 +661,7 @@ describe("SeatOrderEditor", () => {
       />,
     );
     await user.click(
-      within(screen.getByRole("dialog")).getByRole("button", {
+      within(screen.getByRole("alertdialog")).getByRole("button", {
         name: "Confirm",
       }),
     );
@@ -765,14 +767,19 @@ describe("SeatOrderEditor", () => {
 
     await user.click(screen.getByRole("button", { name: "Manage seat 2" }));
 
-    const moveButton = screen.getByRole("button", { name: "Move seat 2" });
+    const moveButton = screen.getByRole("button", {
+      name: "Move seat 2",
+      hidden: true,
+    });
     const actionGroup = moveButton.parentElement;
     const moveIcon = moveButton.querySelector("svg");
 
     expect(actionGroup).not.toBeNull();
     expect(moveButton).not.toHaveTextContent("Move");
     expect(moveIcon).toHaveAttribute("aria-hidden", "true");
-    expect(within(actionGroup!).getAllByRole("button").at(-1)).toBe(moveButton);
+    expect(
+      within(actionGroup!).getAllByRole("button", { hidden: true }).at(-1),
+    ).toBe(moveButton);
   });
 
   it("preserves card presentation and renders configuration without card chrome", () => {
@@ -929,6 +936,8 @@ describe("SeatOrderEditor", () => {
     );
 
     expect(screen.queryByRole("dialog")).toBeNull();
+
+    expect(screen.queryByRole("alertdialog")).toBeNull();
     expect(screen.queryByRole("button", { name: /manage seat/i })).toBeNull();
     expect(screen.queryByRole("button", { name: "Save order" })).toBeNull();
     await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(false));
@@ -1000,8 +1009,8 @@ describe("SeatOrderEditor", () => {
       ),
     );
 
-    expect(screen.getAllByRole("dialog")).toHaveLength(1);
-    const confirmationDialog = screen.getByRole("dialog", {
+    expect(screen.queryByRole("dialog")).toBeNull();
+    const confirmationDialog = screen.getByRole("alertdialog", {
       name: "Confirm seat change",
     });
     expect(confirmationDialog).toBeVisible();
@@ -1016,6 +1025,7 @@ describe("SeatOrderEditor", () => {
       }),
     );
     expect(screen.getAllByRole("dialog")).toHaveLength(1);
+    expect(screen.queryByRole("alertdialog")).toBeNull();
     expect(screen.getByRole("dialog", { name: "Manage seat 2" })).toBeVisible();
 
     await user.click(
@@ -1024,7 +1034,7 @@ describe("SeatOrderEditor", () => {
       }),
     );
     await user.click(
-      within(screen.getByRole("dialog")).getByRole("button", {
+      within(screen.getByRole("alertdialog")).getByRole("button", {
         name: "Confirm",
       }),
     );
@@ -1059,7 +1069,7 @@ describe("SeatOrderEditor", () => {
       }),
     );
     await user.click(
-      within(screen.getByRole("dialog")).getByRole("button", {
+      within(screen.getByRole("alertdialog")).getByRole("button", {
         name: "Confirm",
       }),
     );
@@ -1099,7 +1109,7 @@ describe("SeatOrderEditor", () => {
     await user.click(screen.getByRole("button", { name: "Manage seat 3" }));
     await user.click(screen.getByRole("button", { name: "Remove seat" }));
     await user.click(
-      within(screen.getByRole("dialog")).getByRole("button", {
+      within(screen.getByRole("alertdialog")).getByRole("button", {
         name: "Confirm",
       }),
     );
@@ -1683,16 +1693,17 @@ describe("SeatOrderEditor", () => {
     await user.click(screen.getByRole("button", { name: "Manage seat 2" }));
     await user.click(screen.getByRole("button", { name: "Clear seat" }));
     await user.click(
-      within(screen.getByRole("dialog")).getByRole("button", {
+      within(screen.getByRole("alertdialog")).getByRole("button", {
         name: "Confirm",
       }),
     );
     await user.click(screen.getByRole("button", { name: "Manage seat 2" }));
     expect(screen.getByRole("button", { name: "Remove seat" })).toBeDisabled();
+    await user.keyboard("{Escape}");
     await user.click(screen.getByRole("button", { name: "Manage seat 3" }));
     await user.click(screen.getByRole("button", { name: "Remove seat" }));
     await user.click(
-      within(screen.getByRole("dialog")).getByRole("button", {
+      within(screen.getByRole("alertdialog")).getByRole("button", {
         name: "Confirm",
       }),
     );

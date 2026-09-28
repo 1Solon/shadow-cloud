@@ -189,6 +189,7 @@ describe("ManageSeatModal", () => {
 
     fireEvent.click(dialog);
     expect(callbacks.onClose).not.toHaveBeenCalled();
+    fireEvent.pointerDown(dialog.parentElement!);
     fireEvent.click(dialog.parentElement!);
     expect(callbacks.onClose).toHaveBeenCalledOnce();
 

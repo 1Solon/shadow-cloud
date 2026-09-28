@@ -1,7 +1,19 @@
 "use client";
 
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
+import {
+  AlertDialog,
+  AlertDialogBody,
+  AlertDialogCancel,
+  AlertDialogCloseButton,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { useTypedLines } from "@/hooks/use-typed-lines";
 
 const ACTION_TEXT_ENTER_DELAY_MS = 140;
 
@@ -21,6 +33,31 @@ type TerminalActionConfirmationDialogProps = {
   onConfirm: () => void;
 };
 
+function TypedConfirmationLines({ lines }: { lines: string[] }) {
+  const { renderedLines, activeLineIndex } = useTypedLines(
+    lines,
+    ACTION_TEXT_ENTER_DELAY_MS,
+  );
+
+  return (
+    <AlertDialogDescription asChild>
+      <div className="min-h-20 space-y-1 text-terminal-200">
+        {renderedLines.map((line, index) => (
+          <div
+            key={index}
+            className="min-h-5 whitespace-pre-wrap break-words leading-6"
+          >
+            {line}
+            {activeLineIndex === index ? (
+              <span className="ml-1 inline-block h-4 w-2 animate-pulse align-[-2px] bg-terminal-300" />
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </AlertDialogDescription>
+  );
+}
+
 export function TerminalActionConfirmationDialog({
   confirmation,
   isPending,
@@ -29,195 +66,37 @@ export function TerminalActionConfirmationDialog({
   onCancel,
   onConfirm,
 }: TerminalActionConfirmationDialogProps) {
-  const [renderedLines, setRenderedLines] = useState<string[]>([]);
-  const [activeLineIndex, setActiveLineIndex] = useState<number | null>(null);
-  const timeoutIdsRef = useRef<number[]>([]);
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const cancelButtonRef = useRef<HTMLButtonElement>(null);
-  const confirmationCommand = confirmation?.command;
-
-  function clearScheduledTimeouts() {
-    timeoutIdsRef.current.forEach((timeoutId) =>
-      window.clearTimeout(timeoutId),
-    );
-    timeoutIdsRef.current = [];
-  }
-
-  function scheduleTimeout(callback: () => void, delay: number) {
-    const timeoutId = window.setTimeout(callback, delay);
-    timeoutIdsRef.current.push(timeoutId);
-  }
-
-  useEffect(
-    () => () => {
-      clearScheduledTimeouts();
-    },
-    [],
-  );
-
-  useEffect(() => {
-    if (!confirmation) {
-      clearScheduledTimeouts();
-      scheduleTimeout(() => {
-        setRenderedLines([]);
-        setActiveLineIndex(null);
-      }, 0);
-
-      return () => {
-        clearScheduledTimeouts();
-      };
-    }
-
-    const terminalLines = [`> ${confirmation.command}`, ...confirmation.lines];
-    let elapsed = ACTION_TEXT_ENTER_DELAY_MS;
-
-    clearScheduledTimeouts();
-    scheduleTimeout(() => {
-      setRenderedLines([]);
-      setActiveLineIndex(null);
-    }, 0);
-
-    terminalLines.forEach((line, lineIndex) => {
-      for (let charIndex = 1; charIndex <= line.length; charIndex += 1) {
-        const snapshot = [
-          ...terminalLines.slice(0, lineIndex),
-          line.slice(0, charIndex),
-        ];
-
-        scheduleTimeout(() => {
-          setRenderedLines(snapshot);
-          setActiveLineIndex(lineIndex);
-        }, elapsed);
-        elapsed += lineIndex === 0 ? 18 : 12;
-      }
-
-      elapsed += 110;
-    });
-
-    scheduleTimeout(() => {
-      setRenderedLines(terminalLines);
-      setActiveLineIndex(null);
-    }, elapsed);
-
-    return () => {
-      clearScheduledTimeouts();
-    };
-  }, [confirmation]);
-
-  useEffect(() => {
-    if (!confirmationCommand) {
-      return;
-    }
-
-    function containFocus(event: FocusEvent) {
-      if (
-        event.target instanceof Node &&
-        !dialogRef.current?.contains(event.target)
-      ) {
-        cancelButtonRef.current?.focus();
-      }
-    }
-
-    const returnFocusElement =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null;
-    cancelButtonRef.current?.focus();
-    document.addEventListener("focusin", containFocus);
-
-    return () => {
-      document.removeEventListener("focusin", containFocus);
-      if (returnFocusElement?.isConnected) {
-        returnFocusElement.focus();
-      }
-    };
-  }, [confirmationCommand]);
-
   if (!confirmation) {
     return null;
   }
 
-  function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-    if (event.key === "Escape" && !isPending) {
-      event.preventDefault();
-      onCancel();
-      return;
-    }
-
-    if (event.key !== "Tab") {
-      return;
-    }
-
-    const focusableElements = Array.from(
-      dialogRef.current?.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ) ?? [],
-    );
-    const first = focusableElements[0];
-    const last = focusableElements.at(-1);
-
-    if (!first || !last) {
-      event.preventDefault();
-      return;
-    }
-
-    if (
-      (event.shiftKey && document.activeElement === first) ||
-      (!event.shiftKey && document.activeElement === last) ||
-      !dialogRef.current?.contains(document.activeElement)
-    ) {
-      event.preventDefault();
-      (event.shiftKey ? last : first).focus();
-    }
-  }
+  const lines = [`> ${confirmation.command}`, ...confirmation.lines];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6">
-      <div
-        aria-label={confirmation.title}
-        aria-modal="true"
-        className="relative w-full max-w-md overflow-hidden rounded-2xl border border-orange-400/30 bg-[#0a0711] shadow-2xl shadow-orange-950/40"
-        ref={dialogRef}
-        role="dialog"
-        onKeyDown={handleKeyDown}
+    <AlertDialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onCancel();
+      }}
+    >
+      <AlertDialogContent
+        onEscapeKeyDown={(event) => {
+          if (isPending) event.preventDefault();
+        }}
       >
-        <div className="flex items-center justify-between border-b border-orange-400/20 bg-orange-400/10 px-4 py-3 font-mono text-[11px] uppercase tracking-[0.28em] text-orange-200">
-          <span>{confirmation.title}</span>
-          <button
+        <AlertDialogHeader>
+          <AlertDialogTitle>{confirmation.title}</AlertDialogTitle>
+          <AlertDialogCloseButton
             aria-label="Close confirmation"
-            className="text-orange-300/70 transition-colors hover:text-orange-200"
             disabled={isPending}
-            type="button"
             onClick={onCancel}
-          >
-            X
-          </button>
-        </div>
-        <div className="space-y-4 bg-black/70 px-4 py-4 font-mono text-sm text-orange-300">
-          <div className="min-h-20 space-y-1 text-orange-200/85">
-            {renderedLines.map((line, index) => (
-              <div
-                key={`${confirmation.command}-${index}`}
-                className="min-h-5 whitespace-pre-wrap break-words leading-6"
-              >
-                {line}
-                {activeLineIndex === index ? (
-                  <span className="ml-1 inline-block h-4 w-2 animate-pulse align-[-2px] bg-orange-300" />
-                ) : null}
-              </div>
-            ))}
-          </div>
+          />
+        </AlertDialogHeader>
+        <AlertDialogBody className="text-sm">
+          <TypedConfirmationLines key={lines.join("\n")} lines={lines} />
           {children}
-          <div className="flex justify-end gap-2 pt-2">
-            <Button
-              ref={cancelButtonRef}
-              disabled={isPending}
-              type="button"
-              variant="secondary"
-              onClick={onCancel}
-            >
-              Cancel
-            </Button>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
             <Button
               disabled={isPending || confirmDisabled}
               type="button"
@@ -225,9 +104,9 @@ export function TerminalActionConfirmationDialog({
             >
               {confirmation.confirmLabel ?? "Confirm"}
             </Button>
-          </div>
-        </div>
-      </div>
-    </div>
+          </AlertDialogFooter>
+        </AlertDialogBody>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
