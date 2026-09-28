@@ -299,6 +299,54 @@ describe("startNotificationServer", () => {
     expect(response.statusCode).toBe(204);
   });
 
+  it("delivers save-rejected notifications without renaming, tagging, or pinning", async () => {
+    const pin = vi.fn(async () => undefined);
+    const thread = {
+      id: "thread-1",
+      isThread: () => true,
+      joinable: false,
+      send: vi.fn(async () => ({ pin })),
+    };
+    const client = buildClient(thread);
+
+    startNotificationServer(client as never, {
+      notificationPort: 3011,
+      notificationSecret: "secret",
+      webBaseUrl: "https://shadow.example",
+    });
+
+    const response = buildResponse();
+    await httpMock.getHandler()?.(
+      buildRequest("/notify/save-rejected", {
+        game: saveReplacedPayload.game,
+        rejection: {
+          versionNumber: 7,
+          originalName: "42-T4-S2-Other.se1",
+          rejectedAt: "2026-07-10T14:30:00.000Z",
+          rejectedBy: saveReplacedPayload.replacement.replacedBy,
+        },
+        turn: {
+          roundNumber: 4,
+          activePlayer: {
+            id: "user-2",
+            displayName: "Other",
+            discordId: "discord-2",
+            turnOrder: 2,
+          },
+        },
+      }),
+      response,
+    );
+
+    expect(thread.send).toHaveBeenCalledOnce();
+    expect(JSON.stringify(thread.send.mock.calls[0])).toContain(
+      "Solon rejected save #7.",
+    );
+    expect(pin).not.toHaveBeenCalled();
+    expect(threadNameMock.renameThreadIfNeeded).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(204);
+  });
+
   it("delivers authenticated turn nudges without renaming, tagging, or pinning", async () => {
     const pin = vi.fn(async () => undefined);
     const thread = {

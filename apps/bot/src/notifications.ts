@@ -15,6 +15,8 @@ const ACCENT_COLOR = 0xffa500;
 
 export const APPROVE_PREFIX = "sc_approve_";
 export const REJECT_PREFIX = "sc_reject_";
+export const SAVE_REJECT_PREFIX = "sc_save_reject_";
+export const SAVE_REJECT_CONFIRM_PREFIX = "sc_save_reject_confirm_";
 
 export type UploadNotificationPayload = {
   game: {
@@ -77,6 +79,24 @@ export type SaveReplacedNotificationPayload = {
       displayName: string;
       discordId: string | null;
     };
+  };
+};
+
+export type SaveRejectedNotificationPayload = {
+  game: UploadNotificationPayload["game"];
+  rejection: {
+    versionNumber: number;
+    originalName: string;
+    rejectedAt: string;
+    rejectedBy: {
+      id: string;
+      displayName: string;
+      discordId: string | null;
+    };
+  };
+  turn: {
+    roundNumber: number;
+    activePlayer: UploadNotificationPayload["turn"]["activePlayer"];
   };
 };
 
@@ -354,9 +374,57 @@ export function buildSaveNotificationMessage(
     headline: `It is ${nextPlayerLabel}'s turn!`,
     message: `Download the [current turn](${downloadUrl}), then upload your [completed turn](${gameUrl}) when finished.`,
     metadata: uploadedAtLabel ? [`-# ${uploadedAtLabel}`] : [],
+    actionRow: new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${SAVE_REJECT_PREFIX}${payload.upload.versionId}`)
+        .setLabel("Reject save")
+        .setStyle(ButtonStyle.Secondary),
+    ),
     mentionedUserIds: payload.turn.activePlayer.discordId
       ? [payload.turn.activePlayer.discordId]
       : [],
+  });
+}
+
+export function buildSaveRejectionPrompt(
+  fileVersionId: string,
+): InteractionReplyOptions {
+  return buildDiscordReply({
+    headline: "Reject this save?",
+    message:
+      "The save is discarded and the turn returns to the player who uploaded it. Their turn time continues from where it stopped.",
+    actionRow: new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`${SAVE_REJECT_CONFIRM_PREFIX}${fileVersionId}`)
+        .setLabel("Reject save")
+        .setStyle(ButtonStyle.Danger),
+    ),
+    ephemeral: true,
+  });
+}
+
+export function buildSaveRejectedNotificationMessage(
+  payload: SaveRejectedNotificationPayload,
+  webBaseUrl: string,
+): MessageCreateOptions {
+  const player = payload.turn.activePlayer;
+  const playerLabel = formatDiscordActor(player.displayName, player.discordId);
+  const rejectedBy = payload.rejection.rejectedBy;
+  const rejectedAt = formatDiscordTimestamp(payload.rejection.rejectedAt);
+  const gameUrl = new URL(
+    `/games/${encodeURIComponent(String(payload.game.gameNumber))}`,
+    webBaseUrl,
+  ).toString();
+  const action =
+    rejectedBy.id === player.id
+      ? `${escapeMarkdown(player.displayName)} withdrew save #${payload.rejection.versionNumber}.`
+      : `${escapeMarkdown(rejectedBy.displayName)} rejected save #${payload.rejection.versionNumber}.`;
+
+  return buildDiscordNotification({
+    headline: `It is ${playerLabel}'s turn again!`,
+    message: `${action} Upload a [corrected save](${gameUrl}) for round ${payload.turn.roundNumber}. Your turn time continues from where it stopped.`,
+    metadata: rejectedAt ? [`-# ${rejectedAt}`] : [],
+    mentionedUserIds: player.discordId ? [player.discordId] : [],
   });
 }
 

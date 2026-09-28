@@ -27,6 +27,7 @@ describe("selectDebugPreviewNames", () => {
       "game-initialized",
       "turn-notification",
       "save-replaced",
+      "save-rejected",
       "turn-reminder",
       "registration-approval",
       "registration-approved",
