@@ -1055,7 +1055,7 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
               className="mt-6 border border-terminal-300/60 bg-terminal-400/5 px-4 py-3"
             >
               <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-terminal-300">
-                Consequential action
+                Handle with care
               </p>
               <h4
                 id={transferHeadingId}
@@ -1067,10 +1067,10 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
                 id={transferDescriptionId}
                 className="mt-2 text-sm leading-relaxed text-terminal-200/70"
               >
-                This changes campaign control, not just campaign metadata. The
-                selected occupied seat becomes the new Overlord and receives
-                organizer-only controls. A confirmation is required before the
-                transfer is sent.
+                This hands control of the campaign to another player. Whoever
+                you pick becomes the new Overlord, with all the controls that
+                come with the role. You&apos;ll be asked to confirm before the
+                transfer goes through.
               </p>
               <div className="mt-2">
                 <p className="text-xs uppercase tracking-[0.14em] text-terminal-300/70">
