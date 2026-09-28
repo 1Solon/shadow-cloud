@@ -287,7 +287,7 @@ describe("TurnCommandCenter", () => {
     expect(clearIntervalSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("uses a two-column layout when there are actions and full width otherwise", () => {
+  it("uses a two-column layout only when the player can upload", () => {
     const { container, rerender } = renderCommandCenter();
     const panel = container.firstElementChild;
     const body = within(panel as HTMLElement).getByTestId(
@@ -305,13 +305,7 @@ describe("TurnCommandCenter", () => {
       "lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]",
     );
 
-    rerender(
-      <TurnCommandCenter
-        {...defaultProps}
-        isActivePlayer={false}
-        latestSave={null}
-      />,
-    );
+    rerender(<TurnCommandCenter {...defaultProps} isActivePlayer={false} />);
 
     expect(body).not.toHaveClass(
       "grid",

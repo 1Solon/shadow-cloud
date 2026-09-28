@@ -37,6 +37,11 @@ export default async function globalSetup() {
     path.join(appRoot, "node_modules"),
     "junction",
   );
+  await symlink(
+    path.join(source, "../../node_modules"),
+    path.join(snapshot, "node_modules"),
+    "junction",
+  );
 
   let logs = "";
   const build = spawn(
