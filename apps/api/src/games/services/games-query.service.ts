@@ -255,6 +255,12 @@ export class GamesQueryService {
       },
     );
     const openTurn = openTurns[0] ? mapTurnRecord(openTurns[0]) : null;
+    const latestSave = game.fileVersions[0];
+    const rejectableSaveId =
+      latestSave?.turnRevision === game.turnRevision &&
+      openTurns[0]?.startedAt.getTime() === latestSave.uploadedAt.getTime()
+        ? latestSave.id
+        : null;
 
     const activePlayerEntry = game.turnState
       ? resolveActivePlayerEntry(game.players, game.turnState)
@@ -353,6 +359,7 @@ export class GamesQueryService {
       turnReminderRepeatHours: game.turnReminderRepeatHours,
       turnRemindersEnabled: game.turnRemindersEnabled,
       currentTurnStartedAt: openTurn?.startedAt ?? null,
+      rejectableSaveId,
       openTurn,
       recentCompletedTurns: recentCompletedTurns.map(mapTurnRecord),
     };

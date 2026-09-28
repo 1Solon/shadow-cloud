@@ -183,6 +183,16 @@ export async function uploadSave(
       `This is the same file as save #${duplicate.versionNumber}, uploaded by ${duplicate.uploadedBy.displayName}. Upload the save from your own turn.`,
     );
   }
+  const rejected = await database.rejectedSave.findFirst({
+    where: { gameId: observed.id, contentHash },
+    orderBy: { versionNumber: 'desc' },
+    include: { rejectedBy: true },
+  });
+  if (rejected) {
+    throw new ConflictException(
+      `This is save #${rejected.versionNumber}, which ${rejected.rejectedBy.displayName} rejected. Upload a corrected save.`,
+    );
+  }
   const fileStorage = dependencies.fileStorage;
   if (!fileStorage) throw new Error('Upload file storage is not configured.');
   const lease = saveStagingLease(database, fileStorage);
@@ -270,7 +280,16 @@ export async function uploadSave(
           'A newer save was uploaded before this upload.',
         );
       }
-      const versionNumber = (latest?.versionNumber ?? 0) + 1;
+      const latestRejected = await transaction.rejectedSave.findFirst({
+        where: { gameId: game.id },
+        orderBy: { versionNumber: 'desc' },
+        select: { versionNumber: true },
+      });
+      const versionNumber =
+        Math.max(
+          latest?.versionNumber ?? 0,
+          latestRejected?.versionNumber ?? 0,
+        ) + 1;
       const roundNumber = turnState.roundNumber + (roundAdvanced ? 1 : 0);
       const transitionedAt = new Date();
       const fileVersion = await transaction.fileVersion.create({
@@ -281,6 +300,7 @@ export async function uploadSave(
           originalName: stored.fileName,
           versionNumber,
           contentHash,
+          turnRevision: game.turnRevision,
           idempotencyKey: metadata.idempotencyKey,
           clientOriginalName: file.originalname,
           clientFileSize: file.size,

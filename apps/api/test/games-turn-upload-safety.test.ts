@@ -275,6 +275,7 @@ describe('upload safety through the public mutation owner', () => {
         activePlayerDisplayName: step.nextName,
         roundNumber: step.round,
         seatOrderBaseline: { revision: step.version },
+        rejectableSaveId: uploaded.fileVersionId,
         openTurn: {
           gamePlayerId: step.nextSeat,
           userId: step.nextUser,

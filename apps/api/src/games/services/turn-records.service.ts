@@ -30,6 +30,17 @@ export type TransitionTurnInput = {
   transitionedAt: Date;
 };
 
+export type ReturnTurnInput = {
+  gameId: string;
+  expectedCurrent: {
+    gamePlayerId: string | null;
+    userId: string;
+    roundNumber: number;
+  };
+  previousTurnId: string;
+  returnedAt: Date;
+};
+
 type CreateInitialTurnInput = {
   gameId: string;
   participant: TurnParticipantSnapshot;
@@ -98,42 +109,68 @@ export class TurnRecordsService {
     transaction: Prisma.TransactionClient,
     input: TransitionTurnInput,
   ): Promise<TurnRecord> {
-    const current = await this.findMatchingOpenRecord(
+    await this.closeOpenTurn(
       transaction,
       input.gameId,
       input.expectedCurrent,
+      input.completionReason,
+      input.transitionedAt,
     );
-    const closed = await transaction.turnRecord.updateMany({
-      where: { id: current.id, endedAt: null },
-      data: {
-        endedAt: input.transitionedAt,
-        completionReason: input.completionReason,
-        nextReminderAt: null,
-      },
-    });
-
-    if (closed.count !== 1) {
-      throw new ConflictException(
-        'The active turn changed before it could close.',
-      );
-    }
-
-    await closeSaveRecovery(transaction, input.gameId);
-
-    await transaction.notificationDelivery.updateMany({
-      where: {
-        turnRecordId: current.id,
-        event: 'TURN_NUDGE',
-        status: 'PENDING',
-      },
-      data: { status: 'CANCELLED', processingStartedAt: null },
-    });
 
     return this.createInitialTurn(transaction, {
       gameId: input.gameId,
       participant: input.next,
       roundNumber: input.next.roundNumber,
       startedAt: input.transitionedAt,
+    });
+  }
+
+  /** Reopen a completed turn so its clock resumes without counting the time it was closed. */
+  async returnTurn(
+    transaction: Prisma.TransactionClient,
+    input: ReturnTurnInput,
+  ): Promise<TurnRecord> {
+    const previous = await transaction.turnRecord.findUnique({
+      where: { id: input.previousTurnId },
+    });
+
+    if (!previous || previous.gameId !== input.gameId || !previous.endedAt) {
+      throw new ConflictException('The previous turn could not be resumed.');
+    }
+
+    await this.closeOpenTurn(
+      transaction,
+      input.gameId,
+      input.expectedCurrent,
+      TurnCompletionReason.REJECTED,
+      input.returnedAt,
+    );
+
+    const pausedMs = input.returnedAt.getTime() - previous.endedAt.getTime();
+    const resume = (at: Date) => new Date(at.getTime() + pausedMs);
+    const startedAt = resume(previous.startedAt);
+    const lastReminderAt = previous.lastReminderAt
+      ? resume(previous.lastReminderAt)
+      : null;
+    const policy = await this.getCurrentPolicy(transaction, input.gameId);
+    const scheduled =
+      previous.reminderCount > 0
+        ? this.calculateRepeatedReminder(lastReminderAt, policy)
+        : calculateFirstReminderAt(startedAt, policy);
+    const nextReminderAt =
+      scheduled && scheduled <= input.returnedAt
+        ? calculateNextReminderAt(input.returnedAt, policy)
+        : scheduled;
+
+    return transaction.turnRecord.update({
+      where: { id: previous.id },
+      data: {
+        startedAt,
+        endedAt: null,
+        completionReason: null,
+        lastReminderAt,
+        nextReminderAt,
+      },
     });
   }
 
@@ -167,6 +204,41 @@ export class TurnRecordsService {
     return transaction.turnRecord.update({
       where: { id: openRecord.id },
       data: { roundNumber: input.roundNumber },
+    });
+  }
+
+  private async closeOpenTurn(
+    transaction: Prisma.TransactionClient,
+    gameId: string,
+    expectedCurrent: TransitionTurnInput['expectedCurrent'],
+    completionReason: TurnCompletionReason,
+    endedAt: Date,
+  ) {
+    const current = await this.findMatchingOpenRecord(
+      transaction,
+      gameId,
+      expectedCurrent,
+    );
+    const closed = await transaction.turnRecord.updateMany({
+      where: { id: current.id, endedAt: null },
+      data: { endedAt, completionReason, nextReminderAt: null },
+    });
+
+    if (closed.count !== 1) {
+      throw new ConflictException(
+        'The active turn changed before it could close.',
+      );
+    }
+
+    await closeSaveRecovery(transaction, gameId);
+
+    await transaction.notificationDelivery.updateMany({
+      where: {
+        turnRecordId: current.id,
+        event: 'TURN_NUDGE',
+        status: 'PENDING',
+      },
+      data: { status: 'CANCELLED', processingStartedAt: null },
     });
   }
 

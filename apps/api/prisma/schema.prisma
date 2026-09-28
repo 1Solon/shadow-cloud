@@ -26,6 +26,7 @@ enum AuditEventType {
   FILE_UPLOADED
   FILE_REPLACED
   FILE_DOWNLOADED
+  SAVE_REJECTED
 }
 
 enum RegistrationRequestStatus {
@@ -38,6 +39,7 @@ enum NotificationDeliveryEvent {
   ACTIVE_PLAYER_CHANGED
   SAVE_UPLOADED
   SAVE_REPLACED
+  SAVE_REJECTED
   GAME_INITIALIZED
   THREAD_RENAMED
   TURN_NUDGE
@@ -57,6 +59,7 @@ enum TurnCompletionReason {
   RESIGNED
   REPLACED
   REASSIGNED
+  REJECTED
 }
 
 enum GameDlcMode {
@@ -97,6 +100,7 @@ model User {
   activeTurns    TurnState[]
   uploads        FileVersion[]  @relation("UploadedBy")
   replacements   FileVersion[]  @relation("ReplacedBy")
+  rejections     RejectedSave[]
   auditEvents    AuditEvent[]   @relation("ActorEvents")
   turnRecords    TurnRecord[]
 }
@@ -158,6 +162,7 @@ model Game {
   players                 GamePlayer[]
   turnState               TurnState?
   fileVersions            FileVersion[]
+  rejectedSaves           RejectedSave[]
   auditEvents             AuditEvent[]
   registrationRequests    RegistrationRequest[]
   turnRecords             TurnRecord[]
@@ -224,6 +229,7 @@ model FileVersion {
   versionNumber      Int
   contentHash        String?
   contentRevision    Int       @default(0)
+  turnRevision       Int?
   idempotencyKey     String?
   clientOriginalName String?
   clientFileSize     Int?
@@ -236,6 +242,22 @@ model FileVersion {
 
   @@unique([gameId, versionNumber])
   @@unique([gameId, uploadedById, idempotencyKey])
+}
+
+model RejectedSave {
+  id            String   @id
+  gameId        String
+  versionNumber Int
+  originalName  String
+  contentHash   String?
+  uploadedById  String
+  uploadedAt    DateTime
+  rejectedById  String
+  rejectedAt    DateTime @default(now())
+  game          Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  rejectedBy    User     @relation(fields: [rejectedById], references: [id])
+
+  @@index([gameId, contentHash])
 }
 
 model RegistrationRequest {

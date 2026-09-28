@@ -10,5 +10,10 @@ export type TurnMutationDependencies = {
     BotNotificationsService,
     'notifySaveUploaded' | 'notifyGameInitialized' | 'notifyThreadRenamed'
   > &
-    Partial<Pick<BotNotificationsService, 'enqueueActivePlayerChanged'>>;
+    Partial<
+      Pick<
+        BotNotificationsService,
+        'enqueueActivePlayerChanged' | 'enqueueSaveRejected'
+      >
+    >;
 };
