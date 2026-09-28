@@ -413,7 +413,7 @@ function SelectOptions({
   );
 }
 
-function HostTransferConfirmationDialog({
+function OverlordTransferConfirmationDialog({
   target,
   errorMessage,
   isPending,
@@ -932,7 +932,7 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
   return (
     <div data-testid="campaign-settings-editor">
       {metadataUnconfirmed ? (
-        <div className="mb-4 border border-orange-400/30 px-4 py-3 text-sm font-mono text-orange-200">
+        <div className="mb-4 border border-terminal-400/30 px-4 py-3 text-sm font-mono text-terminal-200">
           <p ref={recoveryMessageRef} role="alert" tabIndex={-1}>
             Campaign details could not be confirmed. Transfer was not attempted.
             Reload the campaign before editing again; its number may have
@@ -944,7 +944,7 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
         </div>
       ) : null}
       {recovery ? (
-        <div className="mb-4 border border-orange-400/30 px-4 py-3 text-sm font-mono text-orange-200">
+        <div className="mb-4 border border-terminal-400/30 px-4 py-3 text-sm font-mono text-terminal-200">
           <p ref={recoveryMessageRef} role="alert" tabIndex={-1}>
             {transferOutcomeMessage(recovery.outcome, "unavailable")} Reload
             current ownership before another attempt. Editing remains
@@ -964,7 +964,7 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
         confirmation={confirmation}
         onClose={() => setConfirmation(null)}
       />
-      <HostTransferConfirmationDialog
+      <OverlordTransferConfirmationDialog
         target={pendingTransfer}
         errorMessage={transferErrorMessage}
         isPending={isTransferPending}
@@ -980,7 +980,7 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
         {errorMessage ? (
           <div
             role="alert"
-            className="mb-4 border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm font-mono text-red-300"
+            className="mb-4 border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-mono text-destructive"
           >
             {errorMessage}
           </div>
@@ -990,15 +990,15 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
           <div>
             <section
               aria-labelledby={identityMetadataHeadingId}
-              className="border-t border-orange-400/15"
+              className="border-t border-terminal-400/20"
             >
               <h4
                 id={identityMetadataHeadingId}
-                className="pt-3 text-xs font-semibold uppercase tracking-[0.16em] text-orange-300"
+                className="pt-3 text-xs font-semibold uppercase tracking-[0.16em] text-terminal-300"
               >
                 Campaign metadata
               </h4>
-              <p className="mt-1 text-sm leading-relaxed text-orange-200/60">
+              <p className="mt-1 text-sm leading-relaxed text-terminal-200/70">
                 Routine details that identify the campaign and its current
                 progress.
               </p>
@@ -1052,28 +1052,28 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
 
             <section
               aria-labelledby={transferHeadingId}
-              className="mt-6 border border-orange-300/50 bg-orange-400/5 px-4 py-3"
+              className="mt-6 border border-terminal-300/60 bg-terminal-400/5 px-4 py-3"
             >
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-orange-300">
-                Consequential action
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-terminal-300">
+                Handle with care
               </p>
               <h4
                 id={transferHeadingId}
-                className="mt-1 text-sm font-semibold uppercase tracking-[0.16em] text-orange-100"
+                className="mt-1 text-sm font-semibold uppercase tracking-[0.16em] text-terminal-100"
               >
                 Overlord transfer
               </h4>
               <p
                 id={transferDescriptionId}
-                className="mt-2 text-sm leading-relaxed text-orange-200/75"
+                className="mt-2 text-sm leading-relaxed text-terminal-200/70"
               >
-                This changes campaign control, not just campaign metadata. The
-                selected occupied seat becomes the new Overlord and receives
-                organizer-only controls. A confirmation is required before the
-                transfer is sent.
+                This hands control of the campaign to another player. Whoever
+                you pick becomes the new Overlord, with all the controls that
+                come with the role. You&apos;ll be asked to confirm before the
+                transfer goes through.
               </p>
               <div className="mt-2">
-                <p className="text-xs uppercase tracking-[0.14em] text-orange-300/60">
+                <p className="text-xs uppercase tracking-[0.14em] text-terminal-300/70">
                   Current Overlord: {props.organizerDisplayName}
                 </p>
                 <FieldRow label="Overlord">
@@ -1103,7 +1103,7 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
         ) : null}
 
         {props.section === "world" ? (
-          <div className="border-t border-orange-400/15">
+          <div className="border-t border-terminal-400/20">
             <FieldRow label="AI players">
               <NativeSelect
                 disabled={isEditorDisabled}
@@ -1179,12 +1179,12 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
         ) : null}
 
         {props.section === "turn-protocol" ? (
-          <div className="min-w-0 border-t border-orange-400/15">
-            <div className="min-w-0 py-3 font-mono text-orange-200">
-              <p className="text-xs uppercase tracking-[0.16em] text-orange-300/75">
+          <div className="min-w-0 border-t border-terminal-400/20">
+            <div className="min-w-0 py-3 font-mono text-terminal-200">
+              <p className="text-xs uppercase tracking-[0.16em] text-terminal-300/70">
                 REMINDER SCHEDULE
               </p>
-              <p className="mt-1 text-sm leading-relaxed text-orange-200/70">
+              <p className="mt-1 text-sm leading-relaxed text-terminal-200/70">
                 Sets the expected turn pace and controls when automated reminder
                 messages are sent.
               </p>

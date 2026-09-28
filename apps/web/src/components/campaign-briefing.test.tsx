@@ -65,12 +65,7 @@ describe("CampaignBriefing", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("region", { name: "Campaign briefing:" }),
-    ).toHaveClass(
-      "rounded-lg",
-      "border-terminal-400",
-      "bg-card",
-      "shadow-2xl",
-    );
+    ).toHaveClass("rounded-lg", "border-terminal-400", "bg-card", "shadow-2xl");
 
     const values = screen.getByTestId("campaign-briefing-values");
     expect(values).toHaveClass("grid", "min-w-0", "sm:grid-cols-2");
@@ -254,13 +249,13 @@ describe("CampaignBriefing", () => {
     renderBriefing();
 
     for (const button of screen.getAllByRole("button")) {
-      const panelId = button.getAttribute("aria-controls");
-      expect(panelId).toBeTruthy();
       await user.click(button);
       expect(button).toHaveAttribute("aria-expanded", "true");
+      const panelId = button.getAttribute("aria-controls");
+      expect(panelId).toBeTruthy();
       expect(document.getElementById(panelId!)).toBeInTheDocument();
       await user.click(button);
-      expect(document.getElementById(panelId!)).not.toBeInTheDocument();
+      expect(document.getElementById(panelId!)).not.toBeVisible();
     }
   });
 });

@@ -661,6 +661,6 @@ describe("GameDetailPage workspace composition", () => {
   it("keeps the exact root spacing classes", async () => {
     const page = await renderPage();
 
-    expect(page.props.className).toBe("flex flex-col gap-8 pb-6");
+    expect(page.props.className).toBe("flex flex-col gap-8 pb-6 md:min-h-full");
   });
 });

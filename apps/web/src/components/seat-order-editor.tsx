@@ -242,9 +242,9 @@ function SortableSeatRow({
         "relative flex items-center justify-between gap-4 rounded-lg border px-4 py-4",
         isConfiguration ? "min-w-0 flex-wrap" : null,
         showActiveRowHighlight
-          ? "border-orange-400 bg-orange-400 text-black"
-          : "border-orange-400/20 bg-orange-400/5",
-        isDragging ? "opacity-70 shadow-2xl shadow-orange-400/30" : null,
+          ? "border-terminal-400 bg-terminal-400 text-primary-foreground"
+          : "border-terminal-400/20 bg-terminal-400/5",
+        isDragging ? "opacity-70 shadow-2xl shadow-terminal-400/30" : null,
       )}
     >
       {isEmptySeat ? (
@@ -256,7 +256,7 @@ function SortableSeatRow({
           )}
           style={{
             backgroundImage:
-              "repeating-linear-gradient(315deg, transparent 0, transparent 10px, rgba(251, 146, 60, 0.22) 10px, rgba(251, 146, 60, 0.22) 16px)",
+              "repeating-linear-gradient(315deg, transparent 0, transparent 10px, color-mix(in oklab, var(--terminal-400) 22%, transparent) 10px, color-mix(in oklab, var(--terminal-400) 22%, transparent) 16px)",
           }}
         />
       ) : null}
@@ -265,10 +265,10 @@ function SortableSeatRow({
           className={cn(
             "font-medium",
             showActiveRowHighlight
-              ? "text-black"
+              ? "text-primary-foreground"
               : isEmptySeat
-                ? "text-orange-200"
-                : "text-orange-300",
+                ? "text-terminal-200"
+                : "text-terminal-300",
           )}
         >
           {playerLabel}
@@ -276,7 +276,9 @@ function SortableSeatRow({
         <div
           className={cn(
             "mt-1 text-xs uppercase tracking-[0.2em]",
-            showActiveRowHighlight ? "text-black/60" : "text-orange-300/70",
+            showActiveRowHighlight
+              ? "text-primary-foreground/70"
+              : "text-terminal-300/70",
           )}
         >
           Seat {index + 1}
@@ -998,7 +1000,7 @@ function CampaignSeatOrderEditor({
     <>
       {errorMessage ? (
         <div
-          className="rounded-lg border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm font-mono text-red-300"
+          className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-mono text-destructive"
           role="alert"
         >
           {errorMessage}

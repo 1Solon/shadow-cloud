@@ -84,7 +84,7 @@ export function CampaignConfigurationShell({
   return (
     <Card
       aria-labelledby={configurationHeadingId}
-      className="min-w-0 overflow-hidden font-mono text-orange-200"
+      className="min-w-0 overflow-hidden font-mono text-terminal-200 md:flex md:min-h-0 md:grow md:flex-col"
       role="region"
     >
       <CardHeader>
@@ -112,7 +112,7 @@ export function CampaignConfigurationShell({
       </CardHeader>
 
       <p
-        className="border-t border-orange-400/25 px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-orange-300/70 sm:px-6"
+        className="border-t border-terminal-400/20 px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-terminal-300/70 sm:px-6"
         data-testid="campaign-configuration-status"
       >
         [CONFIGURING: {activeSectionDetails.label.toUpperCase()}]
@@ -120,9 +120,9 @@ export function CampaignConfigurationShell({
 
       <div
         data-testid="campaign-configuration-layout"
-        className="grid min-w-0 md:grid-cols-[minmax(11rem,0.35fr)_minmax(0,1fr)]"
+        className="grid min-w-0 md:min-h-0 md:grow md:grid-cols-[minmax(11rem,0.35fr)_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)]"
       >
-        <div className="min-w-0 border-b border-orange-400/25 p-3 md:border-r md:border-b-0">
+        <div className="min-w-0 border-b border-terminal-400/20 p-3 md:border-r md:border-b-0">
           <div className="md:hidden">
             <Label
               htmlFor="campaign-configuration-section"
@@ -161,20 +161,21 @@ export function CampaignConfigurationShell({
 
                 return (
                   <li key={section.id}>
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
                       aria-current={isActive ? "page" : undefined}
                       disabled={isDirty && !isActive}
                       className={cn(
-                        "w-full border-l-2 px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-35",
+                        "h-auto w-full justify-start rounded-none border-l-2 px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] focus-visible:ring-inset focus-visible:ring-offset-0 disabled:opacity-35",
                         isActive
-                          ? "border-orange-400 bg-orange-400/15 text-orange-100"
-                          : "border-transparent text-orange-300/70 hover:border-orange-400/50 hover:bg-orange-400/10 hover:text-orange-200",
+                          ? "border-terminal-400 bg-terminal-400/15 text-terminal-100"
+                          : "border-transparent text-terminal-300/70 hover:border-terminal-400/60 hover:bg-terminal-400/10 hover:text-terminal-200",
                       )}
                       onClick={() => selectSection(section.id)}
                     >
                       {section.label}
-                    </button>
+                    </Button>
                   </li>
                 );
               })}
@@ -184,7 +185,7 @@ export function CampaignConfigurationShell({
           {isDirty ? (
             <p
               role="status"
-              className="mt-3 border-t border-orange-400/20 px-3 pt-3 text-xs leading-relaxed text-orange-300/75"
+              className="mt-3 border-t border-terminal-400/20 px-3 pt-3 text-xs leading-relaxed text-terminal-300/70"
             >
               Save or cancel {activeSectionDetails.label} before switching
               sections or leaving configuration.
@@ -192,11 +193,14 @@ export function CampaignConfigurationShell({
           ) : null}
         </div>
 
-        <div key={activeSection} className="min-w-0 px-4 py-5 sm:px-6">
+        <div
+          key={activeSection}
+          className="min-w-0 px-4 py-5 sm:px-6 md:overflow-y-auto"
+        >
           <h3
             ref={editorHeadingRef}
             tabIndex={-1}
-            className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-orange-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-terminal-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {activeSectionDetails.label}
           </h3>

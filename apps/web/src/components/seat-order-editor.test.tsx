@@ -1009,7 +1009,7 @@ describe("SeatOrderEditor", () => {
       ),
     );
 
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("dialog", { hidden: true })).toBeNull();
     const confirmationDialog = screen.getByRole("alertdialog", {
       name: "Confirm seat change",
     });

@@ -133,7 +133,7 @@ export function CampaignNotesEditor({
   return (
     <section
       data-testid="campaign-notes-editor"
-      className="flex min-w-0 flex-col gap-4 border-l border-orange-400/30 pl-4 font-mono text-orange-200"
+      className="flex min-w-0 flex-col gap-4 border-l border-terminal-400/30 pl-4 font-mono text-terminal-200"
     >
       <TerminalConfirmationModal
         confirmation={confirmation}
@@ -161,7 +161,7 @@ export function CampaignNotesEditor({
         />
         <p
           id={markdownGuidanceId}
-          className="text-xs leading-relaxed text-orange-300/70"
+          className="text-xs leading-relaxed text-terminal-300/70"
         >
           Markdown is supported. Links render in the notes view; raw HTML and
           images are ignored.
@@ -171,7 +171,7 @@ export function CampaignNotesEditor({
       {errorMessage ? (
         <p
           role="alert"
-          className="border-l-2 border-red-400/60 px-3 py-2 text-sm text-red-300"
+          className="border-l-2 border-destructive/60 px-3 py-2 text-sm text-destructive"
         >
           {errorMessage}
         </p>

@@ -116,7 +116,7 @@ function CampaignDetailsWorkspaceContent(props: CampaignDetailsWorkspaceProps) {
     return (
       <div
         ref={configurationEntryRef}
-        className="min-w-0 scroll-mt-4"
+        className="min-w-0 scroll-mt-4 md:flex md:min-h-128 md:grow md:basis-0 md:flex-col"
         data-testid="campaign-configuration-entry"
       >
         <CampaignConfigurationShell

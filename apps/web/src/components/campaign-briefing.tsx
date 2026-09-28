@@ -1,7 +1,13 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId } from "react";
 import { GameNotesMarkdown } from "@/components/game-notes-markdown";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import {
   Card,
   CardDescription,
@@ -36,8 +42,6 @@ export type CampaignBriefingProps = {
   turnReminderRepeatHours: number | null;
   turnRemindersEnabled: boolean;
 };
-
-type Disclosure = "seats" | "notes" | "protocol";
 
 const dlcLabels: Record<string, string> = {
   NONE: "None",
@@ -98,33 +102,6 @@ function DefinitionValue({ label, value }: { label: string; value: string }) {
   );
 }
 
-function DisclosureButton({
-  children,
-  controls,
-  expanded,
-  onClick,
-}: {
-  children: React.ReactNode;
-  controls: string;
-  expanded: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-controls={controls}
-      aria-expanded={expanded}
-      className="flex w-full items-center justify-between gap-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-terminal-300 transition-colors hover:text-terminal-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-      onClick={onClick}
-    >
-      <span>{children}</span>
-      <span aria-hidden="true" className="text-terminal-300/70">
-        {expanded ? "[-]" : "[+]"}
-      </span>
-    </button>
-  );
-}
-
 export function CampaignBriefing({
   activePlayerEntryId,
   headerAction,
@@ -145,11 +122,6 @@ export function CampaignBriefing({
   turnRemindersEnabled,
 }: CampaignBriefingProps) {
   const headingId = useId();
-  const panelIdBase = useId();
-  const [openDisclosure, setOpenDisclosure] = useState<Disclosure | null>(null);
-  const seatPanelId = `${panelIdBase}-seats`;
-  const notesPanelId = `${panelIdBase}-notes`;
-  const protocolPanelId = `${panelIdBase}-protocol`;
   const orderedPlayers = [...players].sort(
     (left, right) => left.turnOrder - right.turnOrder,
   );
@@ -158,12 +130,6 @@ export function CampaignBriefing({
   ).length;
   const hasNotes = notes.trim().length > 0;
   const hasKnownTarget = wholePositiveNumber(turnTargetHours);
-
-  function toggleDisclosure(disclosure: Disclosure) {
-    setOpenDisclosure((current) =>
-      current === disclosure ? null : disclosure,
-    );
-  }
 
   return (
     <Card
@@ -232,16 +198,15 @@ export function CampaignBriefing({
         />
       </dl>
 
-      <div className="border-t border-terminal-400/20 px-4 sm:px-6">
-        <DisclosureButton
-          controls={seatPanelId}
-          expanded={openDisclosure === "seats"}
-          onClick={() => toggleDisclosure("seats")}
+      <Accordion collapsible type="single">
+        <AccordionItem
+          className="border-t border-terminal-400/20 px-4 sm:px-6"
+          value="seats"
         >
-          SEAT ORDER · {occupiedSeats}/{players.length} SEATS
-        </DisclosureButton>
-        {openDisclosure === "seats" ? (
-          <div id={seatPanelId} className="pb-4">
+          <AccordionTrigger>
+            SEAT ORDER · {occupiedSeats}/{players.length} SEATS
+          </AccordionTrigger>
+          <AccordionContent>
             <ol className="flex flex-col gap-2">
               {orderedPlayers.map((player) => {
                 const occupied = player.userId != null;
@@ -276,20 +241,17 @@ export function CampaignBriefing({
                 );
               })}
             </ol>
-          </div>
-        ) : null}
-      </div>
+          </AccordionContent>
+        </AccordionItem>
 
-      <div className="border-t border-terminal-400/20 px-4 sm:px-6">
-        <DisclosureButton
-          controls={notesPanelId}
-          expanded={openDisclosure === "notes"}
-          onClick={() => toggleDisclosure("notes")}
+        <AccordionItem
+          className="border-t border-terminal-400/20 px-4 sm:px-6"
+          value="notes"
         >
-          CAMPAIGN NOTES · {hasNotes ? "RECORDED" : "EMPTY"}
-        </DisclosureButton>
-        {openDisclosure === "notes" ? (
-          <div id={notesPanelId} className="pb-4">
+          <AccordionTrigger>
+            CAMPAIGN NOTES · {hasNotes ? "RECORDED" : "EMPTY"}
+          </AccordionTrigger>
+          <AccordionContent>
             {hasNotes ? (
               <GameNotesMarkdown
                 content={notes}
@@ -300,43 +262,39 @@ export function CampaignBriefing({
                 No campaign notes recorded.
               </p>
             )}
-          </div>
-        ) : null}
-      </div>
+          </AccordionContent>
+        </AccordionItem>
 
-      <div className="border-t border-terminal-400/20 px-4 sm:px-6">
-        <DisclosureButton
-          controls={protocolPanelId}
-          expanded={openDisclosure === "protocol"}
-          onClick={() => toggleDisclosure("protocol")}
+        <AccordionItem
+          className="border-t border-terminal-400/20 px-4 sm:px-6"
+          value="protocol"
         >
-          TURN REMINDERS · {hasKnownTarget ? `${turnTargetHours}H` : "UNKNOWN"}{" "}
-          TARGET
-        </DisclosureButton>
-        {openDisclosure === "protocol" ? (
-          <dl
-            id={protocolPanelId}
-            className="grid min-w-0 divide-y divide-terminal-400/20 pb-4 sm:grid-cols-2 sm:gap-x-6 sm:divide-y-0"
-          >
-            <DefinitionValue
-              label="Target turn"
-              value={duration(turnTargetHours)}
-            />
-            <DefinitionValue
-              label="Reminders"
-              value={turnRemindersEnabled ? "Enabled" : "Disabled"}
-            />
-            <DefinitionValue
-              label="Reminder grace"
-              value={duration(turnReminderGraceHours)}
-            />
-            <DefinitionValue
-              label="Repeat interval"
-              value={duration(turnReminderRepeatHours)}
-            />
-          </dl>
-        ) : null}
-      </div>
+          <AccordionTrigger>
+            TURN REMINDERS ·{" "}
+            {hasKnownTarget ? `${turnTargetHours}H` : "UNKNOWN"} TARGET
+          </AccordionTrigger>
+          <AccordionContent>
+            <dl className="grid min-w-0 divide-y divide-terminal-400/20 sm:grid-cols-2 sm:gap-x-6 sm:divide-y-0">
+              <DefinitionValue
+                label="Target turn"
+                value={duration(turnTargetHours)}
+              />
+              <DefinitionValue
+                label="Reminders"
+                value={turnRemindersEnabled ? "Enabled" : "Disabled"}
+              />
+              <DefinitionValue
+                label="Reminder grace"
+                value={duration(turnReminderGraceHours)}
+              />
+              <DefinitionValue
+                label="Repeat interval"
+                value={duration(turnReminderRepeatHours)}
+              />
+            </dl>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
     </Card>
   );
 }

@@ -138,7 +138,7 @@ export const UploadSaveForm = forwardRef<
             : "px-8 py-14 text-center",
           isDragOver
             ? "border-terminal-400 bg-terminal-400/10"
-            : "border-terminal-400/30 bg-terminal-400/5 hover:border-terminal-400/60 hover:bg-orange-400/[0.07]",
+            : "border-terminal-400/30 bg-terminal-400/5 hover:border-terminal-400/60 hover:bg-terminal-400/[0.07]",
         ].join(" ")}
         onClick={() => fileInputRef.current?.click()}
         onKeyDown={(e) => {

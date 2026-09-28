@@ -97,7 +97,7 @@ function DialogCloseButton({
       type="button"
       data-slot="dialog-close-button"
       className={cn(
-        "text-terminal-300/70 transition-colors hover:text-terminal-200 disabled:opacity-50",
+        "rounded-sm text-terminal-300/70 transition-colors hover:text-terminal-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50",
         className,
       )}
       {...props}

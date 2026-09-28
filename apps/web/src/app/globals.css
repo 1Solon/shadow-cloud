@@ -100,55 +100,6 @@ body {
   color-scheme: dark;
 }
 
-.shadow-override .text-orange-300 {
-  color: #fca5a5 !important;
-}
-
-.shadow-override .text-orange-300\/70 {
-  color: rgba(252, 165, 165, 0.7) !important;
-}
-
-.shadow-override .text-orange-300\/60 {
-  color: rgba(252, 165, 165, 0.6) !important;
-}
-
-.shadow-override .text-orange-200 {
-  color: #fecaca !important;
-}
-
-.shadow-override .text-orange-100 {
-  color: #fee2e2 !important;
-}
-
-.shadow-override .border-orange-400 {
-  border-color: #f87171 !important;
-}
-
-.shadow-override .border-orange-400\/30 {
-  border-color: rgba(248, 113, 113, 0.3) !important;
-}
-
-.shadow-override .border-orange-400\/20 {
-  border-color: rgba(248, 113, 113, 0.2) !important;
-}
-
-.shadow-override .bg-orange-400 {
-  background-color: #f87171 !important;
-}
-
-.shadow-override .bg-orange-400\/10,
-.shadow-override .hover\:bg-orange-400\/10:hover {
-  background-color: rgba(248, 113, 113, 0.1) !important;
-}
-
-.shadow-override .bg-orange-400\/5 {
-  background-color: rgba(248, 113, 113, 0.05) !important;
-}
-
-.shadow-override .hover\:text-orange-200:hover {
-  color: #fecaca !important;
-}
-
 @keyframes terminal-powerup {
   0% {
     opacity: 0;

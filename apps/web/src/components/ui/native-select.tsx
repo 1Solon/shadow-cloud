@@ -8,7 +8,7 @@ function NativeSelect({ className, ...props }: React.ComponentProps<"select">) {
       <select
         data-slot="native-select"
         className={cn(
-          "h-10 w-full min-w-0 appearance-none rounded-md border border-terminal-400/30 bg-background px-3 pr-9 font-mono text-sm text-terminal-200 outline-none transition-colors focus-visible:border-terminal-300 focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50",
+          "h-10 w-full min-w-0 appearance-none rounded-md border border-terminal-400/30 bg-background px-3 pr-9 font-mono text-sm text-terminal-200 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50",
           className,
         )}
         {...props}
