@@ -100,14 +100,6 @@ body {
   color-scheme: dark;
 }
 
-.shadow-override .text-orange-400 {
-  color: #f87171 !important;
-}
-
-.shadow-override .text-orange-400\/70 {
-  color: rgba(248, 113, 113, 0.7) !important;
-}
-
 .shadow-override .text-orange-300 {
   color: #fca5a5 !important;
 }
@@ -124,21 +116,8 @@ body {
   color: #fecaca !important;
 }
 
-.shadow-override .text-orange-200\/90 {
-  color: rgba(254, 202, 202, 0.9) !important;
-}
-
-.shadow-override .text-orange-200\/85 {
-  color: rgba(254, 202, 202, 0.85) !important;
-}
-
 .shadow-override .text-orange-100 {
   color: #fee2e2 !important;
-}
-
-.shadow-override .text-orange-50,
-.shadow-override .hover\:text-orange-50:hover {
-  color: #fff1f2 !important;
 }
 
 .shadow-override .border-orange-400 {
@@ -153,10 +132,6 @@ body {
   border-color: rgba(248, 113, 113, 0.2) !important;
 }
 
-.shadow-override .border-orange-300\/40 {
-  border-color: rgba(252, 165, 165, 0.4) !important;
-}
-
 .shadow-override .bg-orange-400 {
   background-color: #f87171 !important;
 }
@@ -168,26 +143,6 @@ body {
 
 .shadow-override .bg-orange-400\/5 {
   background-color: rgba(248, 113, 113, 0.05) !important;
-}
-
-.shadow-override .bg-black\/90 {
-  background-color: rgba(24, 4, 4, 0.9) !important;
-}
-
-.shadow-override .bg-black\/70 {
-  background-color: rgba(20, 3, 3, 0.7) !important;
-}
-
-.shadow-override .bg-black\/60 {
-  background-color: rgba(18, 2, 2, 0.6) !important;
-}
-
-.shadow-override .shadow-orange-400\/20 {
-  --tw-shadow-color: rgba(248, 113, 113, 0.2) !important;
-}
-
-.shadow-override .hover\:text-orange-400:hover {
-  color: #f87171 !important;
 }
 
 .shadow-override .hover\:text-orange-200:hover {

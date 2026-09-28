@@ -248,8 +248,8 @@ describe("TurnCommandCenter", () => {
     expect(panel).toHaveClass(
       "rounded-lg",
       "border",
-      "border-orange-400/40",
-      "bg-black",
+      "border-terminal-400/30",
+      "bg-background",
     );
     expect(body).toHaveClass(
       "grid",

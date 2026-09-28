@@ -64,14 +64,14 @@ export default async function UploadPage({
 
       <div>
         <Link
-          className="inline-flex items-center text-sm font-mono text-orange-400/70 hover:text-orange-400 transition-colors"
+          className="inline-flex items-center text-sm font-mono text-terminal-400/70 hover:text-terminal-400 transition-colors"
           href={`/games/${game.gameNumber}`}
         >
           &lt; GAME OVERVIEW
         </Link>
       </div>
       {query.upload === "error" ? (
-        <div className="rounded-lg border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-300 font-mono">
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive font-mono">
           {uploadMessage ?? "The save upload failed."}
         </div>
       ) : null}
@@ -104,7 +104,7 @@ export default async function UploadPage({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="rounded-lg border border-orange-400/20 bg-orange-400/5 px-4 py-4 text-sm text-orange-300 font-mono">
+              <div className="rounded-lg border border-terminal-400/20 bg-terminal-400/5 px-4 py-4 text-sm text-terminal-300 font-mono">
                 {`Waiting for ${game.activePlayerDisplayName} to upload the current turn.`}
               </div>
             </CardContent>
