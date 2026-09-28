@@ -3,10 +3,12 @@
 import { useEffect, useId, useRef, useState, type DragEvent } from "react";
 import { DownloadSaveButton } from "@/components/download-save-button";
 import { GameNotesMarkdown } from "@/components/game-notes-markdown";
+import { RejectSaveAction } from "@/components/reject-save-action";
 import {
   UploadSaveForm,
   type UploadSaveFormHandle,
 } from "@/components/upload-save-form";
+import type { SaveRejectionLabel } from "@/lib/save-rejection";
 import {
   formatTurnDuration,
   getTurnDurationMs,
@@ -26,9 +28,11 @@ export type TurnCommandCenterProps = {
     contentRevision: number;
     id: string;
     originalName: string;
+    uploadedByDisplayName: string;
   } | null;
   notes: string;
   roundNumber: number;
+  saveRejectionLabel?: SaveRejectionLabel | null;
   turnTargetHours: number;
 };
 
@@ -67,6 +71,7 @@ export function TurnCommandCenter({
   latestSave,
   notes,
   roundNumber,
+  saveRejectionLabel,
   turnTargetHours,
 }: TurnCommandCenterProps) {
   const headingId = useId();
@@ -220,12 +225,24 @@ export function TurnCommandCenter({
                     {latestSave.originalName}
                   </p>
                 </div>
-                <DownloadSaveButton
-                  className="min-h-11 shrink-0 px-3 text-xs font-medium"
-                  fileName={latestSave.originalName}
-                  href={`/api/games/${gameNumber}/files/${latestSave.id}?revision=${latestSave.contentRevision}`}
-                  label="Download latest save"
-                />
+                <div className="flex shrink-0 gap-2">
+                  <DownloadSaveButton
+                    className="min-h-11 shrink-0 px-3 text-xs font-medium"
+                    fileName={latestSave.originalName}
+                    href={`/api/games/${gameNumber}/files/${latestSave.id}?revision=${latestSave.contentRevision}`}
+                    label="Download latest save"
+                  />
+                  {saveRejectionLabel ? (
+                    <RejectSaveAction
+                      fileName={latestSave.originalName}
+                      fileVersionId={latestSave.id}
+                      gameNumber={gameNumber}
+                      label={saveRejectionLabel}
+                      saveBaseline={saveBaseline}
+                      uploaderDisplayName={latestSave.uploadedByDisplayName}
+                    />
+                  ) : null}
+                </div>
               </div>
             ) : null}
             {canUpload ? (

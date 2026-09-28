@@ -8,6 +8,7 @@ import { TurnCommandCenter } from "@/components/turn-command-center";
 import { TurnTimingHistoryCard } from "@/components/turn-timing-history-card";
 import { WorldStateHistoryCard } from "@/components/world-state-history-card";
 import { SaveRegimeInspection } from "@/components/save-regime-inspection";
+import { getSaveRejectionLabel } from "@/lib/save-rejection";
 import { getShadowOverrideEnabled } from "@/lib/shadow-override";
 import { getGameDetail } from "@/lib/shadow-cloud-api";
 import { transferOutcomeMessage } from "@/lib/transfer-outcome";
@@ -57,6 +58,16 @@ export default async function GameDetailPage({
   const canDeleteGame = Boolean(
     session?.user?.isShadowOverride && shadowOverrideEnabled,
   );
+  const latestSave = game.fileVersions[0] ?? null;
+  const saveRejectionLabel = getSaveRejectionLabel({
+    currentUserId: session?.user?.id ?? null,
+    latestSave,
+    rejectableSaveId: game.rejectableSaveId,
+    activePlayerUserId: game.activePlayerUserId,
+    organizerId: game.organizerId,
+    isShadowOverrideUser: session?.user?.isShadowOverride === true,
+    shadowOverrideEnabled,
+  });
   const uploadMessage = query.message
     ? decodeURIComponent(query.message)
     : null;
@@ -128,9 +139,10 @@ export default async function GameDetailPage({
         isActivePlayer={isActivePlayer}
         isSignedIn={Boolean(session?.user)}
         key={game.openTurn?.id ?? "no-open-turn"}
-        latestSave={game.fileVersions[0] ?? null}
+        latestSave={latestSave}
         notes={game.notes ?? ""}
         roundNumber={game.roundNumber}
+        saveRejectionLabel={saveRejectionLabel}
         turnTargetHours={game.turnTargetHours}
       />
 

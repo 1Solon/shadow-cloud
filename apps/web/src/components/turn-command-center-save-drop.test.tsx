@@ -21,6 +21,7 @@ const defaultProps = {
     contentRevision: 1,
     id: "save-9",
     originalName: "281-T9-S4-zarohn.se1",
+    uploadedByDisplayName: "Ivo",
   },
   notes: "",
   roundNumber: 9,

@@ -79,6 +79,8 @@ export function formatCompletionReason(
       return "Replaced";
     case "REASSIGNED":
       return "Reassigned";
+    case "REJECTED":
+      return "Save rejected";
     case null:
       return "In progress";
   }

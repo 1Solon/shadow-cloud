@@ -129,6 +129,7 @@ function createGame(overrides: Partial<GameDetail> = {}): GameDetail {
         uploadedAt: "2026-07-09T11:00:00.000Z",
       }),
     ],
+    rejectableSaveId: null,
     openTurn: createTurnRecord(),
     recentCompletedTurns: [
       createTurnRecord({
@@ -362,6 +363,33 @@ describe("GameDetailPage workspace composition", () => {
       turnTargetHours: 24,
     });
   });
+
+  it.each([
+    ["player-2", false, false, "file-newest", "Withdraw"],
+    ["organizer-1", false, false, "file-newest", "Reject"],
+    ["admin-1", true, true, "file-newest", "Reject"],
+    ["admin-1", true, false, "file-newest", null],
+    ["organizer-1", false, false, null, null],
+  ])(
+    "gives %s (override user=%s, enabled=%s) with rejectable save %s the %s action",
+    async (
+      userId,
+      isShadowOverride,
+      shadowOverrideEnabled,
+      rejectableSaveId,
+      expected,
+    ) => {
+      const page = await renderPage({
+        game: createGame({ rejectableSaveId }),
+        session: { user: { id: userId, isShadowOverride } },
+        shadowOverrideEnabled,
+      });
+
+      expect(
+        findElementByType(page, TurnCommandCenter)?.props.saveRejectionLabel,
+      ).toBe(expected);
+    },
+  );
 
   it("places Saves and Timing in separate workspace tabs", async () => {
     vi.useFakeTimers();

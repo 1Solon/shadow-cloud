@@ -63,6 +63,7 @@ export async function startUpstream(secret: string) {
         },
       ],
       fileVersions: [],
+      rejectableSaveId: null,
       openTurn: null,
       recentCompletedTurns: [],
     },
