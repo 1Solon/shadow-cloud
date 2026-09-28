@@ -105,6 +105,11 @@ const saveReplacedPayload = {
     name: "The Game",
     discordThreadId: "thread-1",
   },
+  activePlayer: {
+    id: "user-2",
+    displayName: "Kaz",
+    discordId: "discord-2",
+  },
   replacement: {
     contentRevision: 4,
     versionId: "version-1",
@@ -533,7 +538,9 @@ describe("buildSaveReplacedNotificationMessage", () => {
       ),
     );
 
-    expect(message).toContain("The save for The Game was corrected");
+    expect(message).toContain(
+      "<@discord-2>, the save for The Game was corrected",
+    );
     expect(message).toContain("The Game");
     expect(message).toContain("42-T4-S2-Other.se1");
     expect(message).toContain("<@discord-1>");
@@ -548,6 +555,29 @@ describe("buildSaveReplacedNotificationMessage", () => {
     expect(message).not.toContain("current turn");
     expect(message).not.toContain("completed turn");
     expect(message).not.toContain("It is");
+  });
+
+  it("pings the active lord and the corrector", () => {
+    const message = buildSaveReplacedNotificationMessage(
+      saveReplacedPayload,
+      "https://shadow.example",
+    );
+
+    expect(message.allowedMentions).toEqual({
+      users: ["discord-2", "discord-1"],
+    });
+  });
+
+  it("keeps the plain headline when there is no active lord", () => {
+    const message = buildSaveReplacedNotificationMessage(
+      { ...saveReplacedPayload, activePlayer: null },
+      "https://shadow.example",
+    );
+
+    expect(JSON.stringify(message)).toContain(
+      "The save for The Game was corrected",
+    );
+    expect(message.allowedMentions).toEqual({ users: ["discord-1"] });
   });
 });
 

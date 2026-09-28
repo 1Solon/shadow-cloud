@@ -61,6 +61,13 @@ function createGame(fileVersions = [createFileVersion()]) {
     slug: 'test-game',
     name: 'Test Game',
     discordThreadId: 'thread-1',
+    turnState: {
+      activePlayer: {
+        id: 'lord-2',
+        displayName: 'Active Lord',
+        identities: [{ provider: 'discord', providerId: 'discord-lord-2' }],
+      },
+    },
     fileVersions,
   };
 }
@@ -267,6 +274,11 @@ describe('GamesFileService replaceSave', () => {
           slug: 'test-game',
           name: 'Test Game',
           discordThreadId: 'thread-1',
+        },
+        activePlayer: {
+          id: 'lord-2',
+          displayName: 'Active Lord',
+          discordId: 'discord-lord-2',
         },
         replacement: {
           contentRevision: 1,

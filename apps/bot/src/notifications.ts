@@ -60,6 +60,11 @@ export type ActivePlayerChangedNotificationPayload = {
 
 export type SaveReplacedNotificationPayload = {
   game: UploadNotificationPayload["game"];
+  activePlayer?: {
+    id: string;
+    displayName: string;
+    discordId: string | null;
+  } | null;
   replacement: {
     passwordRecovery?: { operation: "reset" | "undo"; regimeName: string };
     contentRevision: number;
@@ -386,6 +391,12 @@ export function buildSaveReplacedNotificationMessage(
     payload.replacement.replacedBy.displayName,
     payload.replacement.replacedBy.discordId,
   );
+  const activePlayer = payload.activePlayer
+    ? formatDiscordActor(
+        payload.activePlayer.displayName,
+        payload.activePlayer.discordId,
+      )
+    : null;
   const replacedAt = formatDiscordTimestamp(payload.replacement.replacedAt);
   const recovery = payload.replacement.passwordRecovery;
   const downloadUrl = new URL(
@@ -398,15 +409,18 @@ export function buildSaveReplacedNotificationMessage(
   );
 
   return buildDiscordNotification({
-    headline: `The save for ${payload.game.name} was corrected`,
+    headline: activePlayer
+      ? `${activePlayer}, the save for ${payload.game.name} was corrected`
+      : `The save for ${payload.game.name} was corrected`,
     message: recovery
       ? `The Overlord ${recovery.operation === "reset" ? "reset the in-game password" : "undid the latest password reset and restored the previous password"} for **${escapeMarkdown(recovery.regimeName)}**. The latest save has been replaced; the turn has not advanced. Download [the updated save](${downloadUrl.toString()}) before continuing. If you already started from the previous copy, restart from the updated save.`
       : `Download [${payload.replacement.originalName}](${downloadUrl.toString()}) to continue with the corrected save.`,
     details: [`**Corrected by:** ${correctedBy}`],
     metadata: replacedAt ? [`-# ${replacedAt}`] : [],
-    mentionedUserIds: payload.replacement.replacedBy.discordId
-      ? [payload.replacement.replacedBy.discordId]
-      : [],
+    mentionedUserIds: [
+      payload.activePlayer?.discordId,
+      payload.replacement.replacedBy.discordId,
+    ].filter((discordId): discordId is string => discordId != null),
   });
 }
 

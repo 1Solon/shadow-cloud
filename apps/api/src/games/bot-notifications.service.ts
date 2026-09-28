@@ -55,6 +55,11 @@ export type ActivePlayerChangedNotificationPayload = {
 
 export type SaveReplacedNotificationPayload = {
   game: UploadNotificationPayload['game'];
+  activePlayer: {
+    id: string;
+    displayName: string;
+    discordId: string | null;
+  } | null;
   replacement: {
     passwordRecovery?: { operation: 'reset' | 'undo'; regimeName: string };
     contentRevision: number;

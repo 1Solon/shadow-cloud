@@ -51,6 +51,30 @@ export type UndoPasswordResetInput = {
   confirmed: boolean;
 };
 
+const activePlayerSelect = {
+  select: {
+    activePlayer: {
+      select: {
+        id: true,
+        displayName: true,
+        identities: { select: { provider: true, providerId: true } },
+      },
+    },
+  },
+} as const;
+
+function activePlayerOf(
+  turnState: Prisma.TurnStateGetPayload<typeof activePlayerSelect> | null,
+) {
+  return turnState
+    ? {
+        id: turnState.activePlayer.id,
+        displayName: turnState.activePlayer.displayName,
+        discordId: getDiscordIdentity(turnState.activePlayer),
+      }
+    : null;
+}
+
 export class SavePublication {
   private readonly logger = new Logger('GamesFileService');
 
@@ -152,6 +176,7 @@ export class SavePublication {
       where: buildGameIdentifierWhere(gameId),
       include: {
         fileVersions: { orderBy: { versionNumber: 'desc' }, take: 1 },
+        turnState: activePlayerSelect,
         turnRecords: {
           where: { endedAt: null },
           orderBy: { startedAt: 'desc' },
@@ -364,6 +389,7 @@ export class SavePublication {
             name: game.name,
             discordThreadId: game.discordThreadId,
           },
+          activePlayer: activePlayerOf(game.turnState),
           replacement: {
             contentRevision: file.contentRevision + 1,
             versionId: file.id,
@@ -405,6 +431,7 @@ export class SavePublication {
       where: buildGameIdentifierWhere(gameId),
       include: {
         fileVersions: { orderBy: { versionNumber: 'desc' }, take: 1 },
+        turnState: activePlayerSelect,
         turnRecords: {
           where: { endedAt: null },
           orderBy: { startedAt: 'desc' },
@@ -556,6 +583,7 @@ export class SavePublication {
             name: game.name,
             discordThreadId: game.discordThreadId,
           },
+          activePlayer: activePlayerOf(game.turnState),
           replacement: {
             contentRevision: file.contentRevision + 1,
             versionId: file.id,
@@ -724,6 +752,7 @@ export class SavePublication {
         slug: true,
         name: true,
         discordThreadId: true,
+        turnState: activePlayerSelect,
         fileVersions: {
           where: { id: fileVersionId },
           select: {
@@ -902,6 +931,7 @@ export class SavePublication {
             name: game.name,
             discordThreadId: game.discordThreadId,
           },
+          activePlayer: activePlayerOf(game.turnState),
           replacement: {
             contentRevision: fileVersion.contentRevision + 1,
             versionId: fileVersion.id,
