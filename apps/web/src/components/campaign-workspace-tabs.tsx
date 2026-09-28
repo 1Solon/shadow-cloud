@@ -1,12 +1,7 @@
 "use client";
 
-import {
-  useId,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type ReactNode,
-} from "react";
+import { useState, type ReactNode } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type WorkspaceTabId =
   "saves" | "timing" | "campaign" | "regimes" | "administration";
@@ -19,9 +14,6 @@ export type CampaignWorkspaceTabsProps = {
   administration?: ReactNode;
 };
 
-const tabButtonClassName =
-  "h-10 shrink-0 whitespace-nowrap border-b-2 px-3 font-mono text-xs font-semibold uppercase tracking-[0.16em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:h-11 sm:px-4 sm:text-sm";
-
 export function CampaignWorkspaceTabs({
   saves,
   timing,
@@ -29,16 +21,8 @@ export function CampaignWorkspaceTabs({
   regimes,
   administration,
 }: CampaignWorkspaceTabsProps) {
-  const baseId = useId();
   const [selectedTabId, setSelectedTabId] = useState<WorkspaceTabId>("saves");
   const [mountedRegimes, setMountedRegimes] = useState(false);
-  const tabRefs = useRef<Record<WorkspaceTabId, HTMLButtonElement | null>>({
-    saves: null,
-    timing: null,
-    campaign: null,
-    regimes: null,
-    administration: null,
-  });
   const tabs: Array<{
     id: WorkspaceTabId;
     label: string;
@@ -72,96 +56,36 @@ export function CampaignWorkspaceTabs({
     setSelectedTabId(tabId);
   }
 
-  function selectAndFocus(tabId: WorkspaceTabId) {
-    selectTab(tabId);
-    tabRefs.current[tabId]?.focus();
-  }
-
-  function handleKeyDown(
-    event: KeyboardEvent<HTMLButtonElement>,
-    tabIndex: number,
-  ) {
-    let targetIndex: number | undefined;
-
-    switch (event.key) {
-      case "ArrowRight":
-        targetIndex = (tabIndex + 1) % tabs.length;
-        break;
-      case "ArrowLeft":
-        targetIndex = (tabIndex - 1 + tabs.length) % tabs.length;
-        break;
-      case "Home":
-        targetIndex = 0;
-        break;
-      case "End":
-        targetIndex = tabs.length - 1;
-        break;
-      default:
-        return;
-    }
-
-    event.preventDefault();
-    selectAndFocus(tabs[targetIndex].id);
-  }
-
   return (
-    <div className="min-w-0">
-      <div className="overflow-x-auto overflow-y-hidden border-b border-orange-400/30">
-        <div
+    <Tabs
+      className="min-w-0"
+      value={activeTabId}
+      onValueChange={(value) => selectTab(value as WorkspaceTabId)}
+    >
+      <div className="overflow-x-auto overflow-y-hidden border-b border-terminal-400/30">
+        <TabsList
           aria-label="Campaign workspace"
-          aria-orientation="horizontal"
-          className="flex min-w-max px-1 pt-1"
-          role="tablist"
+          className="min-w-max px-1 pt-1"
         >
-          {tabs.map((tab, tabIndex) => {
-            const selected = activeTabId === tab.id;
-            const tabId = `${baseId}-${tab.id}-tab`;
-            const panelId = `${baseId}-${tab.id}-panel`;
-
-            return (
-              <button
-                aria-controls={panelId}
-                aria-selected={selected}
-                className={`${tabButtonClassName} ${
-                  selected
-                    ? "border-orange-400 bg-orange-400/10 text-orange-100"
-                    : "border-transparent text-orange-300 hover:border-orange-400/60 hover:bg-orange-400/10 hover:text-orange-200"
-                }`}
-                id={tabId}
-                key={tab.id}
-                onClick={() => selectTab(tab.id)}
-                onKeyDown={(event) => handleKeyDown(event, tabIndex)}
-                ref={(element) => {
-                  tabRefs.current[tab.id] = element;
-                }}
-                role="tab"
-                tabIndex={selected ? 0 : -1}
-                type="button"
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
+          {tabs.map((tab) => (
+            <TabsTrigger key={tab.id} value={tab.id}>
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
       </div>
 
-      {tabs.map((tab) => {
-        const selected = activeTabId === tab.id;
-
-        return (
-          <div
-            aria-labelledby={`${baseId}-${tab.id}-tab`}
-            className="min-w-0 pt-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:pt-6"
-            hidden={!selected}
-            id={`${baseId}-${tab.id}-panel`}
-            key={tab.id}
-            role="tabpanel"
-            tabIndex={0}
-          >
-            {tab.id !== "regimes" || mountedRegimes ? tab.content : null}
-          </div>
-        );
-      })}
-    </div>
+      {tabs.map((tab) => (
+        <TabsContent
+          className="pt-4 sm:pt-6"
+          forceMount
+          hidden={activeTabId !== tab.id}
+          key={tab.id}
+          value={tab.id}
+        >
+          {tab.id !== "regimes" || mountedRegimes ? tab.content : null}
+        </TabsContent>
+      ))}
+    </Tabs>
   );
 }

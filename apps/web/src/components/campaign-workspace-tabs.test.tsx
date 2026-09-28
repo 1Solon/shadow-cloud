@@ -35,7 +35,8 @@ function renderWorkspace({ administration = false, regimes = false } = {}) {
 describe("CampaignWorkspaceTabs", () => {
   afterEach(cleanup);
 
-  it("renders Saves and Timing in the workspace row with Saves initially selected", () => {
+  it("renders Saves and Timing in the workspace row with Saves initially selected", async () => {
+    const user = userEvent.setup();
     renderWorkspace();
 
     const tablist = screen.getByRole("tablist", {
@@ -50,7 +51,8 @@ describe("CampaignWorkspaceTabs", () => {
     expect(tablist).toHaveAttribute("aria-orientation", "horizontal");
     expect(within(tablist).queryByRole("tab", { name: "Activity" })).toBeNull();
     expect(savesTab).toHaveAttribute("aria-selected", "true");
-    expect(savesTab).toHaveAttribute("tabindex", "0");
+    await user.tab();
+    expect(savesTab).toHaveFocus();
     expect(timingTab).toHaveAttribute("aria-selected", "false");
     expect(campaignTab).toHaveAttribute("aria-selected", "false");
     expect(controlledPanel(savesTab)).toBeVisible();
@@ -308,20 +310,20 @@ describe("CampaignWorkspaceTabs", () => {
       "overflow-x-auto",
       "overflow-y-hidden",
       "border-b",
-      "border-orange-400/30",
+      "border-terminal-400/30",
     );
     expect(tablist).toHaveClass("flex", "min-w-max", "px-1", "pt-1");
     expect(savesTab).toHaveClass(
       "h-10",
       "border-b-2",
-      "border-orange-400",
-      "bg-orange-400/10",
-      "text-orange-100",
+      "data-[state=active]:border-terminal-400",
+      "data-[state=active]:bg-terminal-400/10",
+      "data-[state=active]:text-terminal-100",
     );
     expect(timingTab).toHaveClass(
       "border-transparent",
-      "text-orange-300",
-      "hover:border-orange-400/60",
+      "text-terminal-300",
+      "data-[state=inactive]:hover:border-terminal-400/60",
     );
     for (const panel of screen.getAllByRole("tabpanel", { hidden: true })) {
       expect(panel).toHaveClass(
