@@ -267,6 +267,23 @@ export async function sendHostCommandAuthorizationRequest(
   };
 }
 
+export async function sendSaveRejectionRequest(
+  fileVersionId: string,
+  callerDiscordId: string,
+  config: BotApiConfig,
+): Promise<ParsedBotResponse<CommandResponsePayload>> {
+  const response = await postJson(
+    `${config.apiBaseUrl}/v1/games/reject-save`,
+    config.botApiToken,
+    { fileVersionId, callerDiscordId },
+  );
+
+  return {
+    response,
+    payload: await parseJson<CommandResponsePayload>(response),
+  };
+}
+
 export async function sendRegistrationApprovalRequest(
   requestId: string,
   action: ApprovalAction,

@@ -235,11 +235,31 @@ describe('atomic upload through real SQLite', () => {
     ).toMatchObject({ versionNumber: 1, activePlayer: { id: 'seat-2' } });
     const latest = (await persistedState()).files[0];
     expect(
-      await mutations.uploadSave('game-1', 'user-2', file, {
-        expectedLatestFileVersionId: latest.id,
-      }),
+      await mutations.uploadSave(
+        'game-1',
+        'user-2',
+        { ...file, buffer: Buffer.from('next') },
+        { expectedLatestFileVersionId: latest.id },
+      ),
     ).toMatchObject({ versionNumber: 2, roundNumber: 5 });
     expect((await persistedState()).games[0].turnRevision).toBe(2);
+  });
+
+  it('rejects a save identical to an earlier save before staging it', async () => {
+    await mutations.uploadSave('game-1', 'user-1', file, metadata);
+    const before = await persistedState();
+    const beforeFiles = new Map(stored);
+    await expect(
+      mutations.uploadSave('game-1', 'user-2', file, {
+        idempotencyKey: 'upload-2',
+      }),
+    ).rejects.toThrow(
+      new ConflictException(
+        'This is the same file as save #1, uploaded by Alpha. Upload the save from your own turn.',
+      ),
+    );
+    expect(await persistedState()).toEqual(before);
+    expect(stored).toEqual(beforeFiles);
   });
 
   it('uses a previously renamed successor in the filename without requiring a client revision', async () => {

@@ -40,6 +40,29 @@ vi.mock("@/components/upload-save-form", () => ({
   ),
 }));
 
+vi.mock("@/components/reject-save-action", () => ({
+  RejectSaveAction: ({
+    fileVersionId,
+    label,
+    saveBaseline,
+    uploaderDisplayName,
+  }: {
+    fileVersionId: string;
+    label: string;
+    saveBaseline?: string;
+    uploaderDisplayName: string;
+  }) => (
+    <button
+      data-file-version-id={fileVersionId}
+      data-save-baseline={saveBaseline}
+      data-testid="reject-save"
+      data-uploader={uploaderDisplayName}
+    >
+      {label}
+    </button>
+  ),
+}));
+
 import { TurnCommandCenter } from "@/components/turn-command-center";
 
 const defaultProps: React.ComponentProps<typeof TurnCommandCenter> = {
@@ -54,6 +77,7 @@ const defaultProps: React.ComponentProps<typeof TurnCommandCenter> = {
     contentRevision: 3,
     id: "save-9",
     originalName: "42-T4-S2-Rhea.se1",
+    uploadedByDisplayName: "Ivo",
   },
   notes: "Hold the **western** pass.",
   roundNumber: 4,
@@ -99,6 +123,31 @@ describe("TurnCommandCenter", () => {
     expect(uploader).toHaveAttribute("data-game-number", "42");
     expect(uploader).toHaveAttribute("data-presentation", "compact");
   });
+
+  it("offers no save rejection unless a rejection label is provided", () => {
+    renderCommandCenter();
+
+    expect(screen.queryByTestId("reject-save")).not.toBeInTheDocument();
+  });
+
+  it.each(["Reject", "Withdraw"] as const)(
+    "offers the %s action beside the latest save download",
+    (saveRejectionLabel) => {
+      renderCommandCenter({
+        isActivePlayer: false,
+        saveBaseline: "campaign:4:9",
+        saveRejectionLabel,
+      });
+
+      const action = screen.getByRole("button", { name: saveRejectionLabel });
+      expect(action).toHaveAttribute("data-file-version-id", "save-9");
+      expect(action).toHaveAttribute("data-save-baseline", "campaign:4:9");
+      expect(action).toHaveAttribute("data-uploader", "Ivo");
+      expect(action.parentElement).toContainElement(
+        screen.getByTestId("quick-download"),
+      );
+    },
+  );
 
   it("omits quick download when there is no save file", () => {
     renderCommandCenter({ latestSave: null });

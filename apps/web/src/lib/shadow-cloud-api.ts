@@ -49,7 +49,12 @@ export type GameDetailFileVersion = {
 };
 
 export type TurnCompletionReason =
-  "SAVE_UPLOADED" | "SKIPPED" | "RESIGNED" | "REPLACED" | "REASSIGNED";
+  | "SAVE_UPLOADED"
+  | "SKIPPED"
+  | "RESIGNED"
+  | "REPLACED"
+  | "REASSIGNED"
+  | "REJECTED";
 
 export type GameTurnRecord = {
   id: string;
@@ -117,6 +122,7 @@ export type GameDetail = {
     isOrganizer: boolean;
   }>;
   fileVersions: GameDetailFileVersion[];
+  rejectableSaveId: string | null;
   openTurn: GameTurnRecord | null;
   recentCompletedTurns: GameTurnRecord[];
 };

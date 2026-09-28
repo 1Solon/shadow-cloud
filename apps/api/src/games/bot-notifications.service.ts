@@ -75,6 +75,24 @@ export type SaveReplacedNotificationPayload = {
   };
 };
 
+export type SaveRejectedNotificationPayload = {
+  game: UploadNotificationPayload['game'];
+  rejection: {
+    versionNumber: number;
+    originalName: string;
+    rejectedAt: string;
+    rejectedBy: {
+      id: string;
+      displayName: string;
+      discordId: string | null;
+    };
+  };
+  turn: {
+    roundNumber: number;
+    activePlayer: UploadNotificationPayload['turn']['activePlayer'];
+  };
+};
+
 export type GameInitializedNotificationPayload = {
   game: {
     id: string;
@@ -135,6 +153,7 @@ type NotificationEventName =
   | 'active-player-changed'
   | 'save-uploaded'
   | 'save-replaced'
+  | 'save-rejected'
   | 'game-initialized'
   | 'thread-rename'
   | 'turn-nudge';
@@ -247,6 +266,21 @@ export class BotNotificationsService implements OnModuleInit, OnModuleDestroy {
     this.logger.log(
       `Queued bot notification save-replaced for game ${payload.game.slug} (${payload.game.id}) as delivery ${delivery.id}.`,
     );
+  }
+
+  async enqueueSaveRejected(
+    transaction: Prisma.TransactionClient,
+    payload: SaveRejectedNotificationPayload,
+  ) {
+    if (!payload.game.discordThreadId) return;
+    await transaction.notificationDelivery.create({
+      data: {
+        event: NotificationDeliveryEvent.SAVE_REJECTED,
+        gameId: payload.game.id,
+        gameSlug: payload.game.slug,
+        payload: JSON.stringify(payload),
+      },
+    });
   }
 
   async notifyGameInitialized(payload: GameInitializedNotificationPayload) {
@@ -507,6 +541,8 @@ export class BotNotificationsService implements OnModuleInit, OnModuleDestroy {
         return 'save-uploaded';
       case NotificationDeliveryEvent.SAVE_REPLACED:
         return 'save-replaced';
+      case NotificationDeliveryEvent.SAVE_REJECTED:
+        return 'save-rejected';
       case NotificationDeliveryEvent.GAME_INITIALIZED:
         return 'game-initialized';
       case NotificationDeliveryEvent.THREAD_RENAMED:
@@ -524,6 +560,8 @@ export class BotNotificationsService implements OnModuleInit, OnModuleDestroy {
         return this.saveUploadedEndpoint;
       case NotificationDeliveryEvent.SAVE_REPLACED:
         return this.saveReplacedEndpoint;
+      case NotificationDeliveryEvent.SAVE_REJECTED:
+        return `${this.notificationBaseUrl}/notify/save-rejected`;
       case NotificationDeliveryEvent.GAME_INITIALIZED:
         return this.gameInitializedEndpoint;
       case NotificationDeliveryEvent.THREAD_RENAMED:

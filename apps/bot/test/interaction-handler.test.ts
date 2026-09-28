@@ -465,7 +465,7 @@ describe("createInteractionHandler debug command", () => {
     )(interaction as never);
 
     expect(interaction.editReply).toHaveBeenCalledTimes(1);
-    expect(interaction.followUp).toHaveBeenCalledTimes(32);
+    expect(interaction.followUp).toHaveBeenCalledTimes(33);
     for (const [message] of interaction.followUp.mock.calls) {
       expect(message).toMatchObject({
         flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
@@ -657,6 +657,91 @@ describe("createInteractionHandler skip command", () => {
     expect(interaction.editReply).toHaveBeenCalledOnce();
     expect(JSON.stringify(interaction.editReply.mock.calls[0]?.[0])).toContain(
       "Shadow Cloud unavailable",
+    );
+  });
+});
+
+describe("createInteractionHandler save rejection", () => {
+  function buildSaveRejectionInteraction(customId: string) {
+    return {
+      isButton: () => true,
+      customId,
+      user: { id: "acting-user-2" },
+      reply: vi.fn(async (_message: InteractionReplyOptions) => undefined),
+      deferUpdate: vi.fn(async () => undefined),
+      editReply: vi.fn(
+        async (_message: InteractionEditReplyOptions) => undefined,
+      ),
+    };
+  }
+
+  it("asks for confirmation without calling Shadow Cloud", async () => {
+    const interaction = buildSaveRejectionInteraction(
+      "sc_save_reject_version-1",
+    );
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createInteractionHandler({} as never, config)(interaction as never);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(JSON.stringify(interaction.reply.mock.calls[0]?.[0])).toContain(
+      "sc_save_reject_confirm_version-1",
+    );
+  });
+
+  it("rejects the save as the clicking Discord user once confirmed", async () => {
+    const interaction = buildSaveRejectionInteraction(
+      "sc_save_reject_confirm_version-1",
+    );
+    const fetchMock = vi.fn<typeof fetch>(async () =>
+      Response.json({ versionNumber: 1 }, { status: 201 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createInteractionHandler({} as never, {
+      ...config,
+      botApiToken: "test-token",
+    })(interaction as never);
+
+    expect(interaction.deferUpdate).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      "https://api.shadow.example/v1/games/reject-save",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-shadow-cloud-bot-token": "test-token",
+        },
+        body: JSON.stringify({
+          fileVersionId: "version-1",
+          callerDiscordId: "acting-user-2",
+        }),
+      },
+    );
+    expect(JSON.stringify(interaction.editReply.mock.calls[0]?.[0])).toContain(
+      "Save rejected",
+    );
+  });
+
+  it("explains why Shadow Cloud refused the rejection", async () => {
+    const interaction = buildSaveRejectionInteraction(
+      "sc_save_reject_confirm_version-1",
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async () =>
+        Response.json(
+          { message: "Only the latest save can be rejected." },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    await createInteractionHandler({} as never, config)(interaction as never);
+
+    expect(JSON.stringify(interaction.editReply.mock.calls[0]?.[0])).toContain(
+      "**Reason:** Only the latest save can be rejected.",
     );
   });
 });

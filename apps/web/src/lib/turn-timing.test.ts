@@ -101,6 +101,7 @@ describe("formatCompletionReason", () => {
     ["RESIGNED", "Resigned"],
     ["REPLACED", "Replaced"],
     ["REASSIGNED", "Reassigned"],
+    ["REJECTED", "Save rejected"],
     [null, "In progress"],
   ] as const)("formats %s as %s", (reason, expected) => {
     expect(formatCompletionReason(reason)).toBe(expected);

@@ -4,10 +4,12 @@ import {
   buildActivePlayerChangedNotificationMessage,
   type ActivePlayerChangedNotificationPayload,
   buildGameInitNotificationMessage,
+  buildSaveRejectedNotificationMessage,
   buildSaveReplacedNotificationMessage,
   buildSaveNotificationMessage,
   buildTurnNudgeNotificationMessage,
   type GameInitializedNotificationPayload,
+  type SaveRejectedNotificationPayload,
   type SaveReplacedNotificationPayload,
   type ThreadRenameNotificationPayload,
   type TurnNudgeNotificationPayload,
@@ -119,6 +121,7 @@ export function startNotificationServer(
   const server = createServer(async (request, response) => {
     const isSaveUploadedRequest = request.url === "/notify/save-uploaded";
     const isSaveReplacedRequest = request.url === "/notify/save-replaced";
+    const isSaveRejectedRequest = request.url === "/notify/save-rejected";
     const isGameInitializedRequest = request.url === "/notify/game-initialized";
     const isThreadRenameRequest = request.url === "/notify/thread-rename";
     const isTurnNudgeRequest = request.url === "/notify/turn-nudge";
@@ -134,6 +137,7 @@ export function startNotificationServer(
       request.method !== "POST" ||
       (!isSaveUploadedRequest &&
         !isSaveReplacedRequest &&
+        !isSaveRejectedRequest &&
         !isGameInitializedRequest &&
         !isThreadRenameRequest &&
         !isTurnNudgeRequest &&
@@ -161,6 +165,7 @@ export function startNotificationServer(
         | ActivePlayerChangedNotificationPayload
         | UploadNotificationPayload
         | SaveReplacedNotificationPayload
+        | SaveRejectedNotificationPayload
         | GameInitializedNotificationPayload
         | ThreadRenameNotificationPayload
         | TurnNudgeNotificationPayload;
@@ -210,6 +215,11 @@ export function startNotificationServer(
       } else if (isSaveReplacedRequest) {
         notificationMessage = buildSaveReplacedNotificationMessage(
           payload as SaveReplacedNotificationPayload,
+          webBaseUrl,
+        );
+      } else if (isSaveRejectedRequest) {
+        notificationMessage = buildSaveRejectedNotificationMessage(
+          payload as SaveRejectedNotificationPayload,
           webBaseUrl,
         );
       } else if (isTurnNudgeRequest) {

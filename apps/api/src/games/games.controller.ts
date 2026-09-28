@@ -25,6 +25,7 @@ import { AuthorizeHostCommandDto } from './dto/authorize-host-command.dto';
 import { CreateDiscordGameDto } from './dto/create-discord-game.dto';
 import { LinkDiscordThreadDto } from './dto/link-discord-thread.dto';
 import { RegisterDiscordPlayerDto } from './dto/register-discord-player.dto';
+import { RejectDiscordSaveDto } from './dto/reject-discord-save.dto';
 import { ReorderSeatOrderDto } from './dto/reorder-seat-order.dto';
 import { ReplaceDiscordPlayerDto } from './dto/replace-discord-player.dto';
 import { ResignDiscordPlayerDto } from './dto/resign-discord-player.dto';
@@ -270,6 +271,28 @@ export class GamesController {
         shadowOverrideEnabled: request.user?.shadowOverrideEnabled === true,
       },
     );
+  }
+
+  @Post(':gameId/files/:fileVersionId/reject')
+  @UseGuards(AppAuthGuard)
+  rejectSave(
+    @Param('gameId') gameId: string,
+    @Param('fileVersionId') fileVersionId: string,
+    @Req() request: AuthenticatedRequest,
+    @Body() body?: Record<string, string | undefined>,
+  ) {
+    return this.gamesService.rejectSave(request.user?.sub, {
+      gameId,
+      fileVersionId,
+      expectedSaveBaseline: body?.expectedSaveBaseline,
+      shadowOverrideEnabled: request.user?.shadowOverrideEnabled === true,
+    });
+  }
+
+  @Post('reject-save')
+  @UseGuards(BotAuthGuard)
+  rejectSaveFromDiscord(@Body() input: RejectDiscordSaveDto) {
+    return this.gamesService.rejectSaveFromDiscord(input);
   }
 
   @Post('init')

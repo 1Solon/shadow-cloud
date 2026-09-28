@@ -8,6 +8,7 @@ import {
   buildRegistrationResponse,
   buildGameInitNotificationMessage,
   buildSaveNotificationMessage,
+  buildSaveRejectedNotificationMessage,
   buildSaveReplacedNotificationMessage,
   buildTurnNudgeNotificationMessage,
 } from "./notifications.js";
@@ -34,6 +35,7 @@ export const debugPreviewNames = [
   "game-initialized",
   "turn-notification",
   "save-replaced",
+  "save-rejected",
   "turn-reminder",
   "registration-approval",
   "registration-approved",
@@ -204,6 +206,28 @@ const previewFactories: Record<DebugPreviewName, DebugPreviewFactory> = {
           replacedAt: "2026-07-17T12:30:00.000Z",
           replacedBy: fixture.organizer,
         },
+      },
+      context.webBaseUrl,
+    );
+  },
+  "save-rejected": (context) => {
+    const fixture = buildDebugGame(context);
+    return buildSaveRejectedNotificationMessage(
+      {
+        game: {
+          id: fixture.id,
+          gameNumber: fixture.gameNumber,
+          slug: fixture.slug,
+          name: fixture.name,
+          discordThreadId: fixture.discordThreadId,
+        },
+        rejection: {
+          versionNumber: 7,
+          originalName: "42-T3-S1-Debug.se1",
+          rejectedAt: "2026-07-17T12:30:00.000Z",
+          rejectedBy: fixture.organizer,
+        },
+        turn: { roundNumber: 3, activePlayer: fixture.activePlayer },
       },
       context.webBaseUrl,
     );

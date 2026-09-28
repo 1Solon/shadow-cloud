@@ -16,6 +16,15 @@ A position in a campaign's turn order that can be occupied by a player or left o
 **Roster**:
 A campaign's seats, their order, and their occupants.
 
+**Turn**:
+One player's play, from receiving the save to uploading the next one.
+
+**Round**:
+The turns in which every occupied seat plays once.
+
+**Save rejection**:
+Discarding the latest save and returning the turn to the seat that uploaded it, with that seat's turn time resuming where it stopped. Only possible during the turn that save started, by the receiving seat, the uploader, the Overlord, or a Shadow Lord under Shadow Override.
+
 **Accepted Roster**:
 The authoritative account of a campaign's roster and active seat currently accepted for Seat Order editing. It can become newer than an existing Seat Order draft without changing that draft's captured baseline.
 

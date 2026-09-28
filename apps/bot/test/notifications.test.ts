@@ -12,6 +12,8 @@ import {
   buildDiscordNotification,
   buildGameInitNotificationMessage,
   buildSaveNotificationMessage,
+  buildSaveRejectedNotificationMessage,
+  buildSaveRejectionPrompt,
   buildSaveReplacedNotificationMessage,
   buildTurnNudgeNotificationMessage,
 } from "../src/notifications.js";
@@ -426,6 +428,76 @@ describe("production notification style", () => {
     expect(rendered).toContain(`"type":${ComponentType.Separator}`);
     expect(rendered).toContain("-# <t:1778500800:F>");
   });
+
+  it("offers a reject button on the turn notification", () => {
+    const rendered = JSON.stringify(
+      buildSaveNotificationMessage(
+        saveUploadedPayload,
+        "https://shadow.example",
+      ),
+    );
+
+    expect(rendered).toContain('"custom_id":"sc_save_reject_version-1"');
+    expect(rendered).toContain('"label":"Reject save"');
+  });
+
+  it("asks for confirmation before rejecting a save", () => {
+    const prompt = buildSaveRejectionPrompt("version-1");
+
+    expect(prompt.flags).toBe(
+      MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
+    );
+    expect(JSON.stringify(prompt)).toContain(
+      '"custom_id":"sc_save_reject_confirm_version-1"',
+    );
+  });
+
+  it.each([
+    [
+      "user-9",
+      "Overlord",
+      "Overlord rejected save #3. Upload a [corrected save](https://shadow.example/games/42) for round 5. Your turn time continues from where it stopped.",
+    ],
+    [
+      "user-1",
+      "Solon",
+      "Solon withdrew save #3. Upload a [corrected save](https://shadow.example/games/42) for round 5. Your turn time continues from where it stopped.",
+    ],
+  ])(
+    "hands the turn back to the uploader when %s rejects the save",
+    (rejecterId, rejecterName, message) => {
+      const notification = buildSaveRejectedNotificationMessage(
+        {
+          game: saveUploadedPayload.game,
+          rejection: {
+            versionNumber: 3,
+            originalName: "42-T5-S2-Next.se1",
+            rejectedAt: "2026-05-11T12:00:00.000Z",
+            rejectedBy: {
+              id: rejecterId,
+              displayName: rejecterName,
+              discordId: `discord-${rejecterId}`,
+            },
+          },
+          turn: {
+            roundNumber: 5,
+            activePlayer: {
+              id: "user-1",
+              displayName: "Solon",
+              discordId: "discord-1",
+              turnOrder: 1,
+            },
+          },
+        },
+        "https://shadow.example",
+      );
+      const rendered = JSON.stringify(notification);
+
+      expect(rendered).toContain("It is <@discord-1>'s turn again!");
+      expect(rendered).toContain(message);
+      expect(notification.allowedMentions).toEqual({ users: ["discord-1"] });
+    },
+  );
 
   it("falls back to delivery time when an event timestamp is invalid", () => {
     vi.useFakeTimers();

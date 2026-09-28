@@ -70,6 +70,7 @@ export type GameDetailResponse = TurnTimingPolicyResponse & {
     replacedAt: string | null;
     replacedByDisplayName: string | null;
   }>;
+  rejectableSaveId: string | null;
   openTurn: TurnRecordResponse | null;
   recentCompletedTurns: TurnRecordResponse[];
 };

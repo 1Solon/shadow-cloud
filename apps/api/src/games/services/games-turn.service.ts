@@ -8,6 +8,8 @@ import type {
   UploadedSaveFile,
   UploadSaveSafetyMetadata,
 } from '../support/game-payload.types';
+import type { RejectDiscordSaveDto } from '../dto/reject-discord-save.dto';
+import type { RejectSaveInput } from './turn-mutations/rejection';
 import { TurnMutationsService } from './turn-mutations.service';
 
 @Injectable()
@@ -21,6 +23,14 @@ export class GamesTurnService {
     metadata: UploadSaveSafetyMetadata = {},
   ) {
     return this.turnMutations.uploadSave(gameId, userId, file, metadata);
+  }
+
+  async rejectSave(userId: string | undefined, input: RejectSaveInput) {
+    return this.turnMutations.rejectSave(userId, input);
+  }
+
+  async rejectSaveFromDiscord(input: RejectDiscordSaveDto) {
+    return this.turnMutations.rejectSaveFromDiscord(input);
   }
 
   async reorderSeatOrder(

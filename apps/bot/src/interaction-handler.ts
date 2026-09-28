@@ -14,6 +14,7 @@ import {
   sendHostCommandAuthorizationRequest,
   sendCommandRequest,
   sendRegistrationApprovalRequest,
+  sendSaveRejectionRequest,
 } from "./bot-api.js";
 import {
   isSupportedCommandName,
@@ -22,7 +23,10 @@ import {
 import {
   APPROVE_PREFIX,
   REJECT_PREFIX,
+  SAVE_REJECT_CONFIRM_PREFIX,
+  SAVE_REJECT_PREFIX,
   buildRegistrationResponse,
+  buildSaveRejectionPrompt,
   buildDiscordEditReply,
   buildDiscordReply,
 } from "./notifications.js";
@@ -413,10 +417,69 @@ async function handleDebugCommand(
   }
 }
 
+async function handleSaveRejectionButton(
+  interaction: ButtonInteraction,
+  fileVersionId: string,
+  config: BotApiConfig,
+) {
+  await interaction.deferUpdate();
+
+  try {
+    const { payload, response } = await sendSaveRejectionRequest(
+      fileVersionId,
+      interaction.user.id,
+      config,
+    );
+
+    if (!response.ok) {
+      const errorMessage = Array.isArray(payload?.message)
+        ? payload.message.join(", ")
+        : (payload?.message ?? "Failed to reject the save.");
+
+      await interaction.editReply(
+        buildDiscordEditReply({
+          headline: "Rejection failed",
+          message: "Shadow Cloud could not reject this save.",
+          details: [`**Reason:** ${errorMessage}`],
+        }),
+      );
+      return;
+    }
+
+    await interaction.editReply(
+      buildDiscordEditReply({
+        headline: "Save rejected",
+        message: "The turn has returned to the player who uploaded it.",
+      }),
+    );
+  } catch (error) {
+    console.error(`Failed to reject save ${fileVersionId}.`, error);
+    await interaction
+      .editReply(buildShadowCloudUnavailableReply())
+      .catch(() => undefined);
+  }
+}
+
 export function createInteractionHandler(client: Client, config: BotApiConfig) {
   return async (interaction: Interaction) => {
     if (interaction.isButton()) {
       const customId = interaction.customId;
+
+      if (customId.startsWith(SAVE_REJECT_CONFIRM_PREFIX)) {
+        await handleSaveRejectionButton(
+          interaction,
+          customId.slice(SAVE_REJECT_CONFIRM_PREFIX.length),
+          config,
+        );
+        return;
+      }
+
+      if (customId.startsWith(SAVE_REJECT_PREFIX)) {
+        await interaction.reply(
+          buildSaveRejectionPrompt(customId.slice(SAVE_REJECT_PREFIX.length)),
+        );
+        return;
+      }
 
       if (customId.startsWith(APPROVE_PREFIX)) {
         await handleRegistrationButton(
