@@ -23,7 +23,7 @@ export function SavePasswordReset({
   const [confirmed, setConfirmed] = useState(false);
   return (
     <form
-      className="space-y-4 border border-orange-400/40 p-4"
+      className="space-y-4 border border-terminal-400/30 p-4"
       onSubmit={(event) => {
         event.preventDefault();
         if (!confirmed || pending) return;
@@ -34,7 +34,7 @@ export function SavePasswordReset({
       }}
     >
       <h3 className="font-bold">Reset password for {regime.name}</h3>
-      <div className="space-y-3 border-l-2 border-orange-400 pl-4">
+      <div className="space-y-3 border-l-2 border-terminal-400 pl-4">
         <h4 className="font-bold">Players must use the updated save</h4>
         <p>
           This changes the password in Shadow Cloud&apos;s latest save only.

@@ -29,7 +29,7 @@ export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
   if (!canManagePasswords) return null;
   return (
     <Card
-      className="min-w-0 overflow-hidden font-mono text-sm text-orange-200"
+      className="min-w-0 overflow-hidden font-mono text-sm text-terminal-200"
       role="region"
       aria-label="In-game regime inspection"
     >
@@ -65,7 +65,10 @@ export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
         {!hasSave ? <p>This campaign has no save to inspect.</p> : null}
         {workflow.message ? <p role="alert">{workflow.message}</p> : null}
         {hasSave && error ? (
-          <p role="alert" className="border border-red-400/30 p-3 text-red-300">
+          <p
+            role="alert"
+            className="border border-destructive/30 p-3 text-destructive"
+          >
             {error}
           </p>
         ) : null}
@@ -74,7 +77,7 @@ export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
             {inspection.regimes.length === 0 ? (
               <p>No human-controlled regimes were found.</p>
             ) : (
-              <ul className="divide-y divide-orange-400/20">
+              <ul className="divide-y divide-terminal-400/20">
                 {inspection.regimes.map((regime) => (
                   <li key={regime.id} className="space-y-2 py-3">
                     <div className="flex flex-wrap items-center gap-3">
@@ -82,12 +85,12 @@ export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
                         {regime.name}
                       </span>
                       {regime.current ? (
-                        <span className="border border-orange-400/50 px-2 py-1 text-xs">
+                        <span className="border border-terminal-400/60 px-2 py-1 text-xs">
                           Current regime
                         </span>
                       ) : null}
                     </div>
-                    <p className="text-xs text-orange-300/70">
+                    <p className="text-xs text-terminal-300/70">
                       {regime.eligible
                         ? "Eligible for password reset"
                         : regime.reason}
@@ -115,7 +118,7 @@ export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
                 ))}
               </ul>
             )}
-            <p className="text-xs text-orange-300/70">
+            <p className="text-xs text-terminal-300/70">
               This inspection does not change the save or advance the turn.
             </p>
           </div>

@@ -76,7 +76,7 @@ describe("CampaignBriefing", () => {
     expect(values).toHaveClass("grid", "min-w-0", "sm:grid-cols-2");
     expect(screen.getByTestId("campaign-briefing-identity")).toHaveClass(
       "border-t",
-      "border-orange-400/25",
+      "border-terminal-400/20",
     );
     expect(within(values).getAllByText("4")).toHaveLength(2);
     for (const value of [

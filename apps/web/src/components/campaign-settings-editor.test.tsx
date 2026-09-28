@@ -546,7 +546,9 @@ describe("CampaignSettingsEditor", () => {
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(
       "Transfer rejected.",
     );
-    await user.click(within(dialog).getByRole("button", { name: "Confirm" }));
+    await user.click(
+      await within(dialog).findByRole("button", { name: "Confirm" }),
+    );
 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(3));
     expect(
@@ -579,6 +581,11 @@ describe("CampaignSettingsEditor", () => {
 
     const dialog = screen.getByRole("alertdialog");
     await within(dialog).findByRole("alert");
+    await waitFor(() =>
+      expect(
+        within(dialog).getByRole("button", { name: "Cancel" }),
+      ).toBeEnabled(),
+    );
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 

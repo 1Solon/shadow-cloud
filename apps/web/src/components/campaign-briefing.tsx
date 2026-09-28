@@ -90,10 +90,10 @@ function duration(value: number | null) {
 function DefinitionValue({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 py-3">
-      <dt className="text-[11px] uppercase tracking-[0.2em] text-orange-300/60">
+      <dt className="text-[11px] uppercase tracking-[0.2em] text-terminal-300/70">
         {label}
       </dt>
-      <dd className="mt-1 break-words text-sm text-orange-100">{value}</dd>
+      <dd className="mt-1 break-words text-sm text-terminal-100">{value}</dd>
     </div>
   );
 }
@@ -114,11 +114,11 @@ function DisclosureButton({
       type="button"
       aria-controls={controls}
       aria-expanded={expanded}
-      className="flex w-full items-center justify-between gap-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-orange-300 transition-colors hover:text-orange-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      className="flex w-full items-center justify-between gap-4 py-4 text-left text-xs font-semibold uppercase tracking-[0.18em] text-terminal-300 transition-colors hover:text-terminal-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       onClick={onClick}
     >
       <span>{children}</span>
-      <span aria-hidden="true" className="text-orange-300/60">
+      <span aria-hidden="true" className="text-terminal-300/70">
         {expanded ? "[-]" : "[+]"}
       </span>
     </button>
@@ -168,7 +168,7 @@ export function CampaignBriefing({
   return (
     <Card
       aria-labelledby={headingId}
-      className="min-w-0 overflow-hidden font-mono text-orange-200"
+      className="min-w-0 overflow-hidden font-mono text-terminal-200"
       role="region"
     >
       <CardHeader>
@@ -184,20 +184,20 @@ export function CampaignBriefing({
       </CardHeader>
 
       <div
-        className="border-t border-orange-400/25 px-4 py-4 sm:px-6"
+        className="border-t border-terminal-400/20 px-4 py-4 sm:px-6"
         data-testid="campaign-briefing-identity"
       >
-        <p className="break-words text-lg font-semibold text-orange-100">
+        <p className="break-words text-lg font-semibold text-terminal-100">
           {name}
         </p>
-        <p className="mt-1 text-xs uppercase tracking-[0.16em] text-orange-300/60">
+        <p className="mt-1 text-xs uppercase tracking-[0.16em] text-terminal-300/70">
           Overlord · {organizerDisplayName}
         </p>
       </div>
 
       <dl
         data-testid="campaign-briefing-values"
-        className="grid min-w-0 divide-y divide-orange-400/20 px-4 sm:grid-cols-2 sm:gap-x-6 sm:divide-y-0 sm:px-6"
+        className="grid min-w-0 divide-y divide-terminal-400/20 px-4 sm:grid-cols-2 sm:gap-x-6 sm:divide-y-0 sm:px-6"
       >
         <DefinitionValue
           label="Players"
@@ -232,7 +232,7 @@ export function CampaignBriefing({
         />
       </dl>
 
-      <div className="border-t border-orange-400/25 px-4 sm:px-6">
+      <div className="border-t border-terminal-400/20 px-4 sm:px-6">
         <DisclosureButton
           controls={seatPanelId}
           expanded={openDisclosure === "seats"}
@@ -249,25 +249,25 @@ export function CampaignBriefing({
                 return (
                   <li
                     key={player.id}
-                    className="grid min-w-0 grid-cols-[6.5rem_minmax(0,1fr)] items-start gap-x-4 border-t border-orange-400/15 px-2 py-2 text-sm sm:grid-cols-[7.5rem_minmax(0,1fr)]"
+                    className="grid min-w-0 grid-cols-[6.5rem_minmax(0,1fr)] items-start gap-x-4 border-t border-terminal-400/20 px-2 py-2 text-sm sm:grid-cols-[7.5rem_minmax(0,1fr)]"
                   >
-                    <span className="shrink-0 text-orange-300/60">
+                    <span className="shrink-0 text-terminal-300/70">
                       SEAT {String(player.turnOrder).padStart(2, "0")}
                     </span>
                     <span className="min-w-0 text-left">
                       <span className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-                        <span className="min-w-0 break-words text-orange-100">
+                        <span className="min-w-0 break-words text-terminal-100">
                           {occupied
                             ? (player.displayName ?? "Occupied")
                             : "Empty"}
                         </span>
                         {isActive ? (
-                          <span className="shrink-0 text-xs font-semibold uppercase tracking-[0.12em] text-orange-300">
+                          <span className="shrink-0 text-xs font-semibold uppercase tracking-[0.12em] text-terminal-300">
                             Active player
                           </span>
                         ) : null}
                       </span>
-                      <span className="block text-xs uppercase tracking-[0.12em] text-orange-300/60">
+                      <span className="block text-xs uppercase tracking-[0.12em] text-terminal-300/70">
                         {occupied ? "Occupied" : "Empty"}
                         {player.isOrganizer ? " · Overlord" : ""}
                       </span>
@@ -280,7 +280,7 @@ export function CampaignBriefing({
         ) : null}
       </div>
 
-      <div className="border-t border-orange-400/25 px-4 sm:px-6">
+      <div className="border-t border-terminal-400/20 px-4 sm:px-6">
         <DisclosureButton
           controls={notesPanelId}
           expanded={openDisclosure === "notes"}
@@ -296,7 +296,7 @@ export function CampaignBriefing({
                 className="rounded-none border-0 bg-transparent px-0 py-0"
               />
             ) : (
-              <p className="text-sm text-orange-300/60">
+              <p className="text-sm text-terminal-300/70">
                 No campaign notes recorded.
               </p>
             )}
@@ -304,7 +304,7 @@ export function CampaignBriefing({
         ) : null}
       </div>
 
-      <div className="border-t border-orange-400/25 px-4 sm:px-6">
+      <div className="border-t border-terminal-400/20 px-4 sm:px-6">
         <DisclosureButton
           controls={protocolPanelId}
           expanded={openDisclosure === "protocol"}
@@ -316,7 +316,7 @@ export function CampaignBriefing({
         {openDisclosure === "protocol" ? (
           <dl
             id={protocolPanelId}
-            className="grid min-w-0 divide-y divide-orange-400/15 pb-4 sm:grid-cols-2 sm:gap-x-6 sm:divide-y-0"
+            className="grid min-w-0 divide-y divide-terminal-400/20 pb-4 sm:grid-cols-2 sm:gap-x-6 sm:divide-y-0"
           >
             <DefinitionValue
               label="Target turn"
