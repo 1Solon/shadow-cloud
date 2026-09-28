@@ -146,7 +146,7 @@ jobs:
           node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync } from "node:fs";
 
-          const releaseTag = process.env.RELEASE_TAG || JSON.parse(readFileSync("package.json", "utf8")).version;
+          const releaseTag = process.env.RELEASE_TAG;
           let version = releaseTag.trim().replace(/^refs\/tags\//, "");
           if (version.startsWith("v")) version = version.slice(1);
           if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version)) {
