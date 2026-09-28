@@ -17,7 +17,7 @@ export default function CampaignListError({ retry }: { retry: () => void }) {
   }, [retry]);
 
   return (
-    <section className="m-6 border border-orange-400/30 bg-black p-6 font-mono text-orange-200">
+    <section className="m-6 border border-terminal-400/30 bg-background p-6 font-mono text-terminal-200">
       <div role="alert">
         <p>Campaigns could not be loaded.</p>
         <p>Retrying automatically every minute.</p>

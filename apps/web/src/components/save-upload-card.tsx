@@ -34,7 +34,7 @@ export function SaveUploadCard({
         {isActivePlayer ? (
           <UploadSaveForm gameNumber={gameNumber} saveBaseline={saveBaseline} />
         ) : (
-          <div className="rounded-lg border border-orange-400/20 bg-orange-400/5 px-4 py-4 text-sm text-orange-300 font-mono">
+          <div className="rounded-lg border border-terminal-400/20 bg-terminal-400/5 px-4 py-4 text-sm text-terminal-300 font-mono">
             {isSignedIn
               ? `Waiting for ${activePlayerDisplayName} to upload the current turn.`
               : "Sign in with Discord to upload or download game saves."}

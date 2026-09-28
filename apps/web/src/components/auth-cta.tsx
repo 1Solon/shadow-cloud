@@ -25,7 +25,7 @@ export function AuthCta() {
     <>
       <Card className="overflow-hidden">
         <CardHeader className="gap-4">
-          <span className="w-fit rounded-full border border-orange-400/30 bg-orange-400/10 px-3 py-1 text-xs uppercase tracking-[0.28em] text-orange-300 font-mono">
+          <span className="w-fit rounded-full border border-terminal-400/30 bg-terminal-400/10 px-3 py-1 text-xs uppercase tracking-[0.28em] text-terminal-300 font-mono">
             Shadow Cloud
           </span>
           <CardTitle className="max-w-2xl text-4xl leading-tight sm:text-5xl">
@@ -78,7 +78,7 @@ export function AuthCta() {
             {pillars.map((pillar) => (
               <li
                 key={pillar}
-                className="rounded-lg border border-orange-400/20 bg-orange-400/5 px-4 py-3 text-orange-300 font-mono"
+                className="rounded-lg border border-terminal-400/20 bg-terminal-400/5 px-4 py-3 text-terminal-300 font-mono"
               >
                 {pillar}
               </li>
