@@ -1,0 +1,3 @@
+# Web UI colours come only from theme variables
+
+The web app's terminal look was written into components as Tailwind palette classes, and Shadow Override turned it red by overriding those classes one by one, so any shade missing from that list stayed orange. We build the web UI from shadcn components and take every colour from the theme's CSS variables, so Shadow Override only swaps the variables, and a lint rule rejects Tailwind palette and hex colours in components to keep it that way. The desktop app keeps its own plain CSS, because its UI is too small to justify adopting Tailwind and shadcn.

@@ -123,9 +123,9 @@ it("uses the shared campaign card framing and heading styles", () => {
     screen.getByRole("region", { name: "In-game regime inspection" }),
   ).toHaveClass(
     "rounded-lg",
-    "border-orange-400",
-    "bg-black/90",
-    "shadow-orange-400/20",
+    "border-terminal-400",
+    "bg-card",
+    "shadow-terminal-400/20",
   );
   expect(screen.getByRole("heading", { name: "Passwords:" })).toHaveClass(
     "text-xl",
