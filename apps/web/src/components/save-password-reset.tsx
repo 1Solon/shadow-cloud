@@ -1,6 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import type { SaveInspection } from "@/lib/save-inspection";
 
 export function SavePasswordReset({
@@ -43,10 +47,9 @@ export function SavePasswordReset({
         </p>
         <p>This action does not advance the campaign&apos;s turn.</p>
       </div>
-      <label className="block space-y-2">
+      <Label className="block space-y-2">
         Replacement password
-        <input
-          className="block w-full min-w-0 border border-orange-400/50 bg-black p-2"
+        <Input
           type={reveal ? "text" : "password"}
           autoComplete="new-password"
           spellCheck={false}
@@ -58,33 +61,33 @@ export function SavePasswordReset({
           disabled={pending}
           onChange={(e) => setPassword(e.target.value)}
         />
-      </label>
+      </Label>
       <p className="text-xs">
         Use 1 to 128 printable ASCII characters. Share the replacement password
         privately. Shadow Cloud does not send it to players.
       </p>
-      <label className="flex items-start gap-2">
-        <input
-          type="checkbox"
+      <Label className="flex items-start gap-2">
+        <Checkbox
           checked={reveal}
+          className="mt-1"
           disabled={pending}
-          onChange={(e) => setReveal(e.target.checked)}
+          onCheckedChange={(checked) => setReveal(checked === true)}
         />
         Reveal replacement password
-      </label>
-      <label className="flex items-start gap-2">
-        <input
-          type="checkbox"
+      </Label>
+      <Label className="flex items-start gap-2">
+        <Checkbox
           checked={confirmed}
+          className="mt-1"
           disabled={pending}
-          onChange={(e) => setConfirmed(e.target.checked)}
+          onCheckedChange={(checked) => setConfirmed(checked === true)}
         />
         Reset the password for {regime.name}. I have read the restart warning.
-      </label>
+      </Label>
       <div className="flex flex-wrap gap-3">
-        <button
-          className="border border-orange-400 px-3 py-2 disabled:opacity-50"
+        <Button
           type="button"
+          variant="secondary"
           disabled={pending}
           onClick={() => {
             setPassword("");
@@ -92,14 +95,10 @@ export function SavePasswordReset({
           }}
         >
           Cancel
-        </button>
-        <button
-          className="border border-orange-400 bg-orange-400/10 px-3 py-2 disabled:opacity-50"
-          type="submit"
-          disabled={pending || !confirmed || !password}
-        >
+        </Button>
+        <Button type="submit" disabled={pending || !confirmed || !password}>
           {pending ? "Resetting password..." : "Reset password"}
-        </button>
+        </Button>
       </div>
     </form>
   );

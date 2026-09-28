@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import type { PasswordRecovery } from "@/lib/save-inspection";
 
 export function SavePasswordUndo({
@@ -34,19 +37,19 @@ export function SavePasswordUndo({
           The turn will not advance. Players must download the updated save and
           restart any turn already begun from the previous copy.
         </p>
-        <label className="flex items-start gap-2">
-          <input
-            type="checkbox"
+        <Label className="flex items-start gap-2">
+          <Checkbox
             checked={confirmed}
+            className="mt-1"
             disabled={pending}
-            onChange={(event) => setConfirmed(event.target.checked)}
+            onCheckedChange={(checked) => setConfirmed(checked === true)}
           />
           Restore the previous password for {undo.regimeName}.
-        </label>
+        </Label>
         <div className="flex flex-wrap gap-3">
-          <button
+          <Button
             type="button"
-            className="border border-orange-400 px-3 py-2"
+            variant="secondary"
             disabled={pending}
             onClick={() => {
               setConfirmed(false);
@@ -54,14 +57,10 @@ export function SavePasswordUndo({
             }}
           >
             Cancel
-          </button>
-          <button
-            type="submit"
-            className="border border-orange-400 px-3 py-2 disabled:opacity-50"
-            disabled={pending || !confirmed}
-          >
+          </Button>
+          <Button type="submit" disabled={pending || !confirmed}>
             {pending ? "Restoring save..." : "Undo password reset"}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

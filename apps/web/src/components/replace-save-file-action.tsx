@@ -3,6 +3,10 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { TerminalActionConfirmationDialog } from "@/components/terminal-action-confirmation-dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 type ReplaceSaveFileActionProps = {
   saveBaseline?: string;
@@ -102,20 +106,20 @@ export function ReplaceSaveFileAction({
             Replacing{" "}
             <span className="text-orange-200">{canonicalFileName}</span>
           </p>
-          <label className="block space-y-2">
-            <span className="block text-xs uppercase tracking-[0.18em] text-orange-300">
+          <Label className="block space-y-2">
+            <span className="block text-xs uppercase tracking-[0.18em] text-terminal-300">
               Replacement save file
             </span>
-            <input
+            <Input
               accept=".se1"
-              className="block w-full rounded-md border border-orange-400/40 bg-black/50 px-3 py-2 text-sm text-orange-200 file:mr-3 file:border-0 file:bg-orange-400 file:px-3 file:py-1 file:font-mono file:text-xs file:font-bold file:text-black"
+              className="h-auto py-2"
               type="file"
               onChange={(event) => {
                 setSelectedFile(event.target.files?.[0] ?? null);
                 setErrorMessage(null);
               }}
             />
-          </label>
+          </Label>
           {selectedFile ? (
             <p className="text-xs text-orange-300/70">
               Selected: {selectedFile.name}
@@ -135,13 +139,17 @@ export function ReplaceSaveFileAction({
           ) : null}
         </div>
       </TerminalActionConfirmationDialog>
-      <button
-        className={`inline-flex min-h-11 items-center rounded-md border px-3 text-xs font-medium uppercase tracking-[0.14em] font-mono text-orange-200 transition-colors hover:bg-orange-400 hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isMostRecent ? "border-orange-400 bg-orange-400/10" : "border-orange-400/60 bg-transparent"}`}
+      <Button
+        className={cn(
+          "min-h-11 px-3 text-xs uppercase tracking-[0.14em]",
+          isMostRecent && "bg-terminal-400/10",
+        )}
         type="button"
+        variant="outline"
         onClick={openConfirmation}
       >
         Replace
-      </button>
+      </Button>
     </>
   );
 }

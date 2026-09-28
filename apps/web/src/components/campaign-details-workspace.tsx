@@ -13,6 +13,7 @@ import {
 import { CampaignNotesEditor } from "@/components/campaign-notes-editor";
 import { CampaignSettingsEditor } from "@/components/campaign-settings-editor";
 import { SeatOrderEditor } from "@/components/seat-order-editor";
+import { Button } from "@/components/ui/button";
 import { useAcceptedRoster } from "@/components/accepted-roster";
 import type { SeatOrderBaseline } from "@/lib/shadow-cloud-api";
 
@@ -132,13 +133,14 @@ function CampaignDetailsWorkspaceContent(props: CampaignDetailsWorkspaceProps) {
         activePlayerEntryId={props.activePlayerEntryId}
         headerAction={
           props.canEdit ? (
-            <button
-              className="h-full border border-orange-400/40 px-3 py-2 text-xs font-semibold uppercase tracking-[0.14em] text-orange-300 transition-colors hover:bg-orange-400/10 hover:text-orange-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            <Button
+              className="h-full px-3"
               type="button"
+              variant="command"
               onClick={() => setMode("configuration")}
             >
               Configure campaign
-            </button>
+            </Button>
           ) : undefined
         }
         armyCount={props.armyCount}

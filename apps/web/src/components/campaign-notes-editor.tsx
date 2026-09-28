@@ -8,6 +8,8 @@ import {
   type TerminalConfirmationSpec,
 } from "@/components/terminal-confirmation-modal";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 type CampaignNotesEditorProps = CampaignEditorStateProps & {
   gameNumber: number;
@@ -141,17 +143,17 @@ export function CampaignNotesEditor({
       />
 
       <div className="flex min-w-0 flex-col gap-2">
-        <label
+        <Label
           htmlFor="campaign-notes"
-          className="text-xs font-semibold uppercase tracking-[0.16em] text-orange-300"
+          className="text-xs font-semibold uppercase tracking-[0.16em] text-terminal-300"
         >
           Campaign notes
-        </label>
-        <textarea
+        </Label>
+        <Textarea
           id="campaign-notes"
           aria-describedby={markdownGuidanceId}
           disabled={isPending}
-          className="min-h-48 min-w-0 w-full resize-y border border-orange-400/30 bg-black px-3 py-3 text-sm text-orange-200 outline-none transition-colors focus:border-orange-300 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+          className="min-h-48 resize-y"
           value={draftNotes}
           onChange={(event) => {
             setDraftNotes(event.target.value);
