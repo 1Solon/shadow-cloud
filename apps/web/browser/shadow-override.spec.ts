@@ -52,9 +52,10 @@ test("Override reveals Regimes for a privileged non-Overlord and gates signed in
   expect(reads()).toHaveLength(0);
 
   for (const enabled of [true, false]) {
+    await page.getByRole("button", { name: "Account menu" }).click();
     await page
-      .getByRole("button", {
-        name: enabled ? "Override" : "Override Armed",
+      .getByRole("menuitem", {
+        name: enabled ? "Enable override" : "Disable override",
         exact: true,
       })
       .click();

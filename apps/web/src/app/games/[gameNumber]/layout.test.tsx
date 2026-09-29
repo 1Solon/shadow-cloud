@@ -21,14 +21,11 @@ vi.mock("next/navigation", () => ({ notFound: vi.fn() }));
 vi.mock("@/auth", () => ({
   getServerAuthSession: mocks.getServerAuthSession,
 }));
+vi.mock("@/components/account-menu", () => ({
+  AccountMenu: () => <button>Account menu</button>,
+}));
 vi.mock("@/components/login-button", () => ({
   LoginButton: () => <button>Log in</button>,
-}));
-vi.mock("@/components/shadow-override-button", () => ({
-  ShadowOverrideButton: () => <button>Override</button>,
-}));
-vi.mock("@/components/sign-out-button", () => ({
-  SignOutButton: () => <button>Sign out</button>,
 }));
 vi.mock("@/components/terminal-clock", () => ({
   TerminalClock: () => <span>Clock</span>,

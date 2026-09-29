@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import { getServerAuthSession } from "@/auth";
+import { AccountMenu } from "@/components/account-menu";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { CampaignList } from "@/components/campaign-list";
 import { TerminalClock } from "@/components/terminal-clock";
+import { WhatsNewDialog } from "@/components/whats-new-dialog";
 import { UserBadge } from "@/components/user-badge";
-import { SignOutButton } from "@/components/sign-out-button";
 import { LoginButton } from "@/components/login-button";
-import { ShadowOverrideButton } from "@/components/shadow-override-button";
 import { listGames } from "@/lib/shadow-cloud-api";
+import { listReleases } from "@/lib/github-releases";
 import { getShadowOverrideEnabled } from "@/lib/shadow-override";
 import { formatTerminalClock } from "@/lib/terminal-clock";
 import { componentVersionStatus } from "@/lib/component-versions";
@@ -32,10 +33,11 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function Home() {
-  const [session, games, shadowOverrideEnabled] = await Promise.all([
+  const [session, games, shadowOverrideEnabled, releases] = await Promise.all([
     getServerAuthSession(),
     listGames(),
     getShadowOverrideEnabled(),
+    listReleases(),
   ]);
   const initialClockTime = new Date();
   const userId = session?.user?.id;
@@ -60,17 +62,25 @@ export default async function Home() {
             <span aria-hidden="true" className="terminal-title-cursor" />
           </div>
           <div className="flex max-w-full flex-wrap items-center gap-3">
-            <div className={session?.user ? "min-w-0" : "hidden sm:block"}>
-              <UserBadge
+            {session?.user ? (
+              <AccountMenu
                 name={signedInIdentity}
-                image={session?.user?.image}
-                isSignedIn={Boolean(session?.user)}
+                image={session.user.image}
+                canOverride={Boolean(session.user.isShadowOverride)}
+                overrideEnabled={shadowOverrideEnabled}
               />
-            </div>
-            {session?.user ? <SignOutButton /> : <LoginButton />}
-            {session?.user?.isShadowOverride ? (
-              <ShadowOverrideButton enabled={shadowOverrideEnabled} />
-            ) : null}
+            ) : (
+              <>
+                <div className="hidden sm:block">
+                  <UserBadge
+                    name={signedInIdentity}
+                    image={null}
+                    isSignedIn={false}
+                  />
+                </div>
+                <LoginButton />
+              </>
+            )}
             <div className="hidden xl:block">
               <TerminalClock
                 initialTime={formatTerminalClock(initialClockTime)}
@@ -106,8 +116,8 @@ export default async function Home() {
           />
         </div>
         {/* Status bar */}
-        <div className="mt-4 pt-3 border-t flex flex-wrap justify-between gap-2 text-xs shrink-0 border-terminal-400 text-terminal-300/70">
-          <div>{componentVersionStatus}</div>
+        <div className="mt-4 pt-3 border-t flex flex-wrap items-center justify-between gap-2 text-xs shrink-0 border-terminal-400 text-terminal-300/70">
+          <WhatsNewDialog label={componentVersionStatus} releases={releases} />
           <div>CAMPAIGNS: {games.length} MONITORED</div>
         </div>
       </div>
