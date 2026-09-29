@@ -424,10 +424,26 @@ describe("production notification style", () => {
 
     expect(rendered).toContain("It is <@discord-2>'s turn!");
     expect(rendered).toContain(
-      "Download the [current turn](https://shadow.example/api/games/42/files/version-1), then upload your [completed turn](https://shadow.example/games/42) when finished.",
+      "Download the current turn, then upload your completed turn when finished.",
     );
     expect(rendered).toContain(`"type":${ComponentType.Separator}`);
     expect(rendered).toContain("-# <t:1778500800:F>");
+  });
+
+  it("offers download and upload buttons on the turn notification", () => {
+    const rendered = JSON.stringify(
+      buildSaveNotificationMessage(
+        saveUploadedPayload,
+        "https://shadow.example",
+      ),
+    );
+
+    expect(rendered).toContain(
+      '"url":"https://shadow.example/api/games/42/files/version-1"',
+    );
+    expect(rendered).toContain('"label":"Download"');
+    expect(rendered).toContain('"url":"https://shadow.example/games/42"');
+    expect(rendered).toContain('"label":"Upload"');
   });
 
   it("offers a reject button on the turn notification", () => {
@@ -438,8 +454,9 @@ describe("production notification style", () => {
       ),
     );
 
-    expect(rendered).toContain('"custom_id":"sc_save_reject_version-1"');
-    expect(rendered).toContain('"label":"Reject save"');
+    expect(rendered).toContain(
+      `"custom_id":"sc_save_reject_version-1","label":"Reject","style":${ButtonStyle.Danger}`,
+    );
   });
 
   it("asks for confirmation before rejecting a save", () => {

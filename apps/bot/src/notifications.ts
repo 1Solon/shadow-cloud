@@ -370,13 +370,22 @@ export function buildSaveNotificationMessage(
 
   return buildDiscordNotification({
     headline: `It is ${nextPlayerLabel}'s turn!`,
-    message: `Download the [current turn](${downloadUrl}), then upload your [completed turn](${gameUrl}) when finished.`,
+    message:
+      "Download the current turn, then upload your completed turn when finished.",
     metadata: uploadedAtLabel ? [`-# ${uploadedAtLabel}`] : [],
     actionRow: new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
+        .setURL(downloadUrl)
+        .setLabel("Download")
+        .setStyle(ButtonStyle.Link),
+      new ButtonBuilder()
+        .setURL(gameUrl)
+        .setLabel("Upload")
+        .setStyle(ButtonStyle.Link),
+      new ButtonBuilder()
         .setCustomId(`${SAVE_REJECT_PREFIX}${payload.upload.versionId}`)
-        .setLabel("Reject save")
-        .setStyle(ButtonStyle.Secondary),
+        .setLabel("Reject")
+        .setStyle(ButtonStyle.Danger),
     ),
     mentionedUserIds: payload.turn.activePlayer.discordId
       ? [payload.turn.activePlayer.discordId]
@@ -390,7 +399,7 @@ export function buildSaveRejectionPrompt(
   return buildDiscordReply({
     headline: "Reject this save?",
     message:
-      "The save is discarded and the turn returns to the player who uploaded it. Their turn time continues from where it stopped.",
+      "This discards the save and hands the turn back to the player who uploaded it.",
     actionRow: new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
         .setCustomId(`${SAVE_REJECT_CONFIRM_PREFIX}${fileVersionId}`)

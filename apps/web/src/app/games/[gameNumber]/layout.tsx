@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getServerAuthSession } from "@/auth";
+import { AccountMenu } from "@/components/account-menu";
 import { TerminalClock } from "@/components/terminal-clock";
 import { Button } from "@/components/ui/button";
 import { UserBadge } from "@/components/user-badge";
-import { SignOutButton } from "@/components/sign-out-button";
 import { LoginButton } from "@/components/login-button";
-import { ShadowOverrideButton } from "@/components/shadow-override-button";
 import { formatTerminalClock } from "@/lib/terminal-clock";
 import { getShadowOverrideEnabled } from "@/lib/shadow-override";
 import { getGameDetail } from "@/lib/shadow-cloud-api";
@@ -45,21 +44,27 @@ export default async function GameLayout({
             <div className="min-w-0 break-words text-base sm:text-xl font-mono text-terminal-300">{`> ${game.gameNumber} : ${game.name}`}</div>
           </div>
           <div className="flex w-full max-w-full flex-wrap items-center justify-end gap-2 sm:w-auto sm:gap-4">
-            <div className={session?.user ? "min-w-0" : "hidden sm:block"}>
-              <UserBadge
+            {session?.user ? (
+              <AccountMenu
                 name={
-                  session?.user?.name ??
-                  session?.user?.email ??
-                  "Guest overlord"
+                  session.user.name ?? session.user.email ?? "Guest overlord"
                 }
-                image={session?.user?.image}
-                isSignedIn={Boolean(session?.user)}
+                image={session.user.image}
+                canOverride={Boolean(session.user.isShadowOverride)}
+                overrideEnabled={shadowOverrideEnabled}
               />
-            </div>
-            {session?.user ? <SignOutButton /> : <LoginButton />}
-            {session?.user?.isShadowOverride ? (
-              <ShadowOverrideButton enabled={shadowOverrideEnabled} />
-            ) : null}
+            ) : (
+              <>
+                <div className="hidden sm:block">
+                  <UserBadge
+                    name="Guest overlord"
+                    image={null}
+                    isSignedIn={false}
+                  />
+                </div>
+                <LoginButton />
+              </>
+            )}
             <div className="hidden xl:block">
               <TerminalClock
                 initialTime={formatTerminalClock(initialClockTime)}
