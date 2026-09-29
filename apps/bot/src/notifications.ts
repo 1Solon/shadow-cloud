@@ -185,24 +185,22 @@ function buildDiscordResponseContainer({
     );
   }
 
+  if (actionRow) {
+    container.addActionRowComponents(actionRow);
+  }
+
   const footerMetadata =
     metadata.length > 0
       ? metadata
       : [`-# <t:${Math.floor(Date.now() / 1000)}:F>`];
 
-  container
+  return container
     .addSeparatorComponents((separator) =>
       separator.setDivider(true).setSpacing(SeparatorSpacingSize.Small),
     )
     .addTextDisplayComponents((textDisplay) =>
       textDisplay.setContent(footerMetadata.join("\n")),
     );
-
-  if (actionRow) {
-    container.addActionRowComponents(actionRow);
-  }
-
-  return container;
 }
 
 function buildAllowedMentions(mentionedUserIds: string[]) {

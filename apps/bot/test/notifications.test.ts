@@ -150,7 +150,7 @@ const turnNudgePayload = {
 };
 
 describe("buildDiscordNotification", () => {
-  it("renders headline, message, details, divider, metadata, and actions in order", () => {
+  it("renders headline, message, details, actions, divider, and metadata in order", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-17T12:00:00.000Z"));
 
@@ -181,10 +181,10 @@ describe("buildDiscordNotification", () => {
       rendered.indexOf("**Applicant** Solon"),
     );
     expect(rendered.indexOf("**Applicant** Solon")).toBeLessThan(
-      rendered.indexOf("-# <t:1784299200:F>"),
-    );
-    expect(rendered.indexOf("-# <t:1784299200:F>")).toBeLessThan(
       rendered.indexOf('"label":"Approve"'),
+    );
+    expect(rendered.indexOf('"label":"Approve"')).toBeLessThan(
+      rendered.indexOf("-# <t:1784299200:F>"),
     );
     expect(rendered).not.toContain("-# <t:1784289600:F>");
   });
@@ -225,11 +225,11 @@ describe("buildDiscordNotification", () => {
 
     expect(rendered).toContain(`"type":${ComponentType.Separator}`);
     expect(rendered).toContain("-# <t:1784289600:F>");
+    expect(rendered.indexOf('"label":"Reject"')).toBeLessThan(
+      rendered.indexOf(`"type":${ComponentType.Separator}`),
+    );
     expect(rendered.indexOf(`"type":${ComponentType.Separator}`)).toBeLessThan(
       rendered.indexOf("-# <t:1784289600:F>"),
-    );
-    expect(rendered.indexOf("-# <t:1784289600:F>")).toBeLessThan(
-      rendered.indexOf('"label":"Reject"'),
     );
   });
 });
@@ -274,8 +274,9 @@ describe("production notification style", () => {
                     {
                       ...live.components[0],
                       components: [
-                        ...live.components[0].components.slice(0, -1),
+                        ...live.components[0].components.slice(0, 2),
                         previewControls,
+                        ...live.components[0].components.slice(3),
                       ],
                     },
                   ],
@@ -291,7 +292,7 @@ describe("production notification style", () => {
 
       // The caller can mutate a returned builder without affecting any other render.
       for (const [index, render] of renders.entries()) {
-        const row = render.components[0]?.components.at(-1);
+        const row = render.components[0]?.components[2];
         expect(row).toBeInstanceOf(ActionRowBuilder);
         if (row instanceof ActionRowBuilder) {
           for (const button of row.components) {

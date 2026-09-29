@@ -144,8 +144,9 @@ describe("buildDebugPreviews", () => {
         {
           ...live.components[0],
           components: [
-            ...live.components[0].components.slice(0, -1),
+            ...live.components[0].components.slice(0, 2),
             previewControls,
+            ...live.components[0].components.slice(3),
           ],
         },
       ],

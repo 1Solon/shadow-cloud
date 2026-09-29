@@ -53,8 +53,8 @@ export const registrationResponses = {
             content:
               "Approve or reject **Debug User**'s request to join **Debug World**.",
           },
-          ...footer,
           pendingControls,
+          ...footer,
         ],
       },
     ],
@@ -73,8 +73,8 @@ export const registrationResponses = {
             content:
               "**Debug User** joined [Debug World](https://shadow.example/games/42) as seat 2.",
           },
-          ...footer,
           completedControls,
+          ...footer,
         ],
       },
     ],
@@ -92,8 +92,8 @@ export const registrationResponses = {
             content:
               "**Debug User**'s request to join [Debug World](https://shadow.example/games/42) was rejected.",
           },
-          ...footer,
           completedControls,
+          ...footer,
         ],
       },
     ],
