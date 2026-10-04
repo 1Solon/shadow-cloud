@@ -2,7 +2,7 @@
   "name": "shadow-cloud",
   "version": "0.0.0-dev",
   "private": true,
-  "packageManager": "pnpm@12.8.1",
+  "packageManager": "pnpm@12.9.0",
   "scripts": {
     "build": "turbo run build",
     "dev": "pnpm run dev:web",
@@ -17,7 +17,7 @@
   },
   "devDependencies": {
     "husky": "9.1.7",
-    "turbo": "2.11.5",
+    "turbo": "2.11.7",
     "typescript": "6.0.3"
   }
 }
