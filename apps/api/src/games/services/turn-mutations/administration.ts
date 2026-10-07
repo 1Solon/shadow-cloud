@@ -23,6 +23,7 @@ import {
   normalizeNotesInput,
 } from '../../support/game-configuration.helpers';
 import { buildGameIdentifierWhere } from '../../support/game-lookup.helpers';
+import { assertCampaignInPlay } from '../../support/campaign-conclusion';
 import type { TurnRecordsService } from '../turn-records.service';
 import type { TurnMutationDependencies } from './dependencies';
 
@@ -95,6 +96,7 @@ export async function transferHost(
       data: { turnRevision: { increment: 1 } },
     });
     const game = await findGame(transaction, observed.id);
+    await assertCampaignInPlay(transaction, game.id);
     authorize(game);
     if (fenced.count !== 1 || rosterProof(game) !== rosterProof(observed)) {
       throw new ConflictException(
@@ -196,6 +198,7 @@ export async function updateGameMetadata(
       data: { turnRevision: { increment: 0 } },
     });
     const game = await findGame(transaction, observed.id);
+    await assertCampaignInPlay(transaction, game.id);
     authorize(game);
     if (fenced.count !== 1 || rosterProof(game) !== rosterProof(observed)) {
       throw new ConflictException(

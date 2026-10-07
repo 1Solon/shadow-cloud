@@ -28,6 +28,19 @@ Discarding the latest save and returning the turn to the seat that uploaded it, 
 **Accepted Roster**:
 The authoritative account of a campaign's roster and active seat currently accepted for Seat Order editing. It can become newer than an existing Seat Order draft without changing that draft's captured baseline.
 
+**Victory**:
+The Overlord's or a Shadow Lord's designation of a seated player as a campaign's victor, which concludes the campaign.
+
+**Victor**:
+The player designated by a victory as having won a campaign.
+_Avoid_: Winner
+
+**Concluded campaign**:
+A campaign whose victory has been designated and that is awaiting deletion at the end of a grace period, during which saves may only be downloaded and the victory may be undone.
+
+**Victory record**:
+The lasting record of a campaign's victor, which outlives the deleted campaign.
+
 **Regime**:
 A nation inside a Shadow Empire game, controlled by a human or the game AI. A regime is distinct from a Shadow Cloud seat and the player occupying that seat.
 
@@ -55,7 +68,7 @@ A person who administers Shadow Cloud itself and may arm Shadow Override.
 _Avoid_: Administrator, admin, privileged user
 
 **Shadow Override**:
-A per-session mode in which a Shadow Lord holds an Overlord's authority in any campaign, plus the power to delete campaigns.
+A per-session mode in which a Shadow Lord holds an Overlord's authority in any campaign, plus the power to delete campaigns. Designating or undoing a victory from Discord needs no armed session; holding the Shadow Lord role is enough.
 _Avoid_: Override mode, admin mode
 
 **Registration preview**:

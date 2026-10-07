@@ -11,6 +11,8 @@ import {
   buildSaveRejectedNotificationMessage,
   buildSaveReplacedNotificationMessage,
   buildTurnNudgeNotificationMessage,
+  buildCampaignDeletedNotificationMessage,
+  buildVictoryConfirmation,
 } from "./notifications.js";
 import {
   buildApprovalFailureReply,
@@ -28,6 +30,9 @@ import {
   buildSeatFilledReply,
   buildShadowCloudUnavailableReply,
   buildTurnAdvancedAnnouncement,
+  buildVictoryAnnouncement,
+  buildVictoryConfirmationExpiredReply,
+  buildVictoryUndoneAnnouncement,
   buildWrongChannelReply,
 } from "./response-messages.js";
 
@@ -37,6 +42,7 @@ export const debugPreviewNames = [
   "save-replaced",
   "save-rejected",
   "turn-reminder",
+  "campaign-deleted",
   "registration-approval",
   "registration-approved",
   "registration-rejected",
@@ -49,6 +55,11 @@ export const debugPreviewNames = [
   "game-link",
   "message-pinned",
   "message-unpinned",
+  "victory-confirmation",
+  "victory-undo-confirmation",
+  "victory-confirmation-expired",
+  "victory-announcement",
+  "victory-undone-announcement",
   "wrong-channel",
   "forum-thread-required",
   "bot-misconfigured",
@@ -60,6 +71,8 @@ export const debugPreviewNames = [
   "link-failed",
   "pin-failed",
   "unpin-failed",
+  "winner-failed",
+  "unwinner-failed",
   "invalid-message",
   "discord-pin-failed",
   "discord-unpin-failed",
@@ -252,6 +265,22 @@ const previewFactories: Record<DebugPreviewName, DebugPreviewFactory> = {
       },
     });
   },
+  "campaign-deleted": (context) => {
+    const fixture = buildDebugGame(context);
+    return buildCampaignDeletedNotificationMessage({
+      game: {
+        id: fixture.id,
+        gameNumber: fixture.gameNumber,
+        slug: fixture.slug,
+        name: fixture.name,
+        discordThreadId: fixture.discordThreadId,
+      },
+      victory: {
+        victorDisplayName: context.userDisplayName,
+        victorDiscordId: context.userId,
+      },
+    });
+  },
   "registration-approval": (context) => {
     return buildRegistrationResponse({
       mode: "preview",
@@ -299,6 +328,38 @@ const previewFactories: Record<DebugPreviewName, DebugPreviewFactory> = {
     buildGameLinkReply(new URL("/games/42", context.webBaseUrl).toString()),
   "message-pinned": () => buildMessagePinReply("pin", "debug-message"),
   "message-unpinned": () => buildMessagePinReply("unpin", "debug-message"),
+  "victory-confirmation": (context) =>
+    buildVictoryConfirmation({
+      mode: "preview",
+      action: "declare",
+      victorDiscordId: context.userId,
+      gameName: "Debug World",
+      victorName: context.userDisplayName,
+      deletionDueAt: "2026-07-24T12:00:00.000Z",
+    }),
+  "victory-undo-confirmation": (context) =>
+    buildVictoryConfirmation({
+      mode: "preview",
+      action: "undo",
+      gameName: "Debug World",
+      victorName: context.userDisplayName,
+      deletionDueAt: "2026-07-24T12:00:00.000Z",
+    }),
+  "victory-confirmation-expired": () =>
+    buildVictoryConfirmationExpiredReply("winner"),
+  "victory-announcement": (context) =>
+    buildVictoryAnnouncement({
+      gameName: "Debug World",
+      victorName: context.userDisplayName,
+      victorDiscordId: context.userId,
+      deletionDueAt: "2026-07-24T12:00:00.000Z",
+    }),
+  "victory-undone-announcement": (context) =>
+    buildVictoryUndoneAnnouncement({
+      gameName: "Debug World",
+      victorName: context.userDisplayName,
+      victorDiscordId: context.userId,
+    }),
   "wrong-channel": () =>
     buildWrongChannelReply("register", "GuildText", "debug-channel"),
   "forum-thread-required": () => buildForumThreadRequiredReply("register"),
@@ -311,6 +372,8 @@ const previewFactories: Record<DebugPreviewName, DebugPreviewFactory> = {
   "link-failed": () => buildCommandErrorReply("link", null),
   "pin-failed": () => buildCommandErrorReply("pin", null),
   "unpin-failed": () => buildCommandErrorReply("unpin", null),
+  "winner-failed": () => buildCommandErrorReply("winner", null),
+  "unwinner-failed": () => buildCommandErrorReply("unwinner", null),
   "invalid-message": () => buildInvalidMessageTargetReply(),
   "discord-pin-failed": () => buildDiscordPinFailureReply("pin"),
   "discord-unpin-failed": () => buildDiscordPinFailureReply("unpin"),

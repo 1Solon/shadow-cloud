@@ -31,6 +31,8 @@ describe("commands", () => {
       "link",
       "pin",
       "unpin",
+      "winner",
+      "unwinner",
       "debug",
     ]);
   });

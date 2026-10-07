@@ -8,6 +8,16 @@ export type BotApiConfig = {
 
 export type ApprovalAction = "approve" | "reject";
 export type HostCommandName = "pin" | "unpin";
+export type VictoryCommandName = "winner" | "unwinner";
+
+export type VictoryResponsePayload = {
+  message?: string | string[];
+  name?: string;
+  gameNumber?: number;
+  victor?: { displayName?: string; discordId?: string | null };
+  designatedAt?: string;
+  deletionDueAt?: string;
+} | null;
 
 export type CommandResponsePayload = {
   message?: string | string[];
@@ -264,6 +274,34 @@ export async function sendHostCommandAuthorizationRequest(
   return {
     response,
     payload: await parseJson<CommandResponsePayload>(response),
+  };
+}
+
+/** A preview validates the command and describes it without changing anything. */
+export async function sendVictoryRequest(
+  commandName: VictoryCommandName,
+  stage: "preview" | "commit",
+  input: {
+    discordThreadId: string;
+    callerDiscordId: string;
+    victorDiscordId?: string;
+  },
+  config: BotApiConfig,
+): Promise<ParsedBotResponse<VictoryResponsePayload>> {
+  const path = [
+    "victory",
+    ...(commandName === "unwinner" ? ["undo"] : []),
+    ...(stage === "preview" ? ["preview"] : []),
+  ].join("/");
+  const response = await postJson(
+    `${config.apiBaseUrl}/v1/games/${path}`,
+    config.botApiToken,
+    input,
+  );
+
+  return {
+    response,
+    payload: await parseJson<VictoryResponsePayload>(response),
   };
 }
 

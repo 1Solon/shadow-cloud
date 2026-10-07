@@ -44,6 +44,14 @@ import {
 } from './turn-mutations/administration';
 import type { TransferHostDto } from '../dto/transfer-host.dto';
 import type { UpdateGameMetadataDto } from '../dto/update-game-metadata.dto';
+import type { DesignateVictoryDto } from '../dto/designate-victory.dto';
+import type { UndoVictoryDto } from '../dto/undo-victory.dto';
+import {
+  designateVictory,
+  undoVictory,
+  type VictoryOptions,
+} from './turn-mutations/victory';
+import { assertCampaignInPlay } from '../support/campaign-conclusion';
 
 const skipGameInclude = {
   players: {
@@ -192,6 +200,20 @@ export class TurnMutationsService {
     );
   }
 
+  designateVictory(input: DesignateVictoryDto, options?: VictoryOptions) {
+    return designateVictory(this.database, this.dependencies, input, options);
+  }
+
+  undoVictory(input: UndoVictoryDto, options?: VictoryOptions) {
+    return undoVictory(
+      this.database,
+      this.turnRecords,
+      this.dependencies,
+      input,
+      options,
+    );
+  }
+
   async skipPlayerTurn(input: SkipDiscordPlayerDto) {
     const observed = await this.findSkipGame(
       this.database,
@@ -209,6 +231,7 @@ export class TurnMutationsService {
         data: { turnRevision: { increment: 1 } },
       });
       const game = await this.findSkipGame(transaction, input.discordThreadId);
+      await assertCampaignInPlay(transaction, game.id);
       const callerIdentity = await this.authorizeSkip(
         transaction,
         game,

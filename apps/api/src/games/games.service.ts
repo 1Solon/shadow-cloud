@@ -22,6 +22,8 @@ import type { ReorderSeatOrderDto } from './dto/reorder-seat-order.dto';
 import type { ReplaceDiscordPlayerDto } from './dto/replace-discord-player.dto';
 import type { ResignDiscordPlayerDto } from './dto/resign-discord-player.dto';
 import type { SkipDiscordPlayerDto } from './dto/skip-discord-player.dto';
+import type { DesignateVictoryDto } from './dto/designate-victory.dto';
+import type { UndoVictoryDto } from './dto/undo-victory.dto';
 import type { TransferHostDto } from './dto/transfer-host.dto';
 import type { UpdateGameMetadataDto } from './dto/update-game-metadata.dto';
 import { buildGameIdentifierWhere } from './support/game-lookup.helpers';
@@ -291,6 +293,14 @@ export class GamesService {
 
   async skipPlayerTurn(input: SkipDiscordPlayerDto) {
     return this.gamesTurn.skipPlayerTurn(input);
+  }
+
+  async designateVictory(input: DesignateVictoryDto, preview = false) {
+    return this.gamesTurn.designateVictory(input, preview);
+  }
+
+  async undoVictory(input: UndoVictoryDto, preview = false) {
+    return this.gamesTurn.undoVictory(input, preview);
   }
 
   async linkGameFromDiscordThread(input: LinkDiscordThreadDto) {

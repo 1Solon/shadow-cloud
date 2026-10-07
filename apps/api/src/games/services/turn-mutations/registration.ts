@@ -23,6 +23,7 @@ import {
   upsertDiscordUser,
 } from '../../support/discord-user.helpers';
 import { syncGameSeatCount } from '../../support/seat-count.helpers';
+import { assertCampaignInPlay } from '../../support/campaign-conclusion';
 import type { TurnRecordsService } from '../turn-records.service';
 import type { TurnMutationDependencies } from './dependencies';
 
@@ -294,6 +295,7 @@ export async function approveRegistrationRequest(
         'Only the game overlord can approve registration requests.',
       );
     }
+    await assertCampaignInPlay(transaction, request.gameId);
     await turnRecords.assertCurrentTurn(transaction, request.gameId);
     const player = await upsertDiscordUser(transaction, {
       discordId: request.playerDiscordId,

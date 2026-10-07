@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { mkdir, stat, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import { basename, extname, join, resolve } from 'node:path';
 import type { ReadStream } from 'node:fs';
 
@@ -164,5 +164,12 @@ export class FileStorageService {
 
   async removeFileOrThrow(storagePath: string) {
     await unlink(storagePath);
+  }
+
+  async removeGameDirectory(gameId: string) {
+    await rm(join(this.rootDirectory, sanitizeSegment(gameId)), {
+      recursive: true,
+      force: true,
+    });
   }
 }

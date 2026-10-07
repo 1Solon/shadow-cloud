@@ -347,6 +347,45 @@ describe("startNotificationServer", () => {
     expect(response.statusCode).toBe(204);
   });
 
+  it("posts the campaign-deleted notice, then archives the thread without locking it", async () => {
+    const thread = {
+      id: "thread-1",
+      isThread: () => true,
+      joinable: false,
+      send: vi.fn(async () => ({ pin: vi.fn() })),
+      setArchived: vi.fn(async () => undefined),
+      setLocked: vi.fn(async () => undefined),
+    };
+    const client = buildClient(thread);
+
+    startNotificationServer(client as never, {
+      notificationPort: 3011,
+      notificationSecret: "secret",
+      webBaseUrl: "https://shadow.example",
+    });
+
+    const response = buildResponse();
+    await httpMock.getHandler()?.(
+      buildRequest("/notify/campaign-deleted", {
+        game: saveUploadedPayload.game,
+        victory: { victorDisplayName: "Solon", victorDiscordId: "discord-1" },
+      }),
+      response,
+    );
+
+    expect(thread.send).toHaveBeenCalledOnce();
+    const notice = JSON.stringify(thread.send.mock.calls[0]);
+    expect(notice).toContain("The Game has been deleted");
+    expect(notice).toContain("<@discord-1> won this campaign.");
+    expect(thread.setArchived).toHaveBeenCalledExactlyOnceWith(true);
+    expect(thread.setArchived.mock.invocationCallOrder[0] ?? 0).toBeGreaterThan(
+      thread.send.mock.invocationCallOrder[0] ?? 0,
+    );
+    expect(thread.setLocked).not.toHaveBeenCalled();
+    expect(threadNameMock.renameThreadIfNeeded).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(204);
+  });
+
   it("delivers authenticated turn nudges without renaming, tagging, or pinning", async () => {
     const pin = vi.fn(async () => undefined);
     const thread = {

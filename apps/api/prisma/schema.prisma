@@ -27,6 +27,8 @@ enum AuditEventType {
   FILE_REPLACED
   FILE_DOWNLOADED
   SAVE_REJECTED
+  VICTORY_DESIGNATED
+  VICTORY_UNDONE
 }
 
 enum RegistrationRequestStatus {
@@ -43,6 +45,7 @@ enum NotificationDeliveryEvent {
   GAME_INITIALIZED
   THREAD_RENAMED
   TURN_NUDGE
+  CAMPAIGN_DELETED
 }
 
 enum NotificationDeliveryStatus {
@@ -103,6 +106,8 @@ model User {
   rejections     RejectedSave[]
   auditEvents    AuditEvent[]   @relation("ActorEvents")
   turnRecords    TurnRecord[]
+  victories      VictoryRecord[] @relation("Victor")
+  designations   VictoryRecord[] @relation("DesignatedBy")
 }
 
 model AuthIdentity {
@@ -166,6 +171,7 @@ model Game {
   auditEvents             AuditEvent[]
   registrationRequests    RegistrationRequest[]
   turnRecords             TurnRecord[]
+  victoryRecord           VictoryRecord?
 }
 
 model GamePlayer {
@@ -258,6 +264,24 @@ model RejectedSave {
   rejectedBy    User     @relation(fields: [rejectedById], references: [id])
 
   @@index([gameId, contentHash])
+}
+
+// Outlives its campaign: deletion clears gameId, the snapshots keep the result.
+model VictoryRecord {
+  id                      String   @id @default(cuid())
+  gameId                  String?  @unique
+  gameNumber              Int
+  gameName                String
+  victorId                String?
+  victorDisplayName       String
+  designatedById          String?
+  designatedByDisplayName String
+  designatedAt            DateTime @default(now())
+  game                    Game?    @relation(fields: [gameId], references: [id], onDelete: SetNull)
+  victor                  User?    @relation("Victor", fields: [victorId], references: [id], onDelete: SetNull)
+  designatedBy            User?    @relation("DesignatedBy", fields: [designatedById], references: [id], onDelete: SetNull)
+
+  @@index([designatedAt])
 }
 
 model RegistrationRequest {

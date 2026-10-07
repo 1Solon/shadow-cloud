@@ -15,6 +15,7 @@ import { buildGameIdentifierWhere } from '../../support/game-lookup.helpers';
 import { assertSaveBaseline } from '../../support/save-baseline';
 import { cleanupSaveRecovery } from '../../support/save-recovery';
 import { resolveActivePlayerEntry } from '../../support/turn-state.utils';
+import { assertCampaignInPlay } from '../../support/campaign-conclusion';
 import type { TurnRecordsService } from '../turn-records.service';
 import type { TurnMutationDependencies } from './dependencies';
 
@@ -184,6 +185,7 @@ export async function rejectSave(
         'The campaign or save changed. Refresh and review the latest save before trying again.',
       );
     }
+    await assertCampaignInPlay(transaction, observed.game.id);
     const current = await loadRejection(transaction, input);
     const { active, turnState, uploaderSeat, uploaderTurn } = validateRejection(
       {

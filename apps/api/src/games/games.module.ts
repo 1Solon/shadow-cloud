@@ -13,6 +13,7 @@ import { TurnRecordsService } from './services/turn-records.service';
 import { TurnRemindersService } from './services/turn-reminders.service';
 import { GamesTurnService } from './services/games-turn.service';
 import { TurnMutationsService } from './services/turn-mutations.service';
+import { VictoryDeletionService } from './services/victory-deletion.service';
 
 @Module({
   imports: [AuthModule],
@@ -44,6 +45,7 @@ import { TurnMutationsService } from './services/turn-mutations.service';
       ],
     },
     TurnRemindersService,
+    VictoryDeletionService,
     GamesTurnService,
     FileStorageService,
     BotNotificationsService,

@@ -29,6 +29,7 @@ describe("selectDebugPreviewNames", () => {
       "save-replaced",
       "save-rejected",
       "turn-reminder",
+      "campaign-deleted",
       "registration-approval",
       "registration-approved",
       "registration-rejected",
@@ -41,6 +42,11 @@ describe("selectDebugPreviewNames", () => {
       "game-link",
       "message-pinned",
       "message-unpinned",
+      "victory-confirmation",
+      "victory-undo-confirmation",
+      "victory-confirmation-expired",
+      "victory-announcement",
+      "victory-undone-announcement",
       "wrong-channel",
       "forum-thread-required",
       "bot-misconfigured",
@@ -52,6 +58,8 @@ describe("selectDebugPreviewNames", () => {
       "link-failed",
       "pin-failed",
       "unpin-failed",
+      "winner-failed",
+      "unwinner-failed",
       "invalid-message",
       "discord-pin-failed",
       "discord-unpin-failed",
@@ -114,9 +122,8 @@ describe("buildDebugPreviews", () => {
       const [container] = serialized.components;
       const componentTypes =
         container?.components.map(({ type }) => type) ?? [];
-      const timestamp = container?.components.find(({ content }) =>
-        content?.includes("<t:"),
-      );
+      // Bodies may mention dates, such as a deletion deadline; the footer is last.
+      const timestamp = container?.components.at(-1);
 
       expect(container?.accent_color).toBe(ACCENT_COLOR);
       expect(container?.components[0]?.type).toBe(ComponentType.TextDisplay);

@@ -44,6 +44,7 @@ function createCandidate(overrides: Record<string, unknown> = {}) {
       turnReminderGraceHours: 12,
       turnReminderRepeatHours: 24,
       turnRemindersEnabled: true,
+      victoryRecord: null,
       turnState: {
         activePlayerId: 'user-1',
         activePlayerEntryId: 'seat-1',
@@ -244,6 +245,22 @@ describe('TurnRemindersService', () => {
     );
   });
 
+  it('neither claims nor nudges a turn left open in a concluded campaign', async () => {
+    const candidate = createCandidate();
+    const transaction = createTransaction({
+      ...candidate,
+      game: { ...candidate.game, victoryRecord: { id: 'victory-1' } },
+    } as never);
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback(transaction),
+    );
+
+    await new TurnRemindersService().processTurnReminderCandidate('turn-1', now);
+
+    expect(transaction.turnRecord.updateMany).not.toHaveBeenCalled();
+    expect(transaction.notificationDelivery.create).not.toHaveBeenCalled();
+  });
+
   it('selects an ordered batch of due open turns for a poll', async () => {
     prismaMock.turnRecord.findMany.mockResolvedValue([
       { id: 'turn-1' },
@@ -260,6 +277,7 @@ describe('TurnRemindersService', () => {
       where: {
         endedAt: null,
         nextReminderAt: { lte: now },
+        game: { victoryRecord: { is: null } },
       },
       select: { id: true },
       orderBy: [{ nextReminderAt: 'asc' }, { id: 'asc' }],

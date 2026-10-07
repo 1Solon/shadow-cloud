@@ -15,6 +15,7 @@ import {
 import type { ReorderSeatOrderDto } from '../../dto/reorder-seat-order.dto';
 import type { SeatOrderSnapshot } from '../../games.types';
 import { buildGameIdentifierWhere } from '../../support/game-lookup.helpers';
+import { assertCampaignInPlay } from '../../support/campaign-conclusion';
 import type { TurnRecordsService } from '../turn-records.service';
 import type { TurnMutationDependencies } from './dependencies';
 
@@ -155,6 +156,7 @@ export async function reorderSeatOrder(
         'Only the game organizer can edit seat order.',
       );
     }
+    await assertCampaignInPlay(transaction, game.id);
     if (
       fenced !== 1 ||
       baseline.campaignId !== game.id ||

@@ -20,6 +20,7 @@ import type {
   UploadedSaveFile,
   UploadSaveSafetyMetadata,
 } from '../../support/game-payload.types';
+import { assertCampaignInPlay } from '../../support/campaign-conclusion';
 import type { TurnRecordsService } from '../turn-records.service';
 import type { TurnMutationDependencies } from './dependencies';
 
@@ -239,6 +240,7 @@ export async function uploadSave(
       );
       // Roll back even a successful reservation on replay, including updatedAt.
       if (replay) throw new UploadReplay(replay);
+      await assertCampaignInPlay(transaction, game.id);
       const { active, next, turnState, roundAdvanced } = participants(
         game,
         userId,

@@ -1,7 +1,8 @@
-import type {
-  InteractionEditReplyOptions,
-  InteractionReplyOptions,
-  MessageCreateOptions,
+import {
+  escapeMarkdown,
+  type InteractionEditReplyOptions,
+  type InteractionReplyOptions,
+  type MessageCreateOptions,
 } from "discord.js";
 import type { ApprovalAction, CommandResponsePayload } from "./bot-api.js";
 import type { SupportedCommandName } from "./commands.js";
@@ -48,6 +49,14 @@ const commandErrorDetails: Record<
   unpin: {
     title: "Unpin failed",
     fallback: "The API rejected the unpin request.",
+  },
+  winner: {
+    title: "Victory failed",
+    fallback: "The API rejected the victory.",
+  },
+  unwinner: {
+    title: "Undo failed",
+    fallback: "The API rejected the victory undo.",
   },
 };
 
@@ -208,6 +217,67 @@ export function buildTurnAdvancedAnnouncement({
     headline: `It is now ${nextMention}'s turn!`,
     message: `**${skippedName}** (seat ${skippedSeat}) was skipped in **${gameName}**.`,
     mentionedUserIds: nextDiscordId ? [nextDiscordId] : [],
+  });
+}
+
+function formatDeletionDueAt(deletionDueAt: string) {
+  const dueAt = new Date(deletionDueAt);
+
+  return Number.isNaN(dueAt.getTime())
+    ? "in 7 days"
+    : `<t:${Math.floor(dueAt.getTime() / 1000)}:F>`;
+}
+
+export function buildVictoryAnnouncement({
+  gameName,
+  victorName,
+  victorDiscordId,
+  deletionDueAt,
+}: {
+  gameName: string;
+  victorName: string;
+  victorDiscordId: string | null;
+  deletionDueAt: string;
+}): MessageCreateOptions {
+  const victor = victorDiscordId
+    ? `<@${victorDiscordId}>`
+    : `**${escapeMarkdown(victorName)}**`;
+
+  return buildDiscordNotification({
+    headline: `${victor} is the Victor of ${gameName}!`,
+    message: `The campaign has concluded, so turns, uploads, and reminders have stopped. Download any saves you want to keep before the campaign and all of its saves are deleted ${formatDeletionDueAt(deletionDueAt)}.`,
+    mentionedUserIds: victorDiscordId ? [victorDiscordId] : [],
+  });
+}
+
+export function buildVictoryUndoneAnnouncement({
+  gameName,
+  victorName,
+  victorDiscordId,
+}: {
+  gameName: string;
+  victorName: string;
+  victorDiscordId: string | null;
+}): MessageCreateOptions {
+  const victor = victorDiscordId
+    ? `<@${victorDiscordId}>`
+    : `**${escapeMarkdown(victorName)}**`;
+
+  return {
+    ...buildDiscordNotification({
+      headline: `${gameName} is back in play`,
+      message: `${victor}'s victory was undone, so the campaign will not be deleted. Play resumes exactly where it stopped.`,
+    }),
+    allowedMentions: { parse: [] },
+  };
+}
+
+export function buildVictoryConfirmationExpiredReply(
+  commandName: "winner" | "unwinner",
+): InteractionEditReplyOptions {
+  return buildDiscordEditReply({
+    headline: "Confirmation expired",
+    message: `Nothing was changed. Run /${commandName} again to continue.`,
   });
 }
 

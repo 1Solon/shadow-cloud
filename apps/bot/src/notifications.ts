@@ -17,6 +17,10 @@ export const APPROVE_PREFIX = "sc_approve_";
 export const REJECT_PREFIX = "sc_reject_";
 export const SAVE_REJECT_PREFIX = "sc_save_reject_";
 export const SAVE_REJECT_CONFIRM_PREFIX = "sc_save_reject_confirm_";
+export const VICTORY_CONFIRM_PREFIX = "sc_victory_confirm_";
+export const VICTORY_UNDO_CONFIRM_PREFIX = "sc_victory_undo_confirm_";
+export const VICTORY_CANCEL_ID = "sc_victory_cancel";
+export const VICTORY_CONFIRMATION_TTL_MS = 5 * 60 * 1000;
 
 export type UploadNotificationPayload = {
   game: {
@@ -153,6 +157,20 @@ export type TurnNudgeNotificationPayload = {
       discordId: string;
       turnOrder: number;
     };
+  };
+};
+
+export type CampaignDeletedNotificationPayload = {
+  game: {
+    id: string;
+    gameNumber: number;
+    slug: string;
+    name: string;
+    discordThreadId: string;
+  };
+  victory: {
+    victorDisplayName: string;
+    victorDiscordId: string | null;
   };
 };
 
@@ -408,6 +426,86 @@ export function buildSaveRejectionPrompt(
     ),
     ephemeral: true,
   });
+}
+
+/**
+ * Confirm a victory or its undo. Live buttons carry the Victor and issue time,
+ * so a confirmation stays self-contained and expires without bot state.
+ */
+export function buildVictoryConfirmation(
+  confirmation: {
+    gameName: string;
+    victorName: string;
+    deletionDueAt: string;
+  } & ({ action: "declare"; victorDiscordId: string } | { action: "undo" }) &
+    ({ mode: "live"; issuedAt: number } | { mode: "preview" }),
+): InteractionEditReplyOptions {
+  const declaring = confirmation.action === "declare";
+  const gameName = `**${escapeMarkdown(confirmation.gameName)}**`;
+  const victorName = escapeMarkdown(confirmation.victorName);
+  const deletionDueAt =
+    formatDiscordTimestamp(confirmation.deletionDueAt) ?? "in 7 days";
+  const confirmId =
+    confirmation.mode === "preview"
+      ? "debug_victory_confirm"
+      : confirmation.action === "declare"
+        ? `${VICTORY_CONFIRM_PREFIX}${confirmation.victorDiscordId}_${confirmation.issuedAt}`
+        : `${VICTORY_UNDO_CONFIRM_PREFIX}${confirmation.issuedAt}`;
+  const confirmButton = new ButtonBuilder()
+    .setCustomId(confirmId)
+    .setLabel(declaring ? "Declare Victor" : "Undo victory")
+    .setStyle(declaring ? ButtonStyle.Danger : ButtonStyle.Primary);
+  const cancelButton = new ButtonBuilder()
+    .setCustomId(
+      confirmation.mode === "preview"
+        ? "debug_victory_cancel"
+        : VICTORY_CANCEL_ID,
+    )
+    .setLabel("Cancel")
+    .setStyle(ButtonStyle.Secondary);
+
+  if (confirmation.mode === "preview") {
+    confirmButton.setDisabled(true);
+    cancelButton.setDisabled(true);
+  }
+
+  const expiresAt =
+    confirmation.mode === "live"
+      ? Math.floor((confirmation.issuedAt + VICTORY_CONFIRMATION_TTL_MS) / 1000)
+      : null;
+
+  return buildDiscordEditReply({
+    headline: declaring
+      ? `Declare ${victorName} the Victor?`
+      : `Undo ${victorName}'s victory?`,
+    message: declaring
+      ? `This concludes ${gameName}. Turns, uploads, and reminders stop now, and the campaign and all of its saves are deleted ${deletionDueAt}. Until then, saves can still be downloaded and /unwinner can undo this.`
+      : `${gameName} returns to play exactly where it stopped, and its deletion ${deletionDueAt} is cancelled.`,
+    details: expiresAt
+      ? [`-# This confirmation expires <t:${expiresAt}:R>.`]
+      : [],
+    actionRow: new ActionRowBuilder<ButtonBuilder>().addComponents(
+      confirmButton,
+      cancelButton,
+    ),
+  });
+}
+
+export function buildCampaignDeletedNotificationMessage(
+  payload: CampaignDeletedNotificationPayload,
+): MessageCreateOptions {
+  const victor = formatDiscordActor(
+    escapeMarkdown(payload.victory.victorDisplayName),
+    payload.victory.victorDiscordId,
+  );
+
+  return {
+    ...buildDiscordNotification({
+      headline: `${payload.game.name} has been deleted`,
+      message: `${victor} won this campaign. Its saves and history have been removed from Shadow Cloud; only the record of the victory remains. This thread is now archived.`,
+    }),
+    allowedMentions: { parse: [] },
+  };
 }
 
 export function buildSaveRejectedNotificationMessage(

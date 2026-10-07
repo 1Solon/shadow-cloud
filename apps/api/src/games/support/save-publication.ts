@@ -14,6 +14,7 @@ import { AuditEventType, prisma } from '../../database';
 import type { Prisma } from '../../database';
 import { BotNotificationsService } from '../bot-notifications.service';
 import { FileStorageService } from '../file-storage.service';
+import { assertCampaignInPlay } from './campaign-conclusion';
 import { getDiscordIdentity } from './discord-user.helpers';
 import { buildGameIdentifierWhere } from './game-lookup.helpers';
 import type {
@@ -99,6 +100,8 @@ export class SavePublication {
       const replacedAt = new Date();
       result = await prisma.$transaction(async (tx) => {
         const published = await commit(tx, staged, replacedAt);
+        // After commit's first write, so a concurrent victory cannot slip past.
+        await assertCampaignInPlay(tx, input.gameId);
         // Consuming the lease atomically prevents publication after reclamation.
         await tx.saveCleanup.delete({
           where: { storagePath: staged.storagePath },

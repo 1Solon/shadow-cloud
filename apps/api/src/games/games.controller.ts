@@ -23,6 +23,7 @@ import { AppAuthGuard, type AuthenticatedRequest } from '../auth/auth.guard';
 import { BotAuthGuard } from '../auth/bot-auth.guard';
 import { AuthorizeHostCommandDto } from './dto/authorize-host-command.dto';
 import { CreateDiscordGameDto } from './dto/create-discord-game.dto';
+import { DesignateVictoryDto } from './dto/designate-victory.dto';
 import { LinkDiscordThreadDto } from './dto/link-discord-thread.dto';
 import { RegisterDiscordPlayerDto } from './dto/register-discord-player.dto';
 import { RejectDiscordSaveDto } from './dto/reject-discord-save.dto';
@@ -31,6 +32,7 @@ import { ReplaceDiscordPlayerDto } from './dto/replace-discord-player.dto';
 import { ResignDiscordPlayerDto } from './dto/resign-discord-player.dto';
 import { SkipDiscordPlayerDto } from './dto/skip-discord-player.dto';
 import { TransferHostDto } from './dto/transfer-host.dto';
+import { UndoVictoryDto } from './dto/undo-victory.dto';
 import { UpdateGameMetadataDto } from './dto/update-game-metadata.dto';
 import { ApproveRegistrationRequestDto } from './dto/approve-registration-request.dto';
 import { GamesService, type UploadedSaveFile } from './games.service';
@@ -323,6 +325,30 @@ export class GamesController {
   @UseGuards(BotAuthGuard)
   skipPlayerTurn(@Body() input: SkipDiscordPlayerDto) {
     return this.gamesService.skipPlayerTurn(input);
+  }
+
+  @Post('victory/preview')
+  @UseGuards(BotAuthGuard)
+  previewVictory(@Body() input: DesignateVictoryDto) {
+    return this.gamesService.designateVictory(input, true);
+  }
+
+  @Post('victory')
+  @UseGuards(BotAuthGuard)
+  designateVictory(@Body() input: DesignateVictoryDto) {
+    return this.gamesService.designateVictory(input);
+  }
+
+  @Post('victory/undo/preview')
+  @UseGuards(BotAuthGuard)
+  previewVictoryUndo(@Body() input: UndoVictoryDto) {
+    return this.gamesService.undoVictory(input, true);
+  }
+
+  @Post('victory/undo')
+  @UseGuards(BotAuthGuard)
+  undoVictory(@Body() input: UndoVictoryDto) {
+    return this.gamesService.undoVictory(input);
   }
 
   @Post('link')

@@ -149,6 +149,20 @@ export type TurnNudgeNotificationPayload = {
   };
 };
 
+export type CampaignDeletedNotificationPayload = {
+  game: {
+    id: string;
+    gameNumber: number;
+    slug: string;
+    name: string;
+    discordThreadId: string;
+  };
+  victory: {
+    victorDisplayName: string;
+    victorDiscordId: string | null;
+  };
+};
+
 type NotificationEventName =
   | 'active-player-changed'
   | 'save-uploaded'
@@ -156,7 +170,8 @@ type NotificationEventName =
   | 'save-rejected'
   | 'game-initialized'
   | 'thread-rename'
-  | 'turn-nudge';
+  | 'turn-nudge'
+  | 'campaign-deleted';
 
 type NotificationContext = {
   eventName: NotificationEventName;
@@ -549,6 +564,8 @@ export class BotNotificationsService implements OnModuleInit, OnModuleDestroy {
         return 'thread-rename';
       case NotificationDeliveryEvent.TURN_NUDGE:
         return 'turn-nudge';
+      case NotificationDeliveryEvent.CAMPAIGN_DELETED:
+        return 'campaign-deleted';
     }
   }
 
@@ -568,6 +585,8 @@ export class BotNotificationsService implements OnModuleInit, OnModuleDestroy {
         return this.threadRenameEndpoint;
       case NotificationDeliveryEvent.TURN_NUDGE:
         return this.turnNudgeEndpoint;
+      case NotificationDeliveryEvent.CAMPAIGN_DELETED:
+        return `${this.notificationBaseUrl}/notify/campaign-deleted`;
     }
   }
 
