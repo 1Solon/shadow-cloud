@@ -144,6 +144,7 @@ Optional runtime overrides:
 * `DISCORD_BOT_TOKEN` to enable the Discord bot
 * `BOT_API_TOKEN` and `SHADOW_CLOUD_BOT_NOTIFY_SECRET` to secure bot-to-API traffic
 * `SHADOW_OVERRIDE_DISCORD_ROLE_ID` to enable the Shadow override role check
+* `SHADOW_CLOUD_SAVE_RETENTION_LIMIT` to change how many recent saves each campaign keeps (default `10`, minimum `2`); older saves are permanently deleted, including when the API restarts with a lower limit
 * `SHADOW_CLOUD_WEB_PORT` to change the published web port
 * `SHADOW_CLOUD_API_PORT` to change the published API port
 

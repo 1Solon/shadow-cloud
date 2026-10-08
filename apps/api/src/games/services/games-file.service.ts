@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { AuthService } from '../../auth/auth.service';
+import { prisma } from '../../database';
 import { BotNotificationsService } from '../bot-notifications.service';
 import { FileStorageService } from '../file-storage.service';
 import type {
@@ -11,6 +12,10 @@ import {
   type ResetPasswordInput,
   type UndoPasswordResetInput,
 } from '../support/save-publication';
+import {
+  pruneRetainedSaves,
+  resolveSaveRetentionLimit,
+} from '../support/save-retention';
 
 export type {
   ResetPasswordInput,
@@ -19,6 +24,7 @@ export type {
 
 @Injectable()
 export class GamesFileService {
+  private readonly logger = new Logger(GamesFileService.name);
   private readonly publication: SavePublication;
   private cleanupTimer?: NodeJS.Timeout;
 
@@ -38,7 +44,7 @@ export class GamesFileService {
     this.cleanupTimer = setInterval(() => {
       void this.cleanupRecovery();
     }, 30_000);
-    void this.cleanupRecovery();
+    void this.pruneBacklog().finally(() => this.cleanupRecovery());
   }
 
   onModuleDestroy() {
@@ -47,6 +53,24 @@ export class GamesFileService {
 
   cleanupRecovery() {
     return this.publication.cleanupRecovery();
+  }
+
+  // Uploads keep campaigns within the limit; this catches a lowered limit.
+  private async pruneBacklog() {
+    try {
+      const { saves, campaigns } = await pruneRetainedSaves(
+        prisma,
+        resolveSaveRetentionLimit(),
+      );
+      this.logger.log(
+        `Pruned ${saves} saves across ${campaigns} campaigns under the save retention limit.`,
+      );
+    } catch (error) {
+      this.logger.error(
+        'Pruning saves under the save retention limit failed; it retries on restart.',
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
   }
 
   inspectLatestSave(
