@@ -14,12 +14,7 @@ import type { SkipDiscordPlayerDto } from '../dto/skip-discord-player.dto';
 import { TurnRecordsService } from './turn-records.service';
 import type { TurnMutationDependencies } from './turn-mutations/dependencies';
 import { uploadSave } from './turn-mutations/upload';
-import {
-  rejectSave,
-  rejectSaveFromDiscord,
-  type RejectSaveInput,
-} from './turn-mutations/rejection';
-import type { RejectDiscordSaveDto } from '../dto/reject-discord-save.dto';
+import { rejectSave, type RejectSaveInput } from './turn-mutations/rejection';
 import type {
   UploadedSaveFile,
   UploadSaveSafetyMetadata,
@@ -187,15 +182,6 @@ export class TurnMutationsService {
       this.turnRecords,
       this.dependencies,
       userId,
-      input,
-    );
-  }
-
-  rejectSaveFromDiscord(input: RejectDiscordSaveDto) {
-    return rejectSaveFromDiscord(
-      this.database,
-      this.turnRecords,
-      this.dependencies,
       input,
     );
   }

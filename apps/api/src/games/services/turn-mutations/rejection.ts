@@ -318,27 +318,3 @@ export async function rejectSave(
     },
   };
 }
-
-export async function rejectSaveFromDiscord(
-  database: PrismaClient,
-  turnRecords: TurnRecordsService,
-  dependencies: TurnMutationDependencies,
-  input: { fileVersionId: string; callerDiscordId: string },
-) {
-  const identity = await database.authIdentity.findUnique({
-    where: {
-      provider_providerId: {
-        provider: 'discord',
-        providerId: input.callerDiscordId,
-      },
-    },
-  });
-  if (!identity) {
-    throw new ForbiddenException(
-      'Sign in to Shadow Cloud with this Discord account before rejecting saves.',
-    );
-  }
-  return rejectSave(database, turnRecords, dependencies, identity.userId, {
-    fileVersionId: input.fileVersionId,
-  });
-}

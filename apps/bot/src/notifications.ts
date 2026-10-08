@@ -15,8 +15,6 @@ const ACCENT_COLOR = 0xffa500;
 
 export const APPROVE_PREFIX = "sc_approve_";
 export const REJECT_PREFIX = "sc_reject_";
-export const SAVE_REJECT_PREFIX = "sc_save_reject_";
-export const SAVE_REJECT_CONFIRM_PREFIX = "sc_save_reject_confirm_";
 export const VICTORY_CONFIRM_PREFIX = "sc_victory_confirm_";
 export const VICTORY_UNDO_CONFIRM_PREFIX = "sc_victory_undo_confirm_";
 export const VICTORY_CANCEL_ID = "sc_victory_cancel";
@@ -400,31 +398,10 @@ export function buildSaveNotificationMessage(
         .setURL(gameUrl)
         .setLabel("Upload")
         .setStyle(ButtonStyle.Link),
-      new ButtonBuilder()
-        .setCustomId(`${SAVE_REJECT_PREFIX}${payload.upload.versionId}`)
-        .setLabel("Reject")
-        .setStyle(ButtonStyle.Danger),
     ),
     mentionedUserIds: payload.turn.activePlayer.discordId
       ? [payload.turn.activePlayer.discordId]
       : [],
-  });
-}
-
-export function buildSaveRejectionPrompt(
-  fileVersionId: string,
-): InteractionReplyOptions {
-  return buildDiscordReply({
-    headline: "Reject this save?",
-    message:
-      "This discards the save and hands the turn back to the player who uploaded it.",
-    actionRow: new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`${SAVE_REJECT_CONFIRM_PREFIX}${fileVersionId}`)
-        .setLabel("Reject save")
-        .setStyle(ButtonStyle.Danger),
-    ),
-    ephemeral: true,
   });
 }
 

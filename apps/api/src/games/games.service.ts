@@ -16,7 +16,6 @@ import type { AuthorizeHostCommandDto } from './dto/authorize-host-command.dto';
 import type { CreateDiscordGameDto } from './dto/create-discord-game.dto';
 import type { LinkDiscordThreadDto } from './dto/link-discord-thread.dto';
 import type { RegisterDiscordPlayerDto } from './dto/register-discord-player.dto';
-import type { RejectDiscordSaveDto } from './dto/reject-discord-save.dto';
 import type { RejectSaveInput } from './services/turn-mutations/rejection';
 import type { ReorderSeatOrderDto } from './dto/reorder-seat-order.dto';
 import type { ReplaceDiscordPlayerDto } from './dto/replace-discord-player.dto';
@@ -97,10 +96,6 @@ export class GamesService {
 
   async rejectSave(userId: string | undefined, input: RejectSaveInput) {
     return this.gamesTurn.rejectSave(userId, input);
-  }
-
-  async rejectSaveFromDiscord(input: RejectDiscordSaveDto) {
-    return this.gamesTurn.rejectSaveFromDiscord(input);
   }
 
   replaceSave(
