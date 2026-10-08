@@ -14,6 +14,7 @@ import {
 import type { ReplaceDiscordPlayerDto } from '../../dto/replace-discord-player.dto';
 import type { ResignDiscordPlayerDto } from '../../dto/resign-discord-player.dto';
 import { upsertDiscordUser } from '../../support/discord-user.helpers';
+import { assertCampaignInPlay } from '../../support/campaign-conclusion';
 import type { TurnRecordsService } from '../turn-records.service';
 
 async function findGame(
@@ -128,10 +129,9 @@ async function fenceGame(
     where: { id: observed.id, turnRevision: observed.turnRevision },
     data: { turnRevision: { increment: 1 } },
   });
-  return {
-    game: await findGame(transaction, observed.discordThreadId!),
-    revisionMatched: fenced.count === 1,
-  };
+  const game = await findGame(transaction, observed.discordThreadId!);
+  await assertCampaignInPlay(transaction, game.id);
+  return { game, revisionMatched: fenced.count === 1 };
 }
 
 export async function replacePlayerInSeat(

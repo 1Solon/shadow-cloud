@@ -126,6 +126,7 @@ describe('GamesFileService replaceSave', () => {
     notificationDelivery: {
       create: ReturnType<typeof vi.fn>;
     };
+    victoryRecord: { findUnique: ReturnType<typeof vi.fn> };
     turnState?: undefined;
   };
 
@@ -176,6 +177,7 @@ describe('GamesFileService replaceSave', () => {
       notificationDelivery: {
         create: vi.fn().mockResolvedValue({}),
       },
+      victoryRecord: { findUnique: vi.fn().mockResolvedValue(null) },
     };
     prismaMock.game.findFirst.mockResolvedValue(createGame());
     prismaMock.user.findUnique.mockResolvedValue({
@@ -195,6 +197,26 @@ describe('GamesFileService replaceSave', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('refuses to replace a save once the campaign has concluded', async () => {
+    const { service, fileStorage } = createService();
+    transaction.victoryRecord.findUnique.mockResolvedValue({ id: 'victory-1' });
+
+    await expect(
+      service.replaceSave('42', 'version-7', 'owner-1', replacementFile, {}),
+    ).rejects.toThrow(
+      'This campaign has concluded. Only save downloads are available until it is deleted.',
+    );
+
+    expect(transaction.victoryRecord.findUnique).toHaveBeenCalledWith({
+      where: { gameId: 'game-1' },
+      select: { id: true },
+    });
+    // The refused publication rolls back, so its staged file is reclaimed.
+    expect(fileStorage.removeFileOrThrow).toHaveBeenCalledWith(
+      '/saves/game-1/replacement.se1',
+    );
   });
 
   it('allows the original uploader to replace a historical save without active membership', async () => {

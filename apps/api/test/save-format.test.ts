@@ -312,7 +312,7 @@ describe('save-format inspection', () => {
       password: 'abcdef',
     });
     const decoded = execFileSync(
-      'python',
+      'python3',
       [
         '-c',
         'import sys,io,zipfile; b=sys.stdin.buffer.read(); z=zipfile.ZipFile(io.BytesIO(b[24:])); sys.stdout.buffer.write(z.read(z.infolist()[0],pwd=b[:24]))',
@@ -377,7 +377,7 @@ describe('save-format inspection', () => {
         password,
       });
       const decoded = execFileSync(
-        'python',
+        'python3',
         [
           '-c',
           'import sys,io,zipfile; b=sys.stdin.buffer.read(); z=zipfile.ZipFile(io.BytesIO(b[24:])); sys.stdout.buffer.write(z.read(z.infolist()[0],pwd=b[:24]))',
@@ -421,7 +421,7 @@ describe('save-format inspection', () => {
       password: replacement,
     });
     const decoded = execFileSync(
-      'python',
+      'python3',
       [
         '-c',
         'import sys,io,zipfile; b=sys.stdin.buffer.read(); z=zipfile.ZipFile(io.BytesIO(b[24:])); sys.stdout.buffer.write(z.read(z.infolist()[0],pwd=b[:24]))',
@@ -536,7 +536,7 @@ describe('save-format inspection', () => {
   it('uses fixtures independently decryptable with Python ZIP/CRC validation', () => {
     const payload = syntheticPayload();
     const digest = execFileSync(
-      'python',
+      'python3',
       [
         '-c',
         'import sys,io,zipfile,hashlib; b=sys.stdin.buffer.read(); z=zipfile.ZipFile(io.BytesIO(b[24:])); sys.stdout.write(hashlib.sha256(z.read(z.infolist()[0],pwd=b[:24])).hexdigest())',

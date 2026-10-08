@@ -41,6 +41,12 @@ export type ReturnTurnInput = {
   returnedAt: Date;
 };
 
+export type ResumeOpenTurnInput = {
+  gameId: string;
+  pausedAt: Date;
+  resumedAt: Date;
+};
+
 type CreateInitialTurnInput = {
   gameId: string;
   participant: TurnParticipantSnapshot;
@@ -146,31 +152,49 @@ export class TurnRecordsService {
       input.returnedAt,
     );
 
-    const pausedMs = input.returnedAt.getTime() - previous.endedAt.getTime();
-    const resume = (at: Date) => new Date(at.getTime() + pausedMs);
-    const startedAt = resume(previous.startedAt);
-    const lastReminderAt = previous.lastReminderAt
-      ? resume(previous.lastReminderAt)
-      : null;
-    const policy = await this.getCurrentPolicy(transaction, input.gameId);
-    const scheduled =
-      previous.reminderCount > 0
-        ? this.calculateRepeatedReminder(lastReminderAt, policy)
-        : calculateFirstReminderAt(startedAt, policy);
-    const nextReminderAt =
-      scheduled && scheduled <= input.returnedAt
-        ? calculateNextReminderAt(input.returnedAt, policy)
-        : scheduled;
-
     return transaction.turnRecord.update({
       where: { id: previous.id },
       data: {
-        startedAt,
+        ...(await this.resumedTiming(transaction, input.gameId, previous, {
+          pausedAt: previous.endedAt,
+          resumedAt: input.returnedAt,
+        })),
         endedAt: null,
         completionReason: null,
-        lastReminderAt,
-        nextReminderAt,
       },
+    });
+  }
+
+  /** Resume a turn left open while play was paused, without counting the pause. */
+  async resumeOpenTurn(
+    transaction: Prisma.TransactionClient,
+    input: ResumeOpenTurnInput,
+  ): Promise<TurnRecord | null> {
+    const openRecords = await transaction.turnRecord.findMany({
+      where: { gameId: input.gameId, endedAt: null },
+    });
+
+    if (openRecords.length === 0) {
+      return null;
+    }
+
+    if (openRecords.length !== 1) {
+      throw new ConflictException(
+        'The game must have exactly one open turn record.',
+      );
+    }
+
+    return transaction.turnRecord.update({
+      where: { id: openRecords[0].id },
+      data: await this.resumedTiming(
+        transaction,
+        input.gameId,
+        openRecords[0],
+        {
+          pausedAt: input.pausedAt,
+          resumedAt: input.resumedAt,
+        },
+      ),
     });
   }
 
@@ -286,6 +310,31 @@ export class TurnRecordsService {
     }
 
     return matches[0];
+  }
+
+  private async resumedTiming(
+    transaction: Prisma.TransactionClient,
+    gameId: string,
+    record: TurnRecord,
+    pause: { pausedAt: Date; resumedAt: Date },
+  ) {
+    const pausedMs = pause.resumedAt.getTime() - pause.pausedAt.getTime();
+    const resume = (at: Date) => new Date(at.getTime() + pausedMs);
+    const startedAt = resume(record.startedAt);
+    const lastReminderAt = record.lastReminderAt
+      ? resume(record.lastReminderAt)
+      : null;
+    const policy = await this.getCurrentPolicy(transaction, gameId);
+    const scheduled =
+      record.reminderCount > 0
+        ? this.calculateRepeatedReminder(lastReminderAt, policy)
+        : calculateFirstReminderAt(startedAt, policy);
+    const nextReminderAt =
+      scheduled && scheduled <= pause.resumedAt
+        ? calculateNextReminderAt(pause.resumedAt, policy)
+        : scheduled;
+
+    return { startedAt, lastReminderAt, nextReminderAt };
   }
 
   private calculateRepeatedReminder(

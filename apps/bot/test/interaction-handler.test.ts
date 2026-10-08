@@ -465,7 +465,7 @@ describe("createInteractionHandler debug command", () => {
     )(interaction as never);
 
     expect(interaction.editReply).toHaveBeenCalledTimes(1);
-    expect(interaction.followUp).toHaveBeenCalledTimes(33);
+    expect(interaction.followUp).toHaveBeenCalledTimes(41);
     for (const [message] of interaction.followUp.mock.calls) {
       expect(message).toMatchObject({
         flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
@@ -742,6 +742,279 @@ describe("createInteractionHandler save rejection", () => {
 
     expect(JSON.stringify(interaction.editReply.mock.calls[0]?.[0])).toContain(
       "**Reason:** Only the latest save can be rejected.",
+    );
+  });
+});
+
+describe("createInteractionHandler victory", () => {
+  const issuedAt = Date.parse("2026-07-17T12:00:00.000Z");
+  const victoryPayload = {
+    name: "Debug World",
+    gameNumber: 42,
+    victor: { displayName: "Solon", discordId: "user-2" },
+    designatedAt: "2026-07-17T12:00:00.000Z",
+    deletionDueAt: "2026-07-24T12:00:00.000Z",
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(issuedAt);
+  });
+
+  function buildVictoryCommand(commandName: "winner" | "unwinner") {
+    const channel = {
+      id: "thread-1",
+      name: "Debug World",
+      parentId: "forum-1",
+      parent: { type: ChannelType.GuildForum },
+      isThread: () => true,
+      joinable: false,
+      send: vi.fn(async () => undefined),
+    };
+    return {
+      isButton: () => false,
+      isChatInputCommand: () => true,
+      commandName,
+      channel,
+      channelId: channel.id,
+      guildId: "guild-1",
+      guild: null,
+      user: { id: "overlord-1", globalName: "Overlord", username: "overlord" },
+      options: {
+        getUser: (name: string) =>
+          name === "player" ? { id: "user-2" } : null,
+      },
+      deferReply: vi.fn(async () => undefined),
+      editReply: vi.fn(
+        async (_message: InteractionEditReplyOptions) => undefined,
+      ),
+      deleteReply: vi.fn(async () => undefined),
+    };
+  }
+
+  function buildVictoryButton(customId: string) {
+    const send = vi.fn(async (_message: unknown) => undefined);
+    return {
+      isButton: () => true,
+      customId,
+      channel: { isSendable: () => true, send },
+      channelId: "thread-1",
+      user: { id: "overlord-1" },
+      deferUpdate: vi.fn(async () => undefined),
+      editReply: vi.fn(
+        async (_message: InteractionEditReplyOptions) => undefined,
+      ),
+      deleteReply: vi.fn(async () => undefined),
+    };
+  }
+
+  const botConfig = { ...config, botApiToken: "test-token" };
+
+  it("previews /winner and asks for a private confirmation", async () => {
+    const interaction = buildVictoryCommand("winner");
+    const fetchMock = vi.fn<typeof fetch>(async () =>
+      Response.json(victoryPayload),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createInteractionHandler(
+      {} as never,
+      botConfig,
+    )(interaction as never);
+
+    expect(interaction.deferReply).toHaveBeenCalledWith({
+      flags: MessageFlags.Ephemeral,
+    });
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      "https://api.shadow.example/v1/games/victory/preview",
+      expect.objectContaining({
+        body: JSON.stringify({
+          discordThreadId: "thread-1",
+          callerDiscordId: "overlord-1",
+          victorDiscordId: "user-2",
+        }),
+      }),
+    );
+    const prompt = JSON.stringify(interaction.editReply.mock.calls[0]?.[0]);
+    expect(prompt).toContain("Declare Solon the Victor?");
+    expect(prompt).toContain("deleted <t:1784894400:F>");
+    expect(prompt).toContain(`sc_victory_confirm_user-2_${issuedAt}`);
+    expect(prompt).toContain("sc_victory_cancel");
+    expect(interaction.channel.send).not.toHaveBeenCalled();
+  });
+
+  it("explains why Shadow Cloud refused /winner before confirming", async () => {
+    const interaction = buildVictoryCommand("winner");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async () =>
+        Response.json(
+          { message: "Only the Overlord or a Shadow Lord can use /winner." },
+          { status: 403 },
+        ),
+      ),
+    );
+
+    await createInteractionHandler(
+      {} as never,
+      botConfig,
+    )(interaction as never);
+
+    const reply = JSON.stringify(interaction.editReply.mock.calls[0]?.[0]);
+    expect(reply).toContain("Victory failed");
+    expect(reply).toContain(
+      "**Reason:** Only the Overlord or a Shadow Lord can use /winner.",
+    );
+    expect(reply).not.toContain("sc_victory_confirm_");
+  });
+
+  it("previews /unwinner without a player", async () => {
+    const interaction = buildVictoryCommand("unwinner");
+    const fetchMock = vi.fn<typeof fetch>(async () =>
+      Response.json(victoryPayload),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createInteractionHandler(
+      {} as never,
+      botConfig,
+    )(interaction as never);
+
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      "https://api.shadow.example/v1/games/victory/undo/preview",
+      expect.objectContaining({
+        body: JSON.stringify({
+          discordThreadId: "thread-1",
+          callerDiscordId: "overlord-1",
+        }),
+      }),
+    );
+    const prompt = JSON.stringify(interaction.editReply.mock.calls[0]?.[0]);
+    expect(prompt).toContain("Undo Solon's victory?");
+    expect(prompt).toContain(`sc_victory_undo_confirm_${issuedAt}`);
+  });
+
+  it("declares the Victor once confirmed, then announces it publicly", async () => {
+    const interaction = buildVictoryButton(
+      `sc_victory_confirm_user-2_${issuedAt}`,
+    );
+    const fetchMock = vi.fn<typeof fetch>(async () =>
+      Response.json(victoryPayload, { status: 201 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createInteractionHandler(
+      {} as never,
+      botConfig,
+    )(interaction as never);
+
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      "https://api.shadow.example/v1/games/victory",
+      expect.objectContaining({
+        body: JSON.stringify({
+          discordThreadId: "thread-1",
+          callerDiscordId: "overlord-1",
+          victorDiscordId: "user-2",
+        }),
+      }),
+    );
+    const announcement = interaction.channel.send.mock.calls[0]?.[0] as {
+      allowedMentions: unknown;
+    };
+    expect(JSON.stringify(announcement)).toContain(
+      "<@user-2> is the Victor of Debug World!",
+    );
+    expect(announcement.allowedMentions).toEqual({ users: ["user-2"] });
+    expect(interaction.deleteReply).toHaveBeenCalledOnce();
+  });
+
+  it("undoes the victory once confirmed without pinging the former Victor", async () => {
+    const interaction = buildVictoryButton(
+      `sc_victory_undo_confirm_${issuedAt}`,
+    );
+    const fetchMock = vi.fn<typeof fetch>(async () =>
+      Response.json(victoryPayload, { status: 201 }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createInteractionHandler(
+      {} as never,
+      botConfig,
+    )(interaction as never);
+
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      "https://api.shadow.example/v1/games/victory/undo",
+      expect.objectContaining({
+        body: JSON.stringify({
+          discordThreadId: "thread-1",
+          callerDiscordId: "overlord-1",
+        }),
+      }),
+    );
+    const announcement = interaction.channel.send.mock.calls[0]?.[0] as {
+      allowedMentions: unknown;
+    };
+    expect(JSON.stringify(announcement)).toContain(
+      "Debug World is back in play",
+    );
+    expect(announcement.allowedMentions).toEqual({ parse: [] });
+  });
+
+  it("refuses a confirmation older than five minutes without calling Shadow Cloud", async () => {
+    const interaction = buildVictoryButton(
+      `sc_victory_confirm_user-2_${issuedAt}`,
+    );
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock);
+    vi.setSystemTime(issuedAt + 5 * 60 * 1000 + 1);
+
+    await createInteractionHandler(
+      {} as never,
+      botConfig,
+    )(interaction as never);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(JSON.stringify(interaction.editReply.mock.calls[0]?.[0])).toContain(
+      "Run /winner again to continue.",
+    );
+  });
+
+  it("dismisses the confirmation on cancel without calling Shadow Cloud", async () => {
+    const interaction = buildVictoryButton("sc_victory_cancel");
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createInteractionHandler(
+      {} as never,
+      botConfig,
+    )(interaction as never);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(interaction.deleteReply).toHaveBeenCalledOnce();
+    expect(interaction.channel.send).not.toHaveBeenCalled();
+  });
+
+  it("shows the committed outcome privately when the public announcement fails", async () => {
+    const interaction = buildVictoryButton(
+      `sc_victory_confirm_user-2_${issuedAt}`,
+    );
+    interaction.channel.send.mockRejectedValue(new Error("Missing access"));
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(async () =>
+        Response.json(victoryPayload, { status: 201 }),
+      ),
+    );
+
+    await createInteractionHandler(
+      {} as never,
+      botConfig,
+    )(interaction as never);
+
+    expect(interaction.deleteReply).not.toHaveBeenCalled();
+    expect(JSON.stringify(interaction.editReply.mock.calls[0]?.[0])).toContain(
+      "<@user-2> is the Victor of Debug World!",
     );
   });
 });

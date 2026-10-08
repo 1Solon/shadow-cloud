@@ -10,6 +10,8 @@ import type {
 } from '../support/game-payload.types';
 import type { RejectDiscordSaveDto } from '../dto/reject-discord-save.dto';
 import type { RejectSaveInput } from './turn-mutations/rejection';
+import type { DesignateVictoryDto } from '../dto/designate-victory.dto';
+import type { UndoVictoryDto } from '../dto/undo-victory.dto';
 import { TurnMutationsService } from './turn-mutations.service';
 
 @Injectable()
@@ -59,5 +61,13 @@ export class GamesTurnService {
 
   async skipPlayerTurn(input: SkipDiscordPlayerDto) {
     return this.turnMutations.skipPlayerTurn(input);
+  }
+
+  async designateVictory(input: DesignateVictoryDto, preview = false) {
+    return this.turnMutations.designateVictory(input, { preview });
+  }
+
+  async undoVictory(input: UndoVictoryDto, preview = false) {
+    return this.turnMutations.undoVictory(input, { preview });
   }
 }

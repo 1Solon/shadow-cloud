@@ -49,6 +49,7 @@ export class TurnRemindersService implements OnModuleInit, OnModuleDestroy {
         where: {
           endedAt: null,
           nextReminderAt: { lte: now },
+          game: { victoryRecord: { is: null } },
         },
         select: { id: true },
         orderBy: [{ nextReminderAt: 'asc' }, { id: 'asc' }],
@@ -78,7 +79,7 @@ export class TurnRemindersService implements OnModuleInit, OnModuleDestroy {
       const turnRecord = await transaction.turnRecord.findUnique({
         where: { id: turnRecordId },
         include: {
-          game: { include: { turnState: true } },
+          game: { include: { turnState: true, victoryRecord: true } },
           gamePlayer: {
             include: { user: { include: { identities: true } } },
           },
@@ -90,6 +91,7 @@ export class TurnRemindersService implements OnModuleInit, OnModuleDestroy {
         !turnRecord.nextReminderAt ||
         turnRecord.nextReminderAt > now ||
         turnRecord.endedAt ||
+        turnRecord.game.victoryRecord ||
         !turnRecord.game.turnRemindersEnabled ||
         !this.isCurrentActiveTurn(turnRecord)
       ) {
@@ -206,7 +208,7 @@ export class TurnRemindersService implements OnModuleInit, OnModuleDestroy {
   private isCurrentActiveTurn(
     turnRecord: Prisma.TurnRecordGetPayload<{
       include: {
-        game: { include: { turnState: true } };
+        game: { include: { turnState: true; victoryRecord: true } };
         gamePlayer: { include: { user: { include: { identities: true } } } };
       };
     }>,

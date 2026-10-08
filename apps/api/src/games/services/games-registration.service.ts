@@ -9,6 +9,7 @@ import { BotNotificationsService } from '../bot-notifications.service';
 import type { ThreadRenameNotificationPayload } from '../bot-notifications.service';
 import type { CreateDiscordGameDto } from '../dto/create-discord-game.dto';
 import type { RegisterDiscordPlayerDto } from '../dto/register-discord-player.dto';
+import { assertCampaignInPlay } from '../support/campaign-conclusion';
 import { getDiscordIdentity } from '../support/discord-user.helpers';
 import { TurnMutationsService } from './turn-mutations.service';
 
@@ -44,6 +45,9 @@ export class GamesRegistrationService {
         `Thread ${input.discordThreadId} is not linked to a game.`,
       );
     }
+
+    // Approval re-checks inside its transaction; this only spares a doomed request.
+    await assertCampaignInPlay(prisma, game.id);
 
     const existingIdentity = await prisma.authIdentity.findUnique({
       where: {

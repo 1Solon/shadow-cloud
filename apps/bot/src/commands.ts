@@ -184,6 +184,24 @@ const unpinCommand = new SlashCommandBuilder()
       .setRequired(true),
   );
 
+const winnerCommand = new SlashCommandBuilder()
+  .setName("winner")
+  .setDescription(
+    "Declare the Victor and conclude this campaign (overlord only).",
+  )
+  .addUserOption((option) =>
+    option
+      .setName("player")
+      .setDescription("The seated player who won the campaign.")
+      .setRequired(true),
+  );
+
+const unwinnerCommand = new SlashCommandBuilder()
+  .setName("unwinner")
+  .setDescription(
+    "Undo the victory and return this campaign to play (overlord only).",
+  );
+
 const debugCommand = new SlashCommandBuilder()
   .setName("debug")
   .setDescription("Preview Shadow Cloud Discord notifications and responses.")
@@ -205,6 +223,8 @@ export const supportedCommandNames = [
   "link",
   "pin",
   "unpin",
+  "winner",
+  "unwinner",
   "debug",
 ] as const;
 
@@ -227,5 +247,7 @@ export const slashCommands = [
   linkCommand,
   pinCommand,
   unpinCommand,
+  winnerCommand,
+  unwinnerCommand,
   debugCommand,
 ] as const;

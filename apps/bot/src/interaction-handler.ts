@@ -15,6 +15,8 @@ import {
   sendCommandRequest,
   sendRegistrationApprovalRequest,
   sendSaveRejectionRequest,
+  sendVictoryRequest,
+  type VictoryCommandName,
 } from "./bot-api.js";
 import {
   isSupportedCommandName,
@@ -25,8 +27,13 @@ import {
   REJECT_PREFIX,
   SAVE_REJECT_CONFIRM_PREFIX,
   SAVE_REJECT_PREFIX,
+  VICTORY_CANCEL_ID,
+  VICTORY_CONFIRM_PREFIX,
+  VICTORY_CONFIRMATION_TTL_MS,
+  VICTORY_UNDO_CONFIRM_PREFIX,
   buildRegistrationResponse,
   buildSaveRejectionPrompt,
+  buildVictoryConfirmation,
   buildDiscordEditReply,
   buildDiscordReply,
 } from "./notifications.js";
@@ -52,6 +59,9 @@ import {
   buildSeatFilledReply,
   buildShadowCloudUnavailableReply,
   buildTurnAdvancedAnnouncement,
+  buildVictoryAnnouncement,
+  buildVictoryConfirmationExpiredReply,
+  buildVictoryUndoneAnnouncement,
   buildWrongChannelReply,
 } from "./response-messages.js";
 
@@ -265,6 +275,140 @@ async function handlePinningCommand(
   }
 }
 
+function isVictoryCommand(
+  commandName: SupportedCommandName,
+): commandName is VictoryCommandName {
+  return commandName === "winner" || commandName === "unwinner";
+}
+
+/** Validate first, so the confirmation only offers a victory that can succeed. */
+async function handleVictoryCommand(
+  interaction: ChatInputCommandInteraction,
+  channel: AnyThreadChannel,
+  config: BotApiConfig,
+  commandName: VictoryCommandName,
+) {
+  const victor =
+    commandName === "winner"
+      ? interaction.options.getUser("player", true)
+      : null;
+  const { payload, response } = await sendVictoryRequest(
+    commandName,
+    "preview",
+    {
+      discordThreadId: channel.id,
+      callerDiscordId: interaction.user.id,
+      ...(victor ? { victorDiscordId: victor.id } : {}),
+    },
+    config,
+  );
+
+  if (!response.ok) {
+    await interaction.editReply(buildCommandErrorReply(commandName, payload));
+    return;
+  }
+
+  const details = {
+    gameName: payload?.name ?? channel.name,
+    victorName: payload?.victor?.displayName ?? "the Victor",
+    deletionDueAt: payload?.deletionDueAt ?? "",
+  };
+  await interaction.editReply(
+    victor
+      ? buildVictoryConfirmation({
+          ...details,
+          action: "declare",
+          victorDiscordId: victor.id,
+          mode: "live",
+          issuedAt: Date.now(),
+        })
+      : buildVictoryConfirmation({
+          ...details,
+          action: "undo",
+          mode: "live",
+          issuedAt: Date.now(),
+        }),
+  );
+}
+
+async function handleVictoryConfirmation(
+  client: Client,
+  interaction: ButtonInteraction,
+  config: BotApiConfig,
+  commandName: VictoryCommandName,
+  victorDiscordId: string | null,
+  issuedAt: number,
+) {
+  await interaction.deferUpdate();
+
+  if (
+    !Number.isFinite(issuedAt) ||
+    Date.now() - issuedAt > VICTORY_CONFIRMATION_TTL_MS
+  ) {
+    await interaction.editReply(
+      buildVictoryConfirmationExpiredReply(commandName),
+    );
+    return;
+  }
+
+  try {
+    const { payload, response } = await sendVictoryRequest(
+      commandName,
+      "commit",
+      {
+        discordThreadId: interaction.channelId,
+        callerDiscordId: interaction.user.id,
+        ...(victorDiscordId ? { victorDiscordId } : {}),
+      },
+      config,
+    );
+
+    if (!response.ok) {
+      await interaction.editReply(buildCommandErrorReply(commandName, payload));
+      return;
+    }
+
+    const announcement = {
+      gameName: payload?.name ?? "the campaign",
+      victorName: payload?.victor?.displayName ?? "the Victor",
+      victorDiscordId: payload?.victor?.discordId ?? null,
+    };
+    const message =
+      commandName === "winner"
+        ? buildVictoryAnnouncement({
+            ...announcement,
+            deletionDueAt: payload?.deletionDueAt ?? "",
+          })
+        : buildVictoryUndoneAnnouncement(announcement);
+
+    try {
+      const channel =
+        interaction.channel ??
+        (await client.channels.fetch(interaction.channelId));
+      if (!channel?.isSendable()) {
+        throw new Error(`Channel ${interaction.channelId} is not sendable.`);
+      }
+      await channel.send(message);
+      await interaction.deleteReply().catch(() => undefined);
+    } catch (error) {
+      // The change is committed; show its outcome privately instead.
+      console.warn(`Failed to announce /${commandName} publicly.`, {
+        channelId: interaction.channelId,
+        error,
+      });
+      await interaction.editReply({
+        components: message.components,
+        allowedMentions: { parse: [] },
+      });
+    }
+  } catch (error) {
+    console.error(`Failed to confirm /${commandName}.`, error);
+    await interaction
+      .editReply(buildShadowCloudUnavailableReply())
+      .catch(() => undefined);
+  }
+}
+
 async function handleSuccessfulCommand(
   interaction: ChatInputCommandInteraction,
   channel: AnyThreadChannel,
@@ -465,6 +609,39 @@ export function createInteractionHandler(client: Client, config: BotApiConfig) {
     if (interaction.isButton()) {
       const customId = interaction.customId;
 
+      if (customId === VICTORY_CANCEL_ID) {
+        await interaction.deferUpdate();
+        await interaction.deleteReply().catch(() => undefined);
+        return;
+      }
+
+      if (customId.startsWith(VICTORY_UNDO_CONFIRM_PREFIX)) {
+        await handleVictoryConfirmation(
+          client,
+          interaction,
+          config,
+          "unwinner",
+          null,
+          Number(customId.slice(VICTORY_UNDO_CONFIRM_PREFIX.length)),
+        );
+        return;
+      }
+
+      if (customId.startsWith(VICTORY_CONFIRM_PREFIX)) {
+        const [victorDiscordId = "", issuedAt = ""] = customId
+          .slice(VICTORY_CONFIRM_PREFIX.length)
+          .split("_");
+        await handleVictoryConfirmation(
+          client,
+          interaction,
+          config,
+          "winner",
+          victorDiscordId,
+          Number(issuedAt),
+        );
+        return;
+      }
+
       if (customId.startsWith(SAVE_REJECT_CONFIRM_PREFIX)) {
         await handleSaveRejectionButton(
           interaction,
@@ -578,6 +755,11 @@ export function createInteractionHandler(client: Client, config: BotApiConfig) {
     try {
       if (isPinningCommand(commandName)) {
         await handlePinningCommand(interaction, channel, config, commandName);
+        return;
+      }
+
+      if (isVictoryCommand(commandName)) {
+        await handleVictoryCommand(interaction, channel, config, commandName);
         return;
       }
 
