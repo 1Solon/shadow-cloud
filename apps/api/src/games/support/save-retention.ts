@@ -60,7 +60,10 @@ export async function pruneSaves(
   return expired.length;
 }
 
-/** Bring every campaign within the limit, e.g. after the limit is lowered. */
+/**
+ * Bring every campaign within the limit, e.g. after the limit is lowered. A
+ * campaign that fails is reported and left for its next upload to prune.
+ */
 export async function pruneRetainedSaves(
   database: PrismaClient,
   limit: number,
@@ -70,13 +73,18 @@ export async function pruneRetainedSaves(
   });
   let saves = 0;
   let campaigns = 0;
+  const failed: Array<{ gameId: string; error: unknown }> = [];
   for (const game of games) {
     if (game._count.fileVersions <= limit) continue;
-    const pruned = await database.$transaction((transaction) =>
-      pruneSaves(transaction, game.id, limit),
-    );
-    saves += pruned;
-    if (pruned > 0) campaigns += 1;
+    try {
+      const pruned = await database.$transaction((transaction) =>
+        pruneSaves(transaction, game.id, limit),
+      );
+      saves += pruned;
+      if (pruned > 0) campaigns += 1;
+    } catch (error) {
+      failed.push({ gameId: game.id, error });
+    }
   }
-  return { saves, campaigns };
+  return { saves, campaigns, failed };
 }

@@ -167,6 +167,7 @@ describe('pruning the backlog', () => {
     await expect(pruneRetainedSaves(fixture.db, 2)).resolves.toEqual({
       saves: 3,
       campaigns: 1,
+      failed: [],
     });
     expect(await keptVersionNumbers()).toEqual([4, 5]);
     expect(await fixture.db.prunedSave.count()).toBe(3);
@@ -176,7 +177,55 @@ describe('pruning the backlog', () => {
     await expect(pruneRetainedSaves(fixture.db, 2)).resolves.toEqual({
       saves: 0,
       campaigns: 0,
+      failed: [],
     });
+  });
+
+  it('keeps pruning other campaigns when one cannot be pruned', async () => {
+    await uploadSaves('one', 'two', 'three');
+    const stuck = await fixture.db.fileVersion.findFirstOrThrow({
+      where: { gameId: 'campaign', versionNumber: 1 },
+    });
+    await fixture.db.prunedSave.create({
+      data: {
+        id: stuck.id,
+        gameId: 'campaign',
+        versionNumber: 1,
+        originalName: stuck.originalName,
+        uploadedById: 'player',
+        uploadedAt: stuck.uploadedAt,
+      },
+    });
+    await fixture.db.game.create({
+      data: {
+        id: 'other',
+        gameNumber: 2,
+        slug: 'other',
+        name: 'Other',
+        organizerId: 'player',
+        fileVersions: {
+          create: [1, 2, 3].map((versionNumber) => ({
+            uploadedById: 'player',
+            storagePath: `/saves/other/${versionNumber}.se1`,
+            originalName: `${versionNumber}.se1`,
+            versionNumber,
+          })),
+        },
+      },
+    });
+
+    const result = await pruneRetainedSaves(fixture.db, 2);
+
+    expect(result).toMatchObject({ saves: 1, campaigns: 1 });
+    expect(result.failed.map((failure) => failure.gameId)).toEqual([
+      'campaign',
+    ]);
+    expect(await keptVersionNumbers()).toEqual([1, 2, 3]);
+    const other = await fixture.db.fileVersion.findMany({
+      where: { gameId: 'other' },
+      orderBy: { versionNumber: 'asc' },
+    });
+    expect(other.map((save) => save.versionNumber)).toEqual([2, 3]);
   });
 });
 

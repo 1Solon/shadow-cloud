@@ -58,13 +58,19 @@ export class GamesFileService {
   // Uploads keep campaigns within the limit; this catches a lowered limit.
   private async pruneBacklog() {
     try {
-      const { saves, campaigns } = await pruneRetainedSaves(
+      const { saves, campaigns, failed } = await pruneRetainedSaves(
         prisma,
         resolveSaveRetentionLimit(),
       );
       this.logger.log(
         `Pruned ${saves} saves across ${campaigns} campaigns under the save retention limit.`,
       );
+      for (const { gameId, error } of failed) {
+        this.logger.error(
+          `Pruning campaign ${gameId} failed; its next upload or restart retries.`,
+          error instanceof Error ? error.stack : String(error),
+        );
+      }
     } catch (error) {
       this.logger.error(
         'Pruning saves under the save retention limit failed; it retries on restart.',

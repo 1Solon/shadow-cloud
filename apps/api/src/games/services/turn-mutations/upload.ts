@@ -406,14 +406,6 @@ export async function uploadSave(
     roundAdvanced,
     pruned,
   } = result;
-  if (pruned > 0) {
-    await cleanupSaveRecovery(database, fileStorage).catch((error: unknown) => {
-      new Logger('TurnMutationsService').warn(
-        `Save ${fileVersion.id} committed but cleanup of ${pruned} pruned saves will be retried.`,
-        error instanceof Error ? error.stack : String(error),
-      );
-    });
-  }
   const discordId = (user: NonNullable<typeof next.user>) =>
     user.identities.find((identity) => identity.provider === 'discord')
       ?.providerId ?? null;
@@ -463,6 +455,15 @@ export async function uploadSave(
       `Save ${fileVersion.id} committed but upload notification failed.`,
       error instanceof Error ? error.stack : String(error),
     );
+  }
+  // After notifying, so deleting pruned files never delays the next player.
+  if (pruned > 0) {
+    await cleanupSaveRecovery(database, fileStorage).catch((error: unknown) => {
+      new Logger('TurnMutationsService').warn(
+        `Save ${fileVersion.id} committed but cleanup of ${pruned} pruned saves will be retried.`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    });
   }
   return {
     fileVersionId: fileVersion.id,
