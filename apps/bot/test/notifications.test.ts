@@ -13,7 +13,6 @@ import {
   buildGameInitNotificationMessage,
   buildSaveNotificationMessage,
   buildSaveRejectedNotificationMessage,
-  buildSaveRejectionPrompt,
   buildSaveReplacedNotificationMessage,
   buildTurnNudgeNotificationMessage,
 } from "../src/notifications.js";
@@ -444,30 +443,7 @@ describe("production notification style", () => {
     expect(rendered).toContain('"label":"Download"');
     expect(rendered).toContain('"url":"https://shadow.example/games/42"');
     expect(rendered).toContain('"label":"Upload"');
-  });
-
-  it("offers a reject button on the turn notification", () => {
-    const rendered = JSON.stringify(
-      buildSaveNotificationMessage(
-        saveUploadedPayload,
-        "https://shadow.example",
-      ),
-    );
-
-    expect(rendered).toContain(
-      `"custom_id":"sc_save_reject_version-1","label":"Reject","style":${ButtonStyle.Danger}`,
-    );
-  });
-
-  it("asks for confirmation before rejecting a save", () => {
-    const prompt = buildSaveRejectionPrompt("version-1");
-
-    expect(prompt.flags).toBe(
-      MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,
-    );
-    expect(JSON.stringify(prompt)).toContain(
-      '"custom_id":"sc_save_reject_confirm_version-1"',
-    );
+    expect(rendered).not.toContain('"label":"Reject"');
   });
 
   it.each([

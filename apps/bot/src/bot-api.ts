@@ -168,9 +168,11 @@ export async function sendCommandRequest(
       const turnTargetHours =
         interaction.options.getInteger("turn_target_hours") ?? undefined;
       const turnReminderGraceHours =
-        interaction.options.getInteger("turn_reminder_grace_hours") ?? undefined;
+        interaction.options.getInteger("turn_reminder_grace_hours") ??
+        undefined;
       const turnReminderRepeatHours =
-        interaction.options.getInteger("turn_reminder_repeat_hours") ?? undefined;
+        interaction.options.getInteger("turn_reminder_repeat_hours") ??
+        undefined;
       const response = await postJson(
         `${config.apiBaseUrl}/v1/games/init`,
         config.botApiToken,
@@ -186,7 +188,9 @@ export async function sendCommandRequest(
           ...(armyCount != null ? { armyCount } : {}),
           ...(turnTargetHours != null ? { turnTargetHours } : {}),
           ...(turnReminderGraceHours != null ? { turnReminderGraceHours } : {}),
-          ...(turnReminderRepeatHours != null ? { turnReminderRepeatHours } : {}),
+          ...(turnReminderRepeatHours != null
+            ? { turnReminderRepeatHours }
+            : {}),
           organizerDiscordId: interaction.user.id,
           organizerDisplayName:
             interaction.user.globalName ?? interaction.user.username,
@@ -302,23 +306,6 @@ export async function sendVictoryRequest(
   return {
     response,
     payload: await parseJson<VictoryResponsePayload>(response),
-  };
-}
-
-export async function sendSaveRejectionRequest(
-  fileVersionId: string,
-  callerDiscordId: string,
-  config: BotApiConfig,
-): Promise<ParsedBotResponse<CommandResponsePayload>> {
-  const response = await postJson(
-    `${config.apiBaseUrl}/v1/games/reject-save`,
-    config.botApiToken,
-    { fileVersionId, callerDiscordId },
-  );
-
-  return {
-    response,
-    payload: await parseJson<CommandResponsePayload>(response),
   };
 }
 

@@ -329,24 +329,4 @@ describe('save rejection', () => {
       nextReminderAt: at(94),
     });
   });
-
-  it('rejects through Discord as the linked Shadow Cloud user', async () => {
-    await fixture.db.authIdentity.create({
-      data: { provider: 'discord', providerId: 'discord-3', userId: 'user-3' },
-    });
-    const upload = await uploadAt(at(1), 'user-1', 'alpha turn');
-
-    await expect(
-      mutations.rejectSaveFromDiscord({
-        fileVersionId: upload.fileVersionId,
-        callerDiscordId: 'discord-unknown',
-      }),
-    ).rejects.toBeInstanceOf(ForbiddenException);
-    await expect(
-      mutations.rejectSaveFromDiscord({
-        fileVersionId: upload.fileVersionId,
-        callerDiscordId: 'discord-3',
-      }),
-    ).resolves.toMatchObject({ activePlayer: { userId: 'user-1' } });
-  });
 });

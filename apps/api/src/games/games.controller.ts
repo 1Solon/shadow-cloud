@@ -26,7 +26,6 @@ import { CreateDiscordGameDto } from './dto/create-discord-game.dto';
 import { DesignateVictoryDto } from './dto/designate-victory.dto';
 import { LinkDiscordThreadDto } from './dto/link-discord-thread.dto';
 import { RegisterDiscordPlayerDto } from './dto/register-discord-player.dto';
-import { RejectDiscordSaveDto } from './dto/reject-discord-save.dto';
 import { ReorderSeatOrderDto } from './dto/reorder-seat-order.dto';
 import { ReplaceDiscordPlayerDto } from './dto/replace-discord-player.dto';
 import { ResignDiscordPlayerDto } from './dto/resign-discord-player.dto';
@@ -289,12 +288,6 @@ export class GamesController {
       expectedSaveBaseline: body?.expectedSaveBaseline,
       shadowOverrideEnabled: request.user?.shadowOverrideEnabled === true,
     });
-  }
-
-  @Post('reject-save')
-  @UseGuards(BotAuthGuard)
-  rejectSaveFromDiscord(@Body() input: RejectDiscordSaveDto) {
-    return this.gamesService.rejectSaveFromDiscord(input);
   }
 
   @Post('init')

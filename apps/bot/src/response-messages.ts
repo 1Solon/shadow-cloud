@@ -89,7 +89,8 @@ export function buildForumThreadRequiredReply(
 export function buildBotMisconfiguredReply(): InteractionReplyOptions {
   return buildDiscordReply({
     headline: "Bot misconfigured",
-    message: "This bot cannot process commands until its API token is configured.",
+    message:
+      "This bot cannot process commands until its API token is configured.",
     details: ["**Missing setting:** BOT_API_TOKEN"],
     ephemeral: true,
   });
@@ -114,7 +115,8 @@ export function buildCommandErrorReply(
 export function buildInvalidMessageTargetReply(): InteractionEditReplyOptions {
   return buildDiscordEditReply({
     headline: "Use a message from this thread",
-    message: "Provide a Discord message ID or message link from this forum thread.",
+    message:
+      "Provide a Discord message ID or message link from this forum thread.",
   });
 }
 
@@ -316,6 +318,7 @@ export function buildApprovalFailureReply(
 export function buildShadowCloudUnavailableReply(): InteractionEditReplyOptions {
   return buildDiscordEditReply({
     headline: "Shadow Cloud unavailable",
-    message: "Unable to reach the Shadow Cloud API right now. Please try again.",
+    message:
+      "Unable to reach the Shadow Cloud API right now. Please try again.",
   });
 }

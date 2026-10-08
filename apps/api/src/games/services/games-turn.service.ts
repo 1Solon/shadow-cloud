@@ -8,7 +8,6 @@ import type {
   UploadedSaveFile,
   UploadSaveSafetyMetadata,
 } from '../support/game-payload.types';
-import type { RejectDiscordSaveDto } from '../dto/reject-discord-save.dto';
 import type { RejectSaveInput } from './turn-mutations/rejection';
 import type { DesignateVictoryDto } from '../dto/designate-victory.dto';
 import type { UndoVictoryDto } from '../dto/undo-victory.dto';
@@ -29,10 +28,6 @@ export class GamesTurnService {
 
   async rejectSave(userId: string | undefined, input: RejectSaveInput) {
     return this.turnMutations.rejectSave(userId, input);
-  }
-
-  async rejectSaveFromDiscord(input: RejectDiscordSaveDto) {
-    return this.turnMutations.rejectSaveFromDiscord(input);
   }
 
   async reorderSeatOrder(
