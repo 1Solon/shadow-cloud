@@ -77,3 +77,23 @@ describe("API access token", () => {
     });
   });
 });
+
+describe("Discord provider", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.stubEnv("AUTH_SECRET", "discord-provider-secret");
+    vi.stubEnv("NEXTAUTH_SECRET", "discord-provider-secret");
+  });
+
+  it("configures the issuer Discord sends in the OAuth callback", async () => {
+    const { authOptions } = await import("./auth");
+
+    const discord = authOptions.providers.find(
+      (provider) => provider.id === "discord",
+    );
+
+    expect(discord?.options).toMatchObject({
+      issuer: "https://discord.com",
+    });
+  });
+});
