@@ -33,7 +33,6 @@ function createGame() {
     gameNumber: 1,
     slug: 'test1',
     name: 'test1',
-    retentionLimit: 5,
     players: [
       {
         id: 'entry-1',

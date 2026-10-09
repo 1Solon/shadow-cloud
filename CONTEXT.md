@@ -22,6 +22,16 @@ One player's play, from receiving the save to uploading the next one.
 **Round**:
 The turns in which every occupied seat plays once.
 
+**Save**:
+A Shadow Empire game file uploaded to a campaign at the end of a turn.
+
+**Save retention limit**:
+The number of most recent saves a campaign keeps; older saves are permanently deleted. One limit applies to every campaign.
+_Avoid_: Save cap, history limit, max saves
+
+**Pruned save**:
+A save permanently deleted for falling outside the save retention limit. Its number and fingerprint are remembered so it can still be recognised, but it can no longer be downloaded.
+
 **Save rejection**:
 Discarding the latest save and returning the turn to the seat that uploaded it, with that seat's turn time resuming where it stopped. Only possible during the turn that save started, by the receiving seat, the uploader, the Overlord, or a Shadow Lord under Shadow Override.
 

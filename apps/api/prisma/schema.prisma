@@ -104,6 +104,7 @@ model User {
   uploads        FileVersion[]  @relation("UploadedBy")
   replacements   FileVersion[]  @relation("ReplacedBy")
   rejections     RejectedSave[]
+  prunedUploads  PrunedSave[]   @relation("PrunedUploads")
   auditEvents    AuditEvent[]   @relation("ActorEvents")
   turnRecords    TurnRecord[]
   victories      VictoryRecord[] @relation("Victor")
@@ -153,7 +154,6 @@ model Game {
   discordGuildId          String?
   discordChannelId        String?
   discordThreadId         String?               @unique
-  retentionLimit          Int                   @default(5)
   turnTargetHours         Int                   @default(24)
   turnReminderGraceHours  Int                   @default(12)
   turnReminderRepeatHours Int                   @default(24)
@@ -168,6 +168,7 @@ model Game {
   turnState               TurnState?
   fileVersions            FileVersion[]
   rejectedSaves           RejectedSave[]
+  prunedSaves             PrunedSave[]
   auditEvents             AuditEvent[]
   registrationRequests    RegistrationRequest[]
   turnRecords             TurnRecord[]
@@ -262,6 +263,22 @@ model RejectedSave {
   rejectedAt    DateTime @default(now())
   game          Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
   rejectedBy    User     @relation(fields: [rejectedById], references: [id])
+
+  @@index([gameId, contentHash])
+}
+
+// A save deleted under the save retention limit, remembered so it is still recognised.
+model PrunedSave {
+  id            String   @id
+  gameId        String
+  versionNumber Int
+  originalName  String
+  contentHash   String?
+  uploadedById  String
+  uploadedAt    DateTime
+  prunedAt      DateTime @default(now())
+  game          Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  uploadedBy    User     @relation("PrunedUploads", fields: [uploadedById], references: [id])
 
   @@index([gameId, contentHash])
 }

@@ -1,5 +1,6 @@
 import {
   ForbiddenException,
+  GoneException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -13,6 +14,7 @@ import {
 } from '../games-domain';
 import { FileStorageService } from '../file-storage.service';
 import { saveBaseline } from '../support/save-baseline';
+import { resolveSaveRetentionLimit } from '../support/save-retention';
 import { buildCanonicalThreadName } from '../support/game-configuration.helpers';
 import { buildGameDetailFileVersionPayload } from '../support/game-detail-file-version-payload';
 import { buildGameIdentifierWhere } from '../support/game-lookup.helpers';
@@ -219,7 +221,7 @@ export class GamesQueryService {
               orderBy: {
                 versionNumber: 'desc',
               },
-              take: 8,
+              take: resolveSaveRetentionLimit(),
             },
             auditEvents: {
               where: {
@@ -443,6 +445,7 @@ export class GamesQueryService {
         player.role === 'ORGANIZER' || game.organizerId === player.userId,
     }));
 
+    const retentionLimit = resolveSaveRetentionLimit();
     const recentFiles: FileVersionSummary[] = trimFileHistory(
       game.fileVersions.map((fileVersion) => ({
         id: fileVersion.id,
@@ -451,14 +454,14 @@ export class GamesQueryService {
         uploadedAt: fileVersion.uploadedAt.toISOString(),
         uploadedBy: fileVersion.uploadedBy.displayName,
       })),
-      game.retentionLimit,
+      retentionLimit,
     );
 
     const summary: GameSummary = {
       id: game.id,
       name: game.name,
       channelName: game.discordThreadId ?? game.discordChannelId ?? game.slug,
-      retentionLimit: game.retentionLimit,
+      retentionLimit,
       activePlayerEntryId: activePlayerEntry.id,
       players,
       recentFiles,
@@ -499,6 +502,14 @@ export class GamesQueryService {
     });
 
     if (!fileVersion) {
+      const pruned = await prisma.prunedSave.findFirst({
+        where: { id: fileVersionId, gameId: game.id },
+      });
+      if (pruned) {
+        throw new GoneException(
+          `Save #${pruned.versionNumber} was deleted under the save retention limit.`,
+        );
+      }
       throw new NotFoundException(
         `Save file ${fileVersionId} was not found for game ${gameId}.`,
       );
