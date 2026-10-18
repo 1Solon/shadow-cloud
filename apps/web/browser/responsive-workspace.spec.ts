@@ -95,7 +95,7 @@ for (const [layout, widths] of [
       });
       await page.goto(campaign.url);
       await expect(
-        page.getByRole("link").filter({ hasText: "42 : Browser Campaign" }),
+        page.getByRole("link").filter({ hasText: "Browser Campaign" }),
       ).toBeVisible();
       expect(
         await page.evaluate(
@@ -123,7 +123,7 @@ for (const [layout, widths] of [
     ).toBeVisible();
     await search.fill("42");
     await expect(
-      page.getByRole("link").filter({ hasText: "42 : Browser Campaign" }),
+      page.getByRole("link").filter({ hasText: "Browser Campaign" }),
     ).toBeVisible();
     await page.screenshot({
       path: testInfo.outputPath("list-guest-400.png"),

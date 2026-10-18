@@ -23,9 +23,9 @@ export function SaveUploadCard({
   isSignedIn,
 }: SaveUploadCardProps) {
   return (
-    <Card>
+    <Card className="border-0">
       <CardHeader>
-        <CardTitle>Save Upload:</CardTitle>
+        <CardTitle>Save upload</CardTitle>
         <CardDescription>
           Only the active lord can submit the next save for this round.
         </CardDescription>
@@ -34,7 +34,7 @@ export function SaveUploadCard({
         {isActivePlayer ? (
           <UploadSaveForm gameNumber={gameNumber} saveBaseline={saveBaseline} />
         ) : (
-          <div className="rounded-lg border border-terminal-400/20 bg-terminal-400/5 px-4 py-4 text-sm text-terminal-300 font-mono">
+          <div className="rounded-md border border-terminal-400/20 bg-terminal-400/5 px-4 py-4 font-mono text-sm text-terminal-300">
             {isSignedIn
               ? `Waiting for ${activePlayerDisplayName} to upload the current turn.`
               : "Sign in with Discord to upload or download game saves."}

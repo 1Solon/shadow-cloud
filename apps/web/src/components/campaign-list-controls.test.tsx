@@ -25,6 +25,7 @@ const base: GameListItem = {
   slug: "long",
   gameNumber: 1,
   name: "Long",
+  tagline: null,
   organizerDisplayName: "Overlord",
   updatedAt: "2026-07-12T00:00:00Z",
   roundNumber: 1,
@@ -83,8 +84,11 @@ it.each([false, true])(
     const order = () =>
       screen
         .getAllByRole("link")
-        .map((card) => within(card).getByText(/^\d : \w+$/).textContent);
-    expect(order()).toEqual(["3 : Short", "1 : Long", "2 : Unknown"]);
+        .map(
+          (card) =>
+            within(card).getByText(/^(Long|Short|Unknown)$/).textContent,
+        );
+    expect(order()).toEqual(["Short", "Long", "Unknown"]);
     expect(screen.getByText("Unknown / Unknown")).toBeVisible();
     expect(screen.getByText("2d / 48h")).toBeVisible();
     expect(screen.getByText("1d / 2h")).toBeVisible();
@@ -93,10 +97,10 @@ it.each([false, true])(
     });
     expect(sort).toHaveTextContent("Turn (Newest)");
     for (const [label, expected] of [
-      ["Name", ["1 : Long", "3 : Short", "2 : Unknown"]],
-      ["Number", ["1 : Long", "2 : Unknown", "3 : Short"]],
-      ["Turn (Oldest)", ["1 : Long", "3 : Short", "2 : Unknown"]],
-      ["Turn (Newest)", ["3 : Short", "1 : Long", "2 : Unknown"]],
+      ["Name", ["Long", "Short", "Unknown"]],
+      ["Number", ["Long", "Unknown", "Short"]],
+      ["Turn (Oldest)", ["Long", "Short", "Unknown"]],
+      ["Turn (Newest)", ["Short", "Long", "Unknown"]],
     ] as const) {
       fireEvent.keyDown(sort, { key: "ArrowDown" });
       expect(
@@ -110,7 +114,7 @@ it.each([false, true])(
     fireEvent.change(screen.getByRole("searchbox"), {
       target: { value: "Unknown" },
     });
-    expect(order()).toEqual(["2 : Unknown"]);
+    expect(order()).toEqual(["Unknown"]);
     if (hasExtendedControls) {
       const filter = screen.getByRole("combobox", {
         name: "Filter active campaigns by turn status",
@@ -125,7 +129,7 @@ it.each([false, true])(
       fireEvent.click(
         await screen.findByRole("option", { name: "Waiting on others" }),
       );
-      expect(order()).toEqual(["2 : Unknown"]);
+      expect(order()).toEqual(["Unknown"]);
     }
   },
 );

@@ -14,6 +14,10 @@ status. See `docs/agents/triage-labels.md`.
 
 Single-context: root `CONTEXT.md` and `docs/adr/`. Before exploring, read `docs/agents/domain.md`.
 
+### Web style guide
+
+Before building or changing web UI, read `docs/style-guide.md` and match its colour, type, layout and state rules.
+
 <!-- BEGIN:turborepo-agent-rules -->
 
 # This is NOT the Turborepo you know

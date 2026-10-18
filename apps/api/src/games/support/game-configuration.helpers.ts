@@ -186,6 +186,22 @@ export function normalizeNotesInput(input?: string | null) {
   return normalizedInput ? normalizedInput : null;
 }
 
+export const CAMPAIGN_TAGLINE_MAX_LENGTH = 40;
+
+export function isValidCampaignTagline(value: unknown) {
+  return (
+    typeof value === 'string' &&
+    !/[\r\n\u2028\u2029]/.test(value) &&
+    value.trim().length <= CAMPAIGN_TAGLINE_MAX_LENGTH
+  );
+}
+
+export function normalizeTaglineInput(input?: string | null) {
+  const normalizedInput = input?.trim();
+
+  return normalizedInput ? normalizedInput : null;
+}
+
 export function mapOptionalDlcMode(
   input?: CreateDiscordGameDlcMode,
 ): GameDlcMode | null {

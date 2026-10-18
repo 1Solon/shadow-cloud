@@ -22,6 +22,7 @@ type CampaignDetailsWorkspaceProps = Omit<CampaignBriefingProps, "notes"> & {
   canEdit: boolean;
   seatOrderBaseline: SeatOrderBaseline;
   gameNumber: number;
+  tagline: string | null;
   notes: string | null;
   roundNumber: number;
   turnTargetHours: number;
@@ -96,6 +97,7 @@ function CampaignDetailsWorkspaceContent(props: CampaignDetailsWorkspaceProps) {
         gameNumber={props.gameNumber}
         hasAiPlayers={props.hasAiPlayers}
         name={props.name}
+        tagline={props.tagline}
         organizerDisplayName={props.organizerDisplayName}
         playerCount={props.playerCount}
         players={props.players}
@@ -136,7 +138,7 @@ function CampaignDetailsWorkspaceContent(props: CampaignDetailsWorkspaceProps) {
             <Button
               className="h-full px-3"
               type="button"
-              variant="command"
+              variant="outline"
               onClick={() => setMode("configuration")}
             >
               Configure campaign

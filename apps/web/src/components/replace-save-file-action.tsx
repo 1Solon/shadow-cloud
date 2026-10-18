@@ -6,6 +6,7 @@ import { TerminalActionConfirmationDialog } from "@/components/terminal-action-c
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { fieldLabel } from "@/lib/terminal-styles";
 
 type ReplaceSaveFileActionProps = {
   saveBaseline?: string;
@@ -104,9 +105,7 @@ export function ReplaceSaveFileAction({
             <span className="text-terminal-200">{canonicalFileName}</span>
           </p>
           <Label className="block space-y-2">
-            <span className="block text-xs uppercase tracking-[0.18em] text-terminal-300">
-              Replacement save file
-            </span>
+            <span className={`block ${fieldLabel}`}>Replacement save file</span>
             <Input
               accept=".se1"
               className="h-auto py-2"
@@ -129,17 +128,15 @@ export function ReplaceSaveFileAction({
             Replacing this file will not advance the turn.
           </p>
           {errorMessage ? (
-            <div
-              className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-              role="alert"
-            >
+            <p className="text-xs text-destructive" role="alert">
               {errorMessage}
-            </div>
+            </p>
           ) : null}
         </div>
       </TerminalActionConfirmationDialog>
       <Button
-        className="min-h-11 px-3 text-xs uppercase tracking-[0.14em]"
+        className="max-sm:min-h-11"
+        size="sm"
         type="button"
         variant="outline"
         onClick={openConfirmation}

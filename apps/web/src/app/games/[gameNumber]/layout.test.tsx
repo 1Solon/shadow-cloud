@@ -21,20 +21,10 @@ vi.mock("next/navigation", () => ({ notFound: vi.fn() }));
 vi.mock("@/auth", () => ({
   getServerAuthSession: mocks.getServerAuthSession,
 }));
-vi.mock("@/components/account-menu", () => ({
-  AccountMenu: () => <button>Account menu</button>,
-}));
-vi.mock("@/components/login-button", () => ({
-  LoginButton: () => <button>Log in</button>,
-}));
-vi.mock("@/components/terminal-clock", () => ({
-  TerminalClock: () => <span>Clock</span>,
-}));
-vi.mock("@/components/user-badge", () => ({
-  UserBadge: () => <span>User</span>,
-}));
-vi.mock("@/lib/component-versions", () => ({
-  componentVersionStatus: "VERSION",
+vi.mock("@/components/terminal-frame", () => ({
+  TerminalFrame: ({ children }: { children: ReactNode }) => (
+    <div>{children}</div>
+  ),
 }));
 vi.mock("@/lib/shadow-cloud-api", () => ({
   getGameDetail: mocks.getGameDetail,
@@ -42,15 +32,15 @@ vi.mock("@/lib/shadow-cloud-api", () => ({
 vi.mock("@/lib/shadow-override", () => ({
   getShadowOverrideEnabled: mocks.getShadowOverrideEnabled,
 }));
-vi.mock("@/lib/terminal-clock", () => ({
-  formatTerminalClock: () => "00:00:00",
-}));
 
 const { default: GameLayout } = await import("./layout");
 
 type ElementProps = {
   children?: ReactNode;
   className?: string;
+  homeLink?: boolean;
+  game?: { name: string; tagline: string | null };
+  roundNumber?: number;
 };
 
 function elementsIn(node: ReactNode): ReactElement<ElementProps>[] {
@@ -80,17 +70,18 @@ describe("GameLayout", () => {
   beforeEach(() => {
     mocks.getServerAuthSession.mockResolvedValue(null);
     mocks.getGameDetail.mockResolvedValue({
-      gameNumber: 42,
+      gameNumber: 7,
       name: "A Campaign Name That Can Wrap",
+      tagline: "4S FFA+AI T3",
+      roundNumber: 3,
     });
     mocks.getShadowOverrideEnabled.mockResolvedValue(false);
   });
 
-  it("uses compact mobile framing and a viewport-contained desktop shell", async () => {
-    const child = <section>Campaign workspace</section>;
+  it("frames the campaign in the shared terminal panel with a home link", async () => {
     const layout = await GameLayout({
-      children: child,
-      params: Promise.resolve({ gameNumber: "42" }),
+      children: <section>Campaign workspace</section>,
+      params: Promise.resolve({ gameNumber: "7" }),
     });
     const elements = elementsIn(layout);
 
@@ -102,46 +93,44 @@ describe("GameLayout", () => {
     expect(main?.props.className).toContain("p-2");
     expect(main?.props.className).toContain("sm:p-4");
 
-    const frame = elementWithClasses(elements, "shadow-2xl");
-    expect(frame?.props.className).toContain("p-3");
-    expect(frame?.props.className).toContain("sm:p-6");
-    expect(frame?.props.className).toContain("overflow-hidden");
+    expect(elements.some((element) => element.props.homeLink)).toBe(true);
+  });
 
-    const header = elementWithClasses(elements, "border-b", "pb-3", "mb-4");
-    expect(header?.props.className).toContain("flex-wrap");
-    expect(header?.props.className).toContain("gap-3");
+  it("names the campaign in a segment strip under the header", async () => {
+    const layout = await GameLayout({
+      children: <section>Campaign workspace</section>,
+      params: Promise.resolve({ gameNumber: "7" }),
+    });
+    const elements = elementsIn(layout);
 
-    const titleGroup = elementWithClasses(elements, "flex-1", "sm:gap-4");
-    expect(titleGroup?.props.className).toContain("min-w-0");
-    expect(titleGroup?.props.className).toContain("basis-full");
-    expect(titleGroup?.props.className).toContain("sm:basis-0");
-
-    const title = elementWithClasses(elements, "sm:text-xl", "font-mono");
-    expect(title?.props.className).toContain("min-w-0");
-    expect(title?.props.className).toContain("break-words");
-    expect(title?.props.className).toContain("text-base");
-
-    const accountGroup = elementWithClasses(
-      elements,
-      "justify-end",
-      "sm:gap-4",
+    const strip = elementWithClasses(elements, "divide-x", "shrink-0");
+    const stripElements = elementsIn(strip);
+    const number = stripElements.find((element) =>
+      [element.props.children].flat().includes("07"),
     );
-    expect(accountGroup?.props.className).toContain("flex-wrap");
-    expect(accountGroup?.props.className).toContain("gap-2");
-    expect(accountGroup?.props.className).toContain("w-full");
-    expect(accountGroup?.props.className).toContain("max-w-full");
-    expect(accountGroup?.props.className).toContain("sm:w-auto");
-
-    const status = elementWithClasses(elements, "mt-4", "border-t");
-    expect(status?.props.className).toContain("flex-wrap");
-    expect(status?.props.className).toContain("gap-2");
+    expect(number).toBeDefined();
+    expect(
+      elementsIn(number!).find(
+        (element) => element.props.className === "sr-only",
+      )?.props.children,
+    ).toBe("Campaign ");
+    expect(
+      stripElements.find((element) => element.props.roundNumber !== undefined)
+        ?.props.roundNumber,
+    ).toBe(3);
+    expect(
+      stripElements.find((element) => element.props.game)?.props.game,
+    ).toMatchObject({
+      name: "A Campaign Name That Can Wrap",
+      tagline: "4S FFA+AI T3",
+    });
   });
 
   it("restricts inner scrolling to desktop page content", async () => {
     const child = <section>Campaign workspace</section>;
     const layout = await GameLayout({
       children: child,
-      params: Promise.resolve({ gameNumber: "42" }),
+      params: Promise.resolve({ gameNumber: "7" }),
     });
     const elements = elementsIn(layout);
     const scrollClasses = [
@@ -164,14 +153,8 @@ describe("GameLayout", () => {
         "md:pr-2",
       ]),
     );
-    expect(scrollers[0]?.props.className).not.toContain("overflow-x-auto");
-
     expect(scrollers[0]?.props.className?.split(/\s+/)).not.toContain(
       "overflow-y-auto",
     );
-    const header = elementWithClasses(elements, "border-b", "pb-3", "mb-4");
-    const status = elementWithClasses(elements, "mt-4", "border-t");
-    expect(header?.props.className).not.toContain("overflow-y-auto");
-    expect(status?.props.className).not.toContain("overflow-y-auto");
   });
 });

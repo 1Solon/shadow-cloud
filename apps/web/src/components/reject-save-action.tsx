@@ -92,16 +92,13 @@ export function RejectSaveAction({
         onConfirm={rejectSave}
       >
         {errorMessage ? (
-          <div
-            className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-            role="alert"
-          >
+          <p className="text-xs text-destructive" role="alert">
             {errorMessage}
-          </div>
+          </p>
         ) : null}
       </TerminalActionConfirmationDialog>
       <Button
-        className="min-h-11 shrink-0 px-3 text-xs font-medium"
+        className="min-h-11 shrink-0 px-3"
         type="button"
         variant="destructive"
         onClick={openConfirmation}

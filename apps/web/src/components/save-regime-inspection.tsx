@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { fieldValue } from "@/lib/terminal-styles";
 import { SavePasswordReset } from "./save-password-reset";
 import { SavePasswordUndo } from "./save-password-undo";
 
@@ -29,14 +30,14 @@ export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
   if (!canManagePasswords) return null;
   return (
     <Card
-      className="min-w-0 overflow-hidden font-mono text-sm text-terminal-200"
+      className="min-w-0 overflow-hidden font-mono text-sm text-terminal-300"
       role="region"
       aria-label="In-game regime inspection"
     >
       <CardHeader>
         <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 space-y-1.5">
-            <CardTitle>Passwords:</CardTitle>
+            <CardTitle>Passwords</CardTitle>
             <CardDescription>
               Reset/Change passwords in the latest save.
             </CardDescription>
@@ -45,7 +46,7 @@ export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
             <Button
               className="min-h-11 shrink-0 self-start px-3"
               type="button"
-              variant="command"
+              variant="outline"
               disabled={pending || inspecting || selected !== null}
               onClick={() => {
                 void workflow.inspect();
@@ -65,10 +66,7 @@ export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
         {!hasSave ? <p>This campaign has no save to inspect.</p> : null}
         {workflow.message ? <p role="alert">{workflow.message}</p> : null}
         {hasSave && error ? (
-          <p
-            role="alert"
-            className="border border-destructive/30 p-3 text-destructive"
-          >
+          <p role="alert" className="text-xs text-destructive">
             {error}
           </p>
         ) : null}
@@ -81,11 +79,13 @@ export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
                 {inspection.regimes.map((regime) => (
                   <li key={regime.id} className="space-y-2 py-3">
                     <div className="flex flex-wrap items-center gap-3">
-                      <span className="min-w-0 max-w-full break-words">
+                      <span
+                        className={`min-w-0 max-w-full break-words ${fieldValue}`}
+                      >
                         {regime.name}
                       </span>
                       {regime.current ? (
-                        <span className="border border-terminal-400/60 px-2 py-1 text-xs">
+                        <span className="text-xs text-terminal-300/70">
                           Current regime
                         </span>
                       ) : null}

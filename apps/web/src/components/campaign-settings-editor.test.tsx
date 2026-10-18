@@ -4,6 +4,7 @@ import "@testing-library/jest-dom/vitest";
 import {
   act,
   cleanup,
+  fireEvent,
   render,
   screen,
   waitFor,
@@ -40,6 +41,7 @@ const baseProps = {
   gameNumber: 22,
   hasAiPlayers: false,
   name: "Campaign 22",
+  tagline: null,
   organizerDisplayName: "Overlord",
   players: [
     {
@@ -149,7 +151,7 @@ describe("CampaignSettingsEditor", () => {
     expect(metadata).toContainElement(screen.getByLabelText("Round"));
     expect(metadata).not.toContainElement(screen.getByLabelText("Overlord"));
     expect(transfer).toContainElement(screen.getByLabelText("Overlord"));
-    expect(transfer).toHaveClass("border-terminal-300/60", "bg-terminal-400/5");
+    expect(transfer).toHaveClass("border-destructive/40", "bg-terminal-400/5");
     expect(transfer).toHaveTextContent(
       "Whoever you pick becomes the new Overlord, with all the controls that come with the role.",
     );
@@ -301,6 +303,103 @@ describe("CampaignSettingsEditor", () => {
       expect(onDirtyChange).toHaveBeenLastCalledWith(false);
       expect(router.push).toHaveBeenCalledWith("/games/37?metadata=success");
     });
+  });
+
+  it("renders the tagline beside the name with its hint, limit, and saved value", () => {
+    renderEditor("identity", { tagline: "4S FFA+AI T3 1Z 1A" });
+
+    const tagline = screen.getByLabelText("Tagline");
+    expect(tagline).toHaveValue("4S FFA+AI T3 1Z 1A");
+    expect(tagline).toHaveAttribute("maxlength", "40");
+    expect(tagline).toHaveAccessibleDescription(
+      "Optional one-line summary shown after the campaign name (max 40 characters).",
+    );
+    expect(
+      screen.getByRole("region", { name: "Campaign metadata" }),
+    ).toContainElement(tagline);
+  });
+
+  it("starts with an empty tagline when none is saved and is not dirty", async () => {
+    const { onDirtyChange } = renderEditor("identity");
+
+    expect(screen.getByLabelText("Tagline")).toHaveValue("");
+    await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(false));
+  });
+
+  it("submits a trimmed tagline alone and keeps it as the saved draft", async () => {
+    const user = userEvent.setup();
+    const { onDirtyChange } = renderEditor("identity");
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        new Response(JSON.stringify({ gameNumber: 22 }), { status: 200 }),
+      );
+
+    await user.type(screen.getByLabelText("Tagline"), "  Co-op vs hard AI  ");
+    await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(true));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/games/22/metadata",
+        expect.objectContaining({
+          body: JSON.stringify({ tagline: "Co-op vs hard AI" }),
+        }),
+      );
+      expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+    });
+    expect(screen.getByLabelText("Tagline")).toHaveValue("Co-op vs hard AI");
+  });
+
+  it("submits null to clear a saved tagline", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        new Response(JSON.stringify({ gameNumber: 22 }), { status: 200 }),
+      );
+    renderEditor("identity", { tagline: "Old tagline" });
+
+    await user.clear(screen.getByLabelText("Tagline"));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "/api/games/22/metadata",
+        expect.objectContaining({ body: JSON.stringify({ tagline: null }) }),
+      );
+    });
+    expect(screen.getByLabelText("Tagline")).toHaveValue("");
+  });
+
+  it("treats whitespace around an unchanged tagline as clean", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    renderEditor("identity", { tagline: "Same" });
+
+    await user.type(screen.getByLabelText("Tagline"), "   ");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Change at least one detail before saving.",
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("rejects an over-long tagline inline without fetching", async () => {
+    const user = userEvent.setup();
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    renderEditor("identity");
+
+    fireEvent.change(screen.getByLabelText("Tagline"), {
+      target: { value: "x".repeat(41) },
+    });
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Tagline cannot exceed 40 characters.",
+    );
+
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("keeps metadata request failures inline with the draft dirty", async () => {

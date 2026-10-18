@@ -100,10 +100,16 @@ describe("TurnCommandCenter", () => {
   it("gives the active signed-in player status, metrics, campaign notes, and upload action", () => {
     renderCommandCenter();
 
-    expect(screen.getByText("YOUR TURN")).toBeVisible();
+    expect(screen.queryByText("YOUR TURN")).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Current turn" })).toHaveClass(
+      "border-l-[6px]",
+      "border-l-terminal-400",
+    );
+    expect(screen.getByText("It is your turn.")).toHaveClass("sr-only");
     expect(screen.getByText("Rhea")).toBeVisible();
     expect(screen.getByText("Seat 2")).toBeVisible();
-    expect(screen.getByText("Round 4")).toBeVisible();
+    expect(screen.getByText("Round")).toBeVisible();
+    expect(screen.getByText("04")).toBeVisible();
     expect(screen.getByText("59m / 24h")).toBeVisible();
     expect(screen.getByText("Campaign notes")).toBeVisible();
     expect(screen.getByText("western").tagName).toBe("STRONG");
@@ -160,7 +166,14 @@ describe("TurnCommandCenter", () => {
   it("shows a waiting player the latest download but no upload action", () => {
     renderCommandCenter({ isActivePlayer: false });
 
-    expect(screen.getByText("WAITING")).toBeVisible();
+    expect(screen.queryByText("WAITING")).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Current turn" })).toHaveClass(
+      "border-l-[6px]",
+      "border-l-terminal-400/40",
+    );
+    expect(screen.getByText("Waiting for the active lord.")).toHaveClass(
+      "sr-only",
+    );
     expect(screen.getByText("Rhea")).toBeVisible();
     expect(screen.getByText("Seat 2")).toBeVisible();
     expect(screen.getByText("Campaign notes")).toBeVisible();
@@ -170,10 +183,23 @@ describe("TurnCommandCenter", () => {
     expect(screen.getByTestId("quick-download")).toBeVisible();
   });
 
+  it("carries the destructive rail when another lord's turn is overdue", () => {
+    renderCommandCenter({
+      isActivePlayer: false,
+      currentTurnStartedAt: "2026-07-09T11:00:00.000Z",
+    });
+
+    expect(screen.getByRole("region", { name: "Current turn" })).toHaveClass(
+      "border-l-[6px]",
+      "border-l-destructive",
+    );
+    expect(screen.getByText("This turn is overdue.")).toHaveClass("sr-only");
+  });
+
   it("shows visitors the latest download without granting upload access", () => {
     renderCommandCenter({ isSignedIn: false });
 
-    expect(screen.getByText("WAITING")).toBeVisible();
+    expect(screen.queryByText("WAITING")).not.toBeInTheDocument();
     expect(screen.getByText("Campaign notes")).toBeVisible();
     expect(screen.getByText("western").tagName).toBe("STRONG");
     expect(
@@ -294,12 +320,8 @@ describe("TurnCommandCenter", () => {
       "command-center-body",
     );
 
-    expect(panel).toHaveClass(
-      "rounded-lg",
-      "border",
-      "border-terminal-400/30",
-      "bg-background",
-    );
+    expect(panel).toHaveClass("rounded-lg", "border", "border-terminal-400/20");
+    expect(panel).not.toHaveClass("bg-background");
     expect(body).toHaveClass(
       "grid",
       "lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]",

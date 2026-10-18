@@ -22,7 +22,7 @@ it("retries loading campaigns every minute and on request", () => {
   render(<CampaignListError retry={retry} />);
 
   expect(screen.getByRole("alert")).toHaveTextContent(
-    "Campaigns could not be loaded.",
+    "Campaigns could not be loaded",
   );
   expect(retry).not.toHaveBeenCalled();
 

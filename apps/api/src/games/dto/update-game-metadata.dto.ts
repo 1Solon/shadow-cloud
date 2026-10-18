@@ -14,6 +14,7 @@ import {
   CreateDiscordGameMode,
   CreateDiscordGameZoneCount,
 } from './create-discord-game.dto';
+import { IsCampaignTagline } from './validation/is-campaign-tagline.decorator';
 import { IsPositiveSafeInteger } from './validation/is-positive-safe-integer.decorator';
 
 export class UpdateGameMetadataDto {
@@ -26,6 +27,10 @@ export class UpdateGameMetadataDto {
   @IsString()
   @MaxLength(100)
   name?: string;
+
+  @IsOptional()
+  @IsCampaignTagline()
+  tagline?: string | null;
 
   @IsOptional()
   @IsInt()

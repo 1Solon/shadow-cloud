@@ -19,7 +19,7 @@ export function SavePasswordUndo({
 }) {
   const [confirmed, setConfirmed] = useState(false);
   return (
-    <div className="space-y-3 border-t border-terminal-400/30 pt-4">
+    <div className="space-y-3 border-t border-terminal-400/20 pt-4 text-sm text-terminal-300">
       <form
         className="space-y-3"
         onSubmit={(event) => {
@@ -49,7 +49,7 @@ export function SavePasswordUndo({
         <div className="flex flex-wrap gap-3">
           <Button
             type="button"
-            variant="secondary"
+            variant="outline"
             disabled={pending}
             onClick={() => {
               setConfirmed(false);

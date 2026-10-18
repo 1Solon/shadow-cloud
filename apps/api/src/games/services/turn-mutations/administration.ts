@@ -21,6 +21,7 @@ import {
   mapZoneCount,
   normalizeGameNameInput,
   normalizeNotesInput,
+  normalizeTaglineInput,
 } from '../../support/game-configuration.helpers';
 import { buildGameIdentifierWhere } from '../../support/game-lookup.helpers';
 import { assertCampaignInPlay } from '../../support/campaign-conclusion';
@@ -209,6 +210,7 @@ export async function updateGameMetadata(
     const previousMetadata = {
       gameNumber: game.gameNumber,
       name: game.name,
+      tagline: game.tagline,
       roundNumber: game.turnState?.roundNumber ?? 1,
       playerCount: game.playerCount,
       hasAiPlayers: game.hasAiPlayers,
@@ -230,6 +232,10 @@ export async function updateGameMetadata(
     const nextMetadata = {
       gameNumber: input.gameNumber ?? game.gameNumber,
       name,
+      tagline:
+        input.tagline === undefined
+          ? game.tagline
+          : normalizeTaglineInput(input.tagline),
       roundNumber: input.roundNumber ?? previousMetadata.roundNumber,
       playerCount: input.playerCount ?? game.playerCount,
       hasAiPlayers: input.hasAiPlayers ?? game.hasAiPlayers,

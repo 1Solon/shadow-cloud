@@ -15,6 +15,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { CampaignDetailsWorkspace } from "@/components/campaign-details-workspace";
 import type { SeatOrderSnapshot } from "@/lib/shadow-cloud-api";
 
+function expectActiveSeat(label: string) {
+  expect(
+    screen.getByText(label).closest('[aria-current="true"]'),
+  ).not.toBeNull();
+}
+
 const router = { refresh: vi.fn(), push: vi.fn(), replace: vi.fn() };
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
@@ -29,6 +35,7 @@ const props: ComponentProps<typeof CampaignDetailsWorkspace> = {
   gameNumber: 42,
   hasAiPlayers: false,
   name: "Campaign 42",
+  tagline: null,
   notes: "Hold the pass.",
   organizerDisplayName: "Overlord",
   playerCount: 2,
@@ -204,7 +211,7 @@ describe("CampaignDetailsWorkspace Seat Order lifecycle", () => {
       rerender(<CampaignDetailsWorkspace {...props} gameNumber={84} />);
       await user.click(screen.getByRole("button", { name: "Seat Order" }));
       expect(screen.getByText("New lord")).toBeVisible();
-      expect(screen.getByText("Seat 2 · Active")).toBeVisible();
+      expectActiveSeat("Seat 2");
       await user.click(screen.getByRole("button", { name: "Manage seat 1" }));
       await user.click(
         within(screen.getByRole("dialog")).getByRole("button", {
@@ -369,7 +376,7 @@ describe("CampaignDetailsWorkspace Seat Order lifecycle", () => {
       />,
     );
     expect(screen.getByText("Rhea")).toBeVisible();
-    expect(screen.getByText("Seat 2 · Active")).toBeVisible();
+    expectActiveSeat("Seat 2");
     expect(screen.queryByText("New lord")).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Save order" }));
     expect(JSON.parse(String(fetchSpy.mock.calls[0]?.[1]?.body))).toMatchObject(
@@ -385,7 +392,7 @@ describe("CampaignDetailsWorkspace Seat Order lifecycle", () => {
       expect(screen.getByRole("button", { name: "Notes" })).toBeEnabled(),
     );
     expect(screen.getByText("New lord")).toBeVisible();
-    expect(screen.getByText("Seat 1 · Overlord · Active")).toBeVisible();
+    expectActiveSeat("Seat 1 · Overlord");
 
     await user.click(screen.getByRole("button", { name: "Notes" }));
     await user.click(screen.getByRole("button", { name: "Seat Order" }));

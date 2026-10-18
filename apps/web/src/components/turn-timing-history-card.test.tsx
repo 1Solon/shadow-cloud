@@ -69,18 +69,17 @@ describe("TurnTimingHistoryCard", () => {
     expect(rowGroups).toHaveLength(2);
     expect(rowGroups[0]).toBe(table.querySelector("thead"));
     expect(rowGroups[1]).toBe(table.querySelector("tbody"));
-    expect(within(rows[0]).getAllByRole("columnheader")).toHaveLength(6);
-    expect(within(rows[1]).getAllByRole("cell")).toHaveLength(6);
-    expect(within(rows[2]).getAllByRole("cell")).toHaveLength(6);
+    expect(within(rows[0]).getAllByRole("columnheader")).toHaveLength(7);
+    expect(within(rows[1]).getAllByRole("cell")).toHaveLength(7);
+    expect(within(rows[2]).getAllByRole("cell")).toHaveLength(7);
     expect(rows[1]).toHaveClass(
-      "h-16",
       "border-l-2",
       "border-l-terminal-400",
       "bg-terminal-400/10",
-      "text-terminal-100",
+      "text-terminal-300",
     );
-    expect(rows[2]).toHaveClass("h-16");
-    expect(within(rows[1]).getByText("Current turn")).toBeVisible();
+    expect(rows[2]).not.toHaveClass("bg-terminal-400/10");
+    expect(within(rows[1]).getByText("Current turn")).toHaveClass("sr-only");
     expect(within(rows[1]).getByText("1m")).toBeVisible();
     expect(within(rows[2]).getByText("30m")).toBeVisible();
 
@@ -282,6 +281,7 @@ describe("TurnTimingHistoryCard", () => {
       "columnheader",
       "columnheader",
       "columnheader",
+      "columnheader",
     ]);
     expect(
       Array.from(table.querySelectorAll("thead th"), (header) =>
@@ -294,22 +294,24 @@ describe("TurnTimingHistoryCard", () => {
     expect(table).toHaveClass(
       "history-table",
       "history-table--stacked",
-      "sm:min-w-[38rem]",
+      "sm:min-w-[48rem]",
     );
     expect(
       Array.from(table.querySelectorAll("tbody td"), (cell) =>
         cell.getAttribute("data-label"),
       ),
     ).toEqual([
-      "Turn",
+      "Round",
       "Player",
-      "Timeline",
+      "Started",
+      "Ended",
       "Duration",
       "Result",
       "Reminders",
-      "Turn",
+      "Round",
       "Player",
-      "Timeline",
+      "Started",
+      "Ended",
       "Duration",
       "Result",
       "Reminders",
@@ -318,11 +320,10 @@ describe("TurnTimingHistoryCard", () => {
       within(table).queryByRole("columnheader", { name: "Completed" }),
     ).toBe(null);
     const turnHeader = within(table).getByRole("columnheader", {
-      name: "Turn",
+      name: "Round",
     });
     expect(turnHeader).toHaveAttribute("role", "columnheader");
     expect(turnHeader).toHaveAttribute("scope", "col");
-    expect(turnHeader.closest("tr")).toHaveClass("h-10");
     expect(
       within(table)
         .getAllByRole("cell")

@@ -34,6 +34,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
+import { fieldLabel, fieldValue } from "@/lib/terminal-styles";
 import {
   transferOutcomeMessage,
   isKnownRejectionStatus,
@@ -68,6 +69,7 @@ const armyCountOptions = [
 
 const techLevelOptions = [3, 4, 5] as const;
 const MAX_TURN_TIMING_HOURS = 1_000_000_000;
+const MAX_TAGLINE_LENGTH = 40;
 
 type CampaignSettingsSection = Extract<
   CampaignConfigurationSection,
@@ -88,6 +90,7 @@ type CampaignSettingsEditorProps = CampaignEditorStateProps & {
   section: CampaignSettingsSection;
   gameNumber: number;
   name: string;
+  tagline: string | null;
   organizerDisplayName: string;
   roundNumber: number;
   playerCount: number | null;
@@ -107,6 +110,7 @@ type CampaignSettingsEditorProps = CampaignEditorStateProps & {
 type MetadataDraft = {
   gameNumber: string;
   name: string;
+  tagline: string;
   roundNumber: string;
   playerCount: string;
   hasAiPlayers: string;
@@ -124,6 +128,7 @@ type MetadataDraft = {
 type MetadataPayload = {
   gameNumber?: number;
   name?: string;
+  tagline?: string | null;
   roundNumber?: number;
   playerCount?: number;
   hasAiPlayers?: boolean;
@@ -157,6 +162,7 @@ function createDraft(props: CampaignSettingsEditorProps): MetadataDraft {
   return {
     gameNumber: String(props.gameNumber),
     name: props.name,
+    tagline: props.tagline ?? "",
     roundNumber: String(props.roundNumber),
     playerCount: props.playerCount == null ? "" : String(props.playerCount),
     hasAiPlayers:
@@ -228,6 +234,7 @@ function isSectionDirty(
       normalizeNumber(draft.gameNumber) !==
         normalizeNumber(initialDraft.gameNumber) ||
       draft.name.trim() !== initialDraft.name.trim() ||
+      draft.tagline.trim() !== initialDraft.tagline.trim() ||
       normalizeNumber(draft.roundNumber) !==
         normalizeNumber(initialDraft.roundNumber) ||
       normalizeNumber(draft.playerCount) !==
@@ -277,6 +284,17 @@ function buildMetadataPayload(
     const normalizedName = draft.name.trim();
     if (normalizedName !== initialDraft.name.trim()) {
       payload.name = normalizedName;
+    }
+
+    const normalizedTagline = draft.tagline.trim();
+    if (normalizedTagline !== initialDraft.tagline.trim()) {
+      if (normalizedTagline.length > MAX_TAGLINE_LENGTH) {
+        return {
+          ok: false as const,
+          message: `Tagline cannot exceed ${MAX_TAGLINE_LENGTH} characters.`,
+        };
+      }
+      payload.tagline = normalizedTagline === "" ? null : normalizedTagline;
     }
 
     if (
@@ -377,14 +395,12 @@ function FieldRow({
   children: React.ReactNode;
 }) {
   return (
-    <Label className="grid min-w-0 gap-2 border-b border-terminal-400/20 py-3 text-sm font-mono text-terminal-200 sm:grid-cols-[minmax(10rem,0.45fr)_minmax(0,1fr)] sm:items-center">
+    <Label className="grid min-w-0 gap-2 border-b border-terminal-400/20 py-3 font-mono sm:grid-cols-[minmax(10rem,0.45fr)_minmax(0,1fr)] sm:items-center">
       <span className="min-w-0">
-        <span className="block text-xs uppercase tracking-[0.16em] text-terminal-300/70">
-          {label}
-        </span>
+        <span className={`block ${fieldLabel}`}>{label}</span>
         {description ? (
           <span
-            className="mt-1 block min-w-0 text-xs leading-relaxed text-terminal-200/70"
+            className="mt-1 block min-w-0 text-xs text-terminal-300/70"
             id={descriptionId}
           >
             {description}
@@ -466,7 +482,7 @@ function OverlordTransferConfirmationDialog({
         </AlertDialogHeader>
         <AlertDialogBody className="text-sm">
           <AlertDialogDescription asChild>
-            <div className="text-terminal-200">
+            <div className="text-terminal-300">
               <div>&gt; overlord --transfer seat-{target.seatNumber}</div>
               <div className="mt-1 whitespace-pre-wrap break-words leading-6">
                 {target.displayName} will receive campaign control and become
@@ -475,10 +491,7 @@ function OverlordTransferConfirmationDialog({
             </div>
           </AlertDialogDescription>
           {errorMessage ? (
-            <div
-              role="alert"
-              className="border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive"
-            >
+            <div role="alert" className="text-xs text-destructive">
               {errorMessage}
             </div>
           ) : null}
@@ -510,6 +523,7 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
     return generation === operationGenerationRef.current;
   }
   const turnDescriptionIdPrefix = useId();
+  const taglineDescriptionId = `${turnDescriptionIdPrefix}-tagline-description`;
   const turnTargetHoursDescriptionId = `${turnDescriptionIdPrefix}-turn-target-hours-description`;
   const turnReminderGraceHoursDescriptionId = `${turnDescriptionIdPrefix}-turn-reminder-grace-hours-description`;
   const turnReminderRepeatHoursDescriptionId = `${turnDescriptionIdPrefix}-turn-reminder-repeat-hours-description`;
@@ -932,7 +946,7 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
   return (
     <div data-testid="campaign-settings-editor">
       {metadataUnconfirmed ? (
-        <div className="mb-4 border border-terminal-400/30 px-4 py-3 text-sm font-mono text-terminal-200">
+        <div className="mb-4 rounded-md border border-destructive/40 px-4 py-3 font-mono text-xs text-destructive">
           <p ref={recoveryMessageRef} role="alert" tabIndex={-1}>
             Campaign details could not be confirmed. Transfer was not attempted.
             Reload the campaign before editing again; its number may have
@@ -944,13 +958,14 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
         </div>
       ) : null}
       {recovery ? (
-        <div className="mb-4 border border-terminal-400/30 px-4 py-3 text-sm font-mono text-terminal-200">
+        <div className="mb-4 rounded-md border border-destructive/40 px-4 py-3 font-mono text-xs text-destructive">
           <p ref={recoveryMessageRef} role="alert" tabIndex={-1}>
             {transferOutcomeMessage(recovery.outcome, "unavailable")} Reload
             current ownership before another attempt. Editing remains
             unavailable until the campaign is reloaded.
           </p>
           <Button
+            className="mt-3"
             disabled={isMutating}
             onClick={() =>
               startTransferTransition(() => reconcileTransfer(recovery))
@@ -978,10 +993,7 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
 
       <fieldset className="min-w-0 border-0 p-0" disabled={isEditorDisabled}>
         {errorMessage ? (
-          <div
-            role="alert"
-            className="mb-4 border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-mono text-destructive"
-          >
+          <div role="alert" className="mb-4 font-mono text-xs text-destructive">
             {errorMessage}
           </div>
         ) : null}
@@ -994,11 +1006,11 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
             >
               <h4
                 id={identityMetadataHeadingId}
-                className="pt-3 text-xs font-semibold uppercase tracking-[0.16em] text-terminal-300"
+                className={`pt-3 ${fieldLabel}`}
               >
                 Campaign metadata
               </h4>
-              <p className="mt-1 text-sm leading-relaxed text-terminal-200/70">
+              <p className="mt-1 text-xs text-terminal-300/70">
                 Routine details that identify the campaign and its current
                 progress.
               </p>
@@ -1021,6 +1033,23 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
                   type="text"
                   value={draft.name}
                   onChange={(event) => updateDraft("name", event.target.value)}
+                />
+              </FieldRow>
+              <FieldRow
+                description="Optional one-line summary shown after the campaign name (max 40 characters)."
+                descriptionId={taglineDescriptionId}
+                label="Tagline"
+              >
+                <Input
+                  aria-describedby={taglineDescriptionId}
+                  aria-label="Tagline"
+                  disabled={isEditorDisabled}
+                  maxLength={MAX_TAGLINE_LENGTH}
+                  type="text"
+                  value={draft.tagline}
+                  onChange={(event) =>
+                    updateDraft("tagline", event.target.value)
+                  }
                 />
               </FieldRow>
               <FieldRow label="Round">
@@ -1052,20 +1081,17 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
 
             <section
               aria-labelledby={transferHeadingId}
-              className="mt-6 border border-terminal-300/60 bg-terminal-400/5 px-4 py-3"
+              className="mt-6 rounded-md border border-destructive/40 bg-terminal-400/5 px-4 py-3"
             >
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-terminal-300">
+              <p className="text-xs uppercase tracking-[0.16em] text-destructive">
                 Handle with care
               </p>
-              <h4
-                id={transferHeadingId}
-                className="mt-1 text-sm font-semibold uppercase tracking-[0.16em] text-terminal-100"
-              >
+              <h4 id={transferHeadingId} className={`mt-1 ${fieldValue}`}>
                 Overlord transfer
               </h4>
               <p
                 id={transferDescriptionId}
-                className="mt-2 text-sm leading-relaxed text-terminal-200/70"
+                className="mt-2 text-xs text-terminal-300/70"
               >
                 This hands control of the campaign to another player. Whoever
                 you pick becomes the new Overlord, with all the controls that
@@ -1073,7 +1099,7 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
                 transfer goes through.
               </p>
               <div className="mt-2">
-                <p className="text-xs uppercase tracking-[0.14em] text-terminal-300/70">
+                <p className={fieldLabel}>
                   Current Overlord: {props.organizerDisplayName}
                 </p>
                 <FieldRow label="Overlord">
@@ -1180,11 +1206,9 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
 
         {props.section === "turn-protocol" ? (
           <div className="min-w-0 border-t border-terminal-400/20">
-            <div className="min-w-0 py-3 font-mono text-terminal-200">
-              <p className="text-xs uppercase tracking-[0.16em] text-terminal-300/70">
-                REMINDER SCHEDULE
-              </p>
-              <p className="mt-1 text-sm leading-relaxed text-terminal-200/70">
+            <div className="min-w-0 py-3 font-mono">
+              <p className={fieldLabel}>REMINDER SCHEDULE</p>
+              <p className="mt-1 text-xs text-terminal-300/70">
                 Sets the expected turn pace and controls when automated reminder
                 messages are sent.
               </p>
@@ -1268,7 +1292,7 @@ export function CampaignSettingsEditor(props: CampaignSettingsEditorProps) {
           <Button
             disabled={isEditorDisabled}
             type="button"
-            variant="secondary"
+            variant="outline"
             onClick={cancelEditing}
           >
             Cancel

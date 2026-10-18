@@ -15,6 +15,15 @@ import {
   getTurnDurationMs,
 } from "@/lib/turn-timing";
 import type { GameTurnRecord } from "@/lib/shadow-cloud-api";
+import {
+  padNumber,
+  tableCell,
+  tableCurrentRow,
+  tableHead,
+  tableHeaderCell,
+  tableRow,
+} from "@/lib/terminal-styles";
+import { cn } from "@/lib/utils";
 
 const defaultRefreshIntervalMs = 60 * 1000;
 const maxCompletedTurns = 25;
@@ -26,6 +35,17 @@ type TurnTimingHistoryCardProps = {
   refreshIntervalMs?: number;
 };
 
+function EmptyCell() {
+  return (
+    <>
+      <span aria-hidden="true" className="text-terminal-300/50">
+        —
+      </span>
+      <span className="sr-only">None</span>
+    </>
+  );
+}
+
 function TurnTimingHistoryRow({
   record,
   isOpen,
@@ -36,73 +56,63 @@ function TurnTimingHistoryRow({
   now: Date;
 }) {
   return (
-    <tr
-      className={
-        isOpen
-          ? "h-16 border-b border-terminal-400/30 border-l-2 border-l-terminal-400 bg-terminal-400/10 text-terminal-100"
-          : "h-16 border-b border-terminal-400/20 bg-terminal-400/5 text-terminal-200"
-      }
-      role="row"
-    >
+    <tr className={cn(tableRow, isOpen && tableCurrentRow)} role="row">
       <td
-        className="px-3 py-2 align-top sm:px-4 sm:py-3"
-        data-label="Turn"
+        className={cn(tableCell, "tabular-nums")}
+        data-label="Round"
         role="cell"
       >
-        <span className="block font-medium">Round {record.roundNumber}</span>
-        <span className="mt-1 block text-xs text-terminal-300/70">
-          {record.seatNumber == null ? "No seat" : `Seat ${record.seatNumber}`}
-        </span>
+        {isOpen ? <span className="sr-only">Current turn</span> : null}
+        {padNumber(record.roundNumber)}
       </td>
       <td
-        className="break-words px-3 py-2 align-top sm:px-4 sm:py-3"
+        className={cn(tableCell, "break-words")}
         data-label="Player"
         role="cell"
       >
         {record.playerDisplayName}
+        <span className="block text-xs text-terminal-300/70">
+          {record.seatNumber == null ? "No seat" : `Seat ${record.seatNumber}`}
+        </span>
       </td>
       <td
-        className="px-3 py-2 align-top sm:px-4 sm:py-3"
-        data-label="Timeline"
+        className={cn(tableCell, "whitespace-nowrap")}
+        data-label="Started"
         role="cell"
       >
-        <div className="space-y-1">
-          <div>
-            <span className="mr-2 text-[0.6rem] uppercase tracking-[0.14em] text-terminal-300/70">
-              Started
-            </span>
-            <LocalTimestamp compact timestamp={record.startedAt} />
-          </div>
-          <div>
-            <span className="mr-2 text-[0.6rem] uppercase tracking-[0.14em] text-terminal-300/70">
-              {record.endedAt ? "Completed" : "Status"}
-            </span>
-            {record.endedAt ? (
-              <LocalTimestamp compact timestamp={record.endedAt} />
-            ) : (
-              "In progress"
-            )}
-          </div>
-        </div>
+        <LocalTimestamp compact timestamp={record.startedAt} />
       </td>
       <td
-        className="px-3 py-2 align-top font-medium sm:px-4 sm:py-3"
+        className={cn(tableCell, "whitespace-nowrap")}
+        data-label="Ended"
+        role="cell"
+      >
+        {record.endedAt ? (
+          <LocalTimestamp compact timestamp={record.endedAt} />
+        ) : (
+          <EmptyCell />
+        )}
+      </td>
+      <td
+        className={cn(tableCell, "tabular-nums")}
         data-label="Duration"
         role="cell"
       >
         {formatTurnDuration(getTurnDurationMs(record, now))}
       </td>
       <td
-        className="break-words px-3 py-2 align-top sm:px-4 sm:py-3"
+        className={cn(tableCell, "break-words")}
         data-label="Result"
         role="cell"
       >
-        {isOpen
-          ? "Current turn"
-          : formatCompletionReason(record.completionReason)}
+        {isOpen ? (
+          <EmptyCell />
+        ) : (
+          formatCompletionReason(record.completionReason)
+        )}
       </td>
       <td
-        className="px-3 py-2 align-top sm:px-4 sm:py-3"
+        className={cn(tableCell, "tabular-nums")}
         data-label="Reminders"
         role="cell"
       >
@@ -139,66 +149,72 @@ export function TurnTimingHistoryCard({
   return (
     <Card className="overflow-hidden">
       <CardHeader className="p-4 sm:p-5">
-        <CardTitle>Turn timings:</CardTitle>
+        <CardTitle>Turn timings</CardTitle>
         <CardDescription>
           See how long the current and previous turns have taken.
         </CardDescription>
       </CardHeader>
-      <CardContent className="p-4 pt-0 sm:p-5 sm:pt-0">
+      <CardContent
+        className={hasTurns ? "p-0 sm:p-0" : "p-4 pt-0 sm:p-5 sm:pt-0"}
+      >
         {hasTurns ? (
           <div
             aria-label="Recent turn timing history table"
-            className="overflow-x-auto rounded-lg border border-terminal-400/20"
+            className="overflow-x-auto"
             role="region"
             tabIndex={0}
           >
             <table
-              className="history-table history-table--stacked w-full text-left text-xs font-mono sm:min-w-[38rem] sm:text-sm"
+              className="history-table history-table--stacked w-full text-left font-mono text-sm sm:min-w-[48rem]"
               role="table"
             >
               <caption className="sr-only">Recent turn timing history</caption>
-              <thead
-                className="border-b border-terminal-400/30 bg-terminal-400/10 text-xs uppercase tracking-[0.18em] text-terminal-300/70"
-                role="rowgroup"
-              >
-                <tr className="h-10" role="row">
+              <thead className={tableHead} role="rowgroup">
+                <tr role="row">
                   <th
-                    className="px-3 py-2 sm:px-4 sm:py-3"
+                    className={tableHeaderCell}
                     role="columnheader"
                     scope="col"
                   >
-                    Turn
+                    Round
                   </th>
                   <th
-                    className="px-3 py-2 sm:px-4 sm:py-3"
+                    className={tableHeaderCell}
                     role="columnheader"
                     scope="col"
                   >
                     Player
                   </th>
                   <th
-                    className="px-3 py-2 sm:px-4 sm:py-3"
+                    className={tableHeaderCell}
                     role="columnheader"
                     scope="col"
                   >
-                    Timeline
+                    Started
                   </th>
                   <th
-                    className="px-3 py-2 sm:px-4 sm:py-3"
+                    className={tableHeaderCell}
+                    role="columnheader"
+                    scope="col"
+                  >
+                    Ended
+                  </th>
+                  <th
+                    className={tableHeaderCell}
                     role="columnheader"
                     scope="col"
                   >
                     Duration
                   </th>
                   <th
-                    className="px-3 py-2 sm:px-4 sm:py-3"
+                    className={tableHeaderCell}
                     role="columnheader"
                     scope="col"
                   >
                     Result
                   </th>
                   <th
-                    className="px-3 py-2 sm:px-4 sm:py-3"
+                    className={tableHeaderCell}
                     role="columnheader"
                     scope="col"
                   >
@@ -223,7 +239,7 @@ export function TurnTimingHistoryCard({
           </div>
         ) : (
           <div
-            className="rounded-lg border border-terminal-400/20 bg-terminal-400/5 px-4 py-4 text-sm font-mono text-terminal-300"
+            className="rounded-md border border-terminal-400/20 bg-terminal-400/5 px-4 py-4 font-mono text-sm text-terminal-300"
             role="status"
           >
             No turn timings are available yet.
