@@ -10,6 +10,9 @@ A shared Shadow Empire game whose players, seats, and turns are coordinated thro
 **Campaign number**:
 The changeable, human-facing number identifying a campaign; changing the number does not create a different campaign.
 
+**Tagline**:
+An optional one-line summary of a campaign, up to 40 characters, set by its Overlord and shown after the campaign name.
+
 **Seat**:
 A position in a campaign's turn order that can be occupied by a player or left open.
 

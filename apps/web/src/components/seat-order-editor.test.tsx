@@ -19,6 +19,16 @@ import {
 } from "@/components/accepted-roster";
 import type { SeatOrderSnapshot } from "@/lib/shadow-cloud-api";
 
+function expectActiveSeat(label: string) {
+  expect(
+    screen.getByText(label).closest('[aria-current="true"]'),
+  ).not.toBeNull();
+}
+
+function expectInactiveSeat(label: string) {
+  expect(screen.getByText(label).closest('[aria-current="true"]')).toBeNull();
+}
+
 const router = { refresh: vi.fn() };
 
 vi.mock("next/navigation", () => ({
@@ -197,7 +207,7 @@ describe("SeatOrderEditor", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /draft.*discard.*load latest/i,
     );
-    expect(screen.getByText("Seat 2 · Active")).toBeVisible();
+    expectActiveSeat("Seat 2");
     expect(
       await screen.findByRole("button", { name: "Save order" }),
     ).toBeDisabled();
@@ -224,7 +234,7 @@ describe("SeatOrderEditor", () => {
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent(/load.*failed/i),
     );
-    expect(screen.getByText("Seat 2 · Active")).toBeVisible();
+    expectActiveSeat("Seat 2");
     expect(
       await screen.findByRole("button", { name: "Save order" }),
     ).toBeDisabled();
@@ -292,7 +302,7 @@ describe("SeatOrderEditor", () => {
         /different campaign.*original campaign.*campaign list/i,
       );
       expect(screen.getByText("Rhea")).toBeVisible();
-      expect(screen.getByText("Seat 2 · Active")).toBeVisible();
+      expectActiveSeat("Seat 2");
       expect(screen.queryByText("Other campaign lord")).toBeNull();
       expect(screen.queryByTestId("save-confirmation")).toBeNull();
       expect(onDirtyChange).toHaveBeenLastCalledWith(true);
@@ -358,7 +368,7 @@ describe("SeatOrderEditor", () => {
     );
     expect(await screen.findByText("New lord")).toBeVisible();
     expect(screen.queryByText("Rhea")).toBeNull();
-    expect(screen.getByText("Seat 1 · Overlord · Active")).toBeVisible();
+    expectActiveSeat("Seat 1 · Overlord");
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Save order" })).toHaveFocus(),
     );
@@ -506,8 +516,8 @@ describe("SeatOrderEditor", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.queryByRole("alertdialog")).toBeNull();
     rerender(<SeatOrderEditor {...props} canEdit />);
-    expect(screen.getByText("Seat 1 · Overlord · Active")).toBeVisible();
-    expect(screen.queryByText("Seat 2 · Active")).toBeNull();
+    expectActiveSeat("Seat 1 · Overlord");
+    expectInactiveSeat("Seat 2");
   });
 
   it("does not restore a pending save's draft or confirmation after permission is lost", async () => {
@@ -545,7 +555,7 @@ describe("SeatOrderEditor", () => {
     );
     expect(screen.queryByTestId("save-confirmation")).toBeNull();
     expect(screen.queryByRole("button", { name: "Save order" })).toBeNull();
-    expect(screen.getByText("Seat 1 · Overlord · Active")).toBeVisible();
+    expectActiveSeat("Seat 1 · Overlord");
   });
 
   it("does not accept a successful response without a coherent roster and baseline", async () => {
@@ -567,7 +577,7 @@ describe("SeatOrderEditor", () => {
       await screen.findByRole("button", { name: "Save order" }),
     ).toBeDisabled();
     expect(screen.queryByTestId("save-confirmation")).toBeNull();
-    expect(screen.getByText("Seat 2 · Active")).toBeVisible();
+    expectActiveSeat("Seat 2");
     await user.click(
       screen.getByRole("button", {
         name: "Discard draft and load latest roster",
@@ -576,7 +586,7 @@ describe("SeatOrderEditor", () => {
     expect(
       await screen.findByRole("button", { name: "Save order" }),
     ).toBeDisabled();
-    expect(screen.getByText("Seat 2 · Active")).toBeVisible();
+    expectActiveSeat("Seat 2");
     expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 
@@ -793,7 +803,7 @@ describe("SeatOrderEditor", () => {
       />,
     );
 
-    expect(screen.getByRole("heading", { name: "Seat order:" })).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Seat order" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Edit" })).toBeVisible();
 
     rerender(
@@ -807,7 +817,7 @@ describe("SeatOrderEditor", () => {
       />,
     );
 
-    expect(screen.queryByRole("heading", { name: "Seat order:" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Seat order" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
     expect(screen.getByRole("button", { name: "Manage seat 1" })).toBeVisible();
     expect(screen.getByTestId("seat-order-configuration")).toHaveClass(
@@ -1089,7 +1099,7 @@ describe("SeatOrderEditor", () => {
     await user.click(screen.getByRole("button", { name: "Manage seat 2" }));
     await user.click(screen.getByRole("button", { name: "Make active" }));
     await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(true));
-    expect(screen.getByText("Seat 2 · Active")).toBeVisible();
+    expectActiveSeat("Seat 2");
 
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
@@ -1154,7 +1164,7 @@ describe("SeatOrderEditor", () => {
     await waitFor(() => expect(onDirtyChange).toHaveBeenLastCalledWith(true));
     expect(
       screen.getAllByText(/Seat \d/).map((node) => node.textContent),
-    ).toEqual(["Seat 1", "Seat 2 · Overlord · Active", "Seat 3"]);
+    ).toEqual(["Seat 1", "Seat 2 · Overlord (active seat)", "Seat 3"]);
 
     await user.click(screen.getByRole("button", { name: "Manage seat 1" }));
     const dialog = screen.getByRole("dialog", { name: "Manage seat 1" });
@@ -1352,9 +1362,9 @@ describe("SeatOrderEditor", () => {
           presentation="configuration"
         />,
       );
-      expect(screen.getByText("Seat 1 · Overlord · Active")).toBeVisible();
+      expectActiveSeat("Seat 1 · Overlord");
       await user.keyboard(finishGesture);
-      expect(screen.getByText("Seat 2 · Active")).toBeVisible();
+      expectActiveSeat("Seat 2");
       await user.click(screen.getByRole("button", { name: "Save order" }));
       expect(
         await screen.findByRole("button", { name: "Save order" }),
@@ -1454,7 +1464,7 @@ describe("SeatOrderEditor", () => {
     await user.click(screen.getByRole("button", { name: "Manage seat 1" }));
     await user.click(screen.getByRole("button", { name: "Make active" }));
     // The proposal is now identical to its original baseline; show the current accepted roster.
-    expect(screen.getByText("Seat 2 · Active")).toBeVisible();
+    expectActiveSeat("Seat 2");
     await user.click(screen.getByRole("button", { name: "Save order" }));
     expect(
       await screen.findByRole("button", { name: "Save order" }),
@@ -1572,7 +1582,7 @@ describe("SeatOrderEditor", () => {
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "Save order" })).toBeEnabled(),
     );
-    expect(screen.getByText("Seat 2 · Active")).toBeVisible();
+    expectActiveSeat("Seat 2");
     await user.click(screen.getByRole("button", { name: "Save order" }));
     expect(
       await screen.findByRole("button", { name: "Save order" }),

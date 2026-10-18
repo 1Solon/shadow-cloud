@@ -76,19 +76,18 @@ describe("CampaignConfigurationShell", () => {
     render(<Harness />);
 
     const configurationHeading = screen.getByRole("heading", {
-      name: "Configure campaign:",
+      name: "Configure campaign",
     });
     const region = screen.getByRole("region", {
-      name: "Configure campaign:",
+      name: "Configure campaign",
     });
 
     expect(configurationHeading).toBeVisible();
     expect(region).toBeVisible();
     expect(region).toHaveClass(
       "rounded-lg",
-      "border-terminal-400",
-      "bg-card",
-      "shadow-2xl",
+      "border",
+      "border-terminal-400/20",
     );
     expect(
       screen.getByText(
@@ -293,7 +292,7 @@ describe("CampaignConfigurationShell", () => {
     render(<Harness />);
 
     expect(
-      screen.getByRole("region", { name: "Configure campaign:" }),
+      screen.getByRole("region", { name: "Configure campaign" }),
     ).toHaveClass("md:flex", "md:min-h-0", "md:grow", "md:flex-col");
     expect(screen.getByTestId("campaign-configuration-layout")).toHaveClass(
       "md:min-h-0",

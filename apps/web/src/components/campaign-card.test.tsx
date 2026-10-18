@@ -3,11 +3,9 @@
 import "@testing-library/jest-dom/vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  CampaignCard,
-  formatRelativeTimestamp,
-} from "@/components/campaign-card";
+import { CampaignCard } from "@/components/campaign-card";
 import type { GameListItem } from "@/lib/shadow-cloud-api";
 
 const push = vi.fn();
@@ -24,7 +22,7 @@ vi.mock("@/components/download-save-button", () => ({
   }: {
     fileName: string;
     href: string;
-    label?: string;
+    label?: ReactNode;
   }) => (
     <button data-file-name={fileName} data-href={href} type="button">
       {label ?? "Download"}
@@ -41,6 +39,7 @@ const game: GameListItem = {
   slug: "dust-crown",
   gameNumber: 42,
   name: "Dust Crown",
+  tagline: null,
   organizerDisplayName: "Solon",
   updatedAt: "2026-07-10T00:00:00.000Z",
   roundNumber: 4,
@@ -120,14 +119,36 @@ describe("CampaignCard", () => {
     expect(screen.getByText("· 6h over")).toBeVisible();
   });
 
-  it("marks the card when it is the current user's turn", () => {
+  it("shows the campaign number and round as two digits next to the name", () => {
+    render(<CampaignCard game={{ ...game, gameNumber: 7, roundNumber: 4 }} />);
+
+    expect(screen.getByText("07")).toBeVisible();
+    expect(screen.getByText("Round")).toBeVisible();
+    expect(screen.getByText("04")).toBeVisible();
+    expect(screen.getByText("Dust Crown")).toBeVisible();
+  });
+
+  it("shows the tagline after the name only when one is set", () => {
+    const { rerender } = render(<CampaignCard game={game} />);
+    expect(screen.queryByText("4S FFA+AI T3 1Z 1A")).not.toBeInTheDocument();
+
+    rerender(
+      <CampaignCard game={{ ...game, tagline: "4S FFA+AI T3 1Z 1A" }} />,
+    );
+    expect(screen.getByText("4S FFA+AI T3 1Z 1A")).toBeVisible();
+  });
+
+  it("shows turn state through the card's styling rather than status words", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-12T00:00:00.000Z"));
     const { rerender } = render(
       <CampaignCard currentUserId="user-1" game={game} />,
     );
-    expect(screen.getByText("Your turn")).toBeVisible();
+    expect(screen.queryByText(/^(Your turn|Overdue)$/)).not.toBeInTheDocument();
 
     rerender(<CampaignCard currentUserId="user-2" game={game} />);
-    expect(screen.queryByText("Your turn")).not.toBeInTheDocument();
+    expect(screen.queryByText(/^(Your turn|Overdue)$/)).not.toBeInTheDocument();
+    expect(screen.getByText("· 1d over")).toBeVisible();
   });
 
   it("places the latest-turn download to the left of the upload action", async () => {
@@ -137,7 +158,7 @@ describe("CampaignCard", () => {
     const download = screen.getByRole("button", {
       name: "Download latest turn",
     });
-    const upload = screen.getByRole("button", { name: "> Upload your turn" });
+    const upload = screen.getByRole("button", { name: "Upload your turn" });
 
     expect(download).toHaveAttribute("data-file-name", "42-T4-S1-Rhea.se1");
     expect(download).toHaveAttribute(
@@ -172,26 +193,15 @@ describe("CampaignCard", () => {
       screen.queryByRole("button", { name: "Download latest turn" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "> Upload your turn" }),
+      screen.queryByRole("button", { name: "Upload your turn" }),
     ).not.toBeInTheDocument();
   });
 
-  it("shows one Overlord value and keeps the exact update timestamp available", () => {
+  it("shows one Overlord value and the seat count", () => {
     render(<CampaignCard currentUserId="user-2" game={game} />);
 
     expect(screen.getAllByText("Overlord", { exact: true })).toHaveLength(1);
-
-    const updated = screen.getByTitle(`Updated ${game.updatedAt}`);
-    expect(updated).toHaveAttribute("dateTime", game.updatedAt);
-    expect(updated).toHaveAccessibleName(`Updated ${game.updatedAt}`);
-  });
-
-  it("formats relative update times from a supplied clock", () => {
-    const now = Date.parse("2026-07-10T02:00:00.000Z");
-
-    expect(formatRelativeTimestamp(game.updatedAt, now)).toBe("2 hours ago");
-    expect(formatRelativeTimestamp("2026-07-10T02:05:00.000Z", now)).toBe(
-      "in 5 minutes",
-    );
+    expect(screen.getByText("Solon")).toBeVisible();
+    expect(screen.getByText("4/4")).toBeVisible();
   });
 });

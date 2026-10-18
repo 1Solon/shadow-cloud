@@ -63,12 +63,12 @@ describe("UploadSaveForm", () => {
       name: "Drop save files here",
     });
     expect(dropZone).toHaveClass("px-8", "py-14");
-    expect(screen.getByText("> DROP SAVE FILES HERE")).toBeInTheDocument();
+    expect(screen.getByText("DROP SAVE FILES HERE")).toBeInTheDocument();
     expect(
       screen.getByText("Drag and drop your .se1 save files here"),
     ).toBeInTheDocument();
-    expect(screen.getByText("> SELECT FILES")).toBeInTheDocument();
-    expect(screen.getByText("> UPLOAD INSTRUCTIONS")).toBeInTheDocument();
+    expect(screen.getByText("SELECT FILES")).toBeInTheDocument();
+    expect(screen.getByText("Upload instructions")).toBeInTheDocument();
 
     await user.upload(
       screen.getByLabelText("Save file"),
@@ -98,9 +98,9 @@ describe("UploadSaveForm", () => {
       "py-6",
       "text-left",
     );
-    expect(screen.getByText(`> ${compactDropZoneLabel}`)).toBeInTheDocument();
-    expect(screen.queryByText("> SELECT FILE")).not.toBeInTheDocument();
-    expect(screen.queryByText("> UPLOAD INSTRUCTIONS")).not.toBeInTheDocument();
+    expect(screen.getByText(compactDropZoneLabel)).toBeInTheDocument();
+    expect(screen.queryByText("SELECT FILES")).not.toBeInTheDocument();
+    expect(screen.queryByText("Upload instructions")).not.toBeInTheDocument();
     expect(screen.getAllByRole("button")).toHaveLength(1);
     expect(within(dropZone).queryByRole("button")).not.toBeInTheDocument();
   });
@@ -146,7 +146,7 @@ describe("UploadSaveForm", () => {
       new File(["save"], longName),
     );
 
-    expect(screen.getByText(`> ${longName}`)).toHaveClass(
+    expect(screen.getByText(longName)).toHaveClass(
       "min-w-0",
       "[overflow-wrap:anywhere]",
     );

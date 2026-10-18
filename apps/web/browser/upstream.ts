@@ -26,6 +26,7 @@ export async function startUpstream(secret: string) {
       gameNumber: 42,
       slug: "browser-campaign",
       name: "Browser Campaign",
+      tagline: null,
       organizerId: "browser-overlord",
       organizerDisplayName: "Browser Overlord",
       seatOrderBaseline: { campaignId: "browser-campaign", revision: 0 },

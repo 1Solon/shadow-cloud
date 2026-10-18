@@ -141,17 +141,15 @@ describe("seat-order browser request", () => {
   ])(
     "defers invalid intent %j to upstream so a valid stale baseline takes precedence",
     async (rawIntent) => {
-      const fetchSpy = vi
-        .spyOn(globalThis, "fetch")
-        .mockResolvedValue(
-          Response.json(
-            {
-              code: "STALE_SEAT_ORDER",
-              message: "Roster changed. Reload before saving.",
-            },
-            { status: 409 },
-          ),
-        );
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        Response.json(
+          {
+            code: "STALE_SEAT_ORDER",
+            message: "Roster changed. Reload before saving.",
+          },
+          { status: 409 },
+        ),
+      );
       const response = await post({
         ...rawIntent,
         baseline,

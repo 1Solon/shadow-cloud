@@ -385,6 +385,9 @@ importers:
       '@dnd-kit/utilities':
         specifier: 3.2.2
         version: 3.2.2(react@19.3.0)
+      ascii.rest:
+        specifier: 0.2.1
+        version: 0.2.1(react@19.3.0)
       class-variance-authority:
         specifier: 0.7.1
         version: 0.7.1
@@ -3288,6 +3291,15 @@ packages:
   arraybuffer.prototype.slice@1.0.4:
     resolution: {integrity: sha512-BNoCY6SXXPQ7gF2opIP4GBE+Xw7U+pHMYKuzjgCN3GwiaIR09UUeKfheyIry77QtrCBlC0KK0q5/TER/tYh3PQ==}
     engines: {node: '>= 0.4'}
+
+  ascii.rest@0.2.1:
+    resolution: {integrity: sha512-9PY859MpGBo2SQtXO+YTQ9/tuAMG2QUcptXC3PZx5/q8Pk7GFjQPGgOC+AF1+QFQGprVqZBDRPX6k/5TB7MIVw==}
+    hasBin: true
+    peerDependencies:
+      react: '>=18'
+    peerDependenciesMeta:
+      react:
+        optional: true
 
   assertion-error@2.0.1:
     resolution: {integrity: sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA==}
@@ -9190,6 +9202,10 @@ snapshots:
       es-errors: 1.3.0
       get-intrinsic: 1.3.0
       is-array-buffer: 3.0.5
+
+  ascii.rest@0.2.1(react@19.3.0):
+    optionalDependencies:
+      react: 19.3.0
 
   assertion-error@2.0.1: {}
 

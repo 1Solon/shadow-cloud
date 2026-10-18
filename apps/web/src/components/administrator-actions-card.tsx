@@ -74,22 +74,22 @@ export function AdministratorActionsCard({
         onConfirm={deleteCampaign}
       />
       <CardHeader>
-        <CardTitle>Administrator Actions:</CardTitle>
+        <CardTitle>Administrator Actions</CardTitle>
         <CardDescription>
           Elevated tools available only while Override is active.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         {errorMessage ? (
-          <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-mono text-destructive">
+          <p role="alert" className="font-mono text-xs text-destructive">
             {errorMessage}
-          </div>
+          </p>
         ) : null}
         <Button
           className="w-full"
           disabled={isPending}
           type="button"
-          variant="secondary"
+          variant="destructive"
           onClick={requestDeleteCampaign}
         >
           {isPending ? "Deleting..." : "Delete Campaign"}

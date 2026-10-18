@@ -1,17 +1,11 @@
 import type { Metadata } from "next";
 import { getServerAuthSession } from "@/auth";
-import { AccountMenu } from "@/components/account-menu";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { BootSequence } from "@/components/boot-sequence";
 import { CampaignList } from "@/components/campaign-list";
-import { TerminalClock } from "@/components/terminal-clock";
-import { WhatsNewDialog } from "@/components/whats-new-dialog";
-import { UserBadge } from "@/components/user-badge";
-import { LoginButton } from "@/components/login-button";
+import { TerminalFrame } from "@/components/terminal-frame";
 import { listGames } from "@/lib/shadow-cloud-api";
-import { listReleases } from "@/lib/github-releases";
 import { getShadowOverrideEnabled } from "@/lib/shadow-override";
-import { formatTerminalClock } from "@/lib/terminal-clock";
-import { componentVersionStatus } from "@/lib/component-versions";
 
 export async function generateMetadata(): Promise<Metadata> {
   const [session, games] = await Promise.all([
@@ -33,13 +27,11 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function Home() {
-  const [session, games, shadowOverrideEnabled, releases] = await Promise.all([
+  const [session, games, shadowOverrideEnabled] = await Promise.all([
     getServerAuthSession(),
     listGames(),
     getShadowOverrideEnabled(),
-    listReleases(),
   ]);
-  const initialClockTime = new Date();
   const userId = session?.user?.id;
   const yourCampaigns = userId
     ? games.filter((game) => game.participantUserIds.includes(userId))
@@ -48,79 +40,48 @@ export default async function Home() {
     ? games.filter((game) => !game.participantUserIds.includes(userId))
     : games;
 
-  const signedInIdentity =
-    session?.user?.name ?? session?.user?.email ?? "Guest lord";
-
   return (
     <main className="min-h-dvh md:h-dvh md:overflow-hidden bg-background font-mono p-2 sm:p-4 flex flex-col text-terminal-400">
       <AutoRefresh />
-      <div className="flex-1 min-h-0 w-full rounded-lg border p-3 sm:p-6 bg-card shadow-2xl flex flex-col md:overflow-hidden border-terminal-400 shadow-terminal-400/20">
-        {/* Terminal header bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3 mb-4 shrink-0 border-terminal-400">
-          <div className="terminal-title-effect whitespace-nowrap text-base sm:text-xl font-mono text-terminal-300">
-            <span>{`> SHADOW-CLOUD`}</span>
-            <span aria-hidden="true" className="terminal-title-cursor" />
-          </div>
-          <div className="flex max-w-full flex-wrap items-center gap-3">
-            {session?.user ? (
-              <AccountMenu
-                name={signedInIdentity}
-                image={session.user.image}
-                canOverride={Boolean(session.user.isShadowOverride)}
-                overrideEnabled={shadowOverrideEnabled}
-              />
-            ) : (
-              <>
-                <div className="hidden sm:block">
-                  <UserBadge
-                    name={signedInIdentity}
-                    image={null}
-                    isSignedIn={false}
-                  />
-                </div>
-                <LoginButton />
-              </>
-            )}
-            <div className="hidden xl:block">
-              <TerminalClock
-                initialTime={formatTerminalClock(initialClockTime)}
+      <BootSequence>
+        <TerminalFrame
+          user={session?.user}
+          overrideEnabled={shadowOverrideEnabled}
+        >
+          <div className="min-h-0 flex-1 md:overflow-y-auto md:pr-2">
+            <div className="mx-auto flex w-full max-w-6xl flex-col gap-10">
+              {session?.user ? (
+                <CampaignList
+                  campaigns={yourCampaigns}
+                  title="YOUR CAMPAIGNS"
+                  emptyTitle="No campaigns assigned to you"
+                  emptyDescription="Join a Shadow Cloud campaign through Discord to see your active turns here."
+                  currentUserId={userId}
+                  hasExtendedControls
+                />
+              ) : null}
+              <CampaignList
+                campaigns={activeCampaigns}
+                title="ACTIVE CAMPAIGNS"
+                emptyTitle="No campaigns linked yet"
+                emptyDescription={
+                  <>
+                    Run{" "}
+                    <span className="font-mono text-terminal-400">/init</span>{" "}
+                    or{" "}
+                    <span className="font-mono text-terminal-400">
+                      /register
+                    </span>{" "}
+                    inside a forum thread to join your first Shadow Cloud
+                    Campaign.
+                  </>
+                }
+                currentUserId={userId}
               />
             </div>
           </div>
-        </div>
-
-        <div className="flex flex-col gap-6 flex-1 min-h-0 md:overflow-y-auto md:pr-2">
-          {session?.user ? (
-            <CampaignList
-              campaigns={yourCampaigns}
-              title="YOUR CAMPAIGNS"
-              emptyTitle="No campaigns assigned to you"
-              emptyDescription="Join a Shadow Cloud campaign through Discord to see your active turns here."
-              currentUserId={userId}
-              hasExtendedControls
-            />
-          ) : null}
-          <CampaignList
-            campaigns={activeCampaigns}
-            title="ACTIVE CAMPAIGNS"
-            emptyTitle="No campaigns linked yet"
-            emptyDescription={
-              <>
-                Run <span className="font-mono text-terminal-400">/init</span>{" "}
-                or{" "}
-                <span className="font-mono text-terminal-400">/register</span>{" "}
-                inside a forum thread to join your first Shadow Cloud Campaign.
-              </>
-            }
-            currentUserId={userId}
-          />
-        </div>
-        {/* Status bar */}
-        <div className="mt-4 pt-3 border-t flex flex-wrap items-center justify-between gap-2 text-xs shrink-0 border-terminal-400 text-terminal-300/70">
-          <WhatsNewDialog label={componentVersionStatus} releases={releases} />
-          <div>CAMPAIGNS: {games.length} MONITORED</div>
-        </div>
-      </div>
+        </TerminalFrame>
+      </BootSequence>
     </main>
   );
 }

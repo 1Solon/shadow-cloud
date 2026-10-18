@@ -310,7 +310,7 @@ describe("CampaignWorkspaceTabs", () => {
       "overflow-x-auto",
       "overflow-y-hidden",
       "border-b",
-      "border-terminal-400/30",
+      "border-terminal-400/20",
     );
     expect(tablist).toHaveClass("flex", "min-w-max", "px-1", "pt-1");
     expect(savesTab).toHaveClass(
@@ -318,7 +318,7 @@ describe("CampaignWorkspaceTabs", () => {
       "border-b-2",
       "data-[state=active]:border-terminal-400",
       "data-[state=active]:bg-terminal-400/10",
-      "data-[state=active]:text-terminal-100",
+      "data-[state=active]:text-terminal-200",
     );
     expect(timingTab).toHaveClass(
       "border-transparent",

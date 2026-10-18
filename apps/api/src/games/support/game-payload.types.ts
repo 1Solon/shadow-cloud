@@ -37,6 +37,7 @@ export type GameDetailResponse = TurnTimingPolicyResponse & {
   gameNumber: number;
   slug: string;
   name: string;
+  tagline: string | null;
   organizerId: string;
   organizerDisplayName: string;
   playerCount: number | null;
@@ -80,6 +81,7 @@ export type GameMetadataResponse = {
   gameNumber: number;
   slug: string;
   name: string;
+  tagline: string | null;
   roundNumber: number;
   playerCount: number | null;
   hasAiPlayers: boolean | null;

@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 const dialogOverlayClassName = "fixed inset-0 z-50 bg-surface/70";
 
 const dialogContentClassName =
-  "fixed top-1/2 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-2xl border border-terminal-400/30 bg-popover font-mono shadow-2xl shadow-terminal-950/40 outline-none";
+  "fixed top-1/2 left-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-lg border border-terminal-400/30 bg-popover font-mono shadow-2xl shadow-terminal-950/40 outline-none";
 
 type AutoFocusHandlers = {
   onOpenAutoFocus?: (event: Event) => void;
@@ -74,7 +74,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="dialog-header"
       className={cn(
-        "flex items-center justify-between gap-4 border-b border-terminal-400/20 bg-terminal-400/10 px-4 py-3 text-[11px] uppercase tracking-[0.28em] text-terminal-200",
+        "flex items-center justify-between gap-4 border-b border-terminal-400/20 bg-terminal-400/10 px-4 py-3 text-xs uppercase tracking-[0.16em] text-terminal-200",
         className,
       )}
       {...props}

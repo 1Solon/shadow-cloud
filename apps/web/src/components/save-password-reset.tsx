@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { SaveInspection } from "@/lib/save-inspection";
+import { fieldLabel } from "@/lib/terminal-styles";
 
 export function SavePasswordReset({
   regime,
@@ -23,7 +24,7 @@ export function SavePasswordReset({
   const [confirmed, setConfirmed] = useState(false);
   return (
     <form
-      className="space-y-4 border border-terminal-400/30 p-4"
+      className="space-y-4 rounded-md border border-terminal-400/20 bg-terminal-400/5 p-4 text-sm text-terminal-300"
       onSubmit={(event) => {
         event.preventDefault();
         if (!confirmed || pending) return;
@@ -33,9 +34,9 @@ export function SavePasswordReset({
         setConfirmed(false);
       }}
     >
-      <h3 className="font-bold">Reset password for {regime.name}</h3>
-      <div className="space-y-3 border-l-2 border-terminal-400 pl-4">
-        <h4 className="font-bold">Players must use the updated save</h4>
+      <h3 className={fieldLabel}>Reset password for {regime.name}</h3>
+      <div className="space-y-3 border-l-2 border-terminal-400/40 pl-4">
+        <h4 className={fieldLabel}>Players must use the updated save</h4>
         <p>
           This changes the password in Shadow Cloud&apos;s latest save only.
           Copies already downloaded will not be updated.
@@ -48,7 +49,7 @@ export function SavePasswordReset({
         <p>This action does not advance the campaign&apos;s turn.</p>
       </div>
       <Label className="block space-y-2">
-        Replacement password
+        <span className={`block ${fieldLabel}`}>Replacement password</span>
         <Input
           type={reveal ? "text" : "password"}
           autoComplete="new-password"
@@ -62,7 +63,7 @@ export function SavePasswordReset({
           onChange={(e) => setPassword(e.target.value)}
         />
       </Label>
-      <p className="text-xs">
+      <p className="text-xs text-terminal-300/70">
         Use 1 to 128 printable ASCII characters. Share the replacement password
         privately. Shadow Cloud does not send it to players.
       </p>
@@ -87,7 +88,7 @@ export function SavePasswordReset({
       <div className="flex flex-wrap gap-3">
         <Button
           type="button"
-          variant="secondary"
+          variant="outline"
           disabled={pending}
           onClick={() => {
             setPassword("");

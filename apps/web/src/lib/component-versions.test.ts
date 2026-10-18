@@ -2,15 +2,13 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import rootPackage from "../../../../package.json";
 import {
-  componentVersionStatus,
+  applicationVersion,
   resolveApplicationVersion,
 } from "./component-versions";
 
-describe("componentVersionStatus", () => {
-  it("shows one application-wide version", () => {
-    expect(componentVersionStatus).toBe(`VERSION: v${rootPackage.version}`);
-    expect(componentVersionStatus).not.toContain("WEB:");
-    expect(componentVersionStatus).not.toContain("API:");
+describe("applicationVersion", () => {
+  it("defaults to the root package version", () => {
+    expect(applicationVersion).toBe(rootPackage.version);
   });
 
   it("allows release builds to inject the git release tag", () => {

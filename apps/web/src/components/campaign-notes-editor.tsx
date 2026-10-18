@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { fieldLabel } from "@/lib/terminal-styles";
 
 type CampaignNotesEditorProps = CampaignEditorStateProps & {
   gameNumber: number;
@@ -133,7 +134,7 @@ export function CampaignNotesEditor({
   return (
     <section
       data-testid="campaign-notes-editor"
-      className="flex min-w-0 flex-col gap-4 border-l border-terminal-400/30 pl-4 font-mono text-terminal-200"
+      className="flex min-w-0 flex-col gap-4 font-mono text-terminal-300"
     >
       <TerminalConfirmationModal
         confirmation={confirmation}
@@ -143,10 +144,7 @@ export function CampaignNotesEditor({
       />
 
       <div className="flex min-w-0 flex-col gap-2">
-        <Label
-          htmlFor="campaign-notes"
-          className="text-xs font-semibold uppercase tracking-[0.16em] text-terminal-300"
-        >
+        <Label htmlFor="campaign-notes" className={fieldLabel}>
           Campaign notes
         </Label>
         <Textarea
@@ -159,20 +157,14 @@ export function CampaignNotesEditor({
             setDraftNotes(event.target.value);
           }}
         />
-        <p
-          id={markdownGuidanceId}
-          className="text-xs leading-relaxed text-terminal-300/70"
-        >
+        <p id={markdownGuidanceId} className="text-xs text-terminal-300/70">
           Markdown is supported. Links render in the notes view; raw HTML and
           images are ignored.
         </p>
       </div>
 
       {errorMessage ? (
-        <p
-          role="alert"
-          className="border-l-2 border-destructive/60 px-3 py-2 text-sm text-destructive"
-        >
+        <p role="alert" className="text-xs text-destructive">
           {errorMessage}
         </p>
       ) : null}
@@ -184,7 +176,7 @@ export function CampaignNotesEditor({
         <Button
           disabled={isPending}
           type="button"
-          variant="secondary"
+          variant="outline"
           onClick={cancelEditing}
         >
           Cancel

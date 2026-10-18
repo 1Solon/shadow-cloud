@@ -82,4 +82,35 @@ describe('turn policy DTO validation', () => {
       ]),
     );
   });
+
+  it.each([
+    'Co-op vs hard AI, no peace deals',
+    '4S FFA+AI T3 1Z 1A',
+    '',
+    '   ',
+    ` ${'x'.repeat(40)} `,
+    'x'.repeat(40),
+    null,
+    undefined,
+  ])('accepts a valid or clearing tagline: %j', async (tagline) => {
+    await expect(
+      validate(Object.assign(new UpdateGameMetadataDto(), { tagline })),
+    ).resolves.toHaveLength(0);
+  });
+
+  it.each([
+    'x'.repeat(41),
+    ` ${'x'.repeat(41)} `,
+    'first\nsecond',
+    'first\r\nsecond',
+    'trailing\n',
+    'line\u2028break',
+    42,
+    true,
+    ['tagline'],
+  ])('rejects an invalid tagline: %j', async (tagline) => {
+    await expect(
+      validate(Object.assign(new UpdateGameMetadataDto(), { tagline })),
+    ).resolves.toEqual([expect.objectContaining({ property: 'tagline' })]);
+  });
 });

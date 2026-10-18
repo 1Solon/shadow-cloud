@@ -26,6 +26,13 @@ async function openMenu(props: {
 describe("AccountMenu", () => {
   afterEach(cleanup);
 
+  it("names the connected user at the top of the menu", async () => {
+    await openMenu({ canOverride: false, overrideEnabled: false });
+
+    const menu = screen.getByRole("menu");
+    expect(menu).toHaveTextContent(/^Connected asRhea/);
+  });
+
   it("disconnects from the menu", async () => {
     const user = await openMenu({ canOverride: false, overrideEnabled: false });
 

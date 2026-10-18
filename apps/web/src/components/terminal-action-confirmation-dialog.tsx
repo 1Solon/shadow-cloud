@@ -41,7 +41,7 @@ function TypedConfirmationLines({ lines }: { lines: string[] }) {
 
   return (
     <AlertDialogDescription asChild>
-      <div className="min-h-20 space-y-1 text-terminal-200">
+      <div className="min-h-20 space-y-1 text-terminal-300">
         {renderedLines.map((line, index) => (
           <div
             key={index}

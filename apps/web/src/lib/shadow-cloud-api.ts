@@ -15,6 +15,7 @@ export type GameListItem = {
   slug: string;
   gameNumber: number;
   name: string;
+  tagline: string | null;
   organizerDisplayName: string;
   updatedAt: string;
   roundNumber: number;
@@ -94,6 +95,7 @@ export type GameDetail = {
   gameNumber: number;
   slug: string;
   name: string;
+  tagline: string | null;
   organizerId: string;
   seatOrderBaseline: SeatOrderBaseline;
   organizerDisplayName: string;

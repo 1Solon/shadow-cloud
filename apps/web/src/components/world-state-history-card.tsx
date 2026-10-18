@@ -10,6 +10,14 @@ import {
 } from "@/components/ui/card";
 import { canReplaceSaveFile } from "@/lib/save-file-replacement";
 import type { GameDetailFileVersion } from "@/lib/shadow-cloud-api";
+import {
+  tableCell,
+  tableCurrentRow,
+  tableHead,
+  tableHeaderCell,
+  tableRow,
+} from "@/lib/terminal-styles";
+import { cn } from "@/lib/utils";
 
 type WorldStateHistoryCardProps = {
   saveBaseline?: string;
@@ -28,73 +36,67 @@ export function WorldStateHistoryCard({
   isShadowOverrideUser,
   shadowOverrideEnabled,
 }: WorldStateHistoryCardProps) {
+  const hasSaves = fileVersions.length > 0;
+
   return (
     <Card className="overflow-hidden">
       <CardHeader className="p-4 sm:p-5">
-        <CardTitle>Save history:</CardTitle>
+        <CardTitle>Save history</CardTitle>
         <CardDescription>
           Download previous saves or correct a file you uploaded.
         </CardDescription>
       </CardHeader>
-      <CardContent className="p-4 pt-0 sm:p-5 sm:pt-0">
-        {fileVersions.length === 0 ? (
-          <div
-            className="rounded-lg border border-terminal-400/20 bg-terminal-400/5 px-4 py-4 text-sm font-mono text-terminal-300"
-            role="status"
-          >
-            No campaign saves have been uploaded yet.
-          </div>
-        ) : (
+      <CardContent
+        className={hasSaves ? "p-0 sm:p-0" : "p-4 pt-0 sm:p-5 sm:pt-0"}
+      >
+        {hasSaves ? (
           <div
             aria-label="Save history table"
-            className="overflow-x-auto rounded-lg border border-terminal-400/20"
+            className="overflow-x-auto"
             role="region"
             tabIndex={0}
           >
             <table
-              className="history-table history-table--stacked w-full text-left text-xs font-mono sm:min-w-[44rem] sm:text-sm"
+              className="history-table history-table--stacked w-full text-left font-mono text-sm sm:min-w-[44rem]"
               role="table"
             >
               <caption className="sr-only">Campaign save history</caption>
-              <thead
-                className="border-b border-terminal-400/30 bg-terminal-400/10 text-xs uppercase tracking-[0.18em] text-terminal-300/70"
-                role="rowgroup"
-              >
-                <tr className="h-10" role="row">
+              <thead className={tableHead} role="rowgroup">
+                <tr role="row">
                   <th
-                    className="px-3 py-2 sm:px-4 sm:py-3"
+                    className={tableHeaderCell}
                     role="columnheader"
                     scope="col"
                   >
                     Save file
                   </th>
                   <th
-                    className="px-3 py-2 sm:px-4 sm:py-3"
+                    className={tableHeaderCell}
                     role="columnheader"
                     scope="col"
                   >
                     Uploaded by
                   </th>
                   <th
-                    className="px-3 py-2 sm:px-4 sm:py-3"
+                    className={tableHeaderCell}
                     role="columnheader"
                     scope="col"
                   >
                     Uploaded
                   </th>
                   <th
-                    className="px-3 py-2 sm:px-4 sm:py-3"
+                    className={tableHeaderCell}
                     role="columnheader"
                     scope="col"
                   >
-                    Correction
+                    Corrected
                   </th>
                   <th
-                    className="px-3 py-2 text-right sm:px-4 sm:py-3"
+                    className={tableHeaderCell}
                     role="columnheader"
                     scope="col"
                   >
-                    Actions
+                    <span className="sr-only">Actions</span>
                   </th>
                 </tr>
               </thead>
@@ -111,68 +113,73 @@ export function WorldStateHistoryCard({
                   return (
                     <tr
                       key={fileVersion.id}
-                      className={
-                        isMostRecent
-                          ? "h-16 border-b border-terminal-400/30 border-l-2 border-l-terminal-400 bg-terminal-400/10 text-terminal-100"
-                          : "h-16 border-b border-terminal-400/20 bg-terminal-400/5 text-terminal-200"
-                      }
+                      className={cn(tableRow, isMostRecent && tableCurrentRow)}
                       role="row"
                     >
                       <td
-                        className="break-words px-3 py-2 font-medium sm:px-4 sm:py-3"
+                        className={cn(tableCell, "break-words")}
                         data-label="Save file"
                         role="cell"
                       >
-                        <div className="min-w-0">
-                          {isMostRecent ? (
-                            <span className="mb-1 block text-[0.65rem] uppercase tracking-[0.16em] text-terminal-300/70">
-                              Latest save
-                            </span>
-                          ) : null}
-                          <span>{fileVersion.originalName}</span>
-                        </div>
+                        {isMostRecent ? (
+                          <span className="sr-only">Latest save</span>
+                        ) : null}
+                        <span>{fileVersion.originalName}</span>
                       </td>
                       <td
-                        className="break-words px-3 py-2 sm:px-4 sm:py-3"
+                        className={cn(tableCell, "break-words")}
                         data-label="Uploaded by"
                         role="cell"
                       >
                         {fileVersion.uploadedByDisplayName}
                       </td>
                       <td
-                        className="px-3 py-2 sm:px-4 sm:py-3"
+                        className={cn(tableCell, "whitespace-nowrap")}
                         data-label="Uploaded"
                         role="cell"
                       >
-                        <LocalTimestamp timestamp={fileVersion.uploadedAt} />
+                        <LocalTimestamp
+                          compact
+                          timestamp={fileVersion.uploadedAt}
+                        />
                       </td>
                       <td
-                        className="break-words px-3 py-2 sm:px-4 sm:py-3"
-                        data-label="Correction"
+                        className={cn(tableCell, "break-words")}
+                        data-label="Corrected"
                         role="cell"
                       >
                         {fileVersion.replacedAt &&
                         fileVersion.replacedByDisplayName ? (
                           <>
                             {fileVersion.replacedByDisplayName}
-                            <span className="block text-xs opacity-70">
+                            <span className="block text-xs text-terminal-300/70">
                               <LocalTimestamp
+                                compact
                                 timestamp={fileVersion.replacedAt}
                               />
                             </span>
                           </>
                         ) : (
-                          "None"
+                          <>
+                            <span
+                              aria-hidden="true"
+                              className="text-terminal-300/50"
+                            >
+                              —
+                            </span>
+                            <span className="sr-only">None</span>
+                          </>
                         )}
                       </td>
                       <td
-                        className="px-3 py-2 sm:px-4 sm:py-3"
+                        className={cn(tableCell, "py-1.5")}
                         data-label="Actions"
                         role="cell"
                       >
-                        <div className="history-table-actions flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+                        <div className="history-table-actions flex flex-wrap items-center justify-end gap-2">
                           <DownloadSaveButton
-                            className="min-h-11 px-3 text-xs uppercase tracking-[0.18em]"
+                            className="max-sm:min-h-11"
+                            size="sm"
                             variant="outline"
                             fileName={fileVersion.originalName}
                             href={`/api/games/${gameNumber}/files/${fileVersion.id}?revision=${fileVersion.contentRevision}`}
@@ -192,6 +199,13 @@ export function WorldStateHistoryCard({
                 })}
               </tbody>
             </table>
+          </div>
+        ) : (
+          <div
+            className="rounded-md border border-terminal-400/20 bg-terminal-400/5 px-4 py-4 font-mono text-sm text-terminal-300"
+            role="status"
+          >
+            No campaign saves have been uploaded yet.
           </div>
         )}
       </CardContent>

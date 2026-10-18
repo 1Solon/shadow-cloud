@@ -3,8 +3,14 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { WhatsNewDialog } from "@/components/whats-new-dialog";
+
+vi.mock("ascii.rest/react", () => ({
+  Ascii: ({ label }: { label: string }) => (
+    <pre role="img" aria-label={label} />
+  ),
+}));
 
 const releases = [
   {
@@ -29,7 +35,7 @@ describe("WhatsNewDialog", () => {
     const user = userEvent.setup();
     render(<WhatsNewDialog label="VERSION: v0.19.0" releases={releases} />);
 
-    await user.click(screen.getByRole("button", { name: "VERSION: v0.19.0" }));
+    await user.click(screen.getByRole("button", { name: /^VERSION: v0.19.0/ }));
 
     const dialog = screen.getByRole("dialog", { name: "What's new" });
     expect(
@@ -51,29 +57,38 @@ describe("WhatsNewDialog", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("highlights an unseen release until the notes are opened", async () => {
+  it("scrambles to a patch notes prompt until the notes are opened", async () => {
     const user = userEvent.setup();
     window.localStorage.setItem("shadow-cloud:last-seen-release", "0.18.0");
     render(<WhatsNewDialog label="VERSION: v0.19.0" releases={releases} />);
 
-    const button = screen.getByRole("button", { name: "VERSION: v0.19.0" });
-    expect(button).toHaveClass("animate-pulse");
+    const button = screen.getByRole("button", {
+      name: "VERSION: v0.19.0, new patch notes",
+    });
+    expect(
+      within(button).getByRole("img", {
+        name: "VERSION: v0.19.0, click for patch notes",
+      }),
+    ).toBeInTheDocument();
+    expect(button).toHaveClass("patch-notes-flash");
 
     await user.click(button);
 
-    expect(button).not.toHaveClass("animate-pulse");
+    expect(button).toHaveAccessibleName("VERSION: v0.19.0");
+    expect(button).not.toHaveClass("patch-notes-flash");
+    expect(within(button).queryByRole("img")).not.toBeInTheDocument();
     expect(window.localStorage.getItem("shadow-cloud:last-seen-release")).toBe(
       "0.19.0",
     );
   });
 
-  it("does not highlight a release that has been seen", () => {
+  it("shows the plain version for a release that has been seen", () => {
     window.localStorage.setItem("shadow-cloud:last-seen-release", "0.19.0");
     render(<WhatsNewDialog label="VERSION: v0.19.0" releases={releases} />);
 
-    expect(
-      screen.getByRole("button", { name: "VERSION: v0.19.0" }),
-    ).not.toHaveClass("animate-pulse");
+    const button = screen.getByRole("button", { name: "VERSION: v0.19.0" });
+    expect(button).toHaveTextContent("VERSION: v0.19.0");
+    expect(within(button).queryByRole("img")).not.toBeInTheDocument();
   });
 
   it("explains when release notes are unavailable", async () => {
@@ -81,7 +96,7 @@ describe("WhatsNewDialog", () => {
     render(<WhatsNewDialog label="VERSION: v0.19.0" releases={[]} />);
 
     const button = screen.getByRole("button", { name: "VERSION: v0.19.0" });
-    expect(button).not.toHaveClass("animate-pulse");
+    expect(within(button).queryByRole("img")).not.toBeInTheDocument();
 
     await user.click(button);
 

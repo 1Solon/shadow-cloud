@@ -146,6 +146,7 @@ export class GamesQueryService {
         slug: game.slug,
         gameNumber: game.gameNumber,
         name: game.name,
+        tagline: game.tagline,
         threadName: buildCanonicalThreadName({
           gameNumber: game.gameNumber,
           name: game.name,
@@ -324,6 +325,7 @@ export class GamesQueryService {
       gameNumber: game.gameNumber,
       slug: game.slug,
       name: game.name,
+      tagline: game.tagline,
       organizerId: game.organizerId,
       organizerDisplayName: game.organizer.displayName,
       seatOrderBaseline: { campaignId: game.id, revision: game.turnRevision },

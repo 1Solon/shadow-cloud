@@ -141,6 +141,7 @@ model Game {
   id                      String                @id @default(cuid())
   gameNumber              Int                   @unique
   name                    String
+  tagline                 String?
   slug                    String                @unique
   playerCount             Int?
   hasAiPlayers            Boolean?

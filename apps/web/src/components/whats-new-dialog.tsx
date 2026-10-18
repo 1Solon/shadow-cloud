@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
+import { Ascii } from "ascii.rest/react";
 import { GameNotesMarkdown } from "@/components/game-notes-markdown";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { type Release, releasesPageUrl } from "@/lib/github-releases";
+import { scrambleTagPiece } from "@/lib/scramble-tag-piece";
 import { cn } from "@/lib/utils";
 
 type WhatsNewDialogProps = {
@@ -21,6 +23,7 @@ type WhatsNewDialogProps = {
 };
 
 const lastSeenReleaseKey = "shadow-cloud:last-seen-release";
+const patchNotesPrompt = "Click for patch notes";
 
 function subscribeToStorage(onChange: () => void) {
   window.addEventListener("storage", onChange);
@@ -41,19 +44,24 @@ export function WhatsNewDialog({ label, releases }: WhatsNewDialogProps) {
   );
   const hasUnseenRelease =
     latestRelease !== undefined && lastSeenRelease !== latestRelease;
+  const scramblePiece = useMemo(
+    () => scrambleTagPiece([label, patchNotesPrompt]),
+    [label],
+  );
 
   return (
     <>
       <Button
+        aria-label={hasUnseenRelease ? `${label}, new patch notes` : label}
         className={cn(
           "-ml-1.5 h-auto px-1.5 py-0.5 text-xs",
           hasUnseenRelease
-            ? "animate-pulse motion-reduce:animate-none"
+            ? "patch-notes-flash text-terminal-300 hover:text-terminal-200"
             : "font-normal text-terminal-300/70 hover:text-terminal-300",
         )}
         title="What's new"
         type="button"
-        variant={hasUnseenRelease ? "default" : "ghost"}
+        variant="ghost"
         onClick={() => {
           if (latestRelease !== undefined) {
             window.localStorage.setItem(lastSeenReleaseKey, latestRelease);
@@ -61,7 +69,15 @@ export function WhatsNewDialog({ label, releases }: WhatsNewDialogProps) {
           setIsOpen(true);
         }}
       >
-        {label}
+        {hasUnseenRelease ? (
+          <Ascii
+            piece={scramblePiece}
+            label={`${label}, ${patchNotesPrompt.toLowerCase()}`}
+            className="m-0 font-mono leading-[inherit]"
+          />
+        ) : (
+          label
+        )}
       </Button>
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent
@@ -80,7 +96,7 @@ export function WhatsNewDialog({ label, releases }: WhatsNewDialogProps) {
               releases.map((release) => (
                 <section key={release.name} className="space-y-3">
                   <div className="flex items-baseline justify-between gap-3">
-                    <h2 className="text-base font-semibold text-terminal-100">
+                    <h2 className="text-base font-semibold text-terminal-200">
                       {release.name}
                     </h2>
                     <time
@@ -94,7 +110,9 @@ export function WhatsNewDialog({ label, releases }: WhatsNewDialogProps) {
                 </section>
               ))
             ) : (
-              <p className="text-sm">Release notes could not be loaded.</p>
+              <p className="text-sm text-terminal-300/70">
+                Release notes could not be loaded.
+              </p>
             )}
             <DialogFooter>
               <Button asChild size="sm" variant="outline">

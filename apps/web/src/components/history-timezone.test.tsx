@@ -118,19 +118,13 @@ it.each(["Australia/Sydney", "America/New_York"])(
     expect(times).toHaveLength(4);
     times.forEach((time, index) => {
       const timestamp = index % 2 === 0 ? startedAt : endedAt;
-      const options: Intl.DateTimeFormatOptions =
-        index < 2
-          ? { dateStyle: "medium", timeStyle: "short" }
-          : {
-              month: "short",
-              day: "numeric",
-              hour: "numeric",
-              minute: "2-digit",
-            };
       expect(time).toHaveAttribute("datetime", timestamp);
       expect(time.textContent).toBe(
         `${new DateTimeFormat("en-US", {
-          ...options,
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
           timeZone,
         }).format(new Date(timestamp))} local`,
       );

@@ -132,6 +132,59 @@ describe("PATCH /api/games/[gameNumber]/metadata", () => {
     );
   });
 
+  it.each([
+    ["  4S FFA+AI T3 1Z 1A  ", "4S FFA+AI T3 1Z 1A"],
+    ["x".repeat(40), "x".repeat(40)],
+    ["   ", null],
+    ["", null],
+    [null, null],
+  ] as const)(
+    "forwards a trimmed or cleared tagline: %j",
+    async (tagline, expected) => {
+      mockedGetServerAuthSession.mockResolvedValue({
+        user: { id: "overlord-1" },
+      } as Awaited<ReturnType<typeof getServerAuthSession>>);
+      mockedCreateApiAccessToken.mockResolvedValue("test-token");
+      const fetchSpy = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValue(
+          new Response(JSON.stringify({ gameNumber: 22 }), { status: 200 }),
+        );
+
+      const response = await patchMetadata({ tagline });
+
+      expect(response.status).toBe(200);
+      expect(fetchSpy).toHaveBeenCalledWith(
+        "http://localhost:3001/v1/games/22/metadata",
+        expect.objectContaining({
+          body: JSON.stringify({ tagline: expected }),
+        }),
+      );
+    },
+  );
+
+  it.each([
+    ["x".repeat(41), "Tagline cannot exceed 40 characters."],
+    ["first\nsecond", "Tagline must be a single line."],
+    ["first\r\nsecond", "Tagline must be a single line."],
+    [42, "Tagline metadata is invalid."],
+  ] as const)(
+    "rejects an invalid tagline without calling the API: %j",
+    async (tagline, error) => {
+      mockedGetServerAuthSession.mockResolvedValue({
+        user: { id: "overlord-1" },
+      } as Awaited<ReturnType<typeof getServerAuthSession>>);
+      mockedCreateApiAccessToken.mockResolvedValue("test-token");
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+      const response = await patchMetadata({ tagline });
+
+      expect(response.status).toBe(400);
+      await expect(response.json()).resolves.toEqual({ error });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    },
+  );
+
   it("propagates upstream policy authorization errors", async () => {
     mockedGetServerAuthSession.mockResolvedValue({
       user: { id: "player-1" },
