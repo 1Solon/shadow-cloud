@@ -42,6 +42,7 @@ function createGame(override = {}) {
     zoneCount: null,
     armyCount: null,
     notes: null,
+    tagline: null,
     turnTargetHours: 24,
     turnReminderGraceHours: 12,
     turnReminderRepeatHours: 6,
@@ -181,6 +182,28 @@ describe('GamesQueryService turn timing payloads', () => {
         }),
       }),
     );
+  });
+
+  it('exposes the tagline on the list and detail payloads, null when unset', async () => {
+    prismaMock.game.findMany.mockResolvedValue([
+      createGame({ tagline: '4S FFA+AI T3 1Z 1A' }),
+      createGame({ id: 'game-2', slug: 'embers', gameNumber: 2 }),
+    ]);
+    prismaMock.game.findFirst.mockResolvedValue(
+      createGame({ tagline: 'Co-op vs hard AI' }),
+    );
+    prismaMock.turnRecord.findMany.mockResolvedValue([]);
+
+    const games = await new GamesQueryService({} as never).listGames();
+    const detail = await new GamesQueryService({} as never).getGameDetail(
+      'game-1',
+    );
+
+    expect(games.map((game) => game.tagline)).toEqual([
+      '4S FFA+AI T3 1Z 1A',
+      null,
+    ]);
+    expect(detail.tagline).toBe('Co-op vs hard AI');
   });
 
   it('returns detail timing fields and 25 newest completed turn snapshots', async () => {

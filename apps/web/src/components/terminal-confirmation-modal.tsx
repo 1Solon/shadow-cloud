@@ -80,7 +80,7 @@ function TerminalConfirmationSurface({
       className={`fixed inset-x-0 bottom-0 z-50 flex justify-end p-4 sm:p-6 transition-opacity duration-300 ${isEntering || isVisible || isExiting ? "opacity-100" : "pointer-events-none opacity-0"}`}
     >
       <div
-        className={`relative w-full max-w-md overflow-hidden rounded-2xl border border-terminal-400/30 bg-popover shadow-2xl shadow-terminal-950/40 transition-all duration-300 ${isEntering ? "animate-terminal-powerup origin-bottom-right" : isVisible ? "translate-y-0 scale-100 opacity-100" : isExiting ? "animate-terminal-powerdown origin-bottom-right" : "translate-y-4 scale-[0.985] opacity-0"}`}
+        className={`relative w-full max-w-md overflow-hidden rounded-lg border border-terminal-400/30 bg-popover transition-all duration-300 ${isEntering ? "animate-terminal-powerup origin-bottom-right" : isVisible ? "translate-y-0 scale-100 opacity-100" : isExiting ? "animate-terminal-powerdown origin-bottom-right" : "translate-y-4 scale-[0.985] opacity-0"}`}
       >
         {isEntering ? (
           <div className="terminal-scan-lines pointer-events-none absolute inset-0 animate-terminal-scanin opacity-70" />
@@ -89,7 +89,7 @@ function TerminalConfirmationSurface({
           <div className="terminal-scan-lines pointer-events-none absolute inset-0 animate-terminal-scanout opacity-70" />
         ) : null}
         <div
-          className={`flex border-b border-terminal-400/20 bg-terminal-400/10 px-4 py-3 font-mono text-[11px] uppercase tracking-[0.28em] ${hasTitle ? "items-center justify-between" : "justify-end"}`}
+          className={`flex border-b border-terminal-400/20 bg-terminal-400/10 px-4 py-3 font-mono text-xs uppercase tracking-[0.16em] ${hasTitle ? "items-center justify-between" : "justify-end"}`}
         >
           {hasTitle ? (
             <span className="text-terminal-200">{confirmation.title}</span>

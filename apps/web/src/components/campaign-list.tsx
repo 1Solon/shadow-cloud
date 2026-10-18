@@ -2,14 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { CampaignCard } from "@/components/campaign-card";
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -19,6 +12,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { GameListItem } from "@/lib/shadow-cloud-api";
+import { barLabel, segmentLines } from "@/lib/terminal-styles";
+import { cn } from "@/lib/utils";
 
 export type CampaignSortOption =
   "name-asc" | "number-asc" | "turn-oldest" | "turn-newest";
@@ -129,6 +124,56 @@ type CampaignListProps = {
   hasExtendedControls?: boolean;
 };
 
+const sortOptions: [CampaignSortOption, string][] = [
+  ["name-asc", "Name"],
+  ["number-asc", "Number"],
+  ["turn-oldest", "Turn (Oldest)"],
+  ["turn-newest", "Turn (Newest)"],
+];
+
+const turnFilterOptions: [CampaignTurnFilter, string][] = [
+  ["all", "All campaigns"],
+  ["your-turn", "Your turn only"],
+  ["waiting", "Waiting on others"],
+];
+
+function SegmentSelect<T extends string>({
+  value,
+  onValueChange,
+  options,
+  ariaLabel,
+}: {
+  value: T;
+  onValueChange: (value: T) => void;
+  options: [T, string][];
+  ariaLabel: string;
+}) {
+  return (
+    <Select
+      value={value}
+      onValueChange={(next) => {
+        onValueChange(next as T);
+      }}
+    >
+      <SelectTrigger
+        aria-label={ariaLabel}
+        className="h-auto min-h-8 rounded-none border-0 bg-transparent px-2 py-1 text-terminal-200 shadow-none hover:bg-terminal-400/10 focus-visible:ring-inset focus-visible:ring-offset-0"
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent position="popper">
+        <SelectGroup>
+          {options.map(([option, label]) => (
+            <SelectItem key={option} value={option}>
+              {label}
+            </SelectItem>
+          ))}
+        </SelectGroup>
+      </SelectContent>
+    </Select>
+  );
+}
+
 export function CampaignList({
   campaigns,
   title,
@@ -164,87 +209,59 @@ export function CampaignList({
   const campaignListName = title.toLowerCase();
 
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-        <div className="font-mono text-lg text-terminal-300">{`> ${title} (${campaignCount})`}</div>
+    <section className="flex flex-col gap-5">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <h2 className="font-mono text-lg font-normal text-terminal-300">{`> ${title} (${campaignCount})`}</h2>
         {campaigns.length > 0 ? (
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-end sm:gap-3 xl:justify-end">
-            <Label className="col-span-2 flex min-w-0 flex-col gap-1 text-xs uppercase tracking-[0.16em] text-terminal-300/70 sm:w-56">
-              Search
-              <Input
+          <div
+            className={cn(
+              "flex min-w-0 flex-wrap items-stretch divide-x overflow-hidden rounded-lg border text-sm sm:flex-nowrap",
+              segmentLines,
+            )}
+          >
+            <label className="flex min-w-0 flex-1 items-center sm:w-56 sm:flex-none">
+              <span aria-hidden="true" className="pl-2 text-terminal-300/60">
+                /
+              </span>
+              <input
                 type="search"
                 value={searchQuery}
                 onChange={(event) => {
                   setSearchQuery(event.target.value);
                 }}
-                placeholder="Number or name"
+                placeholder="number or name"
                 aria-label={`Search ${campaignListName} by campaign number or name`}
-                className="h-9 border-input normal-case tracking-normal"
+                className="w-full min-w-0 bg-transparent px-2 py-1 text-terminal-200 outline-none placeholder:text-terminal-300/40"
               />
-            </Label>
-            <Label className="flex min-w-0 flex-col gap-1 text-xs uppercase tracking-[0.16em] text-terminal-300/70 sm:w-56">
-              Sort by
-              <Select
-                value={sortOption}
-                onValueChange={(value) => {
-                  setSortOption(value as CampaignSortOption);
-                }}
-              >
-                <SelectTrigger
-                  className="w-full"
-                  aria-label={`Sort ${campaignListName}`}
-                >
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent position="popper">
-                  <SelectGroup>
-                    <SelectItem value="name-asc">Name</SelectItem>
-                    <SelectItem value="number-asc">Number</SelectItem>
-                    <SelectItem value="turn-oldest">Turn (Oldest)</SelectItem>
-                    <SelectItem value="turn-newest">Turn (Newest)</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </Label>
+            </label>
+            <span className={barLabel}>Sort</span>
+            <SegmentSelect
+              value={sortOption}
+              onValueChange={setSortOption}
+              options={sortOptions}
+              ariaLabel={`Sort ${campaignListName}`}
+            />
             {hasExtendedControls ? (
-              <Label className="flex min-w-0 flex-col gap-1 text-xs uppercase tracking-[0.16em] text-terminal-300/70 sm:w-52">
-                Turn status
-                <Select
+              <>
+                <span className={barLabel}>Status</span>
+                <SegmentSelect
                   value={turnFilter}
-                  onValueChange={(value) => {
-                    setTurnFilter(value as CampaignTurnFilter);
-                  }}
-                >
-                  <SelectTrigger
-                    className="w-full"
-                    aria-label={`Filter ${campaignListName} by turn status`}
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent position="popper">
-                    <SelectGroup>
-                      <SelectItem value="all">All campaigns</SelectItem>
-                      <SelectItem value="your-turn">Your turn only</SelectItem>
-                      <SelectItem value="waiting">Waiting on others</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </Label>
+                  onValueChange={setTurnFilter}
+                  options={turnFilterOptions}
+                  ariaLabel={`Filter ${campaignListName} by turn status`}
+                />
+              </>
             ) : null}
           </div>
         ) : null}
       </div>
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-4">
         {visibleCampaigns.length === 0 ? (
-          <Card className="md:col-span-2 xl:col-span-3">
-            <CardHeader>
-              <CardTitle>
-                {hasActiveFilter ? noMatchTitle : emptyTitle}
-              </CardTitle>
-              <CardDescription>
-                {hasActiveFilter ? noMatchDescription : emptyDescription}
-              </CardDescription>
-            </CardHeader>
+          <Card className="gap-1 border-terminal-400/20 bg-transparent px-4 py-6 text-sm text-terminal-300/70">
+            <div className="text-terminal-300">
+              {hasActiveFilter ? noMatchTitle : emptyTitle}
+            </div>
+            <div>{hasActiveFilter ? noMatchDescription : emptyDescription}</div>
           </Card>
         ) : (
           visibleCampaigns.map((game) => (

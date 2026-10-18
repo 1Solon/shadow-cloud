@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { fieldLabel, fieldValue } from "@/lib/terminal-styles";
 
 type UploadSaveFormProps = {
   saveBaseline?: string;
@@ -132,13 +133,13 @@ export const UploadSaveForm = forwardRef<
               : "Drop save files here"
         }
         className={[
-          "rounded-lg border-2 border-dashed transition-colors cursor-pointer",
+          "rounded-md border border-dashed transition-colors cursor-pointer",
           isCompact
             ? "flex flex-1 flex-col justify-center px-4 py-6 text-left"
             : "px-8 py-14 text-center",
           isDragOver
-            ? "border-terminal-400 bg-terminal-400/10"
-            : "border-terminal-400/30 bg-terminal-400/5 hover:border-terminal-400/60 hover:bg-terminal-400/[0.07]",
+            ? "border-terminal-400/30 bg-terminal-400/15"
+            : "border-terminal-400/30 bg-terminal-400/5 hover:bg-terminal-400/10",
         ].join(" ")}
         onClick={() => fileInputRef.current?.click()}
         onKeyDown={(e) => {
@@ -163,32 +164,35 @@ export const UploadSaveForm = forwardRef<
           <>
             <div
               className={[
-                "text-base font-mono uppercase tracking-[0.2em] text-terminal-300 mb-1",
+                `mb-1 font-mono uppercase ${fieldValue}`,
                 isCompact ? "min-w-0 [overflow-wrap:anywhere]" : "",
               ].join(" ")}
             >
-              {`> ${selectedFile.name}`}
+              <span aria-hidden="true">&gt; </span>
+              {selectedFile.name}
             </div>
-            <div className="text-sm text-terminal-300/70 font-mono">
+            <div className="font-mono text-xs text-terminal-300/70">
               {`${(selectedFile.size / 1024 / 1024).toFixed(2)} MB · Click or drag to replace`}
             </div>
           </>
         ) : isCompact ? (
-          <div className="text-base font-mono text-terminal-300">
-            {
-              "> Download the latest save above. When you’ve finished your turn, click here or drag and drop your new save for the next Lord."
-            }
+          <div className={`font-mono ${fieldValue}`}>
+            <span aria-hidden="true">&gt; </span>
+            Download the latest save above. When you’ve finished your turn,
+            click here or drag and drop your new save for the next Lord.
           </div>
         ) : (
           <>
-            <div className="mb-2 text-base font-mono uppercase tracking-[0.2em] text-terminal-300">
-              {"> DROP SAVE FILES HERE"}
+            <div className={`mb-2 font-mono uppercase ${fieldValue}`}>
+              <span aria-hidden="true">&gt; </span>
+              DROP SAVE FILES HERE
             </div>
-            <div className="mb-6 text-sm font-mono text-terminal-300/70">
+            <div className="mb-6 font-mono text-xs text-terminal-300/70">
               Drag and drop your .se1 save files here
             </div>
             <span className={buttonVariants({ className: "animate-pulse" })}>
-              {"> SELECT FILES"}
+              <span aria-hidden="true">&gt; </span>
+              SELECT FILES
             </span>
           </>
         )}
@@ -196,9 +200,9 @@ export const UploadSaveForm = forwardRef<
 
       {/* Error banner */}
       {errorMessage ? (
-        <div className="mt-4 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive font-mono">
+        <p className="mt-4 font-mono text-xs text-destructive">
           {errorMessage}
-        </div>
+        </p>
       ) : null}
 
       {/* Submit row — only when a file is staged */}
@@ -229,11 +233,11 @@ export const UploadSaveForm = forwardRef<
 
       {/* Instructions panel */}
       {!isCompact ? (
-        <div className="mt-6 rounded-lg border border-terminal-400/20 bg-terminal-400/5 px-5 py-4">
-          <div className="text-xs font-mono uppercase tracking-[0.2em] text-terminal-300 mb-3">
-            {"> UPLOAD INSTRUCTIONS"}
+        <div className="mt-6 rounded-md border border-terminal-400/20 bg-terminal-400/5 px-5 py-4">
+          <div className={`mb-3 font-mono ${fieldLabel}`}>
+            Upload instructions
           </div>
-          <ul className="space-y-1.5 text-sm text-terminal-300/70 font-mono">
+          <ul className="space-y-1.5 font-mono text-xs text-terminal-300/70">
             <li>· Supported formats: .se1</li>
             <li>· Maximum file size: 25MB per file</li>
             <li>

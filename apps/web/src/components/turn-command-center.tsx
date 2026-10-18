@@ -9,6 +9,7 @@ import {
   type UploadSaveFormHandle,
 } from "@/components/upload-save-form";
 import type { SaveRejectionLabel } from "@/lib/save-rejection";
+import { fieldLabel, fieldValue, padNumber } from "@/lib/terminal-styles";
 import {
   formatTurnDuration,
   getTurnDurationMs,
@@ -38,16 +39,22 @@ export type TurnCommandCenterProps = {
 
 const refreshIntervalMs = 60 * 1000;
 const lengthyNotesCharacterCount = 240;
+const rail = {
+  yours: "border-l-terminal-400",
+  overdue: "border-l-destructive",
+  waiting: "border-l-terminal-400/40",
+};
+const spokenState = {
+  yours: "It is your turn.",
+  overdue: "This turn is overdue.",
+  waiting: "Waiting for the active lord.",
+};
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <dt className="text-xs uppercase tracking-[0.12em] text-muted-foreground">
-        {label}
-      </dt>
-      <dd className="mt-1 truncate text-sm font-semibold text-terminal-100 sm:text-base">
-        {value}
-      </dd>
+      <dt className={fieldLabel}>{label}</dt>
+      <dd className={`mt-1 truncate tabular-nums ${fieldValue}`}>{value}</dd>
     </div>
   );
 }
@@ -110,15 +117,18 @@ export function TurnCommandCenter({
   const targetHours = normalizeTurnTargetHours(turnTargetHours);
   const target = targetHours !== null ? `${targetHours}h` : "Unknown";
   const canUpload = isSignedIn && isActivePlayer;
+  const isOverdue =
+    elapsedMs !== null &&
+    targetHours !== null &&
+    elapsedMs > targetHours * 3_600_000;
+  const state = canUpload ? "yours" : isOverdue ? "overdue" : "waiting";
   const hasNotes = notes.trim().length > 0;
   const latestSaveCard = latestSave ? (
-    <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-lg border border-terminal-400/30 bg-terminal-400/5 px-3 py-2.5">
+    <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-md border border-terminal-400/20 bg-terminal-400/5 px-3 py-2.5">
       <div className="min-w-0">
-        <p className="text-[0.65rem] uppercase tracking-[0.18em] text-terminal-300/70">
-          Latest save
-        </p>
+        <p className={fieldLabel}>Latest save</p>
         <p
-          className="mt-1 truncate text-sm text-terminal-100"
+          className={`mt-1 truncate ${fieldValue}`}
           title={latestSave.originalName}
         >
           {latestSave.originalName}
@@ -126,10 +136,11 @@ export function TurnCommandCenter({
       </div>
       <div className="flex shrink-0 gap-2">
         <DownloadSaveButton
-          className="min-h-11 shrink-0 px-3 text-xs font-medium"
+          className="min-h-11 shrink-0 px-3"
           fileName={latestSave.originalName}
           href={`/api/games/${gameNumber}/files/${latestSave.id}?revision=${latestSave.contentRevision}`}
           label="Download latest save"
+          variant="outline"
         />
         {saveRejectionLabel ? (
           <RejectSaveAction
@@ -148,7 +159,7 @@ export function TurnCommandCenter({
   return (
     <section
       aria-labelledby={headingId}
-      className="overflow-hidden rounded-lg border border-terminal-400/30 bg-background font-mono text-terminal-100"
+      className={`overflow-hidden rounded-lg border border-l-[6px] border-terminal-400/20 font-mono text-terminal-300 ${rail[state]}`}
       onDragOver={(event) => {
         if (!event.defaultPrevented && containsFiles(event)) {
           event.preventDefault();
@@ -181,16 +192,7 @@ export function TurnCommandCenter({
       <h2 className="sr-only" id={headingId}>
         Current turn
       </h2>
-      <div
-        className={
-          canUpload
-            ? "border-b border-terminal-400 bg-terminal-400 px-3 py-1.5 text-xs font-bold tracking-[0.2em] text-primary-foreground"
-            : "border-b border-terminal-400/30 bg-terminal-400/10 px-3 py-1.5 text-xs font-bold tracking-[0.2em] text-terminal-300"
-        }
-      >
-        {canUpload ? "YOUR TURN" : "WAITING"}
-      </div>
-
+      <p className="sr-only">{spokenState[state]}</p>
       <div
         className={
           canUpload
@@ -212,7 +214,7 @@ export function TurnCommandCenter({
                   : `Seat ${activeSeatNumber}`
               }
             />
-            <Metric label="Round" value={`Round ${roundNumber}`} />
+            <Metric label="Round" value={padNumber(roundNumber)} />
             <Metric label="Elapsed / target" value={`${elapsed} / ${target}`} />
           </dl>
 
@@ -224,9 +226,11 @@ export function TurnCommandCenter({
             open={notesOpen}
             onToggle={(event) => setNotesOpen(event.currentTarget.open)}
           >
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-2 text-[0.65rem] uppercase tracking-[0.18em] text-terminal-300/70 transition-colors hover:text-terminal-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+            <summary
+              className={`flex cursor-pointer list-none items-center justify-between gap-4 py-2 ${fieldLabel} transition-colors hover:text-terminal-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden`}
+            >
               <span>Campaign notes</span>
-              <span className="shrink-0 text-muted-foreground">
+              <span className="shrink-0">
                 {notesOpen ? "Hide −" : "Show +"}
               </span>
             </summary>
@@ -237,7 +241,7 @@ export function TurnCommandCenter({
                   className="rounded-none border-0 bg-transparent px-0 py-0"
                 />
               ) : (
-                <p className="text-sm leading-6 text-terminal-200/70">
+                <p className="text-sm leading-6 text-terminal-300/70">
                   No campaign notes recorded.
                 </p>
               )}
@@ -261,7 +265,7 @@ export function TurnCommandCenter({
       </div>
       {dropNotice ? (
         <p
-          className="border-t border-terminal-400/30 bg-terminal-400/10 px-3 py-2.5 text-sm text-terminal-200 sm:px-4"
+          className="border-t border-terminal-400/20 bg-terminal-400/10 px-3 py-2.5 text-sm text-terminal-300 sm:px-4"
           role="status"
         >
           {dropNotice}

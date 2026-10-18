@@ -161,20 +161,20 @@ describe("WorldStateHistoryCard", () => {
     expect(within(rows[1]).getAllByRole("cell")).toHaveLength(5);
     expect(within(rows[2]).getAllByRole("cell")).toHaveLength(5);
     expect(rows[1]).toHaveClass(
-      "h-16",
       "border-l-2",
       "border-l-terminal-400",
       "bg-terminal-400/10",
-      "text-terminal-100",
+      "text-terminal-300",
     );
-    expect(rows[2]).toHaveClass("h-16", "bg-terminal-400/5", "text-terminal-200");
+    expect(rows[2]).toHaveClass("text-terminal-300");
+    expect(rows[2]).not.toHaveClass("bg-terminal-400/10");
     expect(within(rows[1]).getByText("Latest save")).toBeVisible();
     expect(within(rows[1]).getByText("Corrector")).toBeVisible();
     expect(within(rows[2]).getByText("None")).toBeVisible();
     expect(within(table).getAllByText("Owner")).toHaveLength(2);
     expect(
       screen.getByRole("region", { name: "Save history table" }),
-    ).toHaveClass("overflow-x-auto", "rounded-lg");
+    ).toHaveClass("overflow-x-auto");
     expect(table).toHaveClass(
       "history-table",
       "history-table--stacked",
@@ -189,12 +189,12 @@ describe("WorldStateHistoryCard", () => {
       "Save file",
       "Uploaded by",
       "Uploaded",
-      "Correction",
+      "Corrected",
       "Actions",
       "Save file",
       "Uploaded by",
       "Uploaded",
-      "Correction",
+      "Corrected",
       "Actions",
     ]);
     expect(
@@ -210,8 +210,10 @@ describe("WorldStateHistoryCard", () => {
     expect(
       within(rows[1]).getByText(
         `${new Intl.DateTimeFormat("en-US", {
-          dateStyle: "medium",
-          timeStyle: "short",
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
         }).format(new Date(latest.uploadedAt))} local`,
         { exact: true },
       ),
@@ -224,7 +226,6 @@ describe("WorldStateHistoryCard", () => {
       name: "Save file",
     });
     expect(saveFileHeader).toHaveAttribute("scope", "col");
-    expect(saveFileHeader.closest("tr")).toHaveClass("h-10");
   });
 
   it("labels and styles every download the same", () => {
@@ -245,8 +246,8 @@ describe("WorldStateHistoryCard", () => {
     expect(older).toHaveAttribute("data-label", "Download");
     expect(latest).toHaveAttribute("data-variant", "outline");
     expect(older).toHaveAttribute("data-variant", "outline");
-    expect(latest).toHaveClass("min-h-11");
-    expect(older).toHaveClass("min-h-11");
+    expect(latest).toHaveClass("max-sm:min-h-11");
+    expect(older).toHaveClass("max-sm:min-h-11");
   });
 
   it("renders replacement controls for an enabled Shadow override user", () => {

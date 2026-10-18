@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import { AppSessionProvider } from "@/components/session-provider";
+import { hideBootSplashScript } from "@/lib/boot-session";
 import { getShadowOverrideEnabled } from "@/lib/shadow-override";
 import "./globals.css";
 
@@ -45,6 +47,9 @@ export default async function RootLayout({
           }}
         />
         <AppSessionProvider>{children}</AppSessionProvider>
+        <Script id="hide-boot-splash" strategy="beforeInteractive">
+          {hideBootSplashScript}
+        </Script>
       </body>
     </html>
   );

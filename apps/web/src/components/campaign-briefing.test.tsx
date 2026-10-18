@@ -54,7 +54,7 @@ describe("CampaignBriefing", () => {
     renderBriefing();
 
     expect(
-      screen.getByRole("heading", { name: "Campaign briefing:" }),
+      screen.getByRole("heading", { name: "Campaign briefing" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Dust Crown")).toBeInTheDocument();
     expect(screen.getByText("Overlord · Solon")).toBeInTheDocument();
@@ -64,8 +64,8 @@ describe("CampaignBriefing", () => {
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("region", { name: "Campaign briefing:" }),
-    ).toHaveClass("rounded-lg", "border-terminal-400", "bg-card", "shadow-2xl");
+      screen.getByRole("region", { name: "Campaign briefing" }),
+    ).toHaveClass("rounded-lg", "border", "border-terminal-400/20");
 
     const values = screen.getByTestId("campaign-briefing-values");
     expect(values).toHaveClass("grid", "min-w-0", "sm:grid-cols-2");
@@ -90,7 +90,7 @@ describe("CampaignBriefing", () => {
 
     const action = screen.getByRole("button", { name: "Configure campaign" });
     expect(action.closest('[role="region"]')).toBe(
-      screen.getByRole("region", { name: "Campaign briefing:" }),
+      screen.getByRole("region", { name: "Campaign briefing" }),
     );
   });
 
@@ -111,17 +111,20 @@ describe("CampaignBriefing", () => {
     );
 
     const seats = screen.getAllByRole("listitem");
-    expect(seats[0]).toHaveTextContent("Active player");
+    expect(seats[0]).toHaveAttribute("aria-current", "true");
     expect(seats[0]).toHaveClass(
       "grid",
       "grid-cols-[6.5rem_minmax(0,1fr)]",
       "sm:grid-cols-[7.5rem_minmax(0,1fr)]",
     );
-    expect(within(seats[0]).getByText("Solon").parentElement).toHaveTextContent(
-      /Solon\s*Active player/,
+    expect(within(seats[0]).getByText("SEAT 1")).toHaveClass("bg-terminal-400");
+    expect(within(seats[0]).getByText("(active seat)")).toHaveClass("sr-only");
+    expect(seats[1]).not.toHaveAttribute("aria-current");
+    expect(within(seats[1]).queryByText("(active seat)")).toBeNull();
+    expect(within(seats[1]).getByText("SEAT 2")).not.toHaveClass(
+      "bg-terminal-400",
     );
-    expect(seats[1]).not.toHaveTextContent("Active player");
-    expect(screen.getAllByText("Active player")).toHaveLength(1);
+    expect(screen.queryByText(/active player/i)).not.toBeInTheDocument();
   });
 
   it("starts all disclosures collapsed with inaccessible content", () => {
@@ -134,7 +137,7 @@ describe("CampaignBriefing", () => {
     }
     expect(screen.queryByText("Hold the")).not.toBeInTheDocument();
     expect(screen.queryByText("Reminder grace")).not.toBeInTheDocument();
-    expect(screen.queryByText("SEAT 01")).not.toBeInTheDocument();
+    expect(screen.queryByText("SEAT 1")).not.toBeInTheDocument();
   });
 
   it("opens only one disclosure and toggles the open disclosure closed", async () => {
@@ -144,17 +147,17 @@ describe("CampaignBriefing", () => {
       name: "SEAT ORDER · 1/2 SEATS",
     });
     const notes = screen.getByRole("button", {
-      name: "CAMPAIGN NOTES · RECORDED",
+      name: "CAMPAIGN NOTES",
     });
 
     await user.click(seats);
     expect(seats).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByText("SEAT 01")).toBeInTheDocument();
+    expect(screen.getByText("SEAT 1")).toBeInTheDocument();
 
     await user.click(notes);
     expect(seats).toHaveAttribute("aria-expanded", "false");
     expect(notes).toHaveAttribute("aria-expanded", "true");
-    expect(screen.queryByText("SEAT 01")).not.toBeInTheDocument();
+    expect(screen.queryByText("SEAT 1")).not.toBeInTheDocument();
     expect(screen.getByText("western")).toBeInTheDocument();
 
     await user.click(notes);
@@ -174,21 +177,20 @@ describe("CampaignBriefing", () => {
 
     const seats = screen.getAllByRole("listitem");
     expect(seats).toHaveLength(2);
-    expect(seats[0]).toHaveTextContent("SEAT 01");
+    expect(seats[0]).toHaveTextContent("SEAT 1");
     expect(seats[0]).toHaveTextContent("Solon");
-    expect(seats[0]).toHaveTextContent("Occupied");
+    expect(seats[0]).not.toHaveTextContent("Occupied");
     expect(seats[0]).toHaveTextContent("Overlord");
-    expect(seats[1]).toHaveTextContent("SEAT 02");
+    expect(seats[1]).toHaveTextContent("SEAT 2");
     expect(seats[1]).toHaveTextContent("Empty");
-    expect(seats[0]).toHaveTextContent("Active");
+    expect(seats[0]).toHaveAttribute("aria-current", "true");
+    expect(seats[1]).not.toHaveAttribute("aria-current");
   });
 
   it("renders non-empty campaign notes as Markdown", async () => {
     const user = userEvent.setup();
     renderBriefing();
-    await user.click(
-      screen.getByRole("button", { name: "CAMPAIGN NOTES · RECORDED" }),
-    );
+    await user.click(screen.getByRole("button", { name: "CAMPAIGN NOTES" }));
 
     expect(screen.getByText("western").tagName).toBe("STRONG");
   });
@@ -197,7 +199,7 @@ describe("CampaignBriefing", () => {
     const user = userEvent.setup();
     renderBriefing({ notes: "  \n " });
     const notes = screen.getByRole("button", {
-      name: "CAMPAIGN NOTES · EMPTY",
+      name: "CAMPAIGN NOTES",
     });
     await user.click(notes);
 

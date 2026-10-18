@@ -2,6 +2,7 @@ import { createApiAccessToken, getServerAuthSession } from "@/auth";
 
 const apiBaseUrl = process.env.SHADOW_CLOUD_API_URL ?? "http://localhost:3001";
 const MAX_TURN_TIMING_HOURS = 1_000_000_000;
+const MAX_TAGLINE_LENGTH = 40;
 
 function isPositiveSafeWholeHours(value: unknown): value is number {
   return (
@@ -38,6 +39,7 @@ export async function PATCH(
   const payload = (await request.json().catch(() => null)) as {
     gameNumber?: unknown;
     name?: unknown;
+    tagline?: unknown;
     roundNumber?: unknown;
     playerCount?: unknown;
     hasAiPlayers?: unknown;
@@ -85,6 +87,33 @@ export async function PATCH(
     }
 
     payload.name = normalizedName;
+  }
+
+  if (payload.tagline != null) {
+    if (typeof payload.tagline !== "string") {
+      return Response.json(
+        { error: "Tagline metadata is invalid." },
+        { status: 400 },
+      );
+    }
+
+    if (/[\r\n\u2028\u2029]/.test(payload.tagline)) {
+      return Response.json(
+        { error: "Tagline must be a single line." },
+        { status: 400 },
+      );
+    }
+
+    const normalizedTagline = payload.tagline.trim();
+
+    if (normalizedTagline.length > MAX_TAGLINE_LENGTH) {
+      return Response.json(
+        { error: `Tagline cannot exceed ${MAX_TAGLINE_LENGTH} characters.` },
+        { status: 400 },
+      );
+    }
+
+    payload.tagline = normalizedTagline;
   }
 
   if (
@@ -204,6 +233,7 @@ export async function PATCH(
           ? { gameNumber: payload.gameNumber }
           : {}),
         ...(payload.name !== undefined ? { name: payload.name } : {}),
+        ...("tagline" in payload ? { tagline: payload.tagline || null } : {}),
         ...(payload.roundNumber !== undefined
           ? { roundNumber: payload.roundNumber }
           : {}),

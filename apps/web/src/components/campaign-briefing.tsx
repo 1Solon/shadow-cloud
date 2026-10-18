@@ -14,6 +14,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { fieldLabel, fieldValue } from "@/lib/terminal-styles";
+import { cn } from "@/lib/utils";
 
 export type CampaignBriefingPlayer = {
   id: string;
@@ -94,10 +96,8 @@ function duration(value: number | null) {
 function DefinitionValue({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0 py-3">
-      <dt className="text-[11px] uppercase tracking-[0.2em] text-terminal-300/70">
-        {label}
-      </dt>
-      <dd className="mt-1 break-words text-sm text-terminal-100">{value}</dd>
+      <dt className={fieldLabel}>{label}</dt>
+      <dd className={cn("mt-1 break-words", fieldValue)}>{value}</dd>
     </div>
   );
 }
@@ -134,13 +134,13 @@ export function CampaignBriefing({
   return (
     <Card
       aria-labelledby={headingId}
-      className="min-w-0 overflow-hidden font-mono text-terminal-200"
+      className="min-w-0 overflow-hidden font-mono text-terminal-300"
       role="region"
     >
       <CardHeader>
         <div className="flex items-stretch justify-between gap-4">
           <div className="min-w-0">
-            <CardTitle id={headingId}>Campaign briefing:</CardTitle>
+            <CardTitle id={headingId}>Campaign briefing</CardTitle>
             <CardDescription>
               Review campaign settings, seat order, notes, and turn reminders.
             </CardDescription>
@@ -153,10 +153,10 @@ export function CampaignBriefing({
         className="border-t border-terminal-400/20 px-4 py-4 sm:px-6"
         data-testid="campaign-briefing-identity"
       >
-        <p className="break-words text-lg font-semibold text-terminal-100">
+        <p className="break-words text-lg font-medium text-terminal-200">
           {name}
         </p>
-        <p className="mt-1 text-xs uppercase tracking-[0.16em] text-terminal-300/70">
+        <p className={cn("mt-1", fieldLabel)}>
           Overlord · {organizerDisplayName}
         </p>
       </div>
@@ -207,35 +207,47 @@ export function CampaignBriefing({
             SEAT ORDER · {occupiedSeats}/{players.length} SEATS
           </AccordionTrigger>
           <AccordionContent>
-            <ol className="flex flex-col gap-2">
+            <ol className="divide-y divide-terminal-400/20 border-y border-terminal-400/20">
               {orderedPlayers.map((player) => {
                 const occupied = player.userId != null;
                 const isActive = occupied && player.id === activePlayerEntryId;
                 return (
                   <li
                     key={player.id}
-                    className="grid min-w-0 grid-cols-[6.5rem_minmax(0,1fr)] items-start gap-x-4 border-t border-terminal-400/20 px-2 py-2 text-sm sm:grid-cols-[7.5rem_minmax(0,1fr)]"
+                    aria-current={isActive ? "true" : undefined}
+                    className="grid min-w-0 grid-cols-[6.5rem_minmax(0,1fr)] items-start gap-x-4 py-2 sm:grid-cols-[7.5rem_minmax(0,1fr)]"
                   >
-                    <span className="shrink-0 text-terminal-300/70">
-                      SEAT {String(player.turnOrder).padStart(2, "0")}
+                    <span
+                      className={cn(
+                        "w-fit shrink-0 rounded-sm px-2 py-0.5",
+                        isActive
+                          ? "bg-terminal-400 text-xs font-bold uppercase tracking-[0.16em] text-primary-foreground"
+                          : fieldLabel,
+                      )}
+                    >
+                      SEAT {player.turnOrder}
+                      {isActive ? (
+                        <span className="sr-only"> (active seat)</span>
+                      ) : null}
                     </span>
                     <span className="min-w-0 text-left">
-                      <span className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-                        <span className="min-w-0 break-words text-terminal-100">
-                          {occupied
-                            ? (player.displayName ?? "Occupied")
-                            : "Empty"}
+                      <span
+                        className={cn(
+                          "block min-w-0 break-words",
+                          occupied
+                            ? fieldValue
+                            : "text-sm font-medium text-terminal-300/50",
+                        )}
+                      >
+                        {occupied
+                          ? (player.displayName ?? "Occupied")
+                          : "Empty"}
+                      </span>
+                      {player.isOrganizer ? (
+                        <span className={cn("block", fieldLabel)}>
+                          Overlord
                         </span>
-                        {isActive ? (
-                          <span className="shrink-0 text-xs font-semibold uppercase tracking-[0.12em] text-terminal-300">
-                            Active player
-                          </span>
-                        ) : null}
-                      </span>
-                      <span className="block text-xs uppercase tracking-[0.12em] text-terminal-300/70">
-                        {occupied ? "Occupied" : "Empty"}
-                        {player.isOrganizer ? " · Overlord" : ""}
-                      </span>
+                      ) : null}
                     </span>
                   </li>
                 );
@@ -248,9 +260,7 @@ export function CampaignBriefing({
           className="border-t border-terminal-400/20 px-4 sm:px-6"
           value="notes"
         >
-          <AccordionTrigger>
-            CAMPAIGN NOTES · {hasNotes ? "RECORDED" : "EMPTY"}
-          </AccordionTrigger>
+          <AccordionTrigger>CAMPAIGN NOTES</AccordionTrigger>
           <AccordionContent>
             {hasNotes ? (
               <GameNotesMarkdown
@@ -258,7 +268,7 @@ export function CampaignBriefing({
                 className="rounded-none border-0 bg-transparent px-0 py-0"
               />
             ) : (
-              <p className="text-sm text-terminal-300/70">
+              <p className="text-xs text-terminal-300/70">
                 No campaign notes recorded.
               </p>
             )}

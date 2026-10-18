@@ -41,6 +41,7 @@ import {
   TerminalActionConfirmationDialog,
   type TerminalActionConfirmationSpec,
 } from "@/components/terminal-action-confirmation-dialog";
+import { fieldLabel, fieldValue } from "@/lib/terminal-styles";
 import { cn } from "@/lib/utils";
 import type {
   SeatOrderBaseline,
@@ -238,20 +239,23 @@ function SortableSeatRow({
         transform: CSS.Transform.toString(transform),
         transition,
       }}
+      aria-current={isActive ? "true" : undefined}
       className={cn(
-        "relative flex items-center justify-between gap-4 rounded-lg border px-4 py-4",
+        "relative flex items-center justify-between gap-4 rounded-md border px-4 py-3",
         isConfiguration ? "min-w-0 flex-wrap" : null,
         showActiveRowHighlight
           ? "border-terminal-400 bg-terminal-400 text-primary-foreground"
-          : "border-terminal-400/20 bg-terminal-400/5",
-        isDragging ? "opacity-70 shadow-2xl shadow-terminal-400/30" : null,
+          : isActive
+            ? "border-terminal-400/40 bg-terminal-400/15"
+            : "border-terminal-400/20 bg-terminal-400/5",
+        isDragging ? "opacity-70" : null,
       )}
     >
       {isEmptySeat ? (
         <div
           aria-hidden="true"
           className={cn(
-            "pointer-events-none absolute inset-0 rounded-lg opacity-60",
+            "pointer-events-none absolute inset-0 rounded-md opacity-60",
             showActiveRowHighlight ? "opacity-30" : "opacity-60",
           )}
           style={{
@@ -263,27 +267,26 @@ function SortableSeatRow({
       <div className="relative z-10">
         <div
           className={cn(
-            "font-medium",
+            fieldValue,
             showActiveRowHighlight
               ? "text-primary-foreground"
               : isEmptySeat
-                ? "text-terminal-200"
-                : "text-terminal-300",
+                ? "text-terminal-300/70"
+                : null,
           )}
         >
           {playerLabel}
         </div>
         <div
           className={cn(
-            "mt-1 text-xs uppercase tracking-[0.2em]",
-            showActiveRowHighlight
-              ? "text-primary-foreground/70"
-              : "text-terminal-300/70",
+            "mt-1",
+            fieldLabel,
+            showActiveRowHighlight && "text-primary-foreground/70",
           )}
         >
           Seat {index + 1}
           {player.isOrganizer ? " · Overlord" : ""}
-          {isActive && (!isEditing || isConfiguration) ? " · Active" : ""}
+          {isActive ? <span className="sr-only"> (active seat)</span> : null}
         </div>
       </div>
       {isEditing ? (
@@ -299,7 +302,7 @@ function SortableSeatRow({
               aria-label={`Manage seat ${index + 1}`}
               disabled={isPending}
               type="button"
-              variant="secondary"
+              variant="outline"
               onClick={(event) => {
                 onSelectForManagement(player.id, event.currentTarget);
               }}
@@ -312,10 +315,14 @@ function SortableSeatRow({
               <Button
                 data-no-drag="true"
                 aria-pressed={isActive}
-                className="w-28 shrink-0 transition-none"
+                className={cn(
+                  "w-28 shrink-0 transition-none",
+                  isActive &&
+                    "border-terminal-400 bg-terminal-400/15 text-terminal-200 disabled:opacity-100",
+                )}
                 disabled={isPending || player.userId == null || isActive}
                 type="button"
-                variant={isActive ? "default" : "secondary"}
+                variant="outline"
                 onClick={() => {
                   onMakeActive(index);
                 }}
@@ -999,10 +1006,7 @@ function CampaignSeatOrderEditor({
   const seatRows = (
     <>
       {errorMessage ? (
-        <div
-          className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-mono text-destructive"
-          role="alert"
-        >
+        <div className="font-mono text-xs text-destructive" role="alert">
           {errorMessage}
           {requiresReload
             ? " Your attempted draft is unchanged. Discard it and load latest roster before saving again."
@@ -1015,7 +1019,7 @@ function CampaignSeatOrderEditor({
           className="h-auto whitespace-normal text-left"
           disabled={isPending}
           type="button"
-          variant="secondary"
+          variant="outline"
           onClick={reloadSeatOrder}
         >
           Discard draft and load latest roster
@@ -1083,7 +1087,7 @@ function CampaignSeatOrderEditor({
             <Button
               disabled={isMutating}
               type="button"
-              variant="secondary"
+              variant="outline"
               onClick={cancelEdit}
             >
               Cancel
@@ -1108,10 +1112,10 @@ function CampaignSeatOrderEditor({
       {overlays}
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <CardTitle>Seat order:</CardTitle>
+          <CardTitle>Seat order</CardTitle>
           <CardDescription>
             {isEditing
-              ? "Drag a seat card to reorder turns, clear or remove seats, or choose which player is active."
+              ? "Drag a seat card to reorder seats, clear or remove seats, or choose which player is active."
               : "The current lords and the active seat."}
           </CardDescription>
         </div>
@@ -1121,7 +1125,7 @@ function CampaignSeatOrderEditor({
               <Button
                 disabled={isMutating}
                 type="button"
-                variant="secondary"
+                variant="outline"
                 onClick={cancelEdit}
               >
                 Cancel
@@ -1139,7 +1143,7 @@ function CampaignSeatOrderEditor({
             <Button
               disabled={isMutating}
               type="button"
-              variant="secondary"
+              variant="outline"
               onClick={() => {
                 setDraft({
                   players: latestRoster.players,

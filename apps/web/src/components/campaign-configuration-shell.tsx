@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
+import { fieldLabel } from "@/lib/terminal-styles";
 import { cn } from "@/lib/utils";
 
 export type CampaignConfigurationSection =
@@ -84,14 +85,14 @@ export function CampaignConfigurationShell({
   return (
     <Card
       aria-labelledby={configurationHeadingId}
-      className="min-w-0 overflow-hidden font-mono text-terminal-200 md:flex md:min-h-0 md:grow md:flex-col"
+      className="min-w-0 overflow-hidden font-mono text-terminal-300 md:flex md:min-h-0 md:grow md:flex-col"
       role="region"
     >
       <CardHeader>
         <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-stretch sm:justify-between">
           <div className="min-w-0">
             <CardTitle id={configurationHeadingId}>
-              Configure campaign:
+              Configure campaign
             </CardTitle>
             <CardDescription>
               Update campaign settings, seat order, notes, and turn reminders.
@@ -102,7 +103,7 @@ export function CampaignConfigurationShell({
               className="h-full px-3"
               disabled={isDirty}
               type="button"
-              variant="command"
+              variant="outline"
               onClick={onExit}
             >
               Exit configuration
@@ -112,7 +113,10 @@ export function CampaignConfigurationShell({
       </CardHeader>
 
       <p
-        className="border-t border-terminal-400/20 px-4 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-terminal-300/70 sm:px-6"
+        className={cn(
+          "border-t border-terminal-400/20 px-4 py-3 sm:px-6",
+          fieldLabel,
+        )}
         data-testid="campaign-configuration-status"
       >
         [CONFIGURING: {activeSectionDetails.label.toUpperCase()}]
@@ -126,7 +130,7 @@ export function CampaignConfigurationShell({
           <div className="md:hidden">
             <Label
               htmlFor="campaign-configuration-section"
-              className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-terminal-300/70"
+              className={cn("mb-2 block", fieldLabel)}
             >
               Configuration section
             </Label>
@@ -167,9 +171,9 @@ export function CampaignConfigurationShell({
                       aria-current={isActive ? "page" : undefined}
                       disabled={isDirty && !isActive}
                       className={cn(
-                        "h-auto w-full justify-start rounded-none border-l-2 px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.14em] focus-visible:ring-inset focus-visible:ring-offset-0 disabled:opacity-35",
+                        "h-auto w-full justify-start rounded-none border-l-2 px-3 py-2 text-left text-xs font-bold uppercase tracking-[0.14em] focus-visible:ring-inset focus-visible:ring-offset-0 disabled:opacity-35",
                         isActive
-                          ? "border-terminal-400 bg-terminal-400/15 text-terminal-100"
+                          ? "border-terminal-400 bg-terminal-400/15 text-terminal-200"
                           : "border-transparent text-terminal-300/70 hover:border-terminal-400/60 hover:bg-terminal-400/10 hover:text-terminal-200",
                       )}
                       onClick={() => selectSection(section.id)}
@@ -200,7 +204,10 @@ export function CampaignConfigurationShell({
           <h3
             ref={editorHeadingRef}
             tabIndex={-1}
-            className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-terminal-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className={cn(
+              "mb-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              fieldLabel,
+            )}
           >
             {activeSectionDetails.label}
           </h3>

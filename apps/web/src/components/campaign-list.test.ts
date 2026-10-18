@@ -30,6 +30,7 @@ function createGame(
     slug: id,
     gameNumber,
     name,
+    tagline: null,
     organizerDisplayName: "Overlord",
     updatedAt,
     roundNumber: 1,
@@ -174,7 +175,7 @@ describe("campaign list sorting and filtering", () => {
     const search = screen.getByRole("searchbox", {
       name: "Search your campaigns by campaign number or name",
     });
-    expect(search).toHaveAttribute("placeholder", "Number or name");
+    expect(search).toHaveAttribute("placeholder", "number or name");
 
     await user.type(search, "ALP");
 

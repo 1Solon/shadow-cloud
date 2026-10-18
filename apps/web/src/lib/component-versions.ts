@@ -9,4 +9,3 @@ export function resolveApplicationVersion(
 }
 
 export const applicationVersion = resolveApplicationVersion();
-export const componentVersionStatus = `VERSION: v${applicationVersion}`;

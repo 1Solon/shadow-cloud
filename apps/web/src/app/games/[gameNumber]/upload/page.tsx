@@ -64,24 +64,24 @@ export default async function UploadPage({
 
       <div>
         <Link
-          className="inline-flex items-center text-sm font-mono text-terminal-400/70 hover:text-terminal-400 transition-colors"
+          className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-[0.14em] text-terminal-300/70 transition-colors hover:text-terminal-200"
           href={`/games/${game.gameNumber}`}
         >
-          &lt; GAME OVERVIEW
+          <span aria-hidden="true">◀</span>
+          Game overview
         </Link>
       </div>
       {query.upload === "error" ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive font-mono">
+        <p className="font-mono text-xs text-destructive">
           {uploadMessage ?? "The save upload failed."}
-        </div>
+        </p>
       ) : null}
 
-      {/* Upload section */}
       <section>
         {!session?.user ? (
           <Card>
             <CardHeader>
-              <CardTitle>Save Upload:</CardTitle>
+              <CardTitle>Save upload</CardTitle>
               <CardDescription>
                 Sign in with Discord to upload your turn save.
               </CardDescription>
@@ -98,13 +98,13 @@ export default async function UploadPage({
         ) : (
           <Card>
             <CardHeader>
-              <CardTitle>Save Upload:</CardTitle>
+              <CardTitle>Save upload</CardTitle>
               <CardDescription>
                 Only the active lord can submit the next save for this round.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="rounded-lg border border-terminal-400/20 bg-terminal-400/5 px-4 py-4 text-sm text-terminal-300 font-mono">
+              <div className="rounded-md border border-terminal-400/20 bg-terminal-400/5 px-4 py-4 font-mono text-sm text-terminal-300">
                 {`Waiting for ${game.activePlayerDisplayName} to upload the current turn.`}
               </div>
             </CardContent>

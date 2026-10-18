@@ -276,61 +276,19 @@ body {
   );
 }
 
-@keyframes terminal-title-cursor-blink {
+@keyframes patch-notes-flash {
   0%,
-  46% {
-    opacity: 1;
-  }
-
-  50%,
-  100% {
-    opacity: 0;
-  }
-}
-
-@keyframes terminal-title-flicker {
-  0%,
-  18%,
-  22%,
-  56%,
   100% {
     opacity: 1;
-    text-shadow:
-      0 0 7px color-mix(in srgb, currentColor 42%, transparent),
-      0 0 18px color-mix(in srgb, currentColor 18%, transparent);
   }
 
-  20% {
-    opacity: 0.88;
-    text-shadow:
-      0 0 5px color-mix(in srgb, currentColor 32%, transparent),
-      0 0 12px color-mix(in srgb, currentColor 12%, transparent);
-  }
-
-  58% {
-    opacity: 0.94;
-    text-shadow:
-      0 0 6px color-mix(in srgb, currentColor 38%, transparent),
-      0 0 14px color-mix(in srgb, currentColor 16%, transparent);
+  50% {
+    opacity: 0.7;
   }
 }
 
-.terminal-title-effect {
-  display: inline-flex;
-  align-items: center;
-  letter-spacing: 0.04em;
-  animation: terminal-title-flicker 3.2s steps(1, end) infinite;
-}
-
-.terminal-title-cursor {
-  display: inline-block;
-  width: 0.12em;
-  height: 1em;
-  margin-left: 0.24em;
-  align-self: center;
-  background: currentColor;
-  box-shadow: 0 0 10px color-mix(in srgb, currentColor 75%, transparent);
-  animation: terminal-title-cursor-blink 1.15s steps(1, end) infinite;
+.patch-notes-flash {
+  animation: patch-notes-flash 2.4s ease-in-out infinite;
 }
 
 /* Turn history tables into full-width records before the desktop breakpoint. */
@@ -363,11 +321,12 @@ body {
     grid-template-columns: minmax(0, 1fr);
     height: auto !important;
     overflow: hidden;
-    border: 1px solid var(--border);
+    border: 1px solid color-mix(in oklab, var(--terminal-400) 20%, transparent);
     border-radius: 0.5rem;
   }
 
   .history-table--stacked tr.border-l-2 {
+    border-left-color: var(--terminal-400);
     border-left-width: 2px;
   }
 
@@ -376,16 +335,17 @@ body {
     min-width: 0;
     padding: 0.75rem;
     overflow-wrap: anywhere;
-    border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+    border-bottom: 1px solid
+      color-mix(in oklab, var(--terminal-400) 20%, transparent);
   }
 
   .history-table--stacked td::before {
     display: block;
     margin-bottom: 0.35rem;
-    color: var(--muted-foreground);
-    font-size: 0.7rem;
+    color: color-mix(in oklab, var(--terminal-300) 70%, transparent);
+    font-size: 0.75rem;
     line-height: 1.25;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
     content: attr(data-label);
   }
@@ -404,8 +364,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .terminal-title-effect,
-  .terminal-title-cursor {
+  .patch-notes-flash {
     animation: none;
   }
 }

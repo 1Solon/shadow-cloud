@@ -62,7 +62,7 @@ export function CampaignWorkspaceTabs({
       value={activeTabId}
       onValueChange={(value) => selectTab(value as WorkspaceTabId)}
     >
-      <div className="overflow-x-auto overflow-y-hidden border-b border-terminal-400/30">
+      <div className="overflow-x-auto overflow-y-hidden border-b border-terminal-400/20">
         <TabsList
           aria-label="Campaign workspace"
           className="min-w-max px-1 pt-1"

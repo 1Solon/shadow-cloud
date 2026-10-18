@@ -3,7 +3,6 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { ChevronDownIcon } from "lucide-react";
 import {
   TerminalActionConfirmationDialog,
   type TerminalActionConfirmationSpec,
@@ -12,9 +11,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { UserBadge } from "@/components/user-badge";
+import { AccountTrigger } from "@/components/account-trigger";
 import { cn } from "@/lib/utils";
 
 type AccountMenuProps = {
@@ -24,7 +25,7 @@ type AccountMenuProps = {
   overrideEnabled: boolean;
 };
 
-const menuItemClassName = "text-xs uppercase tracking-[0.18em]";
+const menuItemClassName = "text-xs font-bold uppercase tracking-[0.14em]";
 
 export function AccountMenu({
   name,
@@ -85,12 +86,12 @@ export function AccountMenu({
         onConfirm={confirmOverrideChange}
       />
       <DropdownMenu modal={false}>
-        <DropdownMenuTrigger
-          aria-label="Account menu"
-          className="flex min-w-0 items-center gap-2 rounded-md p-1 text-terminal-300 transition-colors hover:bg-terminal-400/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-        >
-          <UserBadge name={name} image={image} isSignedIn />
-          <ChevronDownIcon aria-hidden="true" className="size-4 shrink-0" />
+        <DropdownMenuTrigger asChild aria-label="Account menu">
+          <AccountTrigger
+            name={name}
+            image={image}
+            overrideEnabled={overrideEnabled}
+          />
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="end"
@@ -101,6 +102,13 @@ export function AccountMenu({
             }
           }}
         >
+          <DropdownMenuLabel className="flex flex-col gap-1">
+            <span className="text-xs uppercase tracking-[0.16em] text-terminal-300/70">
+              Connected as
+            </span>
+            <span className="max-w-56 truncate text-terminal-300">{name}</span>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
           {canOverride ? (
             <DropdownMenuItem
               className={cn(

@@ -93,7 +93,7 @@ export default async function GameDetailPage({
       {transferNotice ? (
         <p
           role="status"
-          className="border border-terminal-400/30 bg-terminal-400/10 px-4 py-3 text-sm font-mono text-terminal-200"
+          className="rounded-md border border-terminal-400/20 bg-terminal-400/5 px-4 py-3 font-mono text-sm text-terminal-300"
         >
           {transferNotice}
         </p>
@@ -122,7 +122,7 @@ export default async function GameDetailPage({
         }
       />
       {query.upload === "error" ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive font-mono">
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 font-mono text-sm text-destructive">
           {uploadMessage ?? "The save upload failed."}
         </div>
       ) : null}
@@ -176,6 +176,7 @@ export default async function GameDetailPage({
             gameNumber={game.gameNumber}
             hasAiPlayers={game.hasAiPlayers}
             name={game.name}
+            tagline={game.tagline}
             notes={game.notes}
             organizerDisplayName={game.organizerDisplayName}
             playerCount={game.playerCount}

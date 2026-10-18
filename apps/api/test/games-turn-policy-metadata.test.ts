@@ -112,6 +112,63 @@ describe('turn policy through the mutation boundary', () => {
     },
   );
 
+  it.each([
+    ['owner', false],
+    ['shadow', true],
+  ] as const)(
+    'allows %s to set, trim, and clear a tagline without advancing revision',
+    async (userId, shadowOverride) => {
+      const { mutations } = createMutations(shadowOverride);
+
+      const set = await mutations.updateGameMetadata('game', userId, {
+        tagline: '  4S FFA+AI T3 1Z 1A  ',
+      });
+      expect(set.tagline).toBe('4S FFA+AI T3 1Z 1A');
+      expect(
+        await fixture.db.game.findUniqueOrThrow({ where: { id: 'game' } }),
+      ).toMatchObject({ tagline: '4S FFA+AI T3 1Z 1A', turnRevision: 0 });
+      expect(
+        JSON.parse((await fixture.db.auditEvent.findFirstOrThrow()).payload),
+      ).toMatchObject({
+        previousMetadata: { tagline: null },
+        nextMetadata: { tagline: '4S FFA+AI T3 1Z 1A' },
+      });
+
+      const untouched = await mutations.updateGameMetadata('game', userId, {
+        notes: 'Unrelated edit',
+      });
+      expect(untouched.tagline).toBe('4S FFA+AI T3 1Z 1A');
+
+      const cleared = await mutations.updateGameMetadata('game', userId, {
+        tagline: '   ',
+      });
+      expect(cleared.tagline).toBeNull();
+      expect(
+        await fixture.db.game.findUniqueOrThrow({ where: { id: 'game' } }),
+      ).toMatchObject({ tagline: null });
+    },
+  );
+
+  it('clears a tagline with an explicit null', async () => {
+    const { mutations } = createMutations();
+    await mutations.updateGameMetadata('game', 'owner', { tagline: 'Hello' });
+    await mutations.updateGameMetadata('game', 'owner', { tagline: null });
+    expect(
+      await fixture.db.game.findUniqueOrThrow({ where: { id: 'game' } }),
+    ).toMatchObject({ tagline: null });
+  });
+
+  it('rejects an unauthorized tagline edit without persisting it', async () => {
+    const { mutations } = createMutations();
+    await expect(
+      mutations.updateGameMetadata('game', 'shadow', { tagline: 'Nope' }),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(
+      await fixture.db.game.findUniqueOrThrow({ where: { id: 'game' } }),
+    ).toMatchObject({ tagline: null });
+    expect(await fixture.db.auditEvent.count()).toBe(0);
+  });
+
   it('rejects an unauthorized policy edit without audit or notification', async () => {
     const { mutations, notifyThreadRenamed } = createMutations();
     await expect(
