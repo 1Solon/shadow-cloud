@@ -15,7 +15,14 @@ import {
 } from '@prisma/client';
 import { buildGameIdentifierWhere } from '../../support/game-lookup.helpers';
 import { assertSaveBaseline } from '../../support/save-baseline';
-import { saveStagingLease } from '../../support/save-recovery';
+import {
+  cleanupSaveRecovery,
+  saveStagingLease,
+} from '../../support/save-recovery';
+import {
+  pruneSaves,
+  resolveSaveRetentionLimit,
+} from '../../support/save-retention';
 import type {
   UploadedSaveFile,
   UploadSaveSafetyMetadata,
@@ -174,11 +181,17 @@ export async function uploadSave(
   });
   checkExpectations(expected, observedLatest?.id ?? null, metadata);
   const contentHash = `sha256:${createHash('sha256').update(file.buffer).digest('hex')}`;
-  const duplicate = await database.fileVersion.findFirst({
-    where: { gameId: observed.id, contentHash },
-    orderBy: { versionNumber: 'desc' },
-    include: { uploadedBy: true },
-  });
+  const duplicate =
+    (await database.fileVersion.findFirst({
+      where: { gameId: observed.id, contentHash },
+      orderBy: { versionNumber: 'desc' },
+      include: { uploadedBy: true },
+    })) ??
+    (await database.prunedSave.findFirst({
+      where: { gameId: observed.id, contentHash },
+      orderBy: { versionNumber: 'desc' },
+      include: { uploadedBy: true },
+    }));
   if (duplicate) {
     throw new ConflictException(
       `This is the same file as save #${duplicate.versionNumber}, uploaded by ${duplicate.uploadedBy.displayName}. Upload the save from your own turn.`,
@@ -196,6 +209,7 @@ export async function uploadSave(
   }
   const fileStorage = dependencies.fileStorage;
   if (!fileStorage) throw new Error('Upload file storage is not configured.');
+  const retentionLimit = resolveSaveRetentionLimit();
   const lease = saveStagingLease(database, fileStorage);
   let result;
   try {
@@ -363,10 +377,19 @@ export async function uploadSave(
           }),
         },
       });
+      const pruned = await pruneSaves(transaction, game.id, retentionLimit);
       await transaction.saveCleanup.delete({
         where: { storagePath: stored.storagePath },
       });
-      return { game, active, next, fileVersion, roundNumber, roundAdvanced };
+      return {
+        game,
+        active,
+        next,
+        fileVersion,
+        roundNumber,
+        roundAdvanced,
+        pruned,
+      };
     });
   } catch (error) {
     await lease.discard();
@@ -374,8 +397,15 @@ export async function uploadSave(
     throw error;
   }
 
-  const { game, active, next, fileVersion, roundNumber, roundAdvanced } =
-    result;
+  const {
+    game,
+    active,
+    next,
+    fileVersion,
+    roundNumber,
+    roundAdvanced,
+    pruned,
+  } = result;
   const discordId = (user: NonNullable<typeof next.user>) =>
     user.identities.find((identity) => identity.provider === 'discord')
       ?.providerId ?? null;
@@ -425,6 +455,15 @@ export async function uploadSave(
       `Save ${fileVersion.id} committed but upload notification failed.`,
       error instanceof Error ? error.stack : String(error),
     );
+  }
+  // After notifying, so deleting pruned files never delays the next player.
+  if (pruned > 0) {
+    await cleanupSaveRecovery(database, fileStorage).catch((error: unknown) => {
+      new Logger('TurnMutationsService').warn(
+        `Save ${fileVersion.id} committed but cleanup of ${pruned} pruned saves will be retried.`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    });
   }
   return {
     fileVersionId: fileVersion.id,

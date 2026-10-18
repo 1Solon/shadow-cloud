@@ -1,0 +1,3 @@
+# One save retention limit permanently prunes old saves
+
+Saves are the largest thing Shadow Cloud stores, so every campaign keeps only its most recent saves (10 by default, never fewer than 2 so a save rejection always has a save to return to) and older saves are deleted for good. The limit is set once for the whole server rather than per campaign, because its purpose is protecting the server's disk, and no Overlord should be able to raise it. A pruned save leaves behind only its number, fingerprint, uploader, and upload time, so duplicate uploads are still recognised and old links can explain why the save is gone. Raising the limit never brings pruned saves back.
