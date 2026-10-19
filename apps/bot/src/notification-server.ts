@@ -92,21 +92,6 @@ async function renameThreadForNotification(
   }
 }
 
-async function archiveDeletedCampaignThread(
-  thread: Awaited<ReturnType<typeof resolveNotificationThread>>,
-  gameName: string,
-) {
-  try {
-    // Archive without locking, so players can keep talking in the thread.
-    await thread.setArchived(true);
-  } catch (error) {
-    console.warn(
-      `Skipping archive for deleted campaign ${gameName} (${thread.id}) because Discord rejected the update.`,
-      error,
-    );
-  }
-}
-
 async function pinGameInitializedMessage(
   message: Pick<Message, "pin">,
   gameName: string,
@@ -272,10 +257,6 @@ export function startNotificationServer(
 
       if (isGameInitializedRequest) {
         await pinGameInitializedMessage(message, payload.game.name, thread.id);
-      }
-
-      if (isCampaignDeletedRequest) {
-        await archiveDeletedCampaignThread(thread, payload.game.name);
       }
 
       response.writeHead(204).end();

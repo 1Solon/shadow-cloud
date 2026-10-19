@@ -494,8 +494,8 @@ export function buildCampaignDeletedNotificationMessage(
     ? `${formatDiscordActor(
         escapeMarkdown(payload.victory.victorDisplayName),
         payload.victory.victorDiscordId,
-      )} won this campaign. Its saves and history have been removed from Shadow Cloud; only the record of the victory remains. This thread is now archived.`
-    : "This campaign was deleted for inactivity. Its saves and history have been removed from Shadow Cloud. This thread is now archived.";
+      )} won this campaign. Its saves and history have been removed from Shadow Cloud; only the record of the victory remains.`
+    : "This campaign was deleted for inactivity. Its saves and history have been removed from Shadow Cloud.";
 
   return {
     ...buildDiscordNotification({

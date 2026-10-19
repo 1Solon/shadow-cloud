@@ -756,5 +756,6 @@ describe("buildCampaignDeletedNotificationMessage", () => {
     expect(rendered).toContain("Ashes has been deleted");
     expect(rendered).toContain("deleted for inactivity");
     expect(rendered).not.toContain("won this campaign");
+    expect(rendered).not.toContain("archived");
   });
 });

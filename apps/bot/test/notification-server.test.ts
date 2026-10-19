@@ -347,7 +347,7 @@ describe("startNotificationServer", () => {
     expect(response.statusCode).toBe(204);
   });
 
-  it("posts the campaign-deleted notice, then archives the thread without locking it", async () => {
+  it("posts the campaign-deleted notice and leaves the thread open", async () => {
     const thread = {
       id: "thread-1",
       isThread: () => true,
@@ -377,10 +377,8 @@ describe("startNotificationServer", () => {
     const notice = JSON.stringify(thread.send.mock.calls[0]);
     expect(notice).toContain("The Game has been deleted");
     expect(notice).toContain("<@discord-1> won this campaign.");
-    expect(thread.setArchived).toHaveBeenCalledExactlyOnceWith(true);
-    expect(thread.setArchived.mock.invocationCallOrder[0] ?? 0).toBeGreaterThan(
-      thread.send.mock.invocationCallOrder[0] ?? 0,
-    );
+    expect(notice).not.toContain("archived");
+    expect(thread.setArchived).not.toHaveBeenCalled();
     expect(thread.setLocked).not.toHaveBeenCalled();
     expect(threadNameMock.renameThreadIfNeeded).not.toHaveBeenCalled();
     expect(response.statusCode).toBe(204);
