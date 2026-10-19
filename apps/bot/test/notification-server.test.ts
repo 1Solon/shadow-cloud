@@ -386,6 +386,41 @@ describe("startNotificationServer", () => {
     expect(response.statusCode).toBe(204);
   });
 
+  it("posts inactivity warnings to the thread without archiving it", async () => {
+    const thread = {
+      id: "thread-1",
+      isThread: () => true,
+      joinable: false,
+      send: vi.fn(async () => ({ pin: vi.fn() })),
+      setArchived: vi.fn(async () => undefined),
+    };
+    const client = buildClient(thread);
+
+    startNotificationServer(client as never, {
+      notificationPort: 3011,
+      notificationSecret: "secret",
+      webBaseUrl: "https://shadow.example",
+    });
+
+    const response = buildResponse();
+    await httpMock.getHandler()?.(
+      buildRequest("/notify/inactivity-warning", {
+        game: saveUploadedPayload.game,
+        warning: { final: true, deletionDueAt: "2026-07-10T12:00:00.000Z" },
+        players: [{ displayName: "Solon", discordId: "discord-1" }],
+      }),
+      response,
+    );
+
+    expect(thread.send).toHaveBeenCalledOnce();
+    const notice = JSON.stringify(thread.send.mock.calls[0]);
+    expect(notice).toContain("Final warning: The Game will be deleted");
+    expect(notice).toContain("<@discord-1>");
+    expect(thread.setArchived).not.toHaveBeenCalled();
+    expect(threadNameMock.renameThreadIfNeeded).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(204);
+  });
+
   it("delivers authenticated turn nudges without renaming, tagging, or pinning", async () => {
     const pin = vi.fn(async () => undefined);
     const thread = {

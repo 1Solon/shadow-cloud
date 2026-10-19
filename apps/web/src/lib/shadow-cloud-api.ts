@@ -125,6 +125,7 @@ export type GameDetail = {
   }>;
   fileVersions: GameDetailFileVersion[];
   rejectableSaveId: string | null;
+  inactivityDeletionDueAt: string | null;
   openTurn: GameTurnRecord | null;
   recentCompletedTurns: GameTurnRecord[];
 };

@@ -46,6 +46,7 @@ enum NotificationDeliveryEvent {
   THREAD_RENAMED
   TURN_NUDGE
   CAMPAIGN_DELETED
+  INACTIVITY_WARNING
 }
 
 enum NotificationDeliveryStatus {
@@ -161,6 +162,8 @@ model Game {
   turnRemindersEnabled    Boolean               @default(true)
   turnRevision            Int                   @default(0)
   saveRevision            Int                   @default(0)
+  inactivityWarnedAt      DateTime?
+  finalInactivityWarnedAt DateTime?
   createdAt               DateTime              @default(now())
   updatedAt               DateTime              @updatedAt
   organizerId             String
@@ -353,6 +356,8 @@ model AuditEvent {
   createdAt DateTime       @default(now())
   game      Game           @relation(fields: [gameId], references: [id], onDelete: Cascade)
   actor     User?          @relation("ActorEvents", fields: [actorId], references: [id])
+
+  @@index([gameId, eventType, createdAt])
 }
 
 model NotificationDelivery {

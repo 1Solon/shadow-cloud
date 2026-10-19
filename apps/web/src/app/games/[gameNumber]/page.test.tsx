@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AdministratorActionsCard } from "@/components/administrator-actions-card";
 import { CampaignDetailsWorkspace } from "@/components/campaign-details-workspace";
 import { CampaignWorkspaceTabs } from "@/components/campaign-workspace-tabs";
+import { LocalTimestamp } from "@/components/local-timestamp";
 import { SaveRegimeInspection } from "@/components/save-regime-inspection";
 import { TerminalConfirmationModal } from "@/components/terminal-confirmation-modal";
 import { TurnCommandCenter } from "@/components/turn-command-center";
@@ -131,6 +132,7 @@ function createGame(overrides: Partial<GameDetail> = {}): GameDetail {
       }),
     ],
     rejectableSaveId: null,
+    inactivityDeletionDueAt: null,
     openTurn: createTurnRecord(),
     recentCompletedTurns: [
       createTurnRecord({
@@ -263,6 +265,31 @@ describe("GameDetailPage workspace composition", () => {
       expect(mocks.getGameDetail).toHaveBeenCalledWith("42");
     },
   );
+
+  it("warns that a dormant campaign will be deleted, and when", async () => {
+    const page = await renderPage({
+      game: createGame({ inactivityDeletionDueAt: "2026-08-31T00:00:00.000Z" }),
+    });
+
+    const notice = elementChildren(page).find(
+      (element) => element.props.role === "alert",
+    );
+    expect(notice?.type).toBe("p");
+    expect(JSON.stringify(notice?.props.children)).toContain(
+      "all of its saves will be deleted",
+    );
+    expect(findElementByType(notice, LocalTimestamp)?.props).toMatchObject({
+      timestamp: "2026-08-31T00:00:00.000Z",
+    });
+  });
+
+  it("shows no deletion warning while the campaign is active", async () => {
+    const page = await renderPage();
+
+    expect(
+      elementChildren(page).find((element) => element.props.role === "alert"),
+    ).toBeUndefined();
+  });
 
   it.each([
     "<script>alert(1)</script>",

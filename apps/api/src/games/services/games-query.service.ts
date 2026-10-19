@@ -17,6 +17,7 @@ import { saveBaseline } from '../support/save-baseline';
 import { resolveSaveRetentionLimit } from '../support/save-retention';
 import { buildCanonicalThreadName } from '../support/game-configuration.helpers';
 import { buildGameDetailFileVersionPayload } from '../support/game-detail-file-version-payload';
+import { dormantCampaignDeletionDueAt } from '../support/campaign-inactivity';
 import { buildGameIdentifierWhere } from '../support/game-lookup.helpers';
 import type {
   GameDetailResponse,
@@ -189,14 +190,15 @@ export class GamesQueryService {
   }
 
   async getGameDetail(gameId: string): Promise<GameDetailResponse> {
-    const { game, openTurns, recentCompletedTurns } = await prisma.$transaction(
-      async (transaction) => {
+    const { game, openTurns, recentCompletedTurns, inactivityDeletionDueAt } =
+      await prisma.$transaction(async (transaction) => {
         const game = await transaction.game.findFirst({
           where: {
             ...buildGameIdentifierWhere(gameId),
           },
           include: {
             organizer: true,
+            victoryRecord: { select: { id: true } },
             players: {
               include: {
                 user: true,
@@ -244,19 +246,25 @@ export class GamesQueryService {
           throw new NotFoundException(`Game ${gameId} was not found.`);
         }
 
-        const [openTurns, recentCompletedTurns] = await Promise.all([
-          transaction.turnRecord.findMany({
-            where: { gameId: game.id, endedAt: null },
-          }),
-          transaction.turnRecord.findMany({
-            where: { gameId: game.id, endedAt: { not: null } },
-            orderBy: { endedAt: 'desc' },
-            take: 25,
-          }),
-        ]);
-        return { game, openTurns, recentCompletedTurns };
-      },
-    );
+        const [openTurns, recentCompletedTurns, inactivityDeletionDueAt] =
+          await Promise.all([
+            transaction.turnRecord.findMany({
+              where: { gameId: game.id, endedAt: null },
+            }),
+            transaction.turnRecord.findMany({
+              where: { gameId: game.id, endedAt: { not: null } },
+              orderBy: { endedAt: 'desc' },
+              take: 25,
+            }),
+            dormantCampaignDeletionDueAt(transaction, game),
+          ]);
+        return {
+          game,
+          openTurns,
+          recentCompletedTurns,
+          inactivityDeletionDueAt,
+        };
+      });
     const openTurn = openTurns[0] ? mapTurnRecord(openTurns[0]) : null;
     const latestSave = game.fileVersions[0];
     const rejectableSaveId =
@@ -364,6 +372,7 @@ export class GamesQueryService {
       turnRemindersEnabled: game.turnRemindersEnabled,
       currentTurnStartedAt: openTurn?.startedAt ?? null,
       rejectableSaveId,
+      inactivityDeletionDueAt: inactivityDeletionDueAt?.toISOString() ?? null,
       openTurn,
       recentCompletedTurns: recentCompletedTurns.map(mapTurnRecord),
     };

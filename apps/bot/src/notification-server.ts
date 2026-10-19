@@ -6,6 +6,8 @@ import {
   buildCampaignDeletedNotificationMessage,
   type CampaignDeletedNotificationPayload,
   buildGameInitNotificationMessage,
+  buildInactivityWarningNotificationMessage,
+  type InactivityWarningNotificationPayload,
   buildSaveRejectedNotificationMessage,
   buildSaveReplacedNotificationMessage,
   buildSaveNotificationMessage,
@@ -145,6 +147,8 @@ export function startNotificationServer(
     const isActivePlayerChangedRequest =
       request.url === "/notify/active-player-changed";
     const isCampaignDeletedRequest = request.url === "/notify/campaign-deleted";
+    const isInactivityWarningRequest =
+      request.url === "/notify/inactivity-warning";
 
     if (request.method === "GET" && request.url === "/health") {
       response.writeHead(200).end("ok");
@@ -160,7 +164,8 @@ export function startNotificationServer(
         !isThreadRenameRequest &&
         !isTurnNudgeRequest &&
         !isActivePlayerChangedRequest &&
-        !isCampaignDeletedRequest)
+        !isCampaignDeletedRequest &&
+        !isInactivityWarningRequest)
     ) {
       response.writeHead(404).end("Not found");
       return;
@@ -188,7 +193,8 @@ export function startNotificationServer(
         | GameInitializedNotificationPayload
         | ThreadRenameNotificationPayload
         | TurnNudgeNotificationPayload
-        | CampaignDeletedNotificationPayload;
+        | CampaignDeletedNotificationPayload
+        | InactivityWarningNotificationPayload;
 
       if (!payload.game.discordThreadId) {
         response.writeHead(202).end("No thread configured");
@@ -245,6 +251,11 @@ export function startNotificationServer(
       } else if (isCampaignDeletedRequest) {
         notificationMessage = buildCampaignDeletedNotificationMessage(
           payload as CampaignDeletedNotificationPayload,
+        );
+      } else if (isInactivityWarningRequest) {
+        notificationMessage = buildInactivityWarningNotificationMessage(
+          payload as InactivityWarningNotificationPayload,
+          webBaseUrl,
         );
       } else if (isTurnNudgeRequest) {
         notificationMessage = buildTurnNudgeNotificationMessage(

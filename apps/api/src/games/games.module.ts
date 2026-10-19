@@ -6,6 +6,7 @@ import { BotNotificationsService } from './bot-notifications.service';
 import { FileStorageService } from './file-storage.service';
 import { GamesController } from './games.controller';
 import { GamesService } from './games.service';
+import { CampaignInactivityService } from './services/campaign-inactivity.service';
 import { GamesFileService } from './services/games-file.service';
 import { GamesQueryService } from './services/games-query.service';
 import { GamesRegistrationService } from './services/games-registration.service';
@@ -46,6 +47,7 @@ import { VictoryDeletionService } from './services/victory-deletion.service';
     },
     TurnRemindersService,
     VictoryDeletionService,
+    CampaignInactivityService,
     GamesTurnService,
     FileStorageService,
     BotNotificationsService,

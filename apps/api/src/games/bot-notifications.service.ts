@@ -157,10 +157,29 @@ export type CampaignDeletedNotificationPayload = {
     name: string;
     discordThreadId: string;
   };
+  /** Null when the campaign was deleted for inactivity. */
   victory: {
     victorDisplayName: string;
     victorDiscordId: string | null;
+  } | null;
+};
+
+export type InactivityWarningNotificationPayload = {
+  game: {
+    id: string;
+    gameNumber: number;
+    slug: string;
+    name: string;
+    discordThreadId: string;
   };
+  warning: {
+    final: boolean;
+    deletionDueAt: string;
+  };
+  players: Array<{
+    displayName: string;
+    discordId: string | null;
+  }>;
 };
 
 type NotificationEventName =
@@ -171,7 +190,8 @@ type NotificationEventName =
   | 'game-initialized'
   | 'thread-rename'
   | 'turn-nudge'
-  | 'campaign-deleted';
+  | 'campaign-deleted'
+  | 'inactivity-warning';
 
 type NotificationContext = {
   eventName: NotificationEventName;
@@ -566,6 +586,8 @@ export class BotNotificationsService implements OnModuleInit, OnModuleDestroy {
         return 'turn-nudge';
       case NotificationDeliveryEvent.CAMPAIGN_DELETED:
         return 'campaign-deleted';
+      case NotificationDeliveryEvent.INACTIVITY_WARNING:
+        return 'inactivity-warning';
     }
   }
 
@@ -587,6 +609,8 @@ export class BotNotificationsService implements OnModuleInit, OnModuleDestroy {
         return this.turnNudgeEndpoint;
       case NotificationDeliveryEvent.CAMPAIGN_DELETED:
         return `${this.notificationBaseUrl}/notify/campaign-deleted`;
+      case NotificationDeliveryEvent.INACTIVITY_WARNING:
+        return `${this.notificationBaseUrl}/notify/inactivity-warning`;
     }
   }
 

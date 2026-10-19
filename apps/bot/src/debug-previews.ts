@@ -12,6 +12,7 @@ import {
   buildSaveReplacedNotificationMessage,
   buildTurnNudgeNotificationMessage,
   buildCampaignDeletedNotificationMessage,
+  buildInactivityWarningNotificationMessage,
   buildVictoryConfirmation,
 } from "./notifications.js";
 import {
@@ -43,6 +44,9 @@ export const debugPreviewNames = [
   "save-rejected",
   "turn-reminder",
   "campaign-deleted",
+  "inactivity-warning",
+  "final-inactivity-warning",
+  "inactivity-deletion",
   "registration-approval",
   "registration-approved",
   "registration-rejected",
@@ -123,6 +127,34 @@ export function selectDebugPreviewNames(
     ok: true,
     names: debugPreviewNames.filter((name) => selectedNames.has(name)),
   };
+}
+
+function buildDebugInactivityWarning(
+  context: DebugPreviewContext,
+  final: boolean,
+) {
+  const fixture = buildDebugGame(context);
+  return buildInactivityWarningNotificationMessage(
+    {
+      game: {
+        id: fixture.id,
+        gameNumber: fixture.gameNumber,
+        slug: fixture.slug,
+        name: fixture.name,
+        discordThreadId: fixture.discordThreadId,
+      },
+      warning: {
+        final,
+        deletionDueAt: new Date(
+          Date.now() + (final ? 2 : 30) * 24 * 60 * 60 * 1000,
+        ).toISOString(),
+      },
+      players: [
+        { displayName: context.userDisplayName, discordId: context.userId },
+      ],
+    },
+    context.webBaseUrl,
+  );
 }
 
 function buildDebugGame(context: DebugPreviewContext) {
@@ -279,6 +311,23 @@ const previewFactories: Record<DebugPreviewName, DebugPreviewFactory> = {
         victorDisplayName: context.userDisplayName,
         victorDiscordId: context.userId,
       },
+    });
+  },
+  "inactivity-warning": (context) =>
+    buildDebugInactivityWarning(context, false),
+  "final-inactivity-warning": (context) =>
+    buildDebugInactivityWarning(context, true),
+  "inactivity-deletion": (context) => {
+    const fixture = buildDebugGame(context);
+    return buildCampaignDeletedNotificationMessage({
+      game: {
+        id: fixture.id,
+        gameNumber: fixture.gameNumber,
+        slug: fixture.slug,
+        name: fixture.name,
+        discordThreadId: fixture.discordThreadId,
+      },
+      victory: null,
     });
   },
   "registration-approval": (context) => {

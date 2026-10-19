@@ -54,6 +54,23 @@ A campaign whose victory has been designated and that is awaiting deletion at th
 **Victory record**:
 The lasting record of a campaign's victor, which outlives the deleted campaign.
 
+**Activity**:
+Anything that moves a campaign forward: a save upload, a save rejection, a turn ending for any other reason, a roster change, or undoing a victory. Downloads and edits to notes, tagline, or settings are not activity.
+_Avoid_: Last updated
+
+**Inactivity warning**:
+Notice to every seated player that a campaign has had no activity for 30 days and will be deleted 30 days after the notice unless activity happens.
+
+**Final inactivity warning**:
+The second notice to a dormant campaign's seated players, given 2 days before its inactivity deletion.
+
+**Dormant campaign**:
+A campaign with an outstanding inactivity warning. Any activity ends dormancy and restarts the 30 days. Concluded campaigns never become dormant.
+_Avoid_: Inactive, abandoned, closed, archived
+
+**Inactivity deletion**:
+The permanent deletion of a dormant campaign, including its saves, roster, and history, once its warning period ends without activity. Unlike a victory, nothing of the campaign remains.
+
 **Regime**:
 A nation inside a Shadow Empire game, controlled by a human or the game AI. A regime is distinct from a Shadow Cloud seat and the player occupying that seat.
 
