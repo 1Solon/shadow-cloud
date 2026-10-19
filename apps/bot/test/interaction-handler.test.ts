@@ -465,7 +465,7 @@ describe("createInteractionHandler debug command", () => {
     )(interaction as never);
 
     expect(interaction.editReply).toHaveBeenCalledTimes(1);
-    expect(interaction.followUp).toHaveBeenCalledTimes(41);
+    expect(interaction.followUp).toHaveBeenCalledTimes(44);
     for (const [message] of interaction.followUp.mock.calls) {
       expect(message).toMatchObject({
         flags: MessageFlags.Ephemeral | MessageFlags.IsComponentsV2,

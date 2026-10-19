@@ -4,6 +4,7 @@ const prismaMock = vi.hoisted(() => ({
   $transaction: vi.fn(async (callback) => callback(prismaMock)),
   game: { findMany: vi.fn(), findFirst: vi.fn() },
   turnRecord: { findMany: vi.fn() },
+  auditEvent: { findFirst: vi.fn() },
 }));
 
 vi.mock('../src/database', () => ({
@@ -256,5 +257,45 @@ describe('GamesQueryService turn timing payloads', () => {
     expect(game.recentCompletedTurns[0].seatNumber).toBeNull();
     expect(game.recentCompletedTurns[0].lastReminderAt).toBeNull();
     expect(game.recentCompletedTurns[0].nextReminderAt).toBeNull();
+  });
+
+  describe('inactivity deletion date', () => {
+    const warnedAt = new Date('2026-08-01T00:00:00.000Z');
+
+    const detail = async (override = {}) => {
+      prismaMock.game.findFirst.mockResolvedValue(
+        createGame({
+          inactivityWarnedAt: warnedAt,
+          finalInactivityWarnedAt: null,
+          victoryRecord: null,
+          ...override,
+        }),
+      );
+      prismaMock.turnRecord.findMany.mockResolvedValue([]);
+      return new GamesQueryService({} as never).getGameDetail('game-1');
+    };
+
+    it('is 30 days after the inactivity warning while the campaign is dormant', async () => {
+      prismaMock.auditEvent.findFirst.mockResolvedValue(null);
+
+      await expect(detail()).resolves.toMatchObject({
+        inactivityDeletionDueAt: '2026-08-31T00:00:00.000Z',
+      });
+    });
+
+    it('is null once activity follows the warning, after a victory, or before any warning', async () => {
+      prismaMock.auditEvent.findFirst.mockResolvedValue({ id: 'activity' });
+      await expect(detail()).resolves.toMatchObject({
+        inactivityDeletionDueAt: null,
+      });
+
+      prismaMock.auditEvent.findFirst.mockResolvedValue(null);
+      await expect(
+        detail({ victoryRecord: { id: 'victory' } }),
+      ).resolves.toMatchObject({ inactivityDeletionDueAt: null });
+      await expect(detail({ inactivityWarnedAt: null })).resolves.toMatchObject(
+        { inactivityDeletionDueAt: null },
+      );
+    });
   });
 });

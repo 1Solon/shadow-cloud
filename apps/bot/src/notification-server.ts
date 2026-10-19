@@ -6,6 +6,8 @@ import {
   buildCampaignDeletedNotificationMessage,
   type CampaignDeletedNotificationPayload,
   buildGameInitNotificationMessage,
+  buildInactivityWarningNotificationMessage,
+  type InactivityWarningNotificationPayload,
   buildSaveRejectedNotificationMessage,
   buildSaveReplacedNotificationMessage,
   buildSaveNotificationMessage,
@@ -90,21 +92,6 @@ async function renameThreadForNotification(
   }
 }
 
-async function archiveDeletedCampaignThread(
-  thread: Awaited<ReturnType<typeof resolveNotificationThread>>,
-  gameName: string,
-) {
-  try {
-    // Archive without locking, so players can keep talking in the thread.
-    await thread.setArchived(true);
-  } catch (error) {
-    console.warn(
-      `Skipping archive for deleted campaign ${gameName} (${thread.id}) because Discord rejected the update.`,
-      error,
-    );
-  }
-}
-
 async function pinGameInitializedMessage(
   message: Pick<Message, "pin">,
   gameName: string,
@@ -145,6 +132,8 @@ export function startNotificationServer(
     const isActivePlayerChangedRequest =
       request.url === "/notify/active-player-changed";
     const isCampaignDeletedRequest = request.url === "/notify/campaign-deleted";
+    const isInactivityWarningRequest =
+      request.url === "/notify/inactivity-warning";
 
     if (request.method === "GET" && request.url === "/health") {
       response.writeHead(200).end("ok");
@@ -160,7 +149,8 @@ export function startNotificationServer(
         !isThreadRenameRequest &&
         !isTurnNudgeRequest &&
         !isActivePlayerChangedRequest &&
-        !isCampaignDeletedRequest)
+        !isCampaignDeletedRequest &&
+        !isInactivityWarningRequest)
     ) {
       response.writeHead(404).end("Not found");
       return;
@@ -188,7 +178,8 @@ export function startNotificationServer(
         | GameInitializedNotificationPayload
         | ThreadRenameNotificationPayload
         | TurnNudgeNotificationPayload
-        | CampaignDeletedNotificationPayload;
+        | CampaignDeletedNotificationPayload
+        | InactivityWarningNotificationPayload;
 
       if (!payload.game.discordThreadId) {
         response.writeHead(202).end("No thread configured");
@@ -246,6 +237,11 @@ export function startNotificationServer(
         notificationMessage = buildCampaignDeletedNotificationMessage(
           payload as CampaignDeletedNotificationPayload,
         );
+      } else if (isInactivityWarningRequest) {
+        notificationMessage = buildInactivityWarningNotificationMessage(
+          payload as InactivityWarningNotificationPayload,
+          webBaseUrl,
+        );
       } else if (isTurnNudgeRequest) {
         notificationMessage = buildTurnNudgeNotificationMessage(
           payload as TurnNudgeNotificationPayload,
@@ -261,10 +257,6 @@ export function startNotificationServer(
 
       if (isGameInitializedRequest) {
         await pinGameInitializedMessage(message, payload.game.name, thread.id);
-      }
-
-      if (isCampaignDeletedRequest) {
-        await archiveDeletedCampaignThread(thread, payload.game.name);
       }
 
       response.writeHead(204).end();

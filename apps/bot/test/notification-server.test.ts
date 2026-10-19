@@ -347,7 +347,7 @@ describe("startNotificationServer", () => {
     expect(response.statusCode).toBe(204);
   });
 
-  it("posts the campaign-deleted notice, then archives the thread without locking it", async () => {
+  it("posts the campaign-deleted notice and leaves the thread open", async () => {
     const thread = {
       id: "thread-1",
       isThread: () => true,
@@ -377,11 +377,44 @@ describe("startNotificationServer", () => {
     const notice = JSON.stringify(thread.send.mock.calls[0]);
     expect(notice).toContain("The Game has been deleted");
     expect(notice).toContain("<@discord-1> won this campaign.");
-    expect(thread.setArchived).toHaveBeenCalledExactlyOnceWith(true);
-    expect(thread.setArchived.mock.invocationCallOrder[0] ?? 0).toBeGreaterThan(
-      thread.send.mock.invocationCallOrder[0] ?? 0,
-    );
+    expect(notice).not.toContain("archived");
+    expect(thread.setArchived).not.toHaveBeenCalled();
     expect(thread.setLocked).not.toHaveBeenCalled();
+    expect(threadNameMock.renameThreadIfNeeded).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(204);
+  });
+
+  it("posts inactivity warnings to the thread without archiving it", async () => {
+    const thread = {
+      id: "thread-1",
+      isThread: () => true,
+      joinable: false,
+      send: vi.fn(async () => ({ pin: vi.fn() })),
+      setArchived: vi.fn(async () => undefined),
+    };
+    const client = buildClient(thread);
+
+    startNotificationServer(client as never, {
+      notificationPort: 3011,
+      notificationSecret: "secret",
+      webBaseUrl: "https://shadow.example",
+    });
+
+    const response = buildResponse();
+    await httpMock.getHandler()?.(
+      buildRequest("/notify/inactivity-warning", {
+        game: saveUploadedPayload.game,
+        warning: { final: true, deletionDueAt: "2026-07-10T12:00:00.000Z" },
+        players: [{ displayName: "Solon", discordId: "discord-1" }],
+      }),
+      response,
+    );
+
+    expect(thread.send).toHaveBeenCalledOnce();
+    const notice = JSON.stringify(thread.send.mock.calls[0]);
+    expect(notice).toContain("Final warning: The Game will be deleted");
+    expect(notice).toContain("<@discord-1>");
+    expect(thread.setArchived).not.toHaveBeenCalled();
     expect(threadNameMock.renameThreadIfNeeded).not.toHaveBeenCalled();
     expect(response.statusCode).toBe(204);
   });

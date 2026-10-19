@@ -166,10 +166,29 @@ export type CampaignDeletedNotificationPayload = {
     name: string;
     discordThreadId: string;
   };
+  /** Null when the campaign was deleted for inactivity. */
   victory: {
     victorDisplayName: string;
     victorDiscordId: string | null;
+  } | null;
+};
+
+export type InactivityWarningNotificationPayload = {
+  game: {
+    id: string;
+    gameNumber: number;
+    slug: string;
+    name: string;
+    discordThreadId: string;
   };
+  warning: {
+    final: boolean;
+    deletionDueAt: string;
+  };
+  players: Array<{
+    displayName: string;
+    discordId: string | null;
+  }>;
 };
 
 type DiscordResponseOptions = {
@@ -471,18 +490,53 @@ export function buildVictoryConfirmation(
 export function buildCampaignDeletedNotificationMessage(
   payload: CampaignDeletedNotificationPayload,
 ): MessageCreateOptions {
-  const victor = formatDiscordActor(
-    escapeMarkdown(payload.victory.victorDisplayName),
-    payload.victory.victorDiscordId,
-  );
+  const message = payload.victory
+    ? `${formatDiscordActor(
+        escapeMarkdown(payload.victory.victorDisplayName),
+        payload.victory.victorDiscordId,
+      )} won this campaign. Its saves and history have been removed from Shadow Cloud; only the record of the victory remains.`
+    : "This campaign was deleted for inactivity. Its saves and history have been removed from Shadow Cloud.";
 
   return {
     ...buildDiscordNotification({
       headline: `${payload.game.name} has been deleted`,
-      message: `${victor} won this campaign. Its saves and history have been removed from Shadow Cloud; only the record of the victory remains. This thread is now archived.`,
+      message,
     }),
     allowedMentions: { parse: [] },
   };
+}
+
+export function buildInactivityWarningNotificationMessage(
+  payload: InactivityWarningNotificationPayload,
+  webBaseUrl: string,
+): MessageCreateOptions {
+  const deletionDueAt = Math.floor(
+    new Date(payload.warning.deletionDueAt).getTime() / 1000,
+  );
+  const gameUrl = new URL(
+    `/games/${encodeURIComponent(String(payload.game.gameNumber))}`,
+    webBaseUrl,
+  ).toString();
+  const players = payload.players
+    .map((player) =>
+      formatDiscordActor(escapeMarkdown(player.displayName), player.discordId),
+    )
+    .join(" ");
+
+  return buildDiscordNotification({
+    headline: payload.warning.final
+      ? `Final warning: ${payload.game.name} will be deleted <t:${deletionDueAt}:R>`
+      : `${payload.game.name} will be deleted for inactivity`,
+    message: `${players}
+${
+  payload.warning.final
+    ? "This is the last notice before this campaign is deleted for inactivity."
+    : "This campaign has had no activity in the last 30 days."
+} Upload a save, skip a turn, or change the roster before <t:${deletionDueAt}:F> to keep it; otherwise the campaign and all of its saves are permanently deleted. Download any [saves](${gameUrl}) you want to keep.`,
+    mentionedUserIds: payload.players.flatMap((player) =>
+      player.discordId ? [player.discordId] : [],
+    ),
+  });
 }
 
 export function buildSaveRejectedNotificationMessage(

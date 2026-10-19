@@ -72,6 +72,8 @@ export type GameDetailResponse = TurnTimingPolicyResponse & {
     replacedByDisplayName: string | null;
   }>;
   rejectableSaveId: string | null;
+  /** When the campaign is dormant, the moment its inactivity deletion is due. */
+  inactivityDeletionDueAt: string | null;
   openTurn: TurnRecordResponse | null;
   recentCompletedTurns: TurnRecordResponse[];
 };

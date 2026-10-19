@@ -9,8 +9,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ACCENT_COLOR,
   buildRegistrationResponse,
+  buildCampaignDeletedNotificationMessage,
   buildDiscordNotification,
   buildGameInitNotificationMessage,
+  buildInactivityWarningNotificationMessage,
   buildSaveNotificationMessage,
   buildSaveRejectedNotificationMessage,
   buildSaveReplacedNotificationMessage,
@@ -685,5 +687,75 @@ describe("buildTurnNudgeNotificationMessage", () => {
     expect(rendered).not.toContain("**1 hours**");
     expect(rendered).not.toContain("@everyone");
     expect(rendered).not.toContain("@here");
+  });
+});
+
+describe("buildInactivityWarningNotificationMessage", () => {
+  const warning = {
+    game: {
+      id: "game-1",
+      gameNumber: 7,
+      slug: "ashes",
+      name: "Ashes",
+      discordThreadId: "thread-1",
+    },
+    warning: { final: false, deletionDueAt: "2026-07-10T12:00:00.000Z" },
+    players: [
+      { displayName: "Alpha", discordId: "discord-1" },
+      { displayName: "Overlord", discordId: "discord-2" },
+      { displayName: "Gamma", discordId: null },
+    ],
+  };
+
+  it("pings every seated player with the deletion date and a link to the saves", () => {
+    const message = buildInactivityWarningNotificationMessage(
+      warning,
+      "https://shadow.example",
+    );
+    const rendered = JSON.stringify(message);
+
+    expect(message.allowedMentions).toEqual({
+      users: ["discord-1", "discord-2"],
+    });
+    expect(rendered).toContain("Ashes will be deleted for inactivity");
+    expect(rendered).toContain("<@discord-1> <@discord-2> Gamma");
+    expect(rendered).toContain("no activity in the last 30 days");
+    expect(rendered).toContain("<t:1783684800:F>");
+    expect(rendered).toContain("https://shadow.example/games/7");
+    expect(rendered).not.toContain("Final warning");
+  });
+
+  it("marks the final warning", () => {
+    const rendered = JSON.stringify(
+      buildInactivityWarningNotificationMessage(
+        { ...warning, warning: { ...warning.warning, final: true } },
+        "https://shadow.example",
+      ),
+    );
+
+    expect(rendered).toContain("Final warning: Ashes will be deleted");
+    expect(rendered).toContain("<t:1783684800:R>");
+  });
+});
+
+describe("buildCampaignDeletedNotificationMessage", () => {
+  it("explains an inactivity deletion without naming a Victor", () => {
+    const rendered = JSON.stringify(
+      buildCampaignDeletedNotificationMessage({
+        game: {
+          id: "game-1",
+          gameNumber: 7,
+          slug: "ashes",
+          name: "Ashes",
+          discordThreadId: "thread-1",
+        },
+        victory: null,
+      }),
+    );
+
+    expect(rendered).toContain("Ashes has been deleted");
+    expect(rendered).toContain("deleted for inactivity");
+    expect(rendered).not.toContain("won this campaign");
+    expect(rendered).not.toContain("archived");
   });
 });

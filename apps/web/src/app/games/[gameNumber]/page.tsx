@@ -3,6 +3,7 @@ import { AdministratorActionsCard } from "@/components/administrator-actions-car
 import { getServerAuthSession } from "@/auth";
 import { CampaignDetailsWorkspace } from "@/components/campaign-details-workspace";
 import { CampaignWorkspaceTabs } from "@/components/campaign-workspace-tabs";
+import { LocalTimestamp } from "@/components/local-timestamp";
 import { TerminalConfirmationModal } from "@/components/terminal-confirmation-modal";
 import { TurnCommandCenter } from "@/components/turn-command-center";
 import { TurnTimingHistoryCard } from "@/components/turn-timing-history-card";
@@ -90,6 +91,17 @@ export default async function GameDetailPage({
 
   return (
     <div className="flex flex-col gap-8 pb-6 md:min-h-full">
+      {game.inactivityDeletionDueAt ? (
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 font-mono text-sm text-destructive"
+        >
+          This campaign has had no activity, so it and all of its saves will be
+          deleted on <LocalTimestamp timestamp={game.inactivityDeletionDueAt} />
+          . Upload a save, skip a turn, or change the roster to keep it, and
+          download any saves you want to keep.
+        </p>
+      ) : null}
       {transferNotice ? (
         <p
           role="status"
