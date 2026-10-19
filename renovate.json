@@ -13,6 +13,10 @@
   "prHourlyLimit": 5,
   "packageRules": [
     {
+      "matchUpdateTypes": ["digest", "lockFileMaintenance"],
+      "minimumReleaseAge": null
+    },
+    {
       "matchPackageNames": ["typescript"],
       "allowedVersions": "<6.1.0"
     },
