@@ -92,7 +92,7 @@ By default, the services are available at:
 * Web: `http://localhost:3000`
 * API: `http://localhost:3001/v1`
 
-The SQLite database will be created from `DATABASE_URL`, and the API will run Prisma generate during its build/dev lifecycle. If you point `DATABASE_URL` at a new file and need to apply schema changes manually, run:
+The SQLite database will be created from `DATABASE_URL`. Starting the API in dev runs Prisma generate and applies any pending migrations first, so a fresh database or a newly pulled migration needs no extra step. To create a new migration after changing the schema, run:
 
 ```bash
 pnpm --filter @shadow-cloud/api prisma:migrate
