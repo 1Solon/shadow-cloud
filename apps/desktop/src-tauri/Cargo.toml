@@ -10,10 +10,10 @@ name = "shadow_cloud_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "=2.7.3", features = [] }
+tauri-build = { version = "=2.7.4", features = [] }
 
 [dependencies]
-tauri = { version = "=2.12.4", features = ["tray-icon"] }
+tauri = { version = "=2.12.5", features = ["tray-icon"] }
 tauri-plugin-dialog = "=2.8.3"
 tauri-plugin-fs = "=2.7.1"
 tauri-plugin-opener = "=2.7.2"
