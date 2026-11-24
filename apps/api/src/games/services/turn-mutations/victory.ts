@@ -1,15 +1,9 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  AuditEventType,
-  type Prisma,
-  type PrismaClient,
-  type User,
-} from '@prisma/client';
+import { AuditEventType, type Prisma, type PrismaClient } from '@prisma/client';
 import type { DesignateVictoryDto } from '../../dto/designate-victory.dto';
 import type { UndoVictoryDto } from '../../dto/undo-victory.dto';
 import {
@@ -17,10 +11,12 @@ import {
   victoryDeletionDueAt,
 } from '../../support/campaign-conclusion';
 import { getDiscordIdentity } from '../../support/discord-user.helpers';
+import {
+  authorizeOverlordCommand,
+  resolveOverlordCommandCaller,
+} from '../../support/overlord-command-authority';
 import type { TurnRecordsService } from '../turn-records.service';
 import type { TurnMutationDependencies } from './dependencies';
-
-type VictoryCommandName = 'winner' | 'unwinner';
 
 export type VictoryOptions = {
   /** Validate and describe the outcome without changing anything. */
@@ -40,8 +36,6 @@ type VictoryGame = Prisma.GameGetPayload<{
   include: typeof victoryGameInclude;
 }>;
 
-type VictoryCaller = { user: User; isShadowLord: boolean } | null;
-
 async function findVictoryGame(
   database: Prisma.TransactionClient,
   discordThreadId: string,
@@ -56,46 +50,6 @@ async function findVictoryGame(
     );
   }
   return game;
-}
-
-/** Shadow Lord status comes from Discord, so resolve it before any transaction. */
-async function resolveCaller(
-  database: PrismaClient,
-  dependencies: TurnMutationDependencies,
-  game: VictoryGame,
-  callerDiscordId: string,
-): Promise<VictoryCaller> {
-  const identity = await database.authIdentity.findUnique({
-    where: {
-      provider_providerId: { provider: 'discord', providerId: callerDiscordId },
-    },
-    include: { user: true },
-  });
-  if (!identity) return null;
-  return {
-    user: identity.user,
-    isShadowLord:
-      identity.userId !== game.organizerId &&
-      (await dependencies.authService?.isUserShadowOverride(
-        identity.userId,
-      )) === true,
-  };
-}
-
-function authorize(
-  game: VictoryGame,
-  caller: VictoryCaller,
-  commandName: VictoryCommandName,
-) {
-  if (
-    !caller ||
-    (caller.user.id !== game.organizerId && !caller.isShadowLord)
-  ) {
-    throw new ForbiddenException(
-      `Only the Overlord or a Shadow Lord can use /${commandName}.`,
-    );
-  }
-  return caller.user;
 }
 
 function findVictorSeat(game: VictoryGame, victorDiscordId: string) {
@@ -148,13 +102,18 @@ export async function designateVictory(
   { preview = false, now = new Date() }: VictoryOptions = {},
 ) {
   const observed = await findVictoryGame(database, input.discordThreadId);
-  const caller = await resolveCaller(
+  const caller = await resolveOverlordCommandCaller(
     database,
-    dependencies,
-    observed,
+    dependencies.authService,
+    observed.organizerId,
     input.callerDiscordId,
   );
-  authorize(observed, caller, 'winner');
+  await authorizeOverlordCommand(
+    database,
+    observed.organizerId,
+    caller,
+    'winner',
+  );
   if (observed.victoryRecord) {
     throw new ConflictException(campaignConcludedMessage);
   }
@@ -178,7 +137,12 @@ export async function designateVictory(
       data: { turnRevision: { increment: 1 } },
     });
     const game = await findVictoryGame(transaction, input.discordThreadId);
-    const designatedBy = authorize(game, caller, 'winner');
+    const designatedBy = await authorizeOverlordCommand(
+      transaction,
+      game.organizerId,
+      caller,
+      'winner',
+    );
     if (game.victoryRecord) {
       throw new ConflictException(campaignConcludedMessage);
     }
@@ -240,13 +204,18 @@ export async function undoVictory(
   { preview = false, now = new Date() }: VictoryOptions = {},
 ) {
   const observed = await findVictoryGame(database, input.discordThreadId);
-  const caller = await resolveCaller(
+  const caller = await resolveOverlordCommandCaller(
     database,
-    dependencies,
-    observed,
+    dependencies.authService,
+    observed.organizerId,
     input.callerDiscordId,
   );
-  authorize(observed, caller, 'unwinner');
+  await authorizeOverlordCommand(
+    database,
+    observed.organizerId,
+    caller,
+    'unwinner',
+  );
   const expected = concludedVictory(observed, now);
   const payload = (game: VictoryGame) =>
     victoryPayload(
@@ -265,7 +234,12 @@ export async function undoVictory(
       data: { turnRevision: { increment: 1 } },
     });
     const game = await findVictoryGame(transaction, input.discordThreadId);
-    const undoneBy = authorize(game, caller, 'unwinner');
+    const undoneBy = await authorizeOverlordCommand(
+      transaction,
+      game.organizerId,
+      caller,
+      'unwinner',
+    );
     const victory = concludedVictory(game, now);
     if (
       fenced.count !== 1 ||

@@ -31,6 +31,7 @@ beforeEach(async () => {
     ['1', 'Alpha'],
     ['2', 'Overlord'],
     ['4', 'Fourth'],
+    ['9', 'Lord'],
   ]) {
     await db.user.create({
       data: {
@@ -81,7 +82,11 @@ beforeEach(async () => {
       },
     },
   });
-  mutations = new TurnMutationsService(db, new TurnRecordsService());
+  mutations = new TurnMutationsService(db, new TurnRecordsService(), {
+    authService: {
+      isUserShadowOverride: async (userId: string) => userId === 'user-9',
+    },
+  });
 });
 
 afterEach(async () => {
@@ -166,6 +171,48 @@ async function seedDeliveries() {
     },
   });
 }
+
+describe('who can run /replace', () => {
+  it('lets a Shadow Lord without a seat fill a seat, recorded as the actor', async () => {
+    await mutations.replacePlayerInSeat({
+      ...replacement,
+      callerDiscordId: 'discord-9',
+    });
+    const { audits, seats } = await persistedState();
+    const newPlayerId = seats.find((seat) => seat.id === 'seat-open')?.userId;
+    expect(audits).toHaveLength(1);
+    expect(audits[0]).toMatchObject({
+      actorId: 'user-9',
+      eventType: 'PLAYER_REPLACED',
+    });
+    expect(newPlayerId).not.toBe('user-9');
+    expect(JSON.parse(audits[0].payload)).toMatchObject({
+      newPlayerDiscordId: 'discord-3',
+      newPlayerDisplayName: 'Replacement',
+    });
+  });
+
+  it('refuses a seated player who is neither the Overlord nor a Shadow Lord', async () => {
+    const before = await persistedState();
+    await expect(
+      mutations.replacePlayerInSeat({
+        ...replacement,
+        callerDiscordId: 'discord-4',
+      }),
+    ).rejects.toThrow(
+      new ForbiddenException(
+        'Only the Overlord or a Shadow Lord can use /replace.',
+      ),
+    );
+    expect(await persistedState()).toEqual(before);
+  });
+
+  it('records the Overlord as the actor', async () => {
+    await mutations.replacePlayerInSeat(replacement);
+    const { audits } = await persistedState();
+    expect(audits[0].actorId).toBe('user-2');
+  });
+});
 
 describe('membership intentions through real SQLite', () => {
   describe.each(['replace', 'resign'] as const)(
@@ -355,9 +402,13 @@ describe('membership intentions through real SQLite', () => {
       expect(after.turns).toEqual(before.turns);
       expect(after.history).toEqual(before.history);
       expect(after.reminders).toEqual(before.reminders);
+      const filledBy = after.seats.find(
+        (seat) => seat.turnOrder === seatNumber,
+      )?.userId;
       expect(
-        after.seats.find((seat) => seat.turnOrder === seatNumber)?.userId,
-      ).toBe(after.audits[0].actorId);
+        after.users.find((user) => user.id === filledBy)?.displayName,
+      ).toBe('Replacement');
+      expect(after.audits[0].actorId).toBe('user-2');
     },
   );
 
@@ -750,12 +801,12 @@ describe('membership intentions through real SQLite', () => {
         .$executeRawUnsafe(`CREATE TRIGGER fail_replace AFTER INSERT ON AuditEvent
       WHEN NEW.eventType = 'PLAYER_REPLACED'
       AND (SELECT turnRevision FROM Game WHERE id = NEW.gameId) = 1
-      AND (SELECT userId FROM GamePlayer WHERE id = 'seat-1') = NEW.actorId
-      AND (SELECT activePlayerId FROM TurnState WHERE gameId = NEW.gameId) = NEW.actorId
-      AND (SELECT displayName FROM User WHERE id = NEW.actorId) = 'Replacement'
-      AND (SELECT userId FROM AuthIdentity WHERE providerId = 'discord-3') = NEW.actorId
+      AND NEW.actorId = 'user-2'
+      AND (SELECT userId FROM GamePlayer WHERE id = 'seat-1') = (SELECT userId FROM AuthIdentity WHERE providerId = 'discord-3')
+      AND (SELECT activePlayerId FROM TurnState WHERE gameId = NEW.gameId) = (SELECT userId FROM AuthIdentity WHERE providerId = 'discord-3')
+      AND (SELECT displayName FROM User WHERE id = (SELECT userId FROM AuthIdentity WHERE providerId = 'discord-3')) = 'Replacement'
       AND (SELECT status FROM NotificationDelivery WHERE id = 'PENDING') = 'CANCELLED'
-      AND EXISTS (SELECT 1 FROM TurnRecord WHERE userId = NEW.actorId AND endedAt IS NULL)
+      AND EXISTS (SELECT 1 FROM TurnRecord WHERE userId = (SELECT userId FROM AuthIdentity WHERE providerId = 'discord-3') AND endedAt IS NULL)
       AND (SELECT completionReason FROM TurnRecord WHERE id = 'turn-1') = 'REPLACED'
       BEGIN SELECT RAISE(ABORT, 'late replacement failure'); END`);
       const before = await persistedState();
@@ -1035,7 +1086,7 @@ describe('membership intentions through real SQLite', () => {
     );
     expect(state.audits).toHaveLength(1);
     expect(state.audits[0]).toMatchObject({
-      actorId: newUser,
+      actorId: 'user-2',
       eventType: 'PLAYER_REPLACED',
     });
     expect(JSON.parse(state.audits[0].payload)).toEqual({

@@ -139,7 +139,7 @@ const resignCommand = new SlashCommandBuilder()
 
 const replaceCommand = new SlashCommandBuilder()
   .setName("replace")
-  .setDescription("Replace or fill a campaign seat (overlord only).")
+  .setDescription("Replace or fill a campaign seat (Overlord or Shadow Lord).")
   .addIntegerOption((option) =>
     option
       .setName("seat")
@@ -156,7 +156,9 @@ const replaceCommand = new SlashCommandBuilder()
 
 const skipCommand = new SlashCommandBuilder()
   .setName("skip")
-  .setDescription("Skip the current active player's turn (overlord only).");
+  .setDescription(
+    "Skip the current active player's turn (Overlord or Shadow Lord).",
+  );
 
 const linkCommand = new SlashCommandBuilder()
   .setName("link")
@@ -166,7 +168,9 @@ const linkCommand = new SlashCommandBuilder()
 
 const pinCommand = new SlashCommandBuilder()
   .setName("pin")
-  .setDescription("Pin a message in this game thread (overlord only).")
+  .setDescription(
+    "Pin a message in this game thread (Overlord or Shadow Lord).",
+  )
   .addStringOption((option) =>
     option
       .setName("message")
@@ -176,7 +180,9 @@ const pinCommand = new SlashCommandBuilder()
 
 const unpinCommand = new SlashCommandBuilder()
   .setName("unpin")
-  .setDescription("Unpin a message in this game thread (overlord only).")
+  .setDescription(
+    "Unpin a message in this game thread (Overlord or Shadow Lord).",
+  )
   .addStringOption((option) =>
     option
       .setName("message")
@@ -187,7 +193,7 @@ const unpinCommand = new SlashCommandBuilder()
 const winnerCommand = new SlashCommandBuilder()
   .setName("winner")
   .setDescription(
-    "Declare the Victor and conclude this campaign (overlord only).",
+    "Declare the Victor and conclude this campaign (Overlord or Shadow Lord).",
   )
   .addUserOption((option) =>
     option
@@ -199,7 +205,7 @@ const winnerCommand = new SlashCommandBuilder()
 const unwinnerCommand = new SlashCommandBuilder()
   .setName("unwinner")
   .setDescription(
-    "Undo the victory and return this campaign to play (overlord only).",
+    "Undo the victory and return this campaign to play (Overlord or Shadow Lord).",
   );
 
 const debugCommand = new SlashCommandBuilder()
