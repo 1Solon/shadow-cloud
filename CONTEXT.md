@@ -80,6 +80,9 @@ The password protecting access to a human-controlled regime inside Shadow Empire
 **In-game password reset**:
 An Overlord-authorized replacement of a human-controlled regime's in-game password without requiring the old password or the affected player's approval.
 
+**Password reset approval**:
+The Overlord's single-use permission for the active player to set a new in-game password for the regime the latest save is waiting on. It ends once used, when the latest save changes, or when withdrawn.
+
 **Seat Order draft**:
 A proposed change to a campaign's roster or active seat, based on the campaign state presented when the draft was loaded.
 
