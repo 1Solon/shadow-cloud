@@ -12,6 +12,7 @@ import {
 } from '@prisma/client';
 import type { ReplaceDiscordPlayerDto } from '../../dto/replace-discord-player.dto';
 import type { ResignDiscordPlayerDto } from '../../dto/resign-discord-player.dto';
+import { renameSaveFilePlayer } from '../../file-storage.service';
 import { upsertDiscordUser } from '../../support/discord-user.helpers';
 import { assertCampaignInPlay } from '../../support/campaign-conclusion';
 import {
@@ -138,6 +139,34 @@ async function fenceGame(
   return { game, revisionMatched: fenced.count === 1 };
 }
 
+async function renameLatestSaveReceivedBySeat(
+  transaction: Prisma.TransactionClient,
+  input: { gameId: string; seatEntryId: string; playerName: string },
+) {
+  const latestSave = await transaction.fileVersion.findFirst({
+    where: { gameId: input.gameId },
+    orderBy: { versionNumber: 'desc' },
+  });
+  if (!latestSave) return;
+  const receivingTurn = await transaction.turnRecord.findFirst({
+    where: {
+      gameId: input.gameId,
+      gamePlayerId: input.seatEntryId,
+      startedAt: latestSave.uploadedAt,
+    },
+  });
+  if (!receivingTurn) return;
+  const originalName = renameSaveFilePlayer(
+    latestSave.originalName,
+    input.playerName,
+  );
+  if (!originalName || originalName === latestSave.originalName) return;
+  await transaction.fileVersion.update({
+    where: { id: latestSave.id },
+    data: { originalName },
+  });
+}
+
 export async function replacePlayerInSeat(
   database: PrismaClient,
   turnRecords: TurnRecordsService,
@@ -223,6 +252,11 @@ export async function replacePlayerInSeat(
         },
       });
     }
+    await renameLatestSaveReceivedBySeat(transaction, {
+      gameId: game.id,
+      seatEntryId: seat.id,
+      playerName: newPlayer.displayName,
+    });
     await transaction.auditEvent.create({
       data: {
         gameId: game.id,
