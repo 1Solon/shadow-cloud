@@ -74,12 +74,9 @@ describe('AuthService desktop handoffs', () => {
       }),
     });
     expect(
-      prismaMock.desktopAuthHandoff.create.mock.calls[0][0].data
-        .pollSecretHash,
+      prismaMock.desktopAuthHandoff.create.mock.calls[0][0].data.pollSecretHash,
     ).not.toBe(result.pollSecret);
-    expect(
-      prismaMock.desktopAuthHandoff.deleteMany,
-    ).toHaveBeenCalledWith({
+    expect(prismaMock.desktopAuthHandoff.deleteMany).toHaveBeenCalledWith({
       where: {
         OR: [
           { expiresAt: { lt: expect.any(Date) } },

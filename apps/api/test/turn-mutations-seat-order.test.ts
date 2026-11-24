@@ -688,9 +688,9 @@ describe('Seat Order through real migrated SQLite', () => {
       activePlayerEntryId: 'seat-1',
       roundNumber: 4,
     });
-    expect(after.history.find((record) => record.id === 'turn-1')).toMatchObject(
-      { userId: null, completionReason: 'REASSIGNED' },
-    );
+    expect(
+      after.history.find((record) => record.id === 'turn-1'),
+    ).toMatchObject({ userId: null, completionReason: 'REASSIGNED' });
     expect(
       after.history.find((record) => record.endedAt == null),
     ).toMatchObject({ gamePlayerId: 'seat-1', userId: 'user-1' });

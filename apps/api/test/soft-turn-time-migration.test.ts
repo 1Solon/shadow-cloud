@@ -134,14 +134,14 @@ describe('soft turn timing migration', () => {
            FROM "TurnRecord" WHERE "gameId" = ?`,
         )
         .get('game-active') as {
-          gamePlayerId: string;
-          userId: string;
-          seatNumber: number;
-          playerDisplayName: string;
-          roundNumber: number;
-          startedAt: string;
-          nextReminderAt: string;
-        };
+        gamePlayerId: string;
+        userId: string;
+        seatNumber: number;
+        playerDisplayName: string;
+        roundNumber: number;
+        startedAt: string;
+        nextReminderAt: string;
+      };
 
       expect(game).toEqual({
         turnTargetHours: 24,

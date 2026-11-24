@@ -15,9 +15,8 @@ vi.mock('../src/database', () => ({
   },
 }));
 
-const { TurnRemindersService } = await import(
-  '../src/games/services/turn-reminders.service'
-);
+const { TurnRemindersService } =
+  await import('../src/games/services/turn-reminders.service');
 
 const dueAt = new Date('2026-07-10T12:00:00.000Z');
 const now = new Date('2026-07-10T12:05:00.000Z');
@@ -97,7 +96,10 @@ describe('TurnRemindersService', () => {
       callback(transaction),
     );
 
-    await new TurnRemindersService().processTurnReminderCandidate('turn-1', now);
+    await new TurnRemindersService().processTurnReminderCandidate(
+      'turn-1',
+      now,
+    );
 
     expect(transaction.turnRecord.updateMany).toHaveBeenCalledWith({
       where: {
@@ -166,7 +168,10 @@ describe('TurnRemindersService', () => {
       callback(transaction),
     );
 
-    await new TurnRemindersService().processTurnReminderCandidate('turn-1', now);
+    await new TurnRemindersService().processTurnReminderCandidate(
+      'turn-1',
+      now,
+    );
 
     expect(transaction.turnRecord.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -205,7 +210,9 @@ describe('TurnRemindersService', () => {
 
     expect(disabledTransaction.turnRecord.updateMany).not.toHaveBeenCalled();
     expect(staleTransaction.turnRecord.updateMany).not.toHaveBeenCalled();
-    expect(disabledTransaction.notificationDelivery.create).not.toHaveBeenCalled();
+    expect(
+      disabledTransaction.notificationDelivery.create,
+    ).not.toHaveBeenCalled();
     expect(staleTransaction.notificationDelivery.create).not.toHaveBeenCalled();
   });
 
@@ -223,42 +230,51 @@ describe('TurnRemindersService', () => {
         },
       },
     ],
-  ])('advances without delivery or delivery accounting when %s', async (reason, override) => {
-    const transaction = createTransaction(createCandidate(override));
-    prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback(transaction),
-    );
-    const logWarning = vi
-      .spyOn(Logger.prototype, 'warn')
-      .mockImplementation(() => undefined);
+  ])(
+    'advances without delivery or delivery accounting when %s',
+    async (reason, override) => {
+      const transaction = createTransaction(createCandidate(override));
+      prismaMock.$transaction.mockImplementation(async (callback) =>
+        callback(transaction),
+      );
+      const logWarning = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
 
-    await new TurnRemindersService().processTurnReminderCandidate('turn-1', now);
+      await new TurnRemindersService().processTurnReminderCandidate(
+        'turn-1',
+        now,
+      );
 
-    expect(transaction.turnRecord.updateMany).toHaveBeenCalledWith({
-      where: {
-        id: 'turn-1',
-        endedAt: null,
-        nextReminderAt: dueAt,
-      },
-      data: { nextReminderAt: new Date('2026-07-11T12:05:00.000Z') },
-    });
-    expect(transaction.notificationDelivery.create).not.toHaveBeenCalled();
-    expect(logWarning).toHaveBeenCalledWith(
-      `Turn reminder skipped for turn-1: missing Discord ${
-        reason.includes('thread') ? 'thread' : 'identity'
-      }.`,
-    );
-  });
+      expect(transaction.turnRecord.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'turn-1',
+          endedAt: null,
+          nextReminderAt: dueAt,
+        },
+        data: { nextReminderAt: new Date('2026-07-11T12:05:00.000Z') },
+      });
+      expect(transaction.notificationDelivery.create).not.toHaveBeenCalled();
+      expect(logWarning).toHaveBeenCalledWith(
+        `Turn reminder skipped for turn-1: missing Discord ${
+          reason.includes('thread') ? 'thread' : 'identity'
+        }.`,
+      );
+    },
+  );
 
-  function vacantTurnCandidate(overlordIdentities = [
-    { provider: 'discord', providerId: 'discord-9' },
-  ]) {
+  function vacantTurnCandidate(
+    overlordIdentities = [{ provider: 'discord', providerId: 'discord-9' }],
+  ) {
     const candidate = createCandidate();
     return createCandidate({
       userId: null,
       game: {
         ...candidate.game,
-        organizer: { ...candidate.game.organizer, identities: overlordIdentities },
+        organizer: {
+          ...candidate.game.organizer,
+          identities: overlordIdentities,
+        },
         turnState: { ...candidate.game.turnState, activePlayerId: null },
       },
       gamePlayer: { ...candidate.gamePlayer, userId: null, user: null },
@@ -271,7 +287,10 @@ describe('TurnRemindersService', () => {
       callback(transaction),
     );
 
-    await new TurnRemindersService().processTurnReminderCandidate('turn-1', now);
+    await new TurnRemindersService().processTurnReminderCandidate(
+      'turn-1',
+      now,
+    );
 
     expect(transaction.turnRecord.updateMany).toHaveBeenCalledWith({
       where: { id: 'turn-1', endedAt: null, nextReminderAt: dueAt },
@@ -322,7 +341,10 @@ describe('TurnRemindersService', () => {
     );
     vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
 
-    await new TurnRemindersService().processTurnReminderCandidate('turn-1', now);
+    await new TurnRemindersService().processTurnReminderCandidate(
+      'turn-1',
+      now,
+    );
 
     expect(transaction.turnRecord.updateMany).toHaveBeenCalledWith({
       where: { id: 'turn-1', endedAt: null, nextReminderAt: dueAt },
@@ -341,7 +363,10 @@ describe('TurnRemindersService', () => {
       callback(transaction),
     );
 
-    await new TurnRemindersService().processTurnReminderCandidate('turn-1', now);
+    await new TurnRemindersService().processTurnReminderCandidate(
+      'turn-1',
+      now,
+    );
 
     expect(transaction.turnRecord.updateMany).not.toHaveBeenCalled();
     expect(transaction.notificationDelivery.create).not.toHaveBeenCalled();

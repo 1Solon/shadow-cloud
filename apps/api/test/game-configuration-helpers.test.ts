@@ -25,12 +25,10 @@ vi.mock('../src/database', () => ({
   },
 }));
 
-const { ArmyCountPreset, GameMode, ZoneCountPreset } = await import(
-  '../src/database'
-);
-const { buildCanonicalThreadName } = await import(
-  '../src/games/support/game-configuration.helpers'
-);
+const { ArmyCountPreset, GameMode, ZoneCountPreset } =
+  await import('../src/database');
+const { buildCanonicalThreadName } =
+  await import('../src/games/support/game-configuration.helpers');
 
 describe('buildCanonicalThreadName', () => {
   it('uses the diamond emoji directly before the game number', () => {

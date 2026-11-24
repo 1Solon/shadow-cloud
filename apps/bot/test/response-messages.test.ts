@@ -155,8 +155,7 @@ describe("response message builders", () => {
       buildResignationAnnouncement("user-1", "Debug World", 2, {
         wasOrganizer: true,
         turnVacant: false,
-      })
-        .allowedMentions,
+      }).allowedMentions,
     ).toEqual({ users: ["user-1"] });
     expect(
       rendered(buildSeatFilledReply("Debug World", "Player", 2)),
