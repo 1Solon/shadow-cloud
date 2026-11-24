@@ -428,7 +428,10 @@ async function handleSuccessfulCommand(
         interaction.user.id,
         gameName,
         payload?.player?.turnOrder ?? "?",
-        wasOrganizer,
+        {
+          wasOrganizer,
+          turnVacant: payload?.player?.turnVacant ?? false,
+        },
       ),
     );
     return;

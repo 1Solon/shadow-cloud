@@ -31,6 +31,7 @@ export type CommandResponsePayload = {
     discordId?: string;
     turnOrder?: number;
     wasOrganizer?: boolean;
+    turnVacant?: boolean;
     tookActiveTurn?: boolean;
   };
   skippedPlayer?: { displayName?: string | null; turnOrder?: number };

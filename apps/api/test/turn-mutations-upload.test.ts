@@ -168,6 +168,14 @@ describe('atomic upload through real SQLite', () => {
         discordThreadId: 'thread-1',
         callerDiscordId: 'discord-2',
       });
+      await fixture.db.turnState.update({
+        where: { gameId: 'game-1' },
+        data: { roundNumber: 4 },
+      });
+      await fixture.db.turnRecord.updateMany({
+        where: { gameId: 'game-1', endedAt: null },
+        data: { roundNumber: 4 },
+      });
       committed = await persistedState();
     };
     await expect(
@@ -274,6 +282,37 @@ describe('atomic upload through real SQLite', () => {
     });
     expect((await persistedState()).games[0].turnRevision).toBe(1);
   });
+
+  it.each(['user-1', 'user-2'])(
+    'refuses an upload by %s while the turn is vacant',
+    async (uploader) => {
+      await fixture.db.gamePlayer.update({
+        where: { id: 'seat-1' },
+        data: { userId: null },
+      });
+      await fixture.db.turnState.update({
+        where: { gameId: 'game-1' },
+        data: { activePlayerId: null },
+      });
+      await fixture.db.turnRecord.update({
+        where: { id: 'turn-1' },
+        data: { userId: null, playerDisplayName: 'Vacant turn (seat 1)' },
+      });
+      const before = await persistedState();
+      const error = await mutations
+        .uploadSave('1', uploader, file, metadata)
+        .catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(
+        uploader === 'user-1' ? ForbiddenException : ConflictException,
+      );
+      if (uploader === 'user-2')
+        expect((error as Error).message).toBe(
+          "Seat 1's turn is vacant, so no player can upload it. The Overlord must fill the seat with /replace before the next save can be uploaded.",
+        );
+      expect(await persistedState()).toEqual(before);
+      expect(stored.size).toBe(0);
+    },
+  );
 
   it('resolves a legacy null active-seat reference only for an unambiguous occupied seat', async () => {
     await fixture.db.turnState.update({

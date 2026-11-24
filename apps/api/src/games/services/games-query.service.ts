@@ -23,7 +23,10 @@ import type {
   GameDetailResponse,
   TurnRecordResponse,
 } from '../support/game-payload.types';
-import { resolveActivePlayerEntry } from '../support/turn-state.utils';
+import {
+  vacantTurnDisplayName,
+  resolveActivePlayerEntry,
+} from '../support/turn-state.utils';
 import type {
   FileVersionSummary,
   GameSummary,
@@ -66,6 +69,13 @@ function mapTurnRecord(record: {
     lastReminderAt: record.lastReminderAt?.toISOString() ?? null,
     nextReminderAt: record.nextReminderAt?.toISOString() ?? null,
   };
+}
+
+function activeDisplayName(
+  entry: { turnOrder: number; user: { displayName: string } | null } | null,
+) {
+  if (!entry) return 'Unassigned';
+  return entry.user?.displayName ?? vacantTurnDisplayName(entry.turnOrder);
 }
 
 @Injectable()
@@ -164,8 +174,7 @@ export class GamesQueryService {
         updatedAt: (latestSave?.uploadedAt ?? game.updatedAt).toISOString(),
         roundNumber: game.turnState?.roundNumber ?? 1,
         activePlayerUserId: activePlayerEntry?.userId ?? null,
-        activePlayerDisplayName:
-          activePlayerEntry?.user?.displayName ?? 'Unassigned',
+        activePlayerDisplayName: activeDisplayName(activePlayerEntry),
         playerCount: game.playerCount ?? game.players.length,
         filledSeatCount: game.players.filter((player) => player.userId != null)
           .length,
@@ -351,8 +360,7 @@ export class GamesQueryService {
       roundNumber: game.turnState?.roundNumber ?? 1,
       activePlayerEntryId: activePlayerEntry?.id ?? null,
       activePlayerUserId: activePlayerEntry?.userId ?? null,
-      activePlayerDisplayName:
-        activePlayerEntry?.user?.displayName ?? 'Unassigned',
+      activePlayerDisplayName: activeDisplayName(activePlayerEntry),
       players: game.players.map((player) => ({
         id: player.id,
         userId: player.userId,

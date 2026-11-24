@@ -22,7 +22,7 @@ export type TransitionTurnInput = {
   gameId: string;
   expectedCurrent: {
     gamePlayerId: string | null;
-    userId: string;
+    userId: string | null;
     roundNumber: number;
   };
   next: TurnParticipantSnapshot & { roundNumber: number };
@@ -34,7 +34,7 @@ export type ReturnTurnInput = {
   gameId: string;
   expectedCurrent: {
     gamePlayerId: string | null;
-    userId: string;
+    userId: string | null;
     roundNumber: number;
   };
   previousTurnId: string;
@@ -62,7 +62,7 @@ type SynchronizeOpenRoundInput = {
   gameId: string;
   expectedCurrent: {
     gamePlayerId: string | null;
-    userId: string;
+    userId: string | null;
   };
   roundNumber: number;
 };
@@ -76,6 +76,9 @@ export class TurnRecordsService {
   ): Promise<void> {
     const state = await transaction.turnState.findUnique({ where: { gameId } });
     if (!state) return;
+    if (state.activePlayerEntryId == null && state.activePlayerId == null) {
+      throw new ConflictException('The active turn could not be resolved.');
+    }
     const seats = await transaction.gamePlayer.findMany({
       where: {
         gameId,
@@ -288,7 +291,7 @@ export class TurnRecordsService {
     gameId: string,
     expected: {
       gamePlayerId: string | null;
-      userId: string;
+      userId: string | null;
       roundNumber?: number;
     },
   ) {

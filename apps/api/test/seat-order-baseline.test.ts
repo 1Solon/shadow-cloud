@@ -419,13 +419,14 @@ describe('Seat Order draft baseline', () => {
       await mutations.updateGameMetadata('1', 'owner', { roundNumber: 4 });
     }
     if (change === 'active turn') {
-      await mutations.skipPlayerTurn({
-        discordThreadId: 'thread',
-        callerDiscordId: 'owner-discord',
+      await mutations.reorderSeatOrder('1', 'owner', {
+        ...intent,
+        activePlayerEntryId: 'other-seat',
       });
-      await mutations.skipPlayerTurn({
-        discordThreadId: 'thread',
-        callerDiscordId: 'owner-discord',
+      await mutations.reorderSeatOrder('1', 'owner', {
+        ...intent,
+        baseline: { campaignId: 'game', revision: 1 },
+        activePlayerEntryId: 'owner-seat',
       });
     }
     if (change === 'seat membership') {

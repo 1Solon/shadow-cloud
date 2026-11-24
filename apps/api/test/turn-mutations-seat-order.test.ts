@@ -613,6 +613,89 @@ describe('Seat Order through real migrated SQLite', () => {
     },
   );
 
+  async function makeSeatTwoActive(occupied: boolean) {
+    if (!occupied)
+      await fixture.db.gamePlayer.update({
+        where: { id: 'seat-2' },
+        data: { userId: null },
+      });
+    await fixture.db.turnState.update({
+      where: { gameId: 'game-1' },
+      data: {
+        activePlayerId: occupied ? 'user-2' : null,
+        activePlayerEntryId: 'seat-2',
+      },
+    });
+    await fixture.db.turnRecord.update({
+      where: { id: 'turn-1' },
+      data: {
+        gamePlayerId: 'seat-2',
+        userId: occupied ? 'user-2' : null,
+        seatNumber: 2,
+        playerDisplayName: occupied ? 'Other' : 'Vacant turn (seat 2)',
+      },
+    });
+  }
+
+  it('advances the round when clearing the last occupied active seat wraps the turn to the first', async () => {
+    await makeSeatTwoActive(true);
+    const result = await mutations.reorderSeatOrder('1', 'user-1', {
+      ...intent,
+      clearedSeatEntryIds: ['seat-2'],
+    });
+    expect(result.activePlayerEntryId).toBe('seat-1');
+    const after = await persistedState();
+    expect(after.turns[0]).toMatchObject({
+      activePlayerId: 'user-1',
+      activePlayerEntryId: 'seat-1',
+      roundNumber: 5,
+    });
+    expect(
+      after.history.find((record) => record.endedAt == null),
+    ).toMatchObject({ gamePlayerId: 'seat-1', roundNumber: 5 });
+  });
+
+  it('keeps a vacant turn on its seat when the roster is reordered', async () => {
+    await makeSeatTwoActive(false);
+    const before = await persistedState();
+    const result = await mutations.reorderSeatOrder('1', 'user-1', {
+      baseline,
+      seatEntryIds: ['seat-2', 'seat-1', 'seat-open'],
+    });
+    expect(result.activePlayerEntryId).toBe('seat-2');
+    expect(result.seatOrder).toMatchObject({
+      activePlayerEntryId: 'seat-2',
+      activePlayerUserId: null,
+    });
+    const after = await persistedState();
+    expect(after.turns[0]).toMatchObject({
+      activePlayerId: null,
+      activePlayerEntryId: 'seat-2',
+      roundNumber: 4,
+    });
+    expect(after.history).toEqual(before.history);
+  });
+
+  it('lets the Overlord move a vacant turn to an occupied seat', async () => {
+    await makeSeatTwoActive(false);
+    await mutations.reorderSeatOrder('1', 'user-1', {
+      ...intent,
+      activePlayerEntryId: 'seat-1',
+    });
+    const after = await persistedState();
+    expect(after.turns[0]).toMatchObject({
+      activePlayerId: 'user-1',
+      activePlayerEntryId: 'seat-1',
+      roundNumber: 4,
+    });
+    expect(after.history.find((record) => record.id === 'turn-1')).toMatchObject(
+      { userId: null, completionReason: 'REASSIGNED' },
+    );
+    expect(
+      after.history.find((record) => record.endedAt == null),
+    ).toMatchObject({ gamePlayerId: 'seat-1', userId: 'user-1' });
+  });
+
   it('commits one revision for combined reorder, inactive clear, removal, and reassignment', async () => {
     await fixture.db.gamePlayer.update({
       where: { id: 'seat-open' },

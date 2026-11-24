@@ -203,7 +203,7 @@ it('does not announce an active-seat change when a later write rolls back', asyn
   expect(await flushNotifications()).toEqual([]);
 });
 
-it('announces the selected successor when the active seat is cleared', async () => {
+it('announces the selected successor in the next round when clearing the last active seat wraps the turn', async () => {
   const before = await campaign.getSeatOrder('42', 'overlord');
   await campaign.reorderSeatOrder('42', 'overlord', {
     baseline: before.seatOrderBaseline,
@@ -212,7 +212,7 @@ it('announces the selected successor when the active seat is cleared', async () 
   });
   expect(await campaign.getSeatOrder('42', 'overlord')).toMatchObject({
     activePlayerEntryId: 'seat-1',
-    roundNumber: 4,
+    roundNumber: 5,
     players: [
       expect.objectContaining({ id: 'seat-1', userId: 'overlord' }),
       expect.objectContaining({ id: 'seat-2', userId: null }),
@@ -225,7 +225,7 @@ it('announces the selected successor when the active seat is cleared', async () 
     body: {
       turn: {
         activePlayer: { id: 'overlord', turnOrder: 1 },
-        roundNumber: 4,
+        roundNumber: 5,
       },
     },
   });

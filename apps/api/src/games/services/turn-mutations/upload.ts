@@ -28,6 +28,7 @@ import type {
   UploadSaveSafetyMetadata,
 } from '../../support/game-payload.types';
 import { assertCampaignInPlay } from '../../support/campaign-conclusion';
+import { isActiveSeat } from '../../support/turn-state.utils';
 import type { TurnRecordsService } from '../turn-records.service';
 import type { TurnMutationDependencies } from './dependencies';
 
@@ -93,12 +94,20 @@ function participants(
       `Game ${identifier} does not have an active turn state yet.`,
     );
   }
+  const vacantTurnSeat =
+    turnState.activePlayerId == null
+      ? game.players.find(
+          (seat) =>
+            seat.id === turnState.activePlayerEntryId && seat.userId == null,
+        )
+      : undefined;
+  if (vacantTurnSeat) {
+    throw new ConflictException(
+      `Seat ${vacantTurnSeat.turnOrder}'s turn is vacant, so no player can upload it. The Overlord must fill the seat with /replace before the next save can be uploaded.`,
+    );
+  }
   const occupied = game.players.filter((seat) => seat.userId != null);
-  const matches = occupied.filter((seat) =>
-    turnState.activePlayerEntryId != null
-      ? seat.id === turnState.activePlayerEntryId
-      : seat.userId === turnState.activePlayerId,
-  );
+  const matches = occupied.filter((seat) => isActiveSeat(seat, turnState));
   const active = matches.length === 1 ? matches[0] : null;
   if (!active || active.userId !== turnState.activePlayerId) {
     throw new InvalidParticipant(

@@ -241,9 +241,15 @@ export class TurnMutationsService {
           'The active turn or next player changed before advancing.',
         );
       }
+      const roundNumber =
+        turnState.roundNumber + (next.turnOrder <= active.turnOrder ? 1 : 0);
       await transaction.turnState.update({
         where: { gameId: game.id },
-        data: { activePlayerId: next.userId!, activePlayerEntryId: next.id },
+        data: {
+          activePlayerId: next.userId!,
+          activePlayerEntryId: next.id,
+          roundNumber,
+        },
       });
       await this.turnRecords.transitionTurn(transaction, {
         gameId: game.id,
@@ -257,7 +263,7 @@ export class TurnMutationsService {
           userId: next.userId,
           seatNumber: next.turnOrder,
           playerDisplayName: next.user!.displayName,
-          roundNumber: turnState.roundNumber,
+          roundNumber,
         },
         completionReason: TurnCompletionReason.SKIPPED,
         transitionedAt: new Date(),

@@ -67,7 +67,7 @@ const activePlayerSelect = {
 function activePlayerOf(
   turnState: Prisma.TurnStateGetPayload<typeof activePlayerSelect> | null,
 ) {
-  return turnState
+  return turnState?.activePlayer
     ? {
         id: turnState.activePlayer.id,
         displayName: turnState.activePlayer.displayName,

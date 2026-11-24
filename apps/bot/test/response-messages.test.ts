@@ -94,9 +94,26 @@ describe("response message builders", () => {
     expect(pinFailure).not.toContain("**Next step**");
   });
 
+  it("says the turn is vacant when the active player resigns", () => {
+    const renderedMessage = rendered(
+      buildResignationAnnouncement("user-1", "Debug World", 2, {
+        wasOrganizer: false,
+        turnVacant: true,
+      }),
+    );
+
+    expect(renderedMessage).toContain(
+      "**Seat 2** is now empty. Its turn is vacant until the Overlord fills the seat.",
+    );
+    expect(renderedMessage).not.toContain("skipped during turn rotation");
+  });
+
   it("emphasizes the resigned seat and directs transfers to the webui", () => {
     const renderedMessage = rendered(
-      buildResignationAnnouncement("user-1", "Debug World", 2, true),
+      buildResignationAnnouncement("user-1", "Debug World", 2, {
+        wasOrganizer: true,
+        turnVacant: false,
+      }),
     );
 
     expect(renderedMessage).toContain(
@@ -135,7 +152,10 @@ describe("response message builders", () => {
       "You resigned from",
     );
     expect(
-      buildResignationAnnouncement("user-1", "Debug World", 2, true)
+      buildResignationAnnouncement("user-1", "Debug World", 2, {
+        wasOrganizer: true,
+        turnVacant: false,
+      })
         .allowedMentions,
     ).toEqual({ users: ["user-1"] });
     expect(
