@@ -3,7 +3,8 @@
   "extends": [
     "config:best-practices",
     ":dependencyDashboard",
-    ":maintainLockFilesWeekly"
+    ":maintainLockFilesWeekly",
+    "customManagers:dockerfileVersions"
   ],
   "labels": ["dependencies"],
   "ignorePresets": ["security:minimumReleaseAgeNpm"],

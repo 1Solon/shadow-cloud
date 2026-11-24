@@ -4,7 +4,10 @@ ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 ENV NODE_ENV=production
 
-RUN corepack enable
+# renovate: datasource=npm depName=corepack
+ARG COREPACK_VERSION=0.36.0
+RUN npm install --global corepack@$COREPACK_VERSION \
+  && corepack enable
 
 FROM base AS deps
 
@@ -29,11 +32,7 @@ ARG SHADOW_CLOUD_VERSION
 ENV SHADOW_CLOUD_VERSION=$SHADOW_CLOUD_VERSION
 LABEL org.opencontainers.image.version=$SHADOW_CLOUD_VERSION
 
-ENV PNPM_HOME=/pnpm
-ENV PATH=$PNPM_HOME:$PATH
 ENV NODE_ENV=production
-
-RUN corepack enable
 
 WORKDIR /workspace
 
