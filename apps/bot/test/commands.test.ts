@@ -87,7 +87,27 @@ describe("commands", () => {
     );
 
     expect(replaceCommand?.description).toBe(
-      "Replace or fill a campaign seat (overlord only).",
+      "Replace or fill a campaign seat (Overlord or Shadow Lord).",
     );
+  });
+
+  it("says the Overlord or a Shadow Lord can use each Overlord command", () => {
+    const descriptions = new Map(
+      slashCommands.map((command) => [command.name, command.description]),
+    );
+
+    for (const name of [
+      "replace",
+      "skip",
+      "pin",
+      "unpin",
+      "winner",
+      "unwinner",
+    ]) {
+      expect(descriptions.get(name)).toMatch(/\(Overlord or Shadow Lord\)\.$/);
+    }
+    for (const description of descriptions.values()) {
+      expect(description.toLowerCase()).not.toContain("overlord only");
+    }
   });
 });

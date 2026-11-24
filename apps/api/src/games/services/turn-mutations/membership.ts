@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -16,10 +15,16 @@ import type { ResignDiscordPlayerDto } from '../../dto/resign-discord-player.dto
 import { upsertDiscordUser } from '../../support/discord-user.helpers';
 import { assertCampaignInPlay } from '../../support/campaign-conclusion';
 import {
+  authorizeOverlordCommand,
+  type OverlordCommandCaller,
+  resolveOverlordCommandCaller,
+} from '../../support/overlord-command-authority';
+import {
   vacantTurnDisplayName,
   isActiveSeat,
 } from '../../support/turn-state.utils';
 import type { TurnRecordsService } from '../turn-records.service';
+import type { TurnMutationDependencies } from './dependencies';
 
 async function findGame(
   database: Prisma.TransactionClient,
@@ -87,13 +92,14 @@ async function authorizeReplacement(
   database: Prisma.TransactionClient,
   game: MembershipGame,
   input: ReplaceDiscordPlayerDto,
+  caller: OverlordCommandCaller,
 ) {
-  const caller = await discordIdentity(database, input.callerDiscordId);
-  if (!caller || caller.userId !== game.organizerId) {
-    throw new ForbiddenException(
-      'Only the game organizer can replace a player.',
-    );
-  }
+  const replacedBy = await authorizeOverlordCommand(
+    database,
+    game.organizerId,
+    caller,
+    'replace',
+  );
   if (game.playerCount != null && input.seatNumber > game.playerCount) {
     throw new BadRequestException(
       `Seat ${input.seatNumber} exceeds this game's seat limit.`,
@@ -115,7 +121,7 @@ async function authorizeReplacement(
       'This player is already in another seat in this game.',
     );
   }
-  return userId;
+  return { userId, replacedBy };
 }
 
 async function fenceGame(
@@ -135,14 +141,31 @@ async function fenceGame(
 export async function replacePlayerInSeat(
   database: PrismaClient,
   turnRecords: TurnRecordsService,
+  dependencies: TurnMutationDependencies,
   input: ReplaceDiscordPlayerDto,
 ) {
   const observed = await findGame(database, input.discordThreadId);
-  const expectedUserId = await authorizeReplacement(database, observed, input);
+  const caller = await resolveOverlordCommandCaller(
+    database,
+    dependencies.authService,
+    observed.organizerId,
+    input.callerDiscordId,
+  );
+  const { userId: expectedUserId } = await authorizeReplacement(
+    database,
+    observed,
+    input,
+    caller,
+  );
   activeSeat(observed);
   return database.$transaction(async (transaction) => {
     const { game, revisionMatched } = await fenceGame(transaction, observed);
-    const userId = await authorizeReplacement(transaction, game, input);
+    const { userId, replacedBy } = await authorizeReplacement(
+      transaction,
+      game,
+      input,
+      caller,
+    );
     if (
       !revisionMatched ||
       participantFacts(game) !== participantFacts(observed) ||
@@ -203,7 +226,7 @@ export async function replacePlayerInSeat(
     await transaction.auditEvent.create({
       data: {
         gameId: game.id,
-        actorId: newPlayer.id,
+        actorId: replacedBy.id,
         eventType: AuditEventType.PLAYER_REPLACED,
         payload: JSON.stringify({
           seatNumber: seat.turnOrder,

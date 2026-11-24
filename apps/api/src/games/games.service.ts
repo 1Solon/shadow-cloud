@@ -26,6 +26,10 @@ import type { UndoVictoryDto } from './dto/undo-victory.dto';
 import type { TransferHostDto } from './dto/transfer-host.dto';
 import type { UpdateGameMetadataDto } from './dto/update-game-metadata.dto';
 import { buildGameIdentifierWhere } from './support/game-lookup.helpers';
+import {
+  authorizeOverlordCommand,
+  resolveOverlordCommandCaller,
+} from './support/overlord-command-authority';
 import type {
   GameDetailResponse,
   GameMetadataResponse,
@@ -319,20 +323,18 @@ export class GamesService {
       );
     }
 
-    const callerIdentity = await prisma.authIdentity.findUnique({
-      where: {
-        provider_providerId: {
-          provider: 'discord',
-          providerId: input.callerDiscordId,
-        },
-      },
-    });
-
-    if (!callerIdentity || callerIdentity.userId !== game.organizerId) {
-      throw new ForbiddenException(
-        `Only the game organizer can use /${input.commandName}.`,
-      );
-    }
+    const caller = await resolveOverlordCommandCaller(
+      prisma,
+      this.authService,
+      game.organizerId,
+      input.callerDiscordId,
+    );
+    await authorizeOverlordCommand(
+      prisma,
+      game.organizerId,
+      caller,
+      input.commandName,
+    );
 
     return {
       gameId: game.id,

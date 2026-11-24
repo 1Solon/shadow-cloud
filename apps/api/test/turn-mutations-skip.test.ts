@@ -29,6 +29,14 @@ beforeEach(async () => {
       identities: { create: { provider: 'discord', providerId: 'discord-2' } },
     },
   });
+  await db.user.create({
+    data: {
+      id: 'user-9',
+      email: 'lord@example.com',
+      displayName: 'Lord',
+      identities: { create: { provider: 'discord', providerId: 'discord-9' } },
+    },
+  });
   await db.game.create({
     data: {
       id: 'game-1',
@@ -65,7 +73,11 @@ beforeEach(async () => {
       },
     },
   });
-  mutations = new TurnMutationsService(db, new TurnRecordsService());
+  mutations = new TurnMutationsService(db, new TurnRecordsService(), {
+    authService: {
+      isUserShadowOverride: async (userId: string) => userId === 'user-9',
+    },
+  });
 });
 
 afterEach(async () => {
@@ -284,10 +296,25 @@ describe('atomic skip through real SQLite', () => {
       const before = await persistedState();
       await expect(
         mutations.skipPlayerTurn({ ...intent, callerDiscordId }),
-      ).rejects.toBeInstanceOf(ForbiddenException);
+      ).rejects.toThrow(
+        new ForbiddenException(
+          'Only the Overlord or a Shadow Lord can use /skip.',
+        ),
+      );
       expect(await persistedState()).toEqual(before);
     },
   );
+
+  it('lets a Shadow Lord without a seat skip the active player, recorded as the actor', async () => {
+    await mutations.skipPlayerTurn({ ...intent, callerDiscordId: 'discord-9' });
+    const { turns, audits } = await persistedState();
+    expect(turns[0]).toMatchObject({ activePlayerEntryId: 'seat-2' });
+    expect(audits).toHaveLength(1);
+    expect(audits[0]).toMatchObject({
+      actorId: 'user-9',
+      eventType: 'TURN_SKIPPED',
+    });
+  });
 
   it('preserves missing campaign, uninitialized campaign, and single occupied seat errors', async () => {
     await expect(

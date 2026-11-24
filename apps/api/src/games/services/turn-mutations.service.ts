@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -47,6 +46,10 @@ import {
   type VictoryOptions,
 } from './turn-mutations/victory';
 import { assertCampaignInPlay } from '../support/campaign-conclusion';
+import {
+  authorizeOverlordCommand,
+  resolveOverlordCommandCaller,
+} from '../support/overlord-command-authority';
 
 const skipGameInclude = {
   players: {
@@ -133,7 +136,12 @@ export class TurnMutationsService {
   }
 
   async replacePlayerInSeat(input: ReplaceDiscordPlayerDto) {
-    return replacePlayerInSeat(this.database, this.turnRecords, input);
+    return replacePlayerInSeat(
+      this.database,
+      this.turnRecords,
+      this.dependencies,
+      input,
+    );
   }
 
   async resignPlayerFromDiscord(input: ResignDiscordPlayerDto) {
@@ -205,7 +213,18 @@ export class TurnMutationsService {
       this.database,
       input.discordThreadId,
     );
-    await this.authorizeSkip(this.database, observed, input.callerDiscordId);
+    const caller = await resolveOverlordCommandCaller(
+      this.database,
+      this.dependencies.authService,
+      observed.organizerId,
+      input.callerDiscordId,
+    );
+    await authorizeOverlordCommand(
+      this.database,
+      observed.organizerId,
+      caller,
+      'skip',
+    );
     const expected = this.skipParticipants(observed);
 
     return this.database.$transaction(async (transaction) => {
@@ -218,10 +237,11 @@ export class TurnMutationsService {
       });
       const game = await this.findSkipGame(transaction, input.discordThreadId);
       await assertCampaignInPlay(transaction, game.id);
-      const callerIdentity = await this.authorizeSkip(
+      const skippedBy = await authorizeOverlordCommand(
         transaction,
-        game,
-        input.callerDiscordId,
+        game.organizerId,
+        caller,
+        'skip',
       );
       const { active, next, turnState } = this.skipParticipants(game, true);
       if (
@@ -271,7 +291,7 @@ export class TurnMutationsService {
       await transaction.auditEvent.create({
         data: {
           gameId: game.id,
-          actorId: callerIdentity.userId,
+          actorId: skippedBy.id,
           eventType: AuditEventType.TURN_SKIPPED,
           payload: JSON.stringify({
             skippedPlayerDisplayName: active.user?.displayName ?? null,
@@ -320,27 +340,6 @@ export class TurnMutationsService {
       );
     }
     return game;
-  }
-
-  private async authorizeSkip(
-    database: Prisma.TransactionClient,
-    game: SkipGame,
-    callerDiscordId: string,
-  ) {
-    const identity = await database.authIdentity.findUnique({
-      where: {
-        provider_providerId: {
-          provider: 'discord',
-          providerId: callerDiscordId,
-        },
-      },
-    });
-    if (!identity || identity.userId !== game.organizerId) {
-      throw new ForbiddenException(
-        'Only the game organizer can skip a player.',
-      );
-    }
-    return identity;
   }
 
   private skipParticipants(game: SkipGame, revalidating = false) {

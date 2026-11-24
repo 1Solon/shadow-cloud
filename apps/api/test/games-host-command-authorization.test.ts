@@ -34,9 +34,17 @@ vi.mock('../src/database', () => ({
 
 const { GamesService } = await import('../src/games/games.service');
 
+const isUserShadowOverride = vi.fn(
+  async (userId: string) => userId === 'user-9',
+);
+
+function identity(userId: string) {
+  return { userId, user: { id: userId } };
+}
+
 function createService() {
   return new GamesService(
-    {} as never,
+    { isUserShadowOverride } as never,
     {} as never,
     {} as never,
     {} as never,
@@ -58,9 +66,7 @@ describe('GamesService host command authorization', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMock.game.findUnique.mockResolvedValue(createGame());
-    prismaMock.authIdentity.findUnique.mockResolvedValue({
-      userId: 'user-1',
-    });
+    prismaMock.authIdentity.findUnique.mockResolvedValue(identity('user-1'));
   });
 
   it('authorizes the organizer for pinning commands', async () => {
@@ -91,6 +97,7 @@ describe('GamesService host command authorization', () => {
           providerId: 'discord-1',
         },
       },
+      include: { user: true },
     });
   });
 
@@ -106,15 +113,47 @@ describe('GamesService host command authorization', () => {
     });
   });
 
-  it('rejects a Discord user who is not the organizer', async () => {
-    prismaMock.authIdentity.findUnique.mockResolvedValue({
-      userId: 'user-2',
-    });
+  it.each(['pin', 'unpin'] as const)(
+    'authorizes a Shadow Lord who is not the organizer for /%s',
+    async (commandName) => {
+      prismaMock.authIdentity.findUnique.mockResolvedValue(identity('user-9'));
+
+      await expect(
+        createService().authorizeHostCommand({
+          discordThreadId: 'thread-1',
+          callerDiscordId: 'discord-9',
+          commandName,
+        }),
+      ).resolves.toMatchObject({ gameId: 'game-1' });
+    },
+  );
+
+  it.each(['pin', 'unpin'] as const)(
+    'rejects /%s from a Discord user who is neither the organizer nor a Shadow Lord',
+    async (commandName) => {
+      prismaMock.authIdentity.findUnique.mockResolvedValue(identity('user-2'));
+
+      await expect(
+        createService().authorizeHostCommand({
+          discordThreadId: 'thread-1',
+          callerDiscordId: 'discord-2',
+          commandName,
+        }),
+      ).rejects.toThrow(
+        new ForbiddenException(
+          `Only the Overlord or a Shadow Lord can use /${commandName}.`,
+        ),
+      );
+    },
+  );
+
+  it('rejects an unknown Discord user', async () => {
+    prismaMock.authIdentity.findUnique.mockResolvedValue(null);
 
     await expect(
       createService().authorizeHostCommand({
         discordThreadId: 'thread-1',
-        callerDiscordId: 'discord-2',
+        callerDiscordId: 'discord-0',
         commandName: 'pin',
       }),
     ).rejects.toBeInstanceOf(ForbiddenException);
