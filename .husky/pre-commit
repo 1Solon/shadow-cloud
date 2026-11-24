@@ -1,1 +1,1 @@
-pnpm exec turbo run lint test --output-logs=errors-only
+pnpm exec turbo run lint typecheck test --output-logs=errors-only
