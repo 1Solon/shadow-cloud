@@ -568,12 +568,17 @@ describe("buildSaveReplacedNotificationMessage", () => {
           ...saveReplacedPayload,
           replacement: {
             ...saveReplacedPayload.replacement,
-            passwordRecovery: { operation: "undo", regimeName: "North Reach" },
+            passwordRecovery: {
+              operation: "undo",
+              regimeName: "North Reach",
+              actorRole: "overlord",
+            },
           },
         },
         "https://example.test",
       ),
     );
+    expect(rendered).toContain("The Overlord undid");
     expect(rendered).toContain("restored the previous password");
     expect(rendered).toContain("for **North Reach**");
     expect(rendered).toContain("the turn has not advanced");
@@ -586,14 +591,18 @@ describe("buildSaveReplacedNotificationMessage", () => {
           ...saveReplacedPayload,
           replacement: {
             ...saveReplacedPayload.replacement,
-            passwordRecovery: { operation: "reset", regimeName: "North Reach" },
+            passwordRecovery: {
+              operation: "reset",
+              regimeName: "North Reach",
+              actorRole: "overlord",
+            },
           },
         },
         "https://example.test",
       ),
     );
     expect(rendered).toContain(
-      "reset the in-game password for **North Reach**",
+      "The Overlord reset the in-game password for **North Reach**",
     );
     expect(rendered).toContain("the turn has not advanced");
     expect(rendered).toContain("Download [the updated save]");
@@ -650,6 +659,79 @@ describe("buildSaveReplacedNotificationMessage", () => {
     );
     expect(message.allowedMentions).toEqual({ users: ["discord-1"] });
   });
+});
+
+describe("buildSaveReplacedNotificationMessage for password recovery", () => {
+  const overlord = {
+    id: "user-3",
+    displayName: "Vera",
+    discordId: "discord-3",
+  };
+  const recovery = (
+    operation: "reset" | "undo",
+    actorRole: "overlord" | "shadowLord",
+    activePlayer:
+      | typeof saveReplacedPayload.activePlayer
+      | null = saveReplacedPayload.activePlayer,
+  ) =>
+    buildSaveReplacedNotificationMessage(
+      {
+        ...saveReplacedPayload,
+        activePlayer,
+        overlord,
+        replacement: {
+          ...saveReplacedPayload.replacement,
+          passwordRecovery: { operation, regimeName: "North Reach", actorRole },
+        },
+      },
+      "https://example.test",
+    );
+
+  it.each([
+    ["reset", "A Shadow Lord reset the in-game password"],
+    ["undo", "A Shadow Lord undid the latest password reset"],
+  ] as const)(
+    "credits a Shadow Lord %s to a Shadow Lord, not the Overlord",
+    (operation, wording) => {
+      const rendered = JSON.stringify(recovery(operation, "shadowLord"));
+      expect(rendered).toContain(wording);
+      expect(rendered).not.toContain("The Overlord");
+      expect(rendered).toContain("**Corrected by:** <@discord-1>");
+    },
+  );
+
+  it("pings the active player and keeps the restart instruction when the seat is occupied", () => {
+    const message = recovery("reset", "shadowLord");
+    const rendered = JSON.stringify(message);
+    expect(rendered).toContain(
+      "<@discord-2>, the save for The Game was corrected",
+    );
+    expect(rendered).toContain(
+      "If you already started from the previous copy, restart from the updated save.",
+    );
+    expect(message.allowedMentions).toEqual({
+      users: ["discord-2", "discord-1"],
+    });
+  });
+
+  it.each(["reset", "undo"] as const)(
+    "pings the Overlord and gives no restart instruction during a vacant turn (%s)",
+    (operation) => {
+      const message = recovery(operation, "shadowLord", null);
+      const rendered = JSON.stringify(message);
+      expect(rendered).toContain(
+        "<@discord-3>, the save for The Game was corrected",
+      );
+      expect(rendered).toContain(
+        "is waiting for the Overlord to fill the empty seat.",
+      );
+      expect(rendered).toContain("[The updated save](https://example.test/");
+      expect(rendered).not.toContain("restart");
+      expect(message.allowedMentions).toEqual({
+        users: ["discord-3", "discord-1"],
+      });
+    },
+  );
 });
 
 describe("buildTurnNudgeNotificationMessage", () => {

@@ -61,8 +61,17 @@ export type SaveReplacedNotificationPayload = {
     displayName: string;
     discordId: string | null;
   } | null;
+  overlord?: {
+    id: string;
+    displayName: string;
+    discordId: string | null;
+  };
   replacement: {
-    passwordRecovery?: { operation: 'reset' | 'undo'; regimeName: string };
+    passwordRecovery?: {
+      operation: 'reset' | 'undo';
+      regimeName: string;
+      actorRole: 'overlord' | 'shadowLord';
+    };
     contentRevision: number;
     versionId: string;
     versionNumber: number;

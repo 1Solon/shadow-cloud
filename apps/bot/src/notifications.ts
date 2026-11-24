@@ -69,8 +69,17 @@ export type SaveReplacedNotificationPayload = {
     displayName: string;
     discordId: string | null;
   } | null;
+  overlord?: {
+    id: string;
+    displayName: string;
+    discordId: string | null;
+  };
   replacement: {
-    passwordRecovery?: { operation: "reset" | "undo"; regimeName: string };
+    passwordRecovery?: {
+      operation: "reset" | "undo";
+      regimeName: string;
+      actorRole?: "overlord" | "shadowLord";
+    };
     contentRevision: number;
     versionId: string;
     versionNumber: number;
@@ -606,12 +615,6 @@ export function buildSaveReplacedNotificationMessage(
     payload.replacement.replacedBy.displayName,
     payload.replacement.replacedBy.discordId,
   );
-  const activePlayer = payload.activePlayer
-    ? formatDiscordActor(
-        payload.activePlayer.displayName,
-        payload.activePlayer.discordId,
-      )
-    : null;
   const replacedAt = formatDiscordTimestamp(payload.replacement.replacedAt);
   const recovery = payload.replacement.passwordRecovery;
   const downloadUrl = new URL(
@@ -622,21 +625,46 @@ export function buildSaveReplacedNotificationMessage(
     "revision",
     String(payload.replacement.contentRevision),
   );
+  const addressee =
+    payload.activePlayer ?? (recovery ? payload.overlord : undefined);
 
   return buildDiscordNotification({
-    headline: activePlayer
-      ? `${activePlayer}, the save for ${payload.game.name} was corrected`
+    headline: addressee
+      ? `${formatDiscordActor(addressee.displayName, addressee.discordId)}, the save for ${payload.game.name} was corrected`
       : `The save for ${payload.game.name} was corrected`,
     message: recovery
-      ? `The Overlord ${recovery.operation === "reset" ? "reset the in-game password" : "undid the latest password reset and restored the previous password"} for **${escapeMarkdown(recovery.regimeName)}**. The latest save has been replaced; the turn has not advanced. Download [the updated save](${downloadUrl.toString()}) before continuing. If you already started from the previous copy, restart from the updated save.`
+      ? passwordRecoveryMessage(
+          recovery,
+          downloadUrl.toString(),
+          payload.activePlayer != null,
+        )
       : `Download [${payload.replacement.originalName}](${downloadUrl.toString()}) to continue with the corrected save.`,
     details: [`**Corrected by:** ${correctedBy}`],
     metadata: replacedAt ? [`-# ${replacedAt}`] : [],
     mentionedUserIds: [
-      payload.activePlayer?.discordId,
+      addressee?.discordId,
       payload.replacement.replacedBy.discordId,
     ].filter((discordId): discordId is string => discordId != null),
   });
+}
+
+function passwordRecoveryMessage(
+  recovery: NonNullable<
+    SaveReplacedNotificationPayload["replacement"]["passwordRecovery"]
+  >,
+  downloadUrl: string,
+  seatOccupied: boolean,
+) {
+  const actor =
+    recovery.actorRole === "shadowLord" ? "A Shadow Lord" : "The Overlord";
+  const change =
+    recovery.operation === "reset"
+      ? "reset the in-game password"
+      : "undid the latest password reset and restored the previous password";
+  const nextStep = seatOccupied
+    ? `Download [the updated save](${downloadUrl}) before continuing. If you already started from the previous copy, restart from the updated save.`
+    : `[The updated save](${downloadUrl}) is waiting for the Overlord to fill the empty seat.`;
+  return `${actor} ${change} for **${escapeMarkdown(recovery.regimeName)}**. The latest save has been replaced; the turn has not advanced. ${nextStep}`;
 }
 
 export function buildTurnNudgeNotificationMessage(

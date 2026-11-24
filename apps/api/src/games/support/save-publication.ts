@@ -56,12 +56,16 @@ export type UndoPasswordResetInput = {
 
 export const MAX_PASSWORD_RESET_REASON_LENGTH = 500;
 
+function isOverlord(overlordId: string, userId: string) {
+  return overlordId === userId;
+}
+
 function reasonUnlessOverlord(
   overlordId: string,
   userId: string,
   reason: unknown,
 ) {
-  if (overlordId === userId) return null;
+  if (isOverlord(overlordId, userId)) return null;
   const trimmed = typeof reason === 'string' ? reason.trim() : '';
   if (!trimmed || trimmed.length > MAX_PASSWORD_RESET_REASON_LENGTH)
     throw new BadRequestException(
@@ -70,28 +74,38 @@ function reasonUnlessOverlord(
   return trimmed;
 }
 
-const activePlayerSelect = {
+function actorRole(overlordId: string, userId: string) {
+  return isOverlord(overlordId, userId) ? 'overlord' : 'shadowLord';
+}
+
+const notifiedUserSelect = {
   select: {
-    activePlayer: {
-      select: {
-        id: true,
-        displayName: true,
-        identities: { select: { provider: true, providerId: true } },
-      },
-    },
+    id: true,
+    displayName: true,
+    identities: { select: { provider: true, providerId: true } },
   },
 } as const;
+
+const activePlayerSelect = {
+  select: { activePlayer: notifiedUserSelect },
+} as const;
+
+function notifiedUser(user: {
+  id: string;
+  displayName: string;
+  identities: Array<{ provider: string; providerId: string }>;
+}) {
+  return {
+    id: user.id,
+    displayName: user.displayName,
+    discordId: getDiscordIdentity(user),
+  };
+}
 
 function activePlayerOf(
   turnState: Prisma.TurnStateGetPayload<typeof activePlayerSelect> | null,
 ) {
-  return turnState?.activePlayer
-    ? {
-        id: turnState.activePlayer.id,
-        displayName: turnState.activePlayer.displayName,
-        discordId: getDiscordIdentity(turnState.activePlayer),
-      }
-    : null;
+  return turnState?.activePlayer ? notifiedUser(turnState.activePlayer) : null;
 }
 
 export class SavePublication {
@@ -198,6 +212,7 @@ export class SavePublication {
       include: {
         fileVersions: { orderBy: { versionNumber: 'desc' }, take: 1 },
         turnState: activePlayerSelect,
+        organizer: notifiedUserSelect,
         turnRecords: {
           where: { endedAt: null },
           orderBy: { startedAt: 'desc' },
@@ -423,20 +438,18 @@ export class SavePublication {
             discordThreadId: game.discordThreadId,
           },
           activePlayer: activePlayerOf(game.turnState),
+          overlord: notifiedUser(game.organizer),
           replacement: {
             contentRevision: file.contentRevision + 1,
             versionId: file.id,
             versionNumber: file.versionNumber,
             originalName: file.originalName,
             replacedAt: replacedAt.toISOString(),
-            replacedBy: {
-              id: actor.id,
-              displayName: actor.displayName,
-              discordId: getDiscordIdentity(actor),
-            },
+            replacedBy: notifiedUser(actor),
             passwordRecovery: {
               operation: 'undo',
               regimeName: reset.regimeName,
+              actorRole: actorRole(game.organizerId, userId!),
             },
           },
         });
@@ -465,6 +478,7 @@ export class SavePublication {
       include: {
         fileVersions: { orderBy: { versionNumber: 'desc' }, take: 1 },
         turnState: activePlayerSelect,
+        organizer: notifiedUserSelect,
         turnRecords: {
           where: { endedAt: null },
           orderBy: { startedAt: 'desc' },
@@ -619,18 +633,19 @@ export class SavePublication {
             discordThreadId: game.discordThreadId,
           },
           activePlayer: activePlayerOf(game.turnState),
+          overlord: notifiedUser(game.organizer),
           replacement: {
             contentRevision: file.contentRevision + 1,
             versionId: file.id,
             versionNumber: file.versionNumber,
             originalName: file.originalName,
             replacedAt: replacedAt.toISOString(),
-            replacedBy: {
-              id: actor.id,
-              displayName: actor.displayName,
-              discordId: getDiscordIdentity(actor),
+            replacedBy: notifiedUser(actor),
+            passwordRecovery: {
+              operation: 'reset',
+              regimeName: regime.name,
+              actorRole: actorRole(game.organizerId, userId),
             },
-            passwordRecovery: { operation: 'reset', regimeName: regime.name },
           },
         });
         return {
@@ -973,11 +988,7 @@ export class SavePublication {
             versionNumber: fileVersion.versionNumber,
             originalName: fileVersion.originalName,
             replacedAt: replacedAt.toISOString(),
-            replacedBy: {
-              id: actor.id,
-              displayName: actor.displayName,
-              discordId: getDiscordIdentity(actor),
-            },
+            replacedBy: notifiedUser(actor),
           },
         });
         return {

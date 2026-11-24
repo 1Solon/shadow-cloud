@@ -41,6 +41,8 @@ export const debugPreviewNames = [
   "game-initialized",
   "turn-notification",
   "save-replaced",
+  "save-replaced-shadow-lord",
+  "save-replaced-vacant-turn",
   "save-rejected",
   "turn-reminder",
   "campaign-deleted",
@@ -178,6 +180,44 @@ function buildDebugGame(context: DebugPreviewContext) {
   };
 }
 
+function buildPasswordResetPreview(
+  context: DebugPreviewContext,
+  seatOccupied: boolean,
+) {
+  const fixture = buildDebugGame(context);
+  return buildSaveReplacedNotificationMessage(
+    {
+      game: {
+        id: fixture.id,
+        gameNumber: fixture.gameNumber,
+        slug: fixture.slug,
+        name: fixture.name,
+        discordThreadId: fixture.discordThreadId,
+      },
+      activePlayer: seatOccupied ? fixture.activePlayer : null,
+      overlord: fixture.organizer,
+      replacement: {
+        contentRevision: 2,
+        versionId: "debug-version",
+        versionNumber: 7,
+        originalName: "42-T3-S1-Debug.se1",
+        replacedAt: "2026-07-17T12:30:00.000Z",
+        replacedBy: {
+          id: "debug-shadow-lord",
+          displayName: context.userDisplayName,
+          discordId: context.userId,
+        },
+        passwordRecovery: {
+          operation: "reset",
+          regimeName: "North Reach",
+          actorRole: "shadowLord",
+        },
+      },
+    },
+    context.webBaseUrl,
+  );
+}
+
 const previewFactories: Record<DebugPreviewName, DebugPreviewFactory> = {
   "game-initialized": (context) => {
     const fixture = buildDebugGame(context);
@@ -255,6 +295,10 @@ const previewFactories: Record<DebugPreviewName, DebugPreviewFactory> = {
       context.webBaseUrl,
     );
   },
+  "save-replaced-shadow-lord": (context) =>
+    buildPasswordResetPreview(context, true),
+  "save-replaced-vacant-turn": (context) =>
+    buildPasswordResetPreview(context, false),
   "save-rejected": (context) => {
     const fixture = buildDebugGame(context);
     return buildSaveRejectedNotificationMessage(

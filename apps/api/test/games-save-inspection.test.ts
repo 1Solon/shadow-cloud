@@ -1171,3 +1171,67 @@ it.each([
     undoRevision: null,
   });
 });
+
+async function saveReplacedPayloads() {
+  return (
+    await fixture.db.notificationDelivery.findMany({
+      where: { event: 'SAVE_REPLACED' },
+      orderBy: { createdAt: 'asc' },
+    })
+  ).map((delivery) => JSON.parse(delivery.payload));
+}
+
+it('credits a Shadow Lord reset and undo to a Shadow Lord and names the Overlord', async () => {
+  await seed();
+  isUserShadowOverride.mockResolvedValue(true);
+  const inspection = await service.inspectLatestSave('1', 'player', true);
+  await service.resetPassword(
+    '1',
+    'player',
+    {
+      ...inspection,
+      regimeId: inspection.regimes[0].id,
+      password: 'NewSecret',
+      confirmed: true,
+      reason: 'Approved',
+    },
+    true,
+  );
+  const { undo } = await service.getPasswordResetRecovery('1', 'player', true);
+  await service.undoPasswordReset(
+    '1',
+    'player',
+    { ...undo!, confirmed: true, reason: 'Approved' },
+    true,
+  );
+  const overlord = { id: 'overlord', displayName: 'Overlord', discordId: null };
+  expect(await saveReplacedPayloads()).toMatchObject([
+    {
+      overlord,
+      replacement: {
+        passwordRecovery: { operation: 'reset', actorRole: 'shadowLord' },
+      },
+    },
+    {
+      overlord,
+      replacement: {
+        passwordRecovery: { operation: 'undo', actorRole: 'shadowLord' },
+      },
+    },
+  ]);
+});
+
+it('credits an Overlord reset and undo to the Overlord', async () => {
+  await seed();
+  await service.resetPassword('1', 'overlord', await resetInput());
+  const { undo } = await service.getPasswordResetRecovery('1', 'overlord');
+  await service.undoPasswordReset('1', 'overlord', {
+    ...undo!,
+    confirmed: true,
+  });
+  expect(
+    (await saveReplacedPayloads()).map(
+      (payload) => payload.replacement.passwordRecovery.actorRole,
+    ),
+  ).toEqual(['overlord', 'overlord']);
+});
