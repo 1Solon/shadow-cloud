@@ -76,7 +76,7 @@ campaign or migration should be touched for this exercise.
    onward in a disposable branch until its login is reached. Keep the unchanged
    canonical reset output available separately for the immediate-undo case.
 
-Do not attach any saves or credential manifests to Linear, even disposable ones.
+Do not attach any saves or credential manifests to issues, even disposable ones.
 Public downloads are an intentional product policy: use only disposable data in
 the isolated campaign. Delete private artifacts/notes and isolated storage after
 observations are captured and recovery cleanup has been checked.

@@ -1,83 +1,69 @@
-# Issue Tracker: Linear
+# Issue Tracker: GitHub Issues
 
-Linear is the source of truth for this repo's issues and specs.
+GitHub Issues on `1Solon/shadow-cloud` is the source of truth for this repo's
+issues and specs.
 
 ## Destination
 
-- Workspace: Solon (`1solon`)
-- Team: Solon
-- Project: `shadow-cloud`
-- Project URL:
-  https://linear.app/1solon/project/shadow-cloud-0e60a72e8c17/overview
+- Repository: `1Solon/shadow-cloud`
+- Issues URL: https://github.com/1Solon/shadow-cloud/issues
 
 ## Access
 
-Prefer the official Linear MCP server configured globally as `linear` in
-`~/.config/opencode/opencode.jsonc`, using `https://mcp.linear.app/mcp` with
-automatic OAuth. This repo does not duplicate that server in project config.
+Use the `gh` CLI, authenticated as the user. Check the connection with
+`gh auth status`. Use `gh issue` for issues, labels and comments, and
+`gh api` for sub-issues and blocking relationships.
 
-For initial authorization, run `opencode mcp auth linear`
-and approve access to the Solon workspace in the browser. Check the connection
-with `opencode mcp list`. OAuth credentials stay in OpenCode's user-level auth
-storage, not in this repo. Quit and restart the OpenCode backend after changing
-MCP configuration so subsequent sessions load the tools.
+If `gh` is unauthenticated, ask the user to run `gh auth login`. Do not create
+a second tracker under `.scratch/` or elsewhere.
 
-Use authenticated browser access only when MCP is unavailable and the browser
-controls demonstrably work; reading a page is not proof a write succeeded.
-
-If access is unavailable, ask the user to reconnect. Do not silently publish
-to GitHub or create a second active tracker under `.scratch/`.
-
-Keep credentials out of repository files and issue descriptions.
+Keep credentials out of repository files and issue bodies.
 
 ## Fetching Work
 
-Resolve the supplied Linear identifier or URL, then read the complete
-description, relevant comments, parent spec, and blocking relationships.
+Resolve the supplied issue number or URL with
+`gh issue view <n> --comments`, then read the parent spec, sub-issues and
+blocking relationships:
 
-For a legacy local source path, resolve its canonical Linear issue through
-`.scratch/linear-migration.md`, then fetch live content and status. The initial
-local source copies were removed after verified migration at the user's request.
+- Parent: `gh api repos/1Solon/shadow-cloud/issues/<n>/parent`
+- Sub-issues: `gh api repos/1Solon/shadow-cloud/issues/<n>/sub_issues`
+- Blockers: `gh api repos/1Solon/shadow-cloud/issues/<n>/dependencies/blocked_by`
+
+Older references such as `SOL-24` point to the retired Linear workspace at
+https://linear.app/1solon. Treat them as history, not active work.
 
 ## Publishing Work
 
-- Publish approved specs as parent issues in the configured team and project.
-- Publish implementation tickets as sub-issues of their spec.
-- Use native Linear blocking relationships, not only prose dependencies.
+- Publish approved specs as parent issues.
+- Publish implementation tickets as sub-issues of their spec. Attach a child
+  with `gh api -X POST repos/1Solon/shadow-cloud/issues/<parent>/sub_issues
+  -F sub_issue_id=<child database id>`; get the id from
+  `gh api repos/1Solon/shadow-cloud/issues/<child> --jq .id`.
+- Record dependencies as native blocking relationships with
+  `gh api -X POST repos/1Solon/shadow-cloud/issues/<n>/dependencies/blocked_by
+  -F issue_id=<blocker database id>`, not only as prose.
 - Apply triage labels according to `triage-labels.md`.
-- Leave new issues in the team's default unstarted workflow state unless
-  the user requests another state.
+- Leave new issues open and unassigned unless the user asks otherwise.
 - Preserve acceptance criteria, decisions, and verification requirements.
-- Return created issue identifiers and URLs.
+- Return created issue numbers and URLs.
 
-Before retrying publication, check for an existing matching issue and consult
-`.scratch/linear-migration.md`. Resume incomplete work instead of creating
+Before retrying publication, search for an existing matching issue with
+`gh issue list --search` and resume incomplete work instead of creating
 duplicates.
 
 ## Working Tickets
 
 Implementation normally targets a child ticket, not its entire parent spec.
-An actionable ticket has `ready-for-agent`, is unstarted, and has completed
-blockers. Check live tracker state before beginning.
+An actionable ticket has `ready-for-agent`, is open, is unassigned or assigned
+to the user, and has no open blockers. Check live state before beginning.
 
-Record progress, decisions, and verification in Linear. Keep triage labels
-separate from workflow status. Do not automatically close a parent spec
-when a child ticket completes.
+Record progress, decisions, and verification as issue comments. Keep triage
+labels separate from open/closed state. Do not close a parent spec when a
+child ticket completes.
 
 ## Wayfinding
 
 Keep the decision map in a parent issue and decision tickets as sub-issues.
 Use native blocking relationships. Retain ticket type and decision phase
-(open, claimed, resolved) in the descriptions, and record answers and links
-back to the map as decisions resolve.
-
-## Migration Record
-
-`.scratch/linear-migration.md` retains the original source-to-Linear mapping,
-including parent and blocking relationships. Its source paths are provenance,
-not local files to reopen. The three migrated specs and ten local ticket copies
-were removed with explicit user approval after publication was verified.
-
-Update active work in Linear, not in duplicate local specs or tickets. For any
-future migration, record canonical identifiers and URLs as publication proceeds;
-remove source copies only after verification and explicit permission.
+(open, claimed, resolved) in the bodies, and record answers and links back
+to the map as decisions resolve.

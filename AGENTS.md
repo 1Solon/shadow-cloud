@@ -2,13 +2,13 @@
 
 ### Issue tracker
 
-Issues and specs live in Linear's shadow-cloud project. Before fetching,
+Issues and specs live in GitHub Issues on `1Solon/shadow-cloud`. Before fetching,
 publishing, or updating work, read `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-Use the five default triage roles as Linear labels, separate from workflow
-status. See `docs/agents/triage-labels.md`.
+Use the five default triage roles as GitHub labels, separate from open/closed
+state. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
