@@ -7,6 +7,7 @@
     "build": "pnpm tauri build",
     "build:release": "pnpm tauri build --config src-tauri/tauri.release.conf.json",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"scripts/**/*.mjs\" \"*.{ts,mjs}\" && cargo fmt --manifest-path src-tauri/Cargo.toml",
+    "lint": "prettier --check \"src/**/*.{ts,tsx,css}\" \"scripts/**/*.mjs\" \"*.{ts,mjs}\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

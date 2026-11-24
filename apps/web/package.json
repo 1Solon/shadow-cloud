@@ -6,7 +6,7 @@
     "build": "dotenv -e ../../.env -- next build",
     "start": "dotenv -e ../../.env -- next start",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"scripts/**/*.mjs\" \"browser/**/*.{ts,mjs}\" \"*.{ts,mjs}\"",
-    "lint": "eslint .",
+    "lint": "eslint . && prettier --check \"src/**/*.{ts,tsx,css}\" \"scripts/**/*.mjs\" \"browser/**/*.{ts,mjs}\" \"*.{ts,mjs}\"",
     "typecheck": "node ./scripts/typecheck.mjs",
     "test": "vitest run",
     "test:browser": "playwright test",
