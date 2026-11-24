@@ -10,6 +10,7 @@
   "ignorePresets": ["security:minimumReleaseAgeNpm"],
   "minimumReleaseAge": "1 day",
   "rangeStrategy": "pin",
+  "rebaseWhen": "behind-base-branch",
   "prConcurrentLimit": 5,
   "prHourlyLimit": 5,
   "packageRules": [

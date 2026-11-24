@@ -105,3 +105,35 @@ jobs:
 
       - name: Test authenticated campaign in Chromium
         run: pnpm --filter @shadow-cloud/web test:browser --project=${{ matrix.project }}
+
+  image:
+    name: Image (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: api
+            cache_scope: shadow-cloud-api
+          - service: web
+            cache_scope: shadow-cloud-web
+          - service: bot
+            cache_scope: shadow-cloud-bot
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: apps/${{ matrix.service }}/Dockerfile
+          platforms: linux/amd64
+          push: false
+          build-args: |
+            SHADOW_CLOUD_VERSION=0.0.0-ci
+          cache-from: type=gha,scope=${{ matrix.cache_scope }}
+          cache-to: ${{ github.event_name == 'push' && format('type=gha,mode=max,scope={0}', matrix.cache_scope) || '' }}

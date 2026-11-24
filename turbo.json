@@ -1,5 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "agentGuidance": false,
   "globalEnv": ["SHADOW_CLOUD_VERSION"],
   "tasks": {
     "build": {
