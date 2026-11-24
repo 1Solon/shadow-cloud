@@ -349,7 +349,9 @@ test("Overlord regime inspection renders on desktop and mobile without changing 
     await expect(
       inspection.getByText("North Reach", { exact: true }),
     ).toBeVisible();
-    await expect(inspection.getByText("Current regime")).toBeVisible();
+    await expect(
+      inspection.getByText("The save is waiting on this regime"),
+    ).toBeVisible();
     await expect(
       inspection.getByText("This regime has no existing password."),
     ).toBeVisible();

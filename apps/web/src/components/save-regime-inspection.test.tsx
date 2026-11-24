@@ -1,8 +1,16 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
+import type { SaveInspection } from "@/lib/save-inspection";
 import { SaveRegimeInspection } from "./save-regime-inspection";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
@@ -296,7 +304,9 @@ it("shows names, current marker and ineligible explanations without a password c
   ).not.toBeInTheDocument();
   expect(screen.getByText("North Reach", { exact: true })).toBeInTheDocument();
   expect(screen.getByText("South Reach")).toBeInTheDocument();
-  expect(screen.getByText("Current regime")).toBeInTheDocument();
+  expect(
+    screen.getByText("The save is waiting on this regime"),
+  ).toBeInTheDocument();
   expect(screen.getByText("Eligible for password reset")).toBeInTheDocument();
   expect(
     screen.getByText("This regime has no existing password."),
@@ -415,3 +425,93 @@ it.each(["save-inspection", "password-reset"])(
     ).not.toBeInTheDocument();
   },
 );
+
+function inspectRegimes(regimes: SaveInspection["regimes"]) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) =>
+      Promise.resolve(
+        Response.json(
+          url.endsWith("save-inspection")
+            ? {
+                fileVersionId: "file",
+                contentRevision: 1,
+                sourceId: "source",
+                expectedSaveBaseline: "baseline",
+                regimes,
+              }
+            : { undo: null },
+        ),
+      ),
+    ),
+  );
+  render(
+    <SaveRegimeInspection
+      campaignId="campaign"
+      gameNumber={1}
+      canManagePasswords
+      hasSave
+    />,
+  );
+}
+
+function regime(
+  id: string,
+  name: string,
+  { current = false, eligible = true } = {},
+): SaveInspection["regimes"][number] {
+  return {
+    id,
+    name,
+    current,
+    eligible,
+    reason: eligible ? null : "This regime has no existing password.",
+  };
+}
+
+it("lists the regime the save is waiting on first and selects it without opening the editor", async () => {
+  inspectRegimes([
+    regime("north", "North Reach"),
+    regime("east", "East March"),
+    regime("south", "South Reach", { current: true }),
+  ]);
+  const items = await screen.findAllByRole("listitem");
+  expect(items.map((item) => item.textContent)).toEqual([
+    expect.stringContaining("South Reach"),
+    expect.stringContaining("North Reach"),
+    expect.stringContaining("East March"),
+  ]);
+  expect(items[0]).toHaveTextContent("The save is waiting on this regime");
+  expect(screen.queryByText("Current regime")).not.toBeInTheDocument();
+  expect(items[0]).toHaveAttribute("aria-current", "true");
+  expect(items[1]).not.toHaveAttribute("aria-current");
+  expect(
+    screen.queryByLabelText("Replacement password"),
+  ).not.toBeInTheDocument();
+});
+
+it("lists an ineligible waiting regime first with its reason and selects nothing", async () => {
+  inspectRegimes([
+    regime("north", "North Reach"),
+    regime("south", "South Reach", { current: true, eligible: false }),
+  ]);
+  const items = await screen.findAllByRole("listitem");
+  expect(items[0]).toHaveTextContent("South Reach");
+  expect(items[0]).toHaveTextContent("The save is waiting on this regime");
+  expect(items[0]).toHaveTextContent("This regime has no existing password.");
+  for (const item of items) expect(item).not.toHaveAttribute("aria-current");
+});
+
+it("still opens another eligible regime's editor with Edit Password", async () => {
+  inspectRegimes([
+    regime("north", "North Reach"),
+    regime("south", "South Reach", { current: true }),
+  ]);
+  const items = await screen.findAllByRole("listitem");
+  await userEvent.click(
+    within(items[1]).getByRole("button", { name: "Edit Password" }),
+  );
+  expect(screen.getByText("Reset password for North Reach")).toBeVisible();
+  expect(items[1]).toHaveAttribute("aria-current", "true");
+  expect(items[0]).not.toHaveAttribute("aria-current");
+});

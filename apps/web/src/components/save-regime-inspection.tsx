@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { fieldValue } from "@/lib/terminal-styles";
+import { cn } from "@/lib/utils";
 import { SavePasswordReset } from "./save-password-reset";
 import { SavePasswordUndo } from "./save-password-undo";
 
@@ -27,6 +28,13 @@ export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
     inspecting,
   } = workflow;
   const pending = workflow.pending !== null;
+  const regimes = [...(inspection?.regimes ?? [])].sort(
+    (first, second) => Number(second.current) - Number(first.current),
+  );
+  const highlighted =
+    selected ??
+    regimes.find((regime) => regime.current && regime.eligible)?.id ??
+    null;
   if (!canManagePasswords) return null;
   return (
     <Card
@@ -72,12 +80,20 @@ export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
         ) : null}
         {hasSave && inspection ? (
           <div aria-live="polite" className="space-y-3">
-            {inspection.regimes.length === 0 ? (
+            {regimes.length === 0 ? (
               <p>No human-controlled regimes were found.</p>
             ) : (
               <ul className="divide-y divide-terminal-400/20">
-                {inspection.regimes.map((regime) => (
-                  <li key={regime.id} className="space-y-2 py-3">
+                {regimes.map((regime) => (
+                  <li
+                    key={regime.id}
+                    aria-current={highlighted === regime.id ? true : undefined}
+                    className={cn(
+                      "space-y-2 border-l-2 border-l-transparent py-3 pl-3",
+                      highlighted === regime.id &&
+                        "border-l-terminal-400 bg-terminal-400/10",
+                    )}
+                  >
                     <div className="flex flex-wrap items-center gap-3">
                       <span
                         className={`min-w-0 max-w-full break-words ${fieldValue}`}
@@ -86,7 +102,7 @@ export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
                       </span>
                       {regime.current ? (
                         <span className="text-xs text-terminal-300/70">
-                          Current regime
+                          The save is waiting on this regime
                         </span>
                       ) : null}
                     </div>
