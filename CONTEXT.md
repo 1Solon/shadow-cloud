@@ -25,6 +25,10 @@ One player's play, from receiving the save to uploading the next one.
 **Round**:
 The turns in which every occupied seat plays once.
 
+**Vacant turn**:
+A turn whose player resigned during it. The turn stays on their now-empty seat, because the save is waiting on that seat's regime, until the Overlord fills the seat and the new occupant takes the turn. Unlike an open seat, a vacant turn is never skipped.
+_Avoid_: Empty active seat, stalled turn, orphaned turn
+
 **Save**:
 A Shadow Empire game file uploaded to a campaign at the end of a turn.
 

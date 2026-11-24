@@ -391,37 +391,6 @@ describe('membership intentions through real SQLite', () => {
     expect(await persistedState()).toEqual(before);
   });
 
-  it('wraps active resignation to the first occupied seat without advancing the round', async () => {
-    await fixture.db.turnState.update({
-      where: { gameId: 'game-1' },
-      data: { activePlayerId: 'user-4', activePlayerEntryId: 'seat-4' },
-    });
-    await fixture.db.turnRecord.update({
-      where: { id: 'turn-1' },
-      data: {
-        gamePlayerId: 'seat-4',
-        userId: 'user-4',
-        seatNumber: 4,
-        playerDisplayName: 'Fourth',
-      },
-    });
-    await mutations.resignPlayerFromDiscord({
-      ...resignation,
-      playerDiscordId: 'discord-4',
-    });
-    const after = await persistedState();
-    expect(after.turns[0]).toMatchObject({
-      activePlayerId: 'user-1',
-      activePlayerEntryId: 'seat-1',
-      roundNumber: 4,
-    });
-    expect(after.history.find((turn) => turn.endedAt === null)).toMatchObject({
-      gamePlayerId: 'seat-1',
-      roundNumber: 4,
-    });
-    expect(after.games[0].turnRevision).toBe(1);
-  });
-
   it('preserves missing campaign, absent membership, unauthorized caller, and seat-limit errors without writes', async () => {
     const before = await persistedState();
     await expect(
@@ -484,11 +453,14 @@ describe('membership intentions through real SQLite', () => {
           nextReminderAt: null,
           roundNumber: 4,
           playerDisplayName:
-            operation === 'replace' ? 'Replacement' : 'Renamed Overlord',
+            operation === 'replace'
+              ? 'Replacement'
+              : 'Vacant turn (seat 2)',
         });
-        expect(state.turns[0].activePlayerEntryId).toBe(
-          operation === 'replace' ? 'seat-1' : 'seat-2',
-        );
+        expect(state.turns[0]).toMatchObject({
+          activePlayerEntryId: 'seat-1',
+          activePlayerId: operation === 'replace' ? expect.any(String) : null,
+        });
         expect(state.games[0].turnRevision).toBe(1);
       });
 
@@ -820,9 +792,10 @@ describe('membership intentions through real SQLite', () => {
       AND (SELECT organizerId FROM Game WHERE id = NEW.gameId) = 'user-1'
       AND (SELECT userId FROM GamePlayer WHERE id = 'seat-1') IS NULL
       AND (SELECT role FROM GamePlayer WHERE id = 'seat-1') = 'PLAYER'
-      AND (SELECT activePlayerEntryId FROM TurnState WHERE gameId = NEW.gameId) = 'seat-2'
+      AND (SELECT activePlayerEntryId FROM TurnState WHERE gameId = NEW.gameId) = 'seat-1'
+      AND (SELECT activePlayerId FROM TurnState WHERE gameId = NEW.gameId) IS NULL
       AND (SELECT status FROM NotificationDelivery WHERE id = 'PENDING') = 'CANCELLED'
-      AND EXISTS (SELECT 1 FROM TurnRecord WHERE gamePlayerId = 'seat-2' AND endedAt IS NULL)
+      AND EXISTS (SELECT 1 FROM TurnRecord WHERE gamePlayerId = 'seat-1' AND userId IS NULL AND endedAt IS NULL)
       AND (SELECT completionReason FROM TurnRecord WHERE id = 'turn-1') = 'RESIGNED'
       BEGIN SELECT RAISE(ABORT, 'late resignation failure'); END`);
     const before = await persistedState();
@@ -900,12 +873,17 @@ describe('membership intentions through real SQLite', () => {
     },
   );
 
-  it('resigns the active player into the next occupied seat, ignoring open-seat indexes and retaining the round', async () => {
+  it('leaves a vacant turn on the active seat when its player resigns, in the same round', async () => {
     expect(await mutations.resignPlayerFromDiscord(resignation)).toEqual({
       gameId: 'game-1',
       slug: 'ashes',
       name: 'Ashes',
-      player: { displayName: 'Alpha', turnOrder: 2, wasOrganizer: false },
+      player: {
+        displayName: 'Alpha',
+        turnOrder: 2,
+        wasOrganizer: false,
+        turnVacant: true,
+      },
     });
     const state = await persistedState();
     expect(state.games[0]).toMatchObject({
@@ -917,18 +895,23 @@ describe('membership intentions through real SQLite', () => {
       turnOrder: 2,
     });
     expect(state.turns[0]).toMatchObject({
-      activePlayerEntryId: 'seat-2',
-      activePlayerId: 'user-2',
+      activePlayerEntryId: 'seat-1',
+      activePlayerId: null,
       roundNumber: 4,
     });
     expect(state.history).toHaveLength(2);
     const open = state.history.find((turn) => turn.endedAt === null)!;
     expect(open).toMatchObject({
-      gamePlayerId: 'seat-2',
-      userId: 'user-2',
+      gamePlayerId: 'seat-1',
+      userId: null,
+      seatNumber: 2,
       roundNumber: 4,
-      playerDisplayName: 'Overlord',
+      playerDisplayName: 'Vacant turn (seat 2)',
     });
+    expect(open.id).not.toBe('turn-1');
+    expect(open.nextReminderAt!.getTime() - open.startedAt.getTime()).toBe(
+      36 * 60 * 60 * 1000,
+    );
     expect(state.history.find((turn) => turn.id === 'turn-1')).toMatchObject({
       endedAt: open.startedAt,
       completionReason: 'RESIGNED',
@@ -946,7 +929,58 @@ describe('membership intentions through real SQLite', () => {
       playerEntryId: 'seat-1',
       turnOrder: 2,
       wasOrganizer: false,
-      turnAdvanced: true,
+      turnVacant: true,
+    });
+  });
+
+  it('gives the vacant turn to the player who fills its seat', async () => {
+    await mutations.resignPlayerFromDiscord(resignation);
+    expect(
+      await mutations.replacePlayerInSeat({ ...replacement, seatNumber: 2 }),
+    ).toMatchObject({
+      player: { displayName: 'Replacement', turnOrder: 2, tookActiveTurn: true },
+    });
+    const state = await persistedState();
+    const newUser = state.identities.find(
+      (identity) => identity.providerId === 'discord-3',
+    )!.userId;
+    expect(state.turns[0]).toMatchObject({
+      activePlayerEntryId: 'seat-1',
+      activePlayerId: newUser,
+      roundNumber: 4,
+    });
+    expect(state.history).toHaveLength(3);
+    expect(
+      state.history.find((turn) => turn.completionReason === 'REPLACED'),
+    ).toMatchObject({
+      gamePlayerId: 'seat-1',
+      userId: null,
+      playerDisplayName: 'Vacant turn (seat 2)',
+    });
+    expect(state.history.find((turn) => turn.endedAt === null)).toMatchObject({
+      gamePlayerId: 'seat-1',
+      userId: newUser,
+      roundNumber: 4,
+      playerDisplayName: 'Replacement',
+    });
+    expect(JSON.parse(state.audits.at(-1)!.payload)).toMatchObject({
+      tookActiveTurn: true,
+    });
+  });
+
+  it('leaves the active turn unchanged when a player who is not active resigns', async () => {
+    const before = await persistedState();
+    expect(
+      await mutations.resignPlayerFromDiscord({
+        ...resignation,
+        playerDiscordId: 'discord-4',
+      }),
+    ).toMatchObject({ player: { turnOrder: 4, turnVacant: false } });
+    const after = await persistedState();
+    expect(after.turns).toEqual(before.turns);
+    expect(after.history).toEqual(before.history);
+    expect(JSON.parse(after.audits[0].payload)).toMatchObject({
+      turnVacant: false,
     });
   });
 

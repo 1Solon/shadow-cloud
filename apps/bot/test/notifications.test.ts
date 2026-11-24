@@ -36,7 +36,10 @@ type TurnNudgeThreadIdIsRequired = Assert<
 >;
 type TurnNudgeActivePlayerIdIsRequired = Assert<
   IsExactly<
-    TurnNudgeNotificationPayload["turnRecord"]["activePlayer"]["discordId"],
+    Extract<
+      TurnNudgeNotificationPayload["turnRecord"],
+      { activePlayer: unknown }
+    >["activePlayer"]["discordId"],
     string
   >
 >;
@@ -687,6 +690,38 @@ describe("buildTurnNudgeNotificationMessage", () => {
     expect(rendered).not.toContain("**1 hours**");
     expect(rendered).not.toContain("@everyone");
     expect(rendered).not.toContain("@here");
+  });
+});
+
+describe("buildTurnNudgeNotificationMessage for a vacant turn", () => {
+  it("nudges only the Overlord to fill the seat the save is waiting on", () => {
+    const message = buildTurnNudgeNotificationMessage({
+      game: turnNudgePayload.game,
+      turnRecord: {
+        id: "turn-1",
+        roundNumber: 3,
+        startedAt: "2026-07-10T12:00:00.000Z",
+        elapsedHours: 25,
+        targetHours: 24,
+        vacantTurn: {
+          turnOrder: 2,
+          overlord: {
+            id: "user-9",
+            displayName: "Overlord",
+            discordId: "discord-9",
+          },
+        },
+      },
+    });
+    const rendered = JSON.stringify(message);
+
+    expect(message.allowedMentions).toEqual({ users: ["discord-9"] });
+    expect(rendered).toContain("<@discord-9>, seat 2's turn is vacant");
+    expect(rendered).toContain(
+      "The save is waiting on seat 2's regime, so no one can play this turn. Fill the seat with /replace.",
+    );
+    expect(rendered).toContain("**25 hours**");
+    expect(rendered).not.toContain("your turn needs attention");
   });
 });
 

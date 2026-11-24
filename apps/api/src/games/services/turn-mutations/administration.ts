@@ -275,19 +275,25 @@ export async function updateGameMetadata(
     }
     let seatsChanged = false;
     if (input.playerCount != null) {
-      const occupiedCount = game.players.filter(
-        (seat) => seat.userId != null,
+      const vacantTurnSeatId =
+        game.turnState && game.turnState.activePlayerId == null
+          ? game.turnState.activePlayerEntryId
+          : null;
+      const keptCount = game.players.filter(
+        (seat) => seat.userId != null || seat.id === vacantTurnSeatId,
       ).length;
-      if (input.playerCount < occupiedCount) {
+      if (input.playerCount < keptCount) {
         throw new BadRequestException(
-          `Seat limit cannot be lower than the ${occupiedCount} occupied seats in this game.`,
+          vacantTurnSeatId
+            ? `Seat limit cannot be lower than the ${keptCount} seats that are occupied or hold a vacant turn in this game.`
+            : `Seat limit cannot be lower than the ${keptCount} occupied seats in this game.`,
         );
       }
       const extraCount = game.players.length - input.playerCount;
       seatsChanged = extraCount !== 0;
       if (extraCount > 0) {
         const removable = game.players
-          .filter((seat) => seat.userId == null)
+          .filter((seat) => seat.userId == null && seat.id !== vacantTurnSeatId)
           .reverse()
           .slice(0, extraCount);
         await transaction.gamePlayer.deleteMany({

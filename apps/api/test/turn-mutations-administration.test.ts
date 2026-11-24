@@ -658,6 +658,49 @@ describe('atomic mixed metadata', () => {
     ]);
   });
 
+  async function vacateTheTurn() {
+    await fixture.db.gamePlayer.update({
+      where: { id: 'target-seat' },
+      data: { userId: null },
+    });
+    await fixture.db.turnState.update({
+      where: { gameId: 'game' },
+      data: { activePlayerId: null },
+    });
+    await fixture.db.turnRecord.update({
+      where: { id: 'turn' },
+      data: {
+        userId: null,
+        playerDisplayName: 'Vacant turn (seat 3)',
+      },
+    });
+  }
+
+  it('keeps the seat of a vacant turn when lowering the seat limit removes open seats', async () => {
+    await vacateTheTurn();
+    await mutations.updateGameMetadata('game', 'owner', { playerCount: 2 });
+    const after = await persisted();
+    expect(after.seats.map((seat) => seat.id)).toEqual([
+      'owner-seat',
+      'target-seat',
+    ]);
+    expect(after.states[0]).toMatchObject({
+      activePlayerId: null,
+      activePlayerEntryId: 'target-seat',
+    });
+  });
+
+  it('refuses a seat limit that would remove the seat of a vacant turn', async () => {
+    await vacateTheTurn();
+    const before = await persisted();
+    await expect(
+      mutations.updateGameMetadata('game', 'owner', { playerCount: 1 }),
+    ).rejects.toThrow(
+      'Seat limit cannot be lower than the 2 seats that are occupied or hold a vacant turn in this game.',
+    );
+    expect(await persisted()).toEqual(before);
+  });
+
   it('rejects occupied-seat truncation and duplicate campaign numbers atomically', async () => {
     await fixture.db.game.create({
       data: {

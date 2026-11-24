@@ -197,12 +197,12 @@ model GamePlayer {
 model TurnState {
   id                  String      @id @default(cuid())
   gameId              String      @unique
-  activePlayerId      String
+  activePlayerId      String?
   activePlayerEntryId String?
   roundNumber         Int         @default(1)
   updatedAt           DateTime    @updatedAt
   game                Game        @relation(fields: [gameId], references: [id], onDelete: Cascade)
-  activePlayer        User        @relation(fields: [activePlayerId], references: [id])
+  activePlayer        User?       @relation(fields: [activePlayerId], references: [id], onDelete: Restrict)
   activePlayerEntry   GamePlayer? @relation("ActivePlayerEntry", fields: [activePlayerEntryId], references: [id])
 }
 

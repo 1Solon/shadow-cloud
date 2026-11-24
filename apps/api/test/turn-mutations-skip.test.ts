@@ -196,7 +196,7 @@ describe('atomic skip through real SQLite', () => {
     expect(await fixture.db.auditEvent.count()).toBe(0);
   });
 
-  it('starts a distinct turn and advances revision when skips return to the same seat, occupant, and round', async () => {
+  it('starts a distinct turn and advances the round when skips wrap from the last occupied seat to the first', async () => {
     await mutations.skipPlayerTurn(intent);
     await mutations.skipPlayerTurn(intent);
     expect(
@@ -209,7 +209,7 @@ describe('atomic skip through real SQLite', () => {
     ).toMatchObject({
       activePlayerEntryId: 'seat-1',
       activePlayerId: 'user-1',
-      roundNumber: 4,
+      roundNumber: 5,
     });
     const records = await fixture.db.turnRecord.findMany({
       where: { gameId: 'game-1' },
@@ -220,7 +220,7 @@ describe('atomic skip through real SQLite', () => {
     expect(open[0]).toMatchObject({
       gamePlayerId: 'seat-1',
       userId: 'user-1',
-      roundNumber: 4,
+      roundNumber: 5,
     });
     expect(open[0].id).not.toBe('turn-1');
     expect(

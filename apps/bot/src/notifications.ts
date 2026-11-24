@@ -135,6 +135,14 @@ export type ThreadRenameNotificationPayload = {
   };
 };
 
+type TurnNudgeTiming = {
+  id: string;
+  roundNumber: number;
+  startedAt: string;
+  elapsedHours: number;
+  targetHours: number;
+};
+
 export type TurnNudgeNotificationPayload = {
   game: {
     id: string;
@@ -143,19 +151,21 @@ export type TurnNudgeNotificationPayload = {
     name: string;
     discordThreadId: string;
   };
-  turnRecord: {
-    id: string;
-    roundNumber: number;
-    startedAt: string;
-    elapsedHours: number;
-    targetHours: number;
-    activePlayer: {
-      id: string;
-      displayName: string;
-      discordId: string;
-      turnOrder: number;
-    };
-  };
+  turnRecord:
+    | (TurnNudgeTiming & {
+        activePlayer: {
+          id: string;
+          displayName: string;
+          discordId: string;
+          turnOrder: number;
+        };
+      })
+    | (TurnNudgeTiming & {
+        vacantTurn: {
+          turnOrder: number;
+          overlord: { id: string; displayName: string; discordId: string };
+        };
+      });
 };
 
 export type CampaignDeletedNotificationPayload = {
@@ -631,18 +641,27 @@ export function buildSaveReplacedNotificationMessage(
 export function buildTurnNudgeNotificationMessage(
   payload: TurnNudgeNotificationPayload,
 ): MessageCreateOptions {
-  const player = formatDiscordActor(
-    payload.turnRecord.activePlayer.displayName,
-    payload.turnRecord.activePlayer.discordId,
-  );
+  const { turnRecord } = payload;
   const hours = (value: number) => `${value} hour${value === 1 ? "" : "s"}`;
-  const startedAt = formatDiscordTimestamp(payload.turnRecord.startedAt);
+  const startedAt = formatDiscordTimestamp(turnRecord.startedAt);
+  const timing = `This turn has been active for **${hours(turnRecord.elapsedHours)}**, against a target of **${hours(turnRecord.targetHours)}**.`;
+  const metadata = startedAt ? [`-# ${startedAt}`] : [];
+
+  if ("vacantTurn" in turnRecord) {
+    const { overlord, turnOrder } = turnRecord.vacantTurn;
+    return buildDiscordNotification({
+      headline: `${formatDiscordActor(overlord.displayName, overlord.discordId)}, seat ${turnOrder}'s turn is vacant`,
+      message: `The save is waiting on seat ${turnOrder}'s regime, so no one can play this turn. Fill the seat with /replace. ${timing}`,
+      metadata,
+      mentionedUserIds: [overlord.discordId],
+    });
+  }
 
   return buildDiscordNotification({
-    headline: `${player}, your turn needs attention`,
-    message: `This turn has been active for **${hours(payload.turnRecord.elapsedHours)}**, against a target of **${hours(payload.turnRecord.targetHours)}**.`,
-    metadata: startedAt ? [`-# ${startedAt}`] : [],
-    mentionedUserIds: [payload.turnRecord.activePlayer.discordId],
+    headline: `${formatDiscordActor(turnRecord.activePlayer.displayName, turnRecord.activePlayer.discordId)}, your turn needs attention`,
+    message: timing,
+    metadata,
+    mentionedUserIds: [turnRecord.activePlayer.discordId],
   });
 }
 

@@ -79,7 +79,13 @@ export class TurnRemindersService implements OnModuleInit, OnModuleDestroy {
       const turnRecord = await transaction.turnRecord.findUnique({
         where: { id: turnRecordId },
         include: {
-          game: { include: { turnState: true, victoryRecord: true } },
+          game: {
+            include: {
+              turnState: true,
+              victoryRecord: true,
+              organizer: { include: { identities: true } },
+            },
+          },
           gamePlayer: {
             include: { user: { include: { identities: true } } },
           },
@@ -105,10 +111,10 @@ export class TurnRemindersService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
-      const activePlayer = turnRecord.gamePlayer;
-      const discordId = activePlayer?.user
-        ? getDiscordIdentity(activePlayer.user)
-        : null;
+      const seat = turnRecord.gamePlayer!;
+      const overlord = turnRecord.game.organizer;
+      const recipient = seat.user ?? overlord;
+      const discordId = getDiscordIdentity(recipient);
       const discordThreadId = turnRecord.game.discordThreadId;
       const missingDeliveryReason = !discordThreadId
         ? 'thread'
@@ -142,6 +148,15 @@ export class TurnRemindersService implements OnModuleInit, OnModuleDestroy {
         return;
       }
 
+      const timing = {
+        id: turnRecord.id,
+        roundNumber: turnRecord.roundNumber,
+        startedAt: turnRecord.startedAt.toISOString(),
+        elapsedHours: Math.floor(
+          (now.getTime() - turnRecord.startedAt.getTime()) / HOUR_MS,
+        ),
+        targetHours: turnRecord.game.turnTargetHours,
+      };
       const payload: TurnNudgeNotificationPayload = {
         game: {
           id: turnRecord.game.id,
@@ -150,21 +165,27 @@ export class TurnRemindersService implements OnModuleInit, OnModuleDestroy {
           name: turnRecord.game.name,
           discordThreadId,
         },
-        turnRecord: {
-          id: turnRecord.id,
-          roundNumber: turnRecord.roundNumber,
-          startedAt: turnRecord.startedAt.toISOString(),
-          elapsedHours: Math.floor(
-            (now.getTime() - turnRecord.startedAt.getTime()) / HOUR_MS,
-          ),
-          targetHours: turnRecord.game.turnTargetHours,
-          activePlayer: {
-            id: activePlayer!.userId!,
-            displayName: activePlayer!.user!.displayName,
-            discordId,
-            turnOrder: activePlayer!.turnOrder,
-          },
-        },
+        turnRecord: seat.user
+          ? {
+              ...timing,
+              activePlayer: {
+                id: seat.user.id,
+                displayName: seat.user.displayName,
+                discordId,
+                turnOrder: seat.turnOrder,
+              },
+            }
+          : {
+              ...timing,
+              vacantTurn: {
+                turnOrder: seat.turnOrder,
+                overlord: {
+                  id: overlord.id,
+                  displayName: overlord.displayName,
+                  discordId,
+                },
+              },
+            },
       };
 
       await transaction.notificationDelivery.create({
@@ -216,8 +237,8 @@ export class TurnRemindersService implements OnModuleInit, OnModuleDestroy {
     const { game, gamePlayer } = turnRecord;
 
     return (
-      gamePlayer?.userId != null &&
-      gamePlayer.user != null &&
+      gamePlayer != null &&
+      (gamePlayer.userId == null) === (gamePlayer.user == null) &&
       game.turnState?.activePlayerId === turnRecord.userId &&
       game.turnState.activePlayerEntryId === turnRecord.gamePlayerId &&
       game.turnState.roundNumber === turnRecord.roundNumber &&

@@ -360,7 +360,10 @@ const previewFactories: Record<DebugPreviewName, DebugPreviewFactory> = {
     buildRegistrationSubmittedReply("Debug World"),
   "resignation-complete": () => buildResignationCompleteReply("Debug World"),
   "resignation-announcement": (context) =>
-    buildResignationAnnouncement(context.userId, "Debug World", 2, true),
+    buildResignationAnnouncement(context.userId, "Debug World", 2, {
+      wasOrganizer: true,
+      turnVacant: true,
+    }),
   "seat-filled": (context) =>
     buildSeatFilledReply("Debug World", context.userDisplayName, 2),
   "seat-filled-announcement": (context) =>

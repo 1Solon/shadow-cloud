@@ -159,16 +159,19 @@ export function buildResignationAnnouncement(
   userId: string,
   gameName: string,
   turnOrder: number | string,
-  wasOrganizer: boolean,
+  { wasOrganizer, turnVacant }: { wasOrganizer: boolean; turnVacant: boolean },
 ): MessageCreateOptions {
   const mention = `<@${userId}>`;
   const organizerNote = wasOrganizer
     ? " They remain the Overlord until campaign control is transferred in the webui."
     : "";
+  const turnNote = turnVacant
+    ? ". Its turn is vacant until the Overlord fills the seat."
+    : " and will be skipped during turn rotation.";
 
   return buildDiscordNotification({
     headline: `${mention} resigned from ${gameName}`,
-    message: `**Seat ${turnOrder}** is now empty and will be skipped during turn rotation.${organizerNote}`,
+    message: `**Seat ${turnOrder}** is now empty${turnNote}${organizerNote}`,
     mentionedUserIds: [userId],
   });
 }

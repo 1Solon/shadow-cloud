@@ -126,6 +126,14 @@ export type ThreadRenameNotificationPayload = {
   };
 };
 
+type TurnNudgeTiming = {
+  id: string;
+  roundNumber: number;
+  startedAt: string;
+  elapsedHours: number;
+  targetHours: number;
+};
+
 export type TurnNudgeNotificationPayload = {
   game: {
     id: string;
@@ -134,19 +142,21 @@ export type TurnNudgeNotificationPayload = {
     name: string;
     discordThreadId: string;
   };
-  turnRecord: {
-    id: string;
-    roundNumber: number;
-    startedAt: string;
-    elapsedHours: number;
-    targetHours: number;
-    activePlayer: {
-      id: string;
-      displayName: string;
-      discordId: string;
-      turnOrder: number;
-    };
-  };
+  turnRecord:
+    | (TurnNudgeTiming & {
+        activePlayer: {
+          id: string;
+          displayName: string;
+          discordId: string;
+          turnOrder: number;
+        };
+      })
+    | (TurnNudgeTiming & {
+        vacantTurn: {
+          turnOrder: number;
+          overlord: { id: string; displayName: string; discordId: string };
+        };
+      });
 };
 
 export type CampaignDeletedNotificationPayload = {

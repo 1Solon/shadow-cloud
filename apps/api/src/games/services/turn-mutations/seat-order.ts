@@ -16,6 +16,7 @@ import type { ReorderSeatOrderDto } from '../../dto/reorder-seat-order.dto';
 import type { SeatOrderSnapshot } from '../../games.types';
 import { buildGameIdentifierWhere } from '../../support/game-lookup.helpers';
 import { assertCampaignInPlay } from '../../support/campaign-conclusion';
+import { isActiveSeat } from '../../support/turn-state.utils';
 import type { TurnRecordsService } from '../turn-records.service';
 import type { TurnMutationDependencies } from './dependencies';
 
@@ -247,13 +248,7 @@ export async function reorderSeatOrder(
 
     const turnState = game.turnState;
     const activeMatches = turnState
-      ? game.players.filter(
-          (seat) =>
-            seat.userId != null &&
-            (turnState.activePlayerEntryId != null
-              ? seat.id === turnState.activePlayerEntryId
-              : seat.userId === turnState.activePlayerId),
-        )
+      ? game.players.filter((seat) => isActiveSeat(seat, turnState))
       : [];
     const activeSeat = activeMatches.length === 1 ? activeMatches[0] : null;
     if (
@@ -290,15 +285,23 @@ export async function reorderSeatOrder(
       throw new BadRequestException(
         'Active player selection cannot be an empty seat.',
       );
+    const keptActiveSeat = reorderedSeats.find(
+      (seat) =>
+        seat.id === activeSeat?.id &&
+        (seat.userId != null || activeSeat.userId == null),
+    );
+    const laterOccupiedSeat = activeSeat
+      ? occupied.find((seat) => seat.turnOrder >= activeSeat.turnOrder)
+      : undefined;
     const nextActiveSeat =
-      explicitActiveEntry ??
-      reorderedSeats.find(
-        (seat) => seat.id === activeSeat?.id && seat.userId != null,
-      ) ??
-      (activeSeat
-        ? occupied.find((seat) => seat.turnOrder >= activeSeat.turnOrder)
-        : null) ??
-      occupied[0];
+      explicitActiveEntry ?? keptActiveSeat ?? laterOccupiedSeat ?? occupied[0];
+    const wrappedToFirstSeat =
+      !explicitActiveEntry &&
+      !keptActiveSeat &&
+      !laterOccupiedSeat &&
+      activeSeat != null;
+    const nextRoundNumber =
+      (turnState?.roundNumber ?? 1) + (wrappedToFirstSeat ? 1 : 0);
     const previousOrder = game.players.map((seat) => ({
       seatEntryId: seat.id,
       turnOrder: seat.turnOrder,
@@ -366,13 +369,14 @@ export async function reorderSeatOrder(
         data: {
           activePlayerId: nextActiveSeat.userId!,
           activePlayerEntryId: nextActiveSeat.id,
+          roundNumber: nextRoundNumber,
         },
       });
       await turnRecords.transitionTurn(transaction, {
         gameId: game.id,
         expectedCurrent: {
           gamePlayerId: activeSeat.id,
-          userId: activeSeat.userId!,
+          userId: activeSeat.userId,
           roundNumber: turnState.roundNumber,
         },
         next: {
@@ -380,7 +384,7 @@ export async function reorderSeatOrder(
           userId: nextActiveSeat.userId,
           seatNumber: nextActiveSeat.turnOrder,
           playerDisplayName: nextActiveSeat.user!.displayName,
-          roundNumber: turnState.roundNumber,
+          roundNumber: nextRoundNumber,
         },
         completionReason: TurnCompletionReason.REASSIGNED,
         transitionedAt: new Date(),
@@ -417,7 +421,7 @@ export async function reorderSeatOrder(
             discordThreadId: game.discordThreadId,
           },
           turn: {
-            roundNumber: turnState.roundNumber,
+            roundNumber: nextRoundNumber,
             activePlayer: {
               id: nextActiveSeat.userId!,
               displayName: nextActiveSeat.user!.displayName,

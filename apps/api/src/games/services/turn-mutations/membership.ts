@@ -15,6 +15,10 @@ import type { ReplaceDiscordPlayerDto } from '../../dto/replace-discord-player.d
 import type { ResignDiscordPlayerDto } from '../../dto/resign-discord-player.dto';
 import { upsertDiscordUser } from '../../support/discord-user.helpers';
 import { assertCampaignInPlay } from '../../support/campaign-conclusion';
+import {
+  vacantTurnDisplayName,
+  isActiveSeat,
+} from '../../support/turn-state.utils';
 import type { TurnRecordsService } from '../turn-records.service';
 
 async function findGame(
@@ -40,13 +44,7 @@ type MembershipGame = Awaited<ReturnType<typeof findGame>>;
 function activeSeat(game: MembershipGame) {
   if (!game.turnState) return null;
   const state = game.turnState;
-  const matches = game.players.filter(
-    (seat) =>
-      seat.userId != null &&
-      (state.activePlayerEntryId != null
-        ? seat.id === state.activePlayerEntryId
-        : seat.userId === state.activePlayerId),
-  );
+  const matches = game.players.filter((seat) => isActiveSeat(seat, state));
   if (matches.length !== 1 || matches[0].userId !== state.activePlayerId) {
     throw new ConflictException('The active turn could not be resolved.');
   }
@@ -277,21 +275,13 @@ export async function resignPlayerFromDiscord(
     }
     await turnRecords.assertCurrentTurn(transaction, game.id);
     const active = activeSeat(game);
-    const turnAdvanced = active?.id === seat.id;
+    const turnVacant = active?.id === seat.id;
     const wasOrganizer =
       seat.role === GameRole.ORGANIZER || game.organizerId === seat.userId;
-    if (turnAdvanced && game.turnState) {
-      const next =
-        occupied[
-          (occupied.findIndex((player) => player.id === seat.id) + 1) %
-            occupied.length
-        ];
+    if (turnVacant && game.turnState) {
       await transaction.turnState.update({
         where: { gameId: game.id },
-        data: {
-          activePlayerId: next.userId!,
-          activePlayerEntryId: next.id,
-        },
+        data: { activePlayerId: null, activePlayerEntryId: seat.id },
       });
       await turnRecords.transitionTurn(transaction, {
         gameId: game.id,
@@ -301,10 +291,10 @@ export async function resignPlayerFromDiscord(
           roundNumber: game.turnState.roundNumber,
         },
         next: {
-          gamePlayerId: next.id,
-          userId: next.userId,
-          seatNumber: next.turnOrder,
-          playerDisplayName: next.user!.displayName,
+          gamePlayerId: seat.id,
+          userId: null,
+          seatNumber: seat.turnOrder,
+          playerDisplayName: vacantTurnDisplayName(seat.turnOrder),
           roundNumber: game.turnState.roundNumber,
         },
         completionReason: TurnCompletionReason.RESIGNED,
@@ -326,7 +316,7 @@ export async function resignPlayerFromDiscord(
           playerEntryId: seat.id,
           turnOrder: seat.turnOrder,
           wasOrganizer,
-          turnAdvanced,
+          turnVacant,
         }),
       },
     });
@@ -338,6 +328,7 @@ export async function resignPlayerFromDiscord(
         displayName: seat.user!.displayName,
         turnOrder: seat.turnOrder,
         wasOrganizer,
+        turnVacant,
       },
     };
   });

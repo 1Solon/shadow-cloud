@@ -45,6 +45,11 @@ function createCandidate(overrides: Record<string, unknown> = {}) {
       turnReminderRepeatHours: 24,
       turnRemindersEnabled: true,
       victoryRecord: null,
+      organizer: {
+        id: 'user-9',
+        displayName: 'Overlord',
+        identities: [{ provider: 'discord', providerId: 'discord-9' }],
+      },
       turnState: {
         activePlayerId: 'user-1',
         activePlayerEntryId: 'seat-1',
@@ -243,6 +248,87 @@ describe('TurnRemindersService', () => {
         reason.includes('thread') ? 'thread' : 'identity'
       }.`,
     );
+  });
+
+  function vacantTurnCandidate(overlordIdentities = [
+    { provider: 'discord', providerId: 'discord-9' },
+  ]) {
+    const candidate = createCandidate();
+    return createCandidate({
+      userId: null,
+      game: {
+        ...candidate.game,
+        organizer: { ...candidate.game.organizer, identities: overlordIdentities },
+        turnState: { ...candidate.game.turnState, activePlayerId: null },
+      },
+      gamePlayer: { ...candidate.gamePlayer, userId: null, user: null },
+    });
+  }
+
+  it('nudges the Overlord, not a seated player, when the turn is vacant', async () => {
+    const transaction = createTransaction(vacantTurnCandidate());
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback(transaction),
+    );
+
+    await new TurnRemindersService().processTurnReminderCandidate('turn-1', now);
+
+    expect(transaction.turnRecord.updateMany).toHaveBeenCalledWith({
+      where: { id: 'turn-1', endedAt: null, nextReminderAt: dueAt },
+      data: {
+        reminderCount: { increment: 1 },
+        lastReminderAt: now,
+        nextReminderAt: new Date('2026-07-11T12:05:00.000Z'),
+      },
+    });
+    expect(transaction.notificationDelivery.create).toHaveBeenCalledWith({
+      data: {
+        event: 'TURN_NUDGE',
+        gameId: 'game-1',
+        gameSlug: 'the-game',
+        turnRecordId: 'turn-1',
+        payload: JSON.stringify({
+          game: {
+            id: 'game-1',
+            gameNumber: 42,
+            slug: 'the-game',
+            name: 'The Game',
+            discordThreadId: 'thread-1',
+          },
+          turnRecord: {
+            id: 'turn-1',
+            roundNumber: 4,
+            startedAt: '2026-07-09T00:00:00.000Z',
+            elapsedHours: 36,
+            targetHours: 24,
+            vacantTurn: {
+              turnOrder: 2,
+              overlord: {
+                id: 'user-9',
+                displayName: 'Overlord',
+                discordId: 'discord-9',
+              },
+            },
+          },
+        }),
+      },
+    });
+  });
+
+  it('sends nothing for a vacant turn when the Overlord has no Discord identity', async () => {
+    const transaction = createTransaction(vacantTurnCandidate([]));
+    prismaMock.$transaction.mockImplementation(async (callback) =>
+      callback(transaction),
+    );
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+    await new TurnRemindersService().processTurnReminderCandidate('turn-1', now);
+
+    expect(transaction.turnRecord.updateMany).toHaveBeenCalledWith({
+      where: { id: 'turn-1', endedAt: null, nextReminderAt: dueAt },
+      data: { nextReminderAt: new Date('2026-07-11T12:05:00.000Z') },
+    });
+    expect(transaction.notificationDelivery.create).not.toHaveBeenCalled();
   });
 
   it('neither claims nor nudges a turn left open in a concluded campaign', async () => {
