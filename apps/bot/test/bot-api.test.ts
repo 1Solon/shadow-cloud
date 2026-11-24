@@ -23,8 +23,7 @@ function buildInitInteraction(timingOptions: Record<string, number | null>) {
     },
     guildId: "guild-1",
     options: {
-      getString: (name: string) =>
-        name === "title" ? " The Game " : null,
+      getString: (name: string) => (name === "title" ? " The Game " : null),
       getInteger: (name: string) => {
         if (name === "number") {
           return 42;

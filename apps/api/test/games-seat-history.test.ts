@@ -31,9 +31,8 @@ vi.mock('../src/database', () => ({
   prisma: prismaMock,
 }));
 
-const { GamesQueryService } = await import(
-  '../src/games/services/games-query.service'
-);
+const { GamesQueryService } =
+  await import('../src/games/services/games-query.service');
 
 function createService() {
   return new GamesQueryService({} as never);

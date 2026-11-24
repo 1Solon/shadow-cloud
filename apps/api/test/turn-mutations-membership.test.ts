@@ -453,9 +453,7 @@ describe('membership intentions through real SQLite', () => {
           nextReminderAt: null,
           roundNumber: 4,
           playerDisplayName:
-            operation === 'replace'
-              ? 'Replacement'
-              : 'Vacant turn (seat 2)',
+            operation === 'replace' ? 'Replacement' : 'Vacant turn (seat 2)',
         });
         expect(state.turns[0]).toMatchObject({
           activePlayerEntryId: 'seat-1',
@@ -938,7 +936,11 @@ describe('membership intentions through real SQLite', () => {
     expect(
       await mutations.replacePlayerInSeat({ ...replacement, seatNumber: 2 }),
     ).toMatchObject({
-      player: { displayName: 'Replacement', turnOrder: 2, tookActiveTurn: true },
+      player: {
+        displayName: 'Replacement',
+        turnOrder: 2,
+        tookActiveTurn: true,
+      },
     });
     const state = await persistedState();
     const newUser = state.identities.find(
