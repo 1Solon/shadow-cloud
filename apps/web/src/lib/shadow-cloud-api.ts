@@ -125,6 +125,10 @@ export type GameDetail = {
   }>;
   fileVersions: GameDetailFileVersion[];
   rejectableSaveId: string | null;
+  saveSeatMismatch: {
+    expectedSeatNumber: number;
+    activeSeatNumber: number;
+  } | null;
   inactivityDeletionDueAt: string | null;
   openTurn: GameTurnRecord | null;
   recentCompletedTurns: GameTurnRecord[];

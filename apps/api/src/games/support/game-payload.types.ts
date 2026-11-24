@@ -1,3 +1,4 @@
+import type { SaveSeatMismatch } from './save-seat-mismatch';
 import type {
   ArmyCountPreset,
   GameDlcMode,
@@ -72,6 +73,7 @@ export type GameDetailResponse = TurnTimingPolicyResponse & {
     replacedByDisplayName: string | null;
   }>;
   rejectableSaveId: string | null;
+  saveSeatMismatch: SaveSeatMismatch | null;
   /** When the campaign is dormant, the moment its inactivity deletion is due. */
   inactivityDeletionDueAt: string | null;
   openTurn: TurnRecordResponse | null;

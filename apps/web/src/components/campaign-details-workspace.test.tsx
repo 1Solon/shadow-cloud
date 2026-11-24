@@ -30,9 +30,11 @@ vi.mock("@/components/campaign-briefing", () => ({
 
 vi.mock("@/components/campaign-configuration-shell", () => ({
   CampaignConfigurationShell: ({
+    initialSection,
     onExit,
     renderSection,
   }: {
+    initialSection?: string;
     onExit: () => void;
     renderSection: (
       section: "identity" | "world" | "turn-protocol" | "seat-order" | "notes",
@@ -43,7 +45,10 @@ vi.mock("@/components/campaign-configuration-shell", () => ({
     const [isDirty, setIsDirty] = useState(false);
 
     return (
-      <div data-testid="configuration-shell">
+      <div
+        data-testid="configuration-shell"
+        data-initial-section={initialSection ?? "identity"}
+      >
         <button disabled={isDirty} onClick={onExit}>
           Exit mock shell
         </button>
@@ -169,6 +174,34 @@ describe("CampaignDetailsWorkspace", () => {
     expect(
       screen.queryByRole("button", { name: "Configure campaign" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("can open straight to the Seat Order configuration for editors", () => {
+    render(
+      <CampaignDetailsWorkspace
+        {...props}
+        initialConfigurationSection="seat-order"
+      />,
+    );
+
+    expect(screen.getByTestId("configuration-shell")).toHaveAttribute(
+      "data-initial-section",
+      "seat-order",
+    );
+    expect(screen.queryByTestId("briefing")).not.toBeInTheDocument();
+  });
+
+  it("ignores a requested configuration section for viewers who cannot edit", () => {
+    render(
+      <CampaignDetailsWorkspace
+        {...props}
+        canEdit={false}
+        initialConfigurationSection="seat-order"
+      />,
+    );
+
+    expect(screen.getByTestId("briefing")).toBeInTheDocument();
+    expect(screen.queryByTestId("configuration-shell")).not.toBeInTheDocument();
   });
 
   it("opens configuration, hides briefing, and exits back to briefing", () => {

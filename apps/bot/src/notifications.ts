@@ -166,6 +166,7 @@ export type TurnNudgeNotificationPayload = {
           overlord: { id: string; displayName: string; discordId: string };
         };
       });
+  saveSeatMismatch?: { expectedSeatNumber: number; activeSeatNumber: number };
 };
 
 export type CampaignDeletedNotificationPayload = {
@@ -646,12 +647,16 @@ export function buildTurnNudgeNotificationMessage(
   const startedAt = formatDiscordTimestamp(turnRecord.startedAt);
   const timing = `This turn has been active for **${hours(turnRecord.elapsedHours)}**, against a target of **${hours(turnRecord.targetHours)}**.`;
   const metadata = startedAt ? [`-# ${startedAt}`] : [];
+  const mismatch = payload.saveSeatMismatch;
+  const mismatchWarning = mismatch
+    ? ` The latest save is waiting on seat ${mismatch.expectedSeatNumber}, but seat ${mismatch.activeSeatNumber} is the active seat. The Overlord can correct the active seat in Seat Order.`
+    : "";
 
   if ("vacantTurn" in turnRecord) {
     const { overlord, turnOrder } = turnRecord.vacantTurn;
     return buildDiscordNotification({
       headline: `${formatDiscordActor(overlord.displayName, overlord.discordId)}, seat ${turnOrder}'s turn is vacant`,
-      message: `The save is waiting on seat ${turnOrder}'s regime, so no one can play this turn. Fill the seat with /replace. ${timing}`,
+      message: `The save is waiting on seat ${turnOrder}'s regime, so no one can play this turn. Fill the seat with /replace. ${timing}${mismatchWarning}`,
       metadata,
       mentionedUserIds: [overlord.discordId],
     });
@@ -659,7 +664,7 @@ export function buildTurnNudgeNotificationMessage(
 
   return buildDiscordNotification({
     headline: `${formatDiscordActor(turnRecord.activePlayer.displayName, turnRecord.activePlayer.discordId)}, your turn needs attention`,
-    message: timing,
+    message: `${timing}${mismatchWarning}`,
     metadata,
     mentionedUserIds: [turnRecord.activePlayer.discordId],
   });

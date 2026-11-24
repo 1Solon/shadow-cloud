@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
   $transaction: vi.fn(async (callback) => callback(prismaMock)),
+  fileVersion: { findFirst: vi.fn(async () => null) },
   game: { findMany: vi.fn(), findFirst: vi.fn() },
   turnRecord: { findMany: vi.fn() },
   auditEvent: { findFirst: vi.fn() },

@@ -28,6 +28,7 @@ type CampaignDetailsWorkspaceProps = Omit<CampaignBriefingProps, "notes"> & {
   turnTargetHours: number;
   turnReminderGraceHours: number;
   turnReminderRepeatHours: number;
+  initialConfigurationSection?: CampaignConfigurationSection;
 };
 
 export function CampaignDetailsWorkspace(props: CampaignDetailsWorkspaceProps) {
@@ -40,7 +41,9 @@ export function CampaignDetailsWorkspace(props: CampaignDetailsWorkspaceProps) {
 }
 
 function CampaignDetailsWorkspaceContent(props: CampaignDetailsWorkspaceProps) {
-  const [mode, setMode] = useState<"briefing" | "configuration">("briefing");
+  const [mode, setMode] = useState<"briefing" | "configuration">(
+    props.initialConfigurationSection ? "configuration" : "briefing",
+  );
   const configurationEntryRef = useRef<HTMLDivElement>(null);
   const roster = useAcceptedRoster({
     players: props.players,
@@ -122,6 +125,7 @@ function CampaignDetailsWorkspaceContent(props: CampaignDetailsWorkspaceProps) {
         data-testid="campaign-configuration-entry"
       >
         <CampaignConfigurationShell
+          initialSection={props.initialConfigurationSection}
           onExit={() => setMode("briefing")}
           renderSection={renderSection}
         />

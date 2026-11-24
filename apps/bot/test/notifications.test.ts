@@ -693,6 +693,29 @@ describe("buildTurnNudgeNotificationMessage", () => {
   });
 });
 
+describe("buildTurnNudgeNotificationMessage during a save seat mismatch", () => {
+  it("says the latest save is waiting on a different seat", () => {
+    const rendered = JSON.stringify(
+      buildTurnNudgeNotificationMessage({
+        ...turnNudgePayload,
+        saveSeatMismatch: { expectedSeatNumber: 4, activeSeatNumber: 1 },
+      }),
+    );
+
+    expect(rendered).toContain(
+      "The latest save is waiting on seat 4, but seat 1 is the active seat.",
+    );
+  });
+
+  it("leaves a normal nudge without the warning", () => {
+    const rendered = JSON.stringify(
+      buildTurnNudgeNotificationMessage(turnNudgePayload),
+    );
+
+    expect(rendered).not.toContain("waiting on seat");
+  });
+});
+
 describe("buildTurnNudgeNotificationMessage for a vacant turn", () => {
   it("nudges only the Overlord to fill the seat the save is waiting on", () => {
     const message = buildTurnNudgeNotificationMessage({

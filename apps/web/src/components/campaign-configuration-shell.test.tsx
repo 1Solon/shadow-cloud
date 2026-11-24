@@ -21,9 +21,16 @@ const sections: Array<{
   { id: "notes", label: "Notes" },
 ];
 
-function Harness({ onExit = vi.fn() }: { onExit?: () => void }) {
+function Harness({
+  onExit = vi.fn(),
+  initialSection,
+}: {
+  onExit?: () => void;
+  initialSection?: CampaignConfigurationSection;
+}) {
   return (
     <CampaignConfigurationShell
+      initialSection={initialSection}
       onExit={onExit}
       renderSection={(section, { onDirtyChange }) => (
         <div>
@@ -70,6 +77,13 @@ describe("CampaignConfigurationShell", () => {
     expect(
       screen.getByText("[CONFIGURING: IDENTITY & PROGRESS]"),
     ).toBeVisible();
+  });
+
+  it("can start on the Seat Order editor", () => {
+    render(<Harness initialSection="seat-order" />);
+
+    expect(screen.getByText("editor:seat-order")).toBeInTheDocument();
+    expect(screen.queryByText("editor:identity")).not.toBeInTheDocument();
   });
 
   it("uses the standard card heading and description for configuration", () => {

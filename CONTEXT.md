@@ -32,6 +32,13 @@ _Avoid_: Empty active seat, stalled turn, orphaned turn
 **Save**:
 A Shadow Empire game file uploaded to a campaign at the end of a turn.
 
+**Expected seat**:
+The seat the latest save is waiting on. An upload sets it to the seat that receives the save, skipping that seat moves it on to the next seat, and rejecting a save returns it to the seat that gets the turn back. Filling a seat, a resignation, a Seat Order edit and skipping any other seat leave it where it is.
+
+**Save seat mismatch**:
+The active seat isn't the expected seat, so whoever holds the turn can't play the latest save. Shadow Cloud warns about it until the active seat is moved back or a new save is uploaded.
+_Avoid_: Wrong seat, desync
+
 **Save retention limit**:
 The number of most recent saves a campaign keeps; older saves are permanently deleted. One limit applies to every campaign.
 _Avoid_: Save cap, history limit, max saves

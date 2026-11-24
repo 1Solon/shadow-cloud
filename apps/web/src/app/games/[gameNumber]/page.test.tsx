@@ -5,6 +5,7 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
+import Link from "next/link";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AdministratorActionsCard } from "@/components/administrator-actions-card";
 import { CampaignDetailsWorkspace } from "@/components/campaign-details-workspace";
@@ -132,6 +133,7 @@ function createGame(overrides: Partial<GameDetail> = {}): GameDetail {
       }),
     ],
     rejectableSaveId: null,
+    saveSeatMismatch: null,
     inactivityDeletionDueAt: null,
     openTurn: createTurnRecord(),
     recentCompletedTurns: [
@@ -204,6 +206,7 @@ async function renderPage({
     message?: string;
     transferOutcome?: string | string[];
     transferRecovery?: string | string[];
+    configure?: string;
   };
 } = {}) {
   mocks.getGameDetail.mockResolvedValue(game);
@@ -289,6 +292,100 @@ describe("GameDetailPage workspace composition", () => {
     expect(
       elementChildren(page).find((element) => element.props.role === "alert"),
     ).toBeUndefined();
+  });
+
+  describe("save seat mismatch warning", () => {
+    const mismatchedGame = () =>
+      createGame({
+        saveSeatMismatch: { expectedSeatNumber: 4, activeSeatNumber: 2 },
+      });
+    const warningIn = (page: ReactNode) =>
+      elementChildren(page).find(
+        (element) => element.props["data-testid"] === "save-seat-mismatch",
+      );
+
+    it.each([
+      ["the Overlord", { id: "organizer-1", isShadowOverride: false }, false],
+      ["a Shadow Lord", { id: "shadow-1", isShadowOverride: true }, true],
+    ])(
+      "names both seats and links %s to Seat Order",
+      async (_viewer, user, shadowOverrideEnabled) => {
+        const warning = warningIn(
+          await renderPage({
+            game: mismatchedGame(),
+            session: { user },
+            shadowOverrideEnabled,
+          }),
+        );
+
+        expect(warning?.props.role).toBe("alert");
+        expect(
+          Children.toArray(warning?.props.children as ReactNode),
+        ).toContain(
+          "The latest save is waiting on seat 4, but seat 2 is the active seat.",
+        );
+        expect(findElementByType(warning, Link)?.props.href).toBe(
+          "/games/42?configure=seat-order",
+        );
+      },
+    );
+
+    it("names both seats for the active player without a Seat Order link", async () => {
+      const warning = warningIn(await renderPage({ game: mismatchedGame() }));
+
+      expect(Children.toArray(warning?.props.children as ReactNode)).toContain(
+        "The latest save is waiting on seat 4, but seat 2 is the active seat.",
+      );
+      expect(findElementByType(warning, Link)).toBeNull();
+    });
+
+    it.each([
+      ["another player", { user: { id: "player-9", isShadowOverride: false } }],
+      ["a signed-out visitor", null],
+    ])("is hidden from %s", async (_viewer, session) => {
+      expect(
+        warningIn(await renderPage({ game: mismatchedGame(), session })),
+      ).toBeUndefined();
+    });
+
+    it("opens Seat Order from its link for an editor", async () => {
+      const page = await renderPage({
+        session: { user: { id: "organizer-1", isShadowOverride: false } },
+        searchParams: { configure: "seat-order" },
+      });
+      const workspace = findElementByType(
+        page,
+        CampaignWorkspaceTabs,
+      ) as ReactElement<ComponentProps<typeof CampaignWorkspaceTabs>>;
+
+      expect(workspace.props.initialTabId).toBe("campaign");
+      expect(
+        findElementByType(workspace.props.campaign, CampaignDetailsWorkspace)
+          ?.props.initialConfigurationSection,
+      ).toBe("seat-order");
+    });
+
+    it("keeps the default tab when a non-editor follows the Seat Order link", async () => {
+      const page = await renderPage({
+        searchParams: { configure: "seat-order" },
+      });
+      const workspace = findElementByType(
+        page,
+        CampaignWorkspaceTabs,
+      ) as ReactElement<ComponentProps<typeof CampaignWorkspaceTabs>>;
+
+      expect(workspace.props.initialTabId).toBeUndefined();
+    });
+
+    it("is hidden when the latest save matches the active seat", async () => {
+      expect(
+        warningIn(
+          await renderPage({
+            session: { user: { id: "organizer-1", isShadowOverride: false } },
+          }),
+        ),
+      ).toBeUndefined();
+    });
   });
 
   it.each([
