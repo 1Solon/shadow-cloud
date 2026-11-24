@@ -71,6 +71,7 @@ export type GameDetailResponse = TurnTimingPolicyResponse & {
     idempotencyKey: string | null;
     replacedAt: string | null;
     replacedByDisplayName: string | null;
+    replacementReason: string | null;
   }>;
   rejectableSaveId: string | null;
   saveSeatMismatch: SaveSeatMismatch | null;

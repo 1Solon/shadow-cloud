@@ -7,19 +7,23 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { SaveInspection } from "@/lib/save-inspection";
 import { fieldLabel } from "@/lib/terminal-styles";
+import { SavePasswordReason, usePasswordReason } from "./save-password-reason";
 
 export function SavePasswordReset({
   regime,
   onCancel,
   onReset,
   pending,
+  requiresReason = false,
 }: {
   regime: SaveInspection["regimes"][number];
   onCancel: () => void;
-  onReset: (password: string) => Promise<void>;
+  onReset: (password: string, reason?: string) => Promise<void>;
   pending: boolean;
+  requiresReason?: boolean;
 }) {
   const [password, setPassword] = useState("");
+  const reason = usePasswordReason(requiresReason);
   const [reveal, setReveal] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   return (
@@ -27,9 +31,10 @@ export function SavePasswordReset({
       className="space-y-4 rounded-md border border-terminal-400/20 bg-terminal-400/5 p-4 text-sm text-terminal-300"
       onSubmit={(event) => {
         event.preventDefault();
-        if (!confirmed || pending) return;
-        void onReset(password);
+        if (!confirmed || pending || !reason.ready) return;
+        void onReset(password, reason.submitted);
         setPassword("");
+        reason.clear();
         setReveal(false);
         setConfirmed(false);
       }}
@@ -76,6 +81,14 @@ export function SavePasswordReset({
         />
         Reveal replacement password
       </Label>
+      {requiresReason ? (
+        <SavePasswordReason
+          label="Reason for resetting"
+          value={reason.value}
+          disabled={pending}
+          onChange={reason.setValue}
+        />
+      ) : null}
       <Label className="flex items-start gap-2">
         <Checkbox
           checked={confirmed}
@@ -92,12 +105,16 @@ export function SavePasswordReset({
           disabled={pending}
           onClick={() => {
             setPassword("");
+            reason.clear();
             onCancel();
           }}
         >
           Cancel
         </Button>
-        <Button type="submit" disabled={pending || !confirmed || !password}>
+        <Button
+          type="submit"
+          disabled={pending || !confirmed || !password || !reason.ready}
+        >
           {pending ? "Resetting password..." : "Reset password"}
         </Button>
       </div>

@@ -550,3 +550,77 @@ it.each(["campaign", "number", "save", "permission", "unmount"])(
     ).not.toBeInTheDocument();
   },
 );
+
+it("asks a Shadow Lord for a reason and sends it with the reset", async () => {
+  let reset = false;
+  const fetchMock = vi.fn((url: string, options?: RequestInit) => {
+    if (options?.method === "POST") reset = true;
+    return Promise.resolve(
+      Response.json(
+        options?.method === "POST"
+          ? receipt
+          : url.endsWith("save-inspection")
+            ? { ...inspection, contentRevision: reset ? 2 : 1 }
+            : { undo: null },
+      ),
+    );
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  render(
+    <SaveRegimeInspection
+      campaignId="campaign"
+      gameNumber={1}
+      canManagePasswords
+      requiresReason
+      hasSave
+      saveRevision="file:1"
+    />,
+  );
+  await openReset();
+  await userEvent.type(screen.getByLabelText("Replacement password"), "Secret");
+  await userEvent.click(
+    screen.getByLabelText(
+      "Reset the password for North Reach. I have read the restart warning.",
+    ),
+  );
+  const submit = screen.getByRole("button", { name: "Reset password" });
+  expect(submit).toBeDisabled();
+  await userEvent.type(
+    screen.getByLabelText("Reason for resetting"),
+    "Overlord approved in Discord",
+  );
+  await userEvent.click(submit);
+  await screen.findByRole("status");
+  const post = fetchMock.mock.calls.find(
+    ([, options]) => options?.method === "POST",
+  );
+  expect(JSON.parse(String(post?.[1]?.body))).toMatchObject({
+    reason: "Overlord approved in Discord",
+  });
+});
+
+it("does not ask the Overlord for a reason", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) =>
+      Promise.resolve(
+        Response.json(
+          url.endsWith("save-inspection") ? inspection : { undo: null },
+        ),
+      ),
+    ),
+  );
+  render(
+    <SaveRegimeInspection
+      campaignId="campaign"
+      gameNumber={1}
+      canManagePasswords
+      hasSave
+      saveRevision="file:1"
+    />,
+  );
+  await openReset();
+  expect(
+    screen.queryByLabelText("Reason for resetting"),
+  ).not.toBeInTheDocument();
+});

@@ -276,3 +276,38 @@ it("ignores obsolete recovery reads and aborts active reads on unmount", async (
   expect(signals.at(-1)?.aborted).toBe(true);
   expect(refresh).not.toHaveBeenCalled();
 });
+
+it("asks a Shadow Lord for a reason and sends it with the undo", async () => {
+  const fetchMock = vi.fn((url: string, options?: RequestInit) =>
+    Promise.resolve(
+      Response.json(
+        options?.method === "POST"
+          ? receipt
+          : url.endsWith("save-inspection")
+            ? inspection
+            : { undo },
+      ),
+    ),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  render(<SaveRegimeInspection {...identity} requiresReason />);
+  await confirmUndo();
+  const submit = screen.getByRole("button", { name: "Undo password reset" });
+  expect(submit).toBeDisabled();
+  await userEvent.type(
+    screen.getByLabelText("Reason for undoing"),
+    "Reset the wrong regime",
+  );
+  await userEvent.click(submit);
+  await waitFor(() =>
+    expect(
+      fetchMock.mock.calls.some(([, options]) => options?.method === "POST"),
+    ).toBe(true),
+  );
+  const post = fetchMock.mock.calls.find(
+    ([, options]) => options?.method === "POST",
+  );
+  expect(JSON.parse(String(post?.[1]?.body))).toMatchObject({
+    reason: "Reset the wrong regime",
+  });
+});

@@ -152,6 +152,15 @@ export function WorldStateHistoryCard({
                         fileVersion.replacedByDisplayName ? (
                           <>
                             {fileVersion.replacedByDisplayName}
+                            {fileVersion.replacementReason ? (
+                              <span
+                                className="line-clamp-2 text-xs text-terminal-300/70"
+                                title={fileVersion.replacementReason}
+                              >
+                                <span className="sr-only">Reason: </span>
+                                {fileVersion.replacementReason}
+                              </span>
+                            ) : null}
                             <span className="block text-xs text-terminal-300/70">
                               <LocalTimestamp
                                 compact

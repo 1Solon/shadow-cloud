@@ -9,6 +9,9 @@ const prismaMock = vi.hoisted(() => ({
   turnRecord: {
     findMany: vi.fn(async () => []),
   },
+  passwordReset: {
+    findMany: vi.fn(async () => []),
+  },
 }));
 
 vi.mock('../src/database', () => ({

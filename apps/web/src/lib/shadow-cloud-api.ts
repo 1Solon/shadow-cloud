@@ -47,6 +47,7 @@ export type GameDetailFileVersion = {
   idempotencyKey: string | null;
   replacedAt: string | null;
   replacedByDisplayName: string | null;
+  replacementReason: string | null;
 };
 
 export type TurnCompletionReason =

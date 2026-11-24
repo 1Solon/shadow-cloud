@@ -107,6 +107,7 @@ export async function POST(
           regimeId: body.regimeId,
           password: body.password,
           confirmed: true,
+          ...(typeof body.reason === "string" ? { reason: body.reason } : {}),
         }),
       },
     );

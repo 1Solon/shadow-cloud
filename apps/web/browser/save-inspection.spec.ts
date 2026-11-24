@@ -17,6 +17,7 @@ for (const action of ["reset", "undo"] as const) {
         idempotencyKey: null,
         replacedAt: null,
         replacedByDisplayName: null,
+        replacementReason: null,
       },
     ];
     let inspections = 0;
@@ -127,6 +128,7 @@ test("reset and undo feedback survives revision-changing campaign refreshes", as
     idempotencyKey: null,
     replacedAt: null as string | null,
     replacedByDisplayName: null as string | null,
+    replacementReason: null as string | null,
   };
   campaign.upstream.game.fileVersions = [file];
   let inspectionRequests = 0;
@@ -272,6 +274,7 @@ test("Overlord regime inspection renders on desktop and mobile without changing 
       idempotencyKey: null,
       replacedAt: null,
       replacedByDisplayName: null,
+      replacementReason: null,
     },
   ];
   // Thin visual check only. Signed proxy and real-storage operation are tested

@@ -77,6 +77,7 @@ function createFileVersion(
     idempotencyKey: "internal-idempotency-key",
     replacedAt: "2026-07-10T11:30:00.000Z",
     replacedByDisplayName: "Internal Operator",
+    replacementReason: null,
     ...overrides,
   };
 }

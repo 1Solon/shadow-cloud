@@ -42,6 +42,7 @@ export type ResetPasswordInput = {
   regimeId: string;
   password: string;
   confirmed: boolean;
+  reason?: string;
 };
 
 export type UndoPasswordResetInput = {
@@ -50,7 +51,24 @@ export type UndoPasswordResetInput = {
   outputRevision: number;
   expectedSaveBaseline: string;
   confirmed: boolean;
+  reason?: string;
 };
+
+export const MAX_PASSWORD_RESET_REASON_LENGTH = 500;
+
+function reasonUnlessOverlord(
+  overlordId: string,
+  userId: string,
+  reason: unknown,
+) {
+  if (overlordId === userId) return null;
+  const trimmed = typeof reason === 'string' ? reason.trim() : '';
+  if (!trimmed || trimmed.length > MAX_PASSWORD_RESET_REASON_LENGTH)
+    throw new BadRequestException(
+      `Give a reason of 1 to ${MAX_PASSWORD_RESET_REASON_LENGTH} characters, such as how the Overlord approved this.`,
+    );
+  return trimmed;
+}
 
 const activePlayerSelect = {
   select: {
@@ -275,6 +293,11 @@ export class SavePublication {
       throw new BadRequestException(
         'Confirm that undo restores the previous password.',
       );
+    const reason = reasonUnlessOverlord(
+      game.organizerId,
+      userId!,
+      input.reason,
+    );
     assertSaveBaseline(game, input.expectedSaveBaseline ?? '');
     if (
       !reset ||
@@ -352,6 +375,13 @@ export class SavePublication {
             'The staged save failed verification.',
           );
         await closeSaveRecovery(tx, game.id);
+        await tx.passwordReset.update({
+          where: { id: reset.id },
+          data: {
+            undoReason: reason,
+            undoRevision: file.contentRevision + 1,
+          },
+        });
         await tx.saveCleanup.upsert({
           where: { storagePath: file.storagePath },
           create: { storagePath: file.storagePath },
@@ -457,6 +487,7 @@ export class SavePublication {
       throw new BadRequestException(
         'Confirm the selected regime and restart warning.',
       );
+    const reason = reasonUnlessOverlord(game.organizerId, userId, input.reason);
     assertSaveBaseline(game, input.expectedSaveBaseline ?? '');
     const file = game.fileVersions[0];
     const conflict = () =>
@@ -549,6 +580,7 @@ export class SavePublication {
             actorId: userId,
             regimeId: regime.id,
             regimeName: regime.name,
+            reason,
           },
         });
         await tx.fileVersion.update({

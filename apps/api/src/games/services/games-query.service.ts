@@ -206,6 +206,7 @@ export class GamesQueryService {
       recentCompletedTurns,
       inactivityDeletionDueAt,
       saveSeatMismatch,
+      passwordResets,
     } = await prisma.$transaction(async (transaction) => {
       const game = await transaction.game.findFirst({
         where: {
@@ -266,6 +267,7 @@ export class GamesQueryService {
         recentCompletedTurns,
         inactivityDeletionDueAt,
         saveSeatMismatch,
+        passwordResets,
       ] = await Promise.all([
         transaction.turnRecord.findMany({
           where: { gameId: game.id, endedAt: null },
@@ -277,6 +279,21 @@ export class GamesQueryService {
         }),
         dormantCampaignDeletionDueAt(transaction, game),
         findSaveSeatMismatch(transaction, game.id),
+        transaction.passwordReset.findMany({
+          where: {
+            gameId: game.id,
+            fileVersionId: {
+              in: game.fileVersions.map((fileVersion) => fileVersion.id),
+            },
+          },
+          select: {
+            fileVersionId: true,
+            outputRevision: true,
+            reason: true,
+            undoRevision: true,
+            undoReason: true,
+          },
+        }),
       ]);
       return {
         game,
@@ -284,6 +301,7 @@ export class GamesQueryService {
         recentCompletedTurns,
         inactivityDeletionDueAt,
         saveSeatMismatch,
+        passwordResets,
       };
     });
     const openTurn = openTurns[0] ? mapTurnRecord(openTurns[0]) : null;
@@ -385,7 +403,9 @@ export class GamesQueryService {
           player.role === GameRole.ORGANIZER ||
           player.userId === game.organizerId,
       })),
-      fileVersions: game.fileVersions.map(buildGameDetailFileVersionPayload),
+      fileVersions: game.fileVersions.map((fileVersion) =>
+        buildGameDetailFileVersionPayload(fileVersion, passwordResets),
+      ),
       turnTargetHours: game.turnTargetHours,
       turnReminderGraceHours: game.turnReminderGraceHours,
       turnReminderRepeatHours: game.turnReminderRepeatHours,

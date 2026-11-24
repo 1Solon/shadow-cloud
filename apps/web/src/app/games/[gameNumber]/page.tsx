@@ -53,6 +53,8 @@ export default async function GameDetailPage({
     (session.user.id === game.organizerId ||
       (session.user.isShadowOverride && shadowOverrideEnabled)),
   );
+  const requiresPasswordReason =
+    canManagePasswords && session?.user?.id !== game.organizerId;
   const canEditSeatOrder = Boolean(
     session?.user?.id &&
     (session.user.id === game.organizerId ||
@@ -242,6 +244,7 @@ export default async function GameDetailPage({
               saveRevision={`${game.fileVersions[0]?.id}:${game.fileVersions[0]?.contentRevision}`}
               gameNumber={game.gameNumber}
               canManagePasswords={canManagePasswords}
+              requiresReason={requiresPasswordReason}
               hasSave={game.fileVersions.length > 0}
             />
           ) : undefined

@@ -181,6 +181,7 @@ it('enabled Shadow Override can inspect, reset, recover and undo without imperso
       regimeId: inspection.regimes[0].id,
       password: 'NewSecret',
       confirmed: true,
+      reason: 'Approved by the Overlord',
     },
     true,
   );
@@ -192,7 +193,7 @@ it('enabled Shadow Override can inspect, reset, recover and undo without imperso
   await service.undoPasswordReset(
     '1',
     'player',
-    { ...undo!, confirmed: true },
+    { ...undo!, confirmed: true, reason: 'Approved by the Overlord' },
     true,
   );
   expect(await service.getPasswordResetRecovery('1', 'player', true)).toEqual({
@@ -251,11 +252,16 @@ it.each(['reset', 'undo'] as const)(
     isUserShadowOverride.mockResolvedValueOnce(true).mockResolvedValue(false);
     await expect(
       operation === 'reset'
-        ? service.resetPassword('1', 'player', input, true)
+        ? service.resetPassword(
+            '1',
+            'player',
+            { ...input, reason: 'Approved' },
+            true,
+          )
         : service.undoPasswordReset(
             '1',
             'player',
-            { ...undo!, confirmed: true },
+            { ...undo!, confirmed: true, reason: 'Approved' },
             true,
           ),
     ).rejects.toMatchObject({ status: 403 });
@@ -1018,4 +1024,150 @@ it('reports missing archive configuration without accepting an unconfigured key'
   await expect(service.inspectLatestSave('1', 'overlord')).rejects.toThrow(
     'Save inspection is not configured on this server.',
   );
+});
+
+it('refuses a Shadow Lord reset without a reason and stores a given reason', async () => {
+  await seed();
+  isUserShadowOverride.mockResolvedValue(true);
+  const inspection = await service.inspectLatestSave('1', 'player', true);
+  const input = {
+    ...inspection,
+    regimeId: inspection.regimes[0].id,
+    password: 'NewSecret',
+    confirmed: true,
+  };
+  await expect(
+    service.resetPassword('1', 'player', input, true),
+  ).rejects.toMatchObject({ status: 400 });
+  await service.resetPassword(
+    '1',
+    'player',
+    { ...input, reason: '  Overlord approved in Discord  ' },
+    true,
+  );
+  expect(await fixture.db.passwordReset.findFirstOrThrow()).toMatchObject({
+    actorId: 'player',
+    reason: 'Overlord approved in Discord',
+  });
+});
+
+it('refuses a Shadow Lord undo without a reason and stores a given reason', async () => {
+  await seed();
+  await service.resetPassword('1', 'overlord', await resetInput());
+  isUserShadowOverride.mockResolvedValue(true);
+  const { undo } = await service.getPasswordResetRecovery('1', 'player', true);
+  await expect(
+    service.undoPasswordReset(
+      '1',
+      'player',
+      { ...undo!, confirmed: true },
+      true,
+    ),
+  ).rejects.toMatchObject({ status: 400 });
+  await service.undoPasswordReset(
+    '1',
+    'player',
+    { ...undo!, confirmed: true, reason: 'Overlord asked to restore it' },
+    true,
+  );
+  expect(await fixture.db.passwordReset.findFirstOrThrow()).toMatchObject({
+    reason: null,
+    undoReason: 'Overlord asked to restore it',
+  });
+});
+
+it('lets the Overlord reset and undo without a reason, ignoring any sent', async () => {
+  await seed();
+  await service.resetPassword('1', 'overlord', {
+    ...(await resetInput()),
+    reason: 'ignored',
+  });
+  const { undo } = await service.getPasswordResetRecovery('1', 'overlord');
+  await service.undoPasswordReset('1', 'overlord', {
+    ...undo!,
+    confirmed: true,
+  });
+  expect(await fixture.db.passwordReset.findFirstOrThrow()).toMatchObject({
+    reason: null,
+    undoReason: null,
+  });
+});
+
+it.each([
+  ['whitespace-only', ' \t\n '],
+  ['over-length', 'x'.repeat(501)],
+])('refuses a Shadow Lord reset with a %s reason', async (_label, reason) => {
+  await seed();
+  isUserShadowOverride.mockResolvedValue(true);
+  const inspection = await service.inspectLatestSave('1', 'player', true);
+  await expect(
+    service.resetPassword(
+      '1',
+      'player',
+      {
+        ...inspection,
+        regimeId: inspection.regimes[0].id,
+        password: 'NewSecret',
+        confirmed: true,
+        reason,
+      },
+      true,
+    ),
+  ).rejects.toMatchObject({ status: 400 });
+  expect(await fixture.db.passwordReset.count()).toBe(0);
+});
+
+it('exposes the reason for the latest correction of a save in save history', async () => {
+  await seed();
+  isUserShadowOverride.mockResolvedValue(true);
+  const inspection = await service.inspectLatestSave('1', 'player', true);
+  await service.resetPassword(
+    '1',
+    'player',
+    {
+      ...inspection,
+      regimeId: inspection.regimes[0].id,
+      password: 'NewSecret',
+      confirmed: true,
+      reason: 'Approved by the Overlord in Discord',
+    },
+    true,
+  );
+  const query = new GamesQueryService(storage);
+  expect((await query.getGameDetail('1')).fileVersions[0]).toMatchObject({
+    replacedByDisplayName: 'Player',
+    replacementReason: 'Approved by the Overlord in Discord',
+  });
+  const { undo } = await service.getPasswordResetRecovery('1', 'player', true);
+  await service.undoPasswordReset(
+    '1',
+    'player',
+    { ...undo!, confirmed: true, reason: 'Wrong regime' },
+    true,
+  );
+  expect((await query.getGameDetail('1')).fileVersions[0]).toMatchObject({
+    replacementReason: 'Wrong regime',
+  });
+});
+
+it.each([
+  ['whitespace-only', '   '],
+  ['over-length', 'x'.repeat(501)],
+])('refuses a Shadow Lord undo with a %s reason', async (_label, reason) => {
+  await seed();
+  await service.resetPassword('1', 'overlord', await resetInput());
+  isUserShadowOverride.mockResolvedValue(true);
+  const { undo } = await service.getPasswordResetRecovery('1', 'player', true);
+  await expect(
+    service.undoPasswordReset(
+      '1',
+      'player',
+      { ...undo!, confirmed: true, reason },
+      true,
+    ),
+  ).rejects.toMatchObject({ status: 400 });
+  expect(await fixture.db.passwordReset.findFirstOrThrow()).toMatchObject({
+    state: 'ACTIVE',
+    undoRevision: null,
+  });
 });

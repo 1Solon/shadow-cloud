@@ -63,6 +63,7 @@ function createFileVersion(
     idempotencyKey: null,
     replacedAt: null,
     replacedByDisplayName: null,
+    replacementReason: null,
     ...overrides,
   };
 }
@@ -303,5 +304,21 @@ describe("WorldStateHistoryCard", () => {
       screen.getByText("No campaign saves have been uploaded yet."),
     ).toHaveAttribute("role", "status");
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("shows a password reset's reason beside who corrected the save", () => {
+    renderHistory([
+      createFileVersion({
+        replacedAt: "2026-07-10T20:00:00.000Z",
+        replacedByDisplayName: "Shadow Lord",
+        replacementReason: "Overlord approved in Discord",
+      }),
+    ]);
+
+    const cell = screen
+      .getAllByRole("cell")
+      .find((element) => element.dataset.label === "Corrected");
+    expect(cell).toHaveTextContent("Shadow Lord");
+    expect(cell).toHaveTextContent("Overlord approved in Discord");
   });
 });

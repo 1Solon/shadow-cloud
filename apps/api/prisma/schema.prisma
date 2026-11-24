@@ -335,6 +335,9 @@ model PasswordReset {
   actorId           String
   regimeId          String
   regimeName        String
+  reason            String?
+  undoReason        String?
+  undoRevision      Int?
   state             String   @default("ACTIVE")
   createdAt         DateTime @default(now())
   closedAt          DateTime?

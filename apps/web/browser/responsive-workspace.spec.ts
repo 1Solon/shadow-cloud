@@ -40,6 +40,7 @@ for (const [layout, widths] of [
         idempotencyKey: null,
         replacedAt: null,
         replacedByDisplayName: null,
+        replacementReason: null,
       },
     ];
 

@@ -17,7 +17,7 @@ import { SavePasswordReset } from "./save-password-reset";
 import { SavePasswordUndo } from "./save-password-undo";
 
 export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
-  const { canManagePasswords, hasSave } = props;
+  const { canManagePasswords, hasSave, requiresReason = false } = props;
   const workflow = useSavePasswordWorkflow(props);
   const {
     success,
@@ -110,6 +110,7 @@ export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
                       <SavePasswordReset
                         regime={regime}
                         pending={pending}
+                        requiresReason={requiresReason}
                         onCancel={workflow.cancelReset}
                         onReset={workflow.resetPassword}
                       />
@@ -127,6 +128,7 @@ export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
           <SavePasswordUndo
             undo={workflow.recovery}
             pending={pending}
+            requiresReason={requiresReason}
             onUndo={workflow.undoPasswordReset}
             onCancel={workflow.cancelUndo}
           />
