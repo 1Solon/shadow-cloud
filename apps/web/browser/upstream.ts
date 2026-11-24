@@ -67,6 +67,7 @@ export async function startUpstream(secret: string) {
       rejectableSaveId: null,
       saveSeatMismatch: null,
       inactivityDeletionDueAt: null,
+      passwordResetApproval: null,
       openTurn: null,
       recentCompletedTurns: [],
     },

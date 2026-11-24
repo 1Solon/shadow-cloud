@@ -29,6 +29,8 @@ describe("selectDebugPreviewNames", () => {
       "save-replaced",
       "save-replaced-shadow-lord",
       "save-replaced-vacant-turn",
+      "save-replaced-player-set",
+      "password-reset-approved",
       "save-rejected",
       "turn-reminder",
       "campaign-deleted",
@@ -171,6 +173,11 @@ describe("buildDebugPreviews", () => {
       "save-replaced-vacant-turn",
       "is waiting for the Overlord to fill the empty seat.",
     ],
+    [
+      "save-replaced-player-set",
+      "set a new in-game password for **North Reach**",
+    ],
+    ["password-reset-approved", "you can set a new in-game password"],
   ] as const)("previews the %s password reset notice", (name, wording) => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-17T12:00:00.000Z"));

@@ -9,6 +9,7 @@ import {
   buildGameInitNotificationMessage,
   buildSaveNotificationMessage,
   buildSaveRejectedNotificationMessage,
+  buildPasswordResetApprovedNotificationMessage,
   buildSaveReplacedNotificationMessage,
   buildTurnNudgeNotificationMessage,
   buildCampaignDeletedNotificationMessage,
@@ -43,6 +44,8 @@ export const debugPreviewNames = [
   "save-replaced",
   "save-replaced-shadow-lord",
   "save-replaced-vacant-turn",
+  "save-replaced-player-set",
+  "password-reset-approved",
   "save-rejected",
   "turn-reminder",
   "campaign-deleted",
@@ -180,6 +183,16 @@ function buildDebugGame(context: DebugPreviewContext) {
   };
 }
 
+function debugGamePayload(fixture: ReturnType<typeof buildDebugGame>) {
+  return {
+    id: fixture.id,
+    gameNumber: fixture.gameNumber,
+    slug: fixture.slug,
+    name: fixture.name,
+    discordThreadId: fixture.discordThreadId,
+  };
+}
+
 function buildPasswordResetPreview(
   context: DebugPreviewContext,
   seatOccupied: boolean,
@@ -299,6 +312,47 @@ const previewFactories: Record<DebugPreviewName, DebugPreviewFactory> = {
     buildPasswordResetPreview(context, true),
   "save-replaced-vacant-turn": (context) =>
     buildPasswordResetPreview(context, false),
+  "save-replaced-player-set": (context) => {
+    const fixture = buildDebugGame(context);
+    return buildSaveReplacedNotificationMessage(
+      {
+        game: debugGamePayload(fixture),
+        activePlayer: fixture.activePlayer,
+        overlord: fixture.organizer,
+        replacement: {
+          contentRevision: 2,
+          versionId: "debug-version",
+          versionNumber: 7,
+          originalName: "42-T3-S1-Debug.se1",
+          replacedAt: "2026-07-17T12:30:00.000Z",
+          replacedBy: fixture.activePlayer,
+          passwordRecovery: {
+            operation: "reset",
+            regimeName: "North Reach",
+            actorRole: "player",
+            approverRole: "overlord",
+          },
+        },
+      },
+      context.webBaseUrl,
+    );
+  },
+  "password-reset-approved": (context) => {
+    const fixture = buildDebugGame(context);
+    return buildPasswordResetApprovedNotificationMessage(
+      {
+        game: debugGamePayload(fixture),
+        player: fixture.activePlayer,
+        approval: {
+          regimeName: "North Reach",
+          grantedAt: "2026-07-17T12:30:00.000Z",
+          approver: fixture.organizer,
+          approverRole: "overlord",
+        },
+      },
+      context.webBaseUrl,
+    );
+  },
   "save-rejected": (context) => {
     const fixture = buildDebugGame(context);
     return buildSaveRejectedNotificationMessage(

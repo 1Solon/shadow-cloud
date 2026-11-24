@@ -33,6 +33,7 @@ describe('buildGameDetailFileVersionPayload', () => {
       replacedAt: '2026-07-10T14:30:00.000Z',
       replacedByDisplayName: 'Vertëks',
       replacementReason: null,
+      replacementApproval: null,
     });
   });
 

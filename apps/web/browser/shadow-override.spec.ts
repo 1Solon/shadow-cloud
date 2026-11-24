@@ -21,6 +21,7 @@ test("Override reveals Regimes for a privileged non-Overlord and gates signed in
       replacedAt: null,
       replacedByDisplayName: null,
       replacementReason: null,
+      replacementApproval: null,
     },
   ];
   const initialGame = structuredClone(upstream.game);

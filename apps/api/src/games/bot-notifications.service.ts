@@ -61,16 +61,13 @@ export type SaveReplacedNotificationPayload = {
     displayName: string;
     discordId: string | null;
   } | null;
-  overlord?: {
-    id: string;
-    displayName: string;
-    discordId: string | null;
-  };
+  overlord?: NotifiedUser;
   replacement: {
     passwordRecovery?: {
       operation: 'reset' | 'undo';
       regimeName: string;
-      actorRole: 'overlord' | 'shadowLord';
+      actorRole: PasswordResetActorRole;
+      approverRole?: 'overlord' | 'shadowLord';
     };
     contentRevision: number;
     versionId: string;
@@ -82,6 +79,25 @@ export type SaveReplacedNotificationPayload = {
       displayName: string;
       discordId: string | null;
     };
+  };
+};
+
+export type NotifiedUser = {
+  id: string;
+  displayName: string;
+  discordId: string | null;
+};
+
+export type PasswordResetActorRole = 'overlord' | 'shadowLord' | 'player';
+
+export type PasswordResetApprovedNotificationPayload = {
+  game: UploadNotificationPayload['game'];
+  player: NotifiedUser;
+  approval: {
+    regimeName: string;
+    grantedAt: string;
+    approver: NotifiedUser;
+    approverRole: 'overlord' | 'shadowLord';
   };
 };
 
@@ -212,7 +228,8 @@ type NotificationEventName =
   | 'thread-rename'
   | 'turn-nudge'
   | 'campaign-deleted'
-  | 'inactivity-warning';
+  | 'inactivity-warning'
+  | 'password-reset-approved';
 
 type NotificationContext = {
   eventName: NotificationEventName;
@@ -322,6 +339,27 @@ export class BotNotificationsService implements OnModuleInit, OnModuleDestroy {
     this.logger.log(
       `Queued bot notification save-replaced for game ${payload.game.slug} (${payload.game.id}) as delivery ${delivery.id}.`,
     );
+  }
+
+  async enqueuePasswordResetApproved(
+    transaction: Prisma.TransactionClient,
+    payload: PasswordResetApprovedNotificationPayload,
+  ) {
+    if (!payload.game.discordThreadId) {
+      this.logger.warn(
+        `Skipping password-reset-approved notification for game ${payload.game.slug} (${payload.game.id}): discordThreadId is missing.`,
+      );
+      return;
+    }
+
+    await transaction.notificationDelivery.create({
+      data: {
+        event: NotificationDeliveryEvent.PASSWORD_RESET_APPROVED,
+        gameId: payload.game.id,
+        gameSlug: payload.game.slug,
+        payload: JSON.stringify(payload),
+      },
+    });
   }
 
   async enqueueSaveRejected(
@@ -609,6 +647,8 @@ export class BotNotificationsService implements OnModuleInit, OnModuleDestroy {
         return 'campaign-deleted';
       case NotificationDeliveryEvent.INACTIVITY_WARNING:
         return 'inactivity-warning';
+      case NotificationDeliveryEvent.PASSWORD_RESET_APPROVED:
+        return 'password-reset-approved';
     }
   }
 
@@ -632,6 +672,8 @@ export class BotNotificationsService implements OnModuleInit, OnModuleDestroy {
         return `${this.notificationBaseUrl}/notify/campaign-deleted`;
       case NotificationDeliveryEvent.INACTIVITY_WARNING:
         return `${this.notificationBaseUrl}/notify/inactivity-warning`;
+      case NotificationDeliveryEvent.PASSWORD_RESET_APPROVED:
+        return `${this.notificationBaseUrl}/notify/password-reset-approved`;
     }
   }
 

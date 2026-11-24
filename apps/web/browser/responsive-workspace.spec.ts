@@ -41,6 +41,7 @@ for (const [layout, widths] of [
         replacedAt: null,
         replacedByDisplayName: null,
         replacementReason: null,
+        replacementApproval: null,
       },
     ];
 

@@ -90,6 +90,7 @@ it.each(["Australia/Sydney", "America/New_York"])(
               replacedAt: endedAt,
               replacedByDisplayName: "Player",
               replacementReason: null,
+              replacementApproval: null,
             },
           ]}
         />

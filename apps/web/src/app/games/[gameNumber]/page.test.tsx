@@ -78,6 +78,7 @@ function createFileVersion(
     replacedAt: "2026-07-10T11:30:00.000Z",
     replacedByDisplayName: "Internal Operator",
     replacementReason: null,
+    replacementApproval: null,
     ...overrides,
   };
 }
@@ -136,6 +137,7 @@ function createGame(overrides: Partial<GameDetail> = {}): GameDetail {
     rejectableSaveId: null,
     saveSeatMismatch: null,
     inactivityDeletionDueAt: null,
+    passwordResetApproval: null,
     openTurn: createTurnRecord(),
     recentCompletedTurns: [
       createTurnRecord({
@@ -624,6 +626,48 @@ describe("GameDetailPage workspace composition", () => {
       );
       expect(inspection !== null).toBe(expected);
       if (inspection) expect(inspection.props.canManagePasswords).toBe(true);
+    },
+  );
+
+  it.each([
+    ["an open approval", "OPEN", "player-2", true],
+    ["an approval for another player", "OPEN", "player-3", false],
+    ["no approval", null, "player-2", false],
+  ] as const)(
+    "shows the active player the Regimes tab only with %s",
+    async (_label, state, playerId, expected) => {
+      const page = await renderPage({
+        game: createGame({
+          passwordResetApproval: state
+            ? {
+                id: "approval",
+                state,
+                regimeId: "north",
+                regimeName: "North Reach",
+                playerId,
+                playerDisplayName: "Rhea",
+                approverDisplayName: "Organizer",
+                approverRole: "overlord",
+                reason: null,
+                grantedAt: "2026-07-10T11:00:00.000Z",
+              }
+            : null,
+        }),
+      });
+      const workspace = findElementByType(
+        page,
+        CampaignWorkspaceTabs,
+      ) as ReactElement<ComponentProps<typeof CampaignWorkspaceTabs>>;
+      const inspection = findElementByType(
+        workspace.props.regimes,
+        SaveRegimeInspection,
+      );
+      expect(inspection !== null).toBe(expected);
+      if (inspection)
+        expect(inspection.props).toMatchObject({
+          canManagePasswords: false,
+          canSetApprovedPassword: true,
+        });
     },
   );
 

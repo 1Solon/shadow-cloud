@@ -9,8 +9,11 @@ import type {
 } from '../support/game-payload.types';
 import {
   SavePublication,
+  type GrantPasswordResetApprovalInput,
   type ResetPasswordInput,
+  type SetApprovedPasswordInput,
   type UndoPasswordResetInput,
+  type WithdrawPasswordResetApprovalInput,
 } from '../support/save-publication';
 import {
   pruneRetainedSaves,
@@ -18,8 +21,11 @@ import {
 } from '../support/save-retention';
 
 export type {
+  GrantPasswordResetApprovalInput,
   ResetPasswordInput,
+  SetApprovedPasswordInput,
   UndoPasswordResetInput,
+  WithdrawPasswordResetApprovalInput,
 } from '../support/save-publication';
 
 @Injectable()
@@ -129,6 +135,42 @@ export class GamesFileService {
       input,
       shadowOverrideEnabled,
     );
+  }
+
+  grantPasswordResetApproval(
+    gameId: string,
+    userId: string | undefined,
+    input: GrantPasswordResetApprovalInput,
+    shadowOverrideEnabled = false,
+  ) {
+    return this.publication.grantPasswordResetApproval(
+      gameId,
+      userId,
+      input,
+      shadowOverrideEnabled,
+    );
+  }
+
+  withdrawPasswordResetApproval(
+    gameId: string,
+    userId: string | undefined,
+    input: WithdrawPasswordResetApprovalInput,
+    shadowOverrideEnabled = false,
+  ) {
+    return this.publication.withdrawPasswordResetApproval(
+      gameId,
+      userId,
+      input,
+      shadowOverrideEnabled,
+    );
+  }
+
+  setApprovedPassword(
+    gameId: string,
+    userId: string | undefined,
+    input: SetApprovedPasswordInput,
+  ) {
+    return this.publication.setApprovedPassword(gameId, userId, input);
   }
 
   replaceSave(

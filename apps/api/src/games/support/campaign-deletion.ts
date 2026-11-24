@@ -52,6 +52,9 @@ export async function eraseCampaign(
     });
   }
   await transaction.passwordReset.deleteMany({ where: { gameId: game.id } });
+  await transaction.passwordResetApproval.deleteMany({
+    where: { gameId: game.id },
+  });
   await transaction.notificationDelivery.deleteMany({
     where: { gameId: game.id },
   });

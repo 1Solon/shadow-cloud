@@ -170,6 +170,42 @@ export class GamesService {
     );
   }
 
+  grantPasswordResetApproval(
+    gameId: string,
+    userId: string | undefined,
+    input: Parameters<GamesFileService['grantPasswordResetApproval']>[2],
+    shadowOverrideEnabled = false,
+  ) {
+    return this.gamesFile.grantPasswordResetApproval(
+      gameId,
+      userId,
+      input,
+      shadowOverrideEnabled,
+    );
+  }
+
+  withdrawPasswordResetApproval(
+    gameId: string,
+    userId: string | undefined,
+    input: Parameters<GamesFileService['withdrawPasswordResetApproval']>[2],
+    shadowOverrideEnabled = false,
+  ) {
+    return this.gamesFile.withdrawPasswordResetApproval(
+      gameId,
+      userId,
+      input,
+      shadowOverrideEnabled,
+    );
+  }
+
+  setApprovedPassword(
+    gameId: string,
+    userId: string | undefined,
+    input: Parameters<GamesFileService['setApprovedPassword']>[2],
+  ) {
+    return this.gamesFile.setApprovedPassword(gameId, userId, input);
+  }
+
   async downloadSave(gameId: string, fileVersionId: string) {
     return this.gamesQuery.downloadSave(gameId, fileVersionId);
   }

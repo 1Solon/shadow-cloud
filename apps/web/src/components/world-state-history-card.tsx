@@ -9,7 +9,10 @@ import {
   Card,
 } from "@/components/ui/card";
 import { canReplaceSaveFile } from "@/lib/save-file-replacement";
-import type { GameDetailFileVersion } from "@/lib/shadow-cloud-api";
+import {
+  approverRoleLabel,
+  type GameDetailFileVersion,
+} from "@/lib/shadow-cloud-api";
 import {
   tableCell,
   tableCurrentRow,
@@ -152,6 +155,22 @@ export function WorldStateHistoryCard({
                         fileVersion.replacedByDisplayName ? (
                           <>
                             {fileVersion.replacedByDisplayName}
+                            {fileVersion.replacementApproval ? (
+                              <span className="block text-xs text-terminal-300/70">
+                                approved by{" "}
+                                {
+                                  fileVersion.replacementApproval
+                                    .approverDisplayName
+                                }{" "}
+                                (
+                                {
+                                  approverRoleLabel[
+                                    fileVersion.replacementApproval.approverRole
+                                  ]
+                                }
+                                )
+                              </span>
+                            ) : null}
                             {fileVersion.replacementReason ? (
                               <span
                                 className="line-clamp-2 text-xs text-terminal-300/70"

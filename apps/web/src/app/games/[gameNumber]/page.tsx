@@ -53,6 +53,12 @@ export default async function GameDetailPage({
     (session.user.id === game.organizerId ||
       (session.user.isShadowOverride && shadowOverrideEnabled)),
   );
+  const approval = game.passwordResetApproval;
+  const canSetApprovedPassword = Boolean(
+    approval &&
+    session?.user?.id === approval.playerId &&
+    (approval.state === "USED" || isActivePlayer),
+  );
   const requiresPasswordReason =
     canManagePasswords && session?.user?.id !== game.organizerId;
   const canEditSeatOrder = Boolean(
@@ -237,15 +243,27 @@ export default async function GameDetailPage({
           />
         }
         regimes={
-          canManagePasswords ? (
+          canManagePasswords || canSetApprovedPassword ? (
             <SaveRegimeInspection
               key={game.id}
               campaignId={game.id}
               saveRevision={`${game.fileVersions[0]?.id}:${game.fileVersions[0]?.contentRevision}`}
+              saveBaseline={game.saveBaseline}
               gameNumber={game.gameNumber}
               canManagePasswords={canManagePasswords}
               requiresReason={requiresPasswordReason}
               hasSave={game.fileVersions.length > 0}
+              approval={game.passwordResetApproval}
+              canSetApprovedPassword={canSetApprovedPassword}
+              currentUserId={session?.user?.id ?? null}
+              activePlayer={
+                game.activePlayerUserId
+                  ? {
+                      userId: game.activePlayerUserId,
+                      displayName: game.activePlayerDisplayName,
+                    }
+                  : null
+              }
             />
           ) : undefined
         }

@@ -15,6 +15,7 @@ import {
   buildInactivityWarningNotificationMessage,
   buildSaveNotificationMessage,
   buildSaveRejectedNotificationMessage,
+  buildPasswordResetApprovedNotificationMessage,
   buildSaveReplacedNotificationMessage,
   buildTurnNudgeNotificationMessage,
 } from "../src/notifications.js";
@@ -732,6 +733,58 @@ describe("buildSaveReplacedNotificationMessage for password recovery", () => {
       });
     },
   );
+});
+
+describe("player-set in-game passwords", () => {
+  it("pings the active player when an approval is granted and links to the campaign", () => {
+    const message = buildPasswordResetApprovedNotificationMessage(
+      {
+        game: saveReplacedPayload.game,
+        player: saveReplacedPayload.activePlayer,
+        approval: {
+          regimeName: "North Reach",
+          grantedAt: "2026-07-10T14:30:00.000Z",
+          approver: saveReplacedPayload.replacement.replacedBy,
+          approverRole: "overlord",
+        },
+      },
+      "https://shadow.example",
+    );
+    const rendered = JSON.stringify(message);
+    expect(message.allowedMentions).toEqual({ users: ["discord-2"] });
+    expect(rendered).toContain("<@discord-2>");
+    expect(rendered).toContain("**North Reach**");
+    expect(rendered).toContain("The Overlord approved");
+    expect(rendered).toContain("https://shadow.example/games/42");
+  });
+
+  it("credits a player-set reset without a password or a restart instruction", () => {
+    const rendered = JSON.stringify(
+      buildSaveReplacedNotificationMessage(
+        {
+          ...saveReplacedPayload,
+          replacement: {
+            ...saveReplacedPayload.replacement,
+            replacedBy: {
+              ...saveReplacedPayload.activePlayer,
+            },
+            passwordRecovery: {
+              operation: "reset",
+              regimeName: "North Reach",
+              actorRole: "player",
+              approverRole: "shadowLord",
+            },
+          },
+        },
+        "https://example.test",
+      ),
+    );
+    expect(rendered).toContain(
+      "<@discord-2> set a new in-game password for **North Reach**, approved by a Shadow Lord.",
+    );
+    expect(rendered).not.toContain("restart");
+    expect(rendered).not.toMatch(/password[^s]*: /i);
+  });
 });
 
 describe("buildTurnNudgeNotificationMessage", () => {

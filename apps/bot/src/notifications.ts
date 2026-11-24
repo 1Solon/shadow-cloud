@@ -78,7 +78,8 @@ export type SaveReplacedNotificationPayload = {
     passwordRecovery?: {
       operation: "reset" | "undo";
       regimeName: string;
-      actorRole?: "overlord" | "shadowLord";
+      actorRole?: "overlord" | "shadowLord" | "player";
+      approverRole?: ApproverRole;
     };
     contentRevision: number;
     versionId: string;
@@ -90,6 +91,25 @@ export type SaveReplacedNotificationPayload = {
       displayName: string;
       discordId: string | null;
     };
+  };
+};
+
+type ApproverRole = "overlord" | "shadowLord";
+
+type NotifiedUser = {
+  id: string;
+  displayName: string;
+  discordId: string | null;
+};
+
+export type PasswordResetApprovedNotificationPayload = {
+  game: UploadNotificationPayload["game"];
+  player: NotifiedUser;
+  approval: {
+    regimeName: string;
+    grantedAt: string;
+    approver: NotifiedUser;
+    approverRole: ApproverRole;
   };
 };
 
@@ -635,6 +655,7 @@ export function buildSaveReplacedNotificationMessage(
     message: recovery
       ? passwordRecoveryMessage(
           recovery,
+          correctedBy,
           downloadUrl.toString(),
           payload.activePlayer != null,
         )
@@ -648,13 +669,28 @@ export function buildSaveReplacedNotificationMessage(
   });
 }
 
+function approverLabel(role: ApproverRole | undefined) {
+  return role === "shadowLord" ? "a Shadow Lord" : "the Overlord";
+}
+
 function passwordRecoveryMessage(
   recovery: NonNullable<
     SaveReplacedNotificationPayload["replacement"]["passwordRecovery"]
   >,
+  correctedBy: string,
   downloadUrl: string,
   seatOccupied: boolean,
 ) {
+  const regime = `**${escapeMarkdown(recovery.regimeName)}**`;
+  const unchanged =
+    "The latest save has been replaced; the turn has not advanced.";
+  if (recovery.actorRole === "player") {
+    const change =
+      recovery.operation === "reset"
+        ? `set a new in-game password for ${regime}, approved by ${approverLabel(recovery.approverRole)}.`
+        : `undid their password reset and restored the previous password for ${regime}.`;
+    return `${correctedBy} ${change} ${unchanged} The [updated save](${downloadUrl}) is ready to continue from.`;
+  }
   const actor =
     recovery.actorRole === "shadowLord" ? "A Shadow Lord" : "The Overlord";
   const change =
@@ -664,7 +700,35 @@ function passwordRecoveryMessage(
   const nextStep = seatOccupied
     ? `Download [the updated save](${downloadUrl}) before continuing. If you already started from the previous copy, restart from the updated save.`
     : `[The updated save](${downloadUrl}) is waiting for the Overlord to fill the empty seat.`;
-  return `${actor} ${change} for **${escapeMarkdown(recovery.regimeName)}**. The latest save has been replaced; the turn has not advanced. ${nextStep}`;
+  return `${actor} ${change} for ${regime}. ${unchanged} ${nextStep}`;
+}
+
+export function buildPasswordResetApprovedNotificationMessage(
+  payload: PasswordResetApprovedNotificationPayload,
+  webBaseUrl: string,
+): MessageCreateOptions {
+  const gameUrl = new URL(
+    `/games/${encodeURIComponent(String(payload.game.gameNumber))}`,
+    webBaseUrl,
+  ).toString();
+  const player = formatDiscordActor(
+    payload.player.displayName,
+    payload.player.discordId,
+  );
+  const grantedAt = formatDiscordTimestamp(payload.approval.grantedAt);
+  const approver = approverLabel(payload.approval.approverRole);
+
+  return buildDiscordNotification({
+    headline: `${player}, you can set a new in-game password`,
+    message: `${approver.charAt(0).toUpperCase()}${approver.slice(1)} approved you to set a new in-game password for **${escapeMarkdown(payload.approval.regimeName)}**, the regime the latest save is waiting on. Open the Regimes tab on [the campaign page](${gameUrl}) to set it. The approval ends if the latest save changes first.`,
+    details: [
+      `**Approved by:** ${escapeMarkdown(payload.approval.approver.displayName)}`,
+    ],
+    metadata: grantedAt ? [`-# ${grantedAt}`] : [],
+    mentionedUserIds: payload.player.discordId
+      ? [payload.player.discordId]
+      : [],
+  });
 }
 
 export function buildTurnNudgeNotificationMessage(
