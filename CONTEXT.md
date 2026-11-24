@@ -89,7 +89,7 @@ A nation inside a Shadow Empire game, controlled by a human or the game AI. A re
 The password protecting access to a human-controlled regime inside Shadow Empire, distinct from authentication to Shadow Cloud.
 
 **In-game password reset**:
-An Overlord-authorized replacement of a human-controlled regime's in-game password without requiring the old password or the affected player's approval.
+An Overlord-authorized replacement of a human-controlled regime's in-game password without requiring the old password or the affected player's approval. The Overlord does it from the campaign's Regimes tab.
 
 **Password reset approval**:
 The Overlord's single-use permission for the active player to set a new in-game password for the regime the latest save is waiting on. It ends once used, when the latest save changes, or when withdrawn.

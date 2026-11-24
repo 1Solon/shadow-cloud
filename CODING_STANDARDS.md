@@ -16,3 +16,7 @@ New identifiers, parameters, user-facing messages, test names and docs use the t
 - Web Overlord actions also admit a Shadow Lord under Shadow Override, through `isUserShadowOverride`.
 
 Flag any new hand-written comparison against `organizerId` that leaves out the Shadow Lord path.
+
+## API tests
+
+New API tests run against `createSqliteFixture` (`apps/api/test/support/sqlite-fixture.ts`) through the real services. Mock `../src/database` only for failure paths the fixture can't produce, such as a thrown database error.

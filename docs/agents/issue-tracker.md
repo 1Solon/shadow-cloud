@@ -56,6 +56,7 @@ duplicates.
 Implementation normally targets a child ticket, not its entire parent spec.
 An actionable ticket has `ready-for-agent`, is open, is unassigned or assigned
 to the user, and has no open blockers. Check live state before beginning.
+A ready-for-agent ticket's acceptance criteria are its agreed test seams.
 
 Record progress, decisions, and verification as issue comments. Keep triage
 labels separate from open/closed state. Do not close a parent spec when a
