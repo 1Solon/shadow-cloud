@@ -351,7 +351,9 @@ for (const renumber of [false, true]) {
           .first(),
       ).toBeVisible();
       await expect(page.getByRole("alertdialog")).toHaveCount(0);
-      expect(new URL(page.url()).pathname).toBe(`/games/${number}`);
+      await expect
+        .poll(() => new URL(page.url()).pathname)
+        .toBe(`/games/${number}`);
       await page.getByRole("tab", { name: "Campaign", exact: true }).click();
       if (committed) {
         await expect(
