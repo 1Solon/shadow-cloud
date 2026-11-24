@@ -105,7 +105,7 @@ A person who administers Shadow Cloud itself and may arm Shadow Override.
 _Avoid_: Administrator, admin, privileged user
 
 **Shadow Override**:
-A per-session mode in which a Shadow Lord holds an Overlord's authority in any campaign, plus the power to delete campaigns. Designating or undoing a victory from Discord needs no armed session; holding the Shadow Lord role is enough.
+A per-session mode in which a Shadow Lord holds an Overlord's authority in any campaign, plus the power to delete campaigns. Overlord-only Discord commands (/replace, /skip, /pin, /unpin, /winner and /unwinner) need no armed session; holding the Shadow Lord role is enough.
 _Avoid_: Override mode, admin mode
 
 **Registration preview**:
