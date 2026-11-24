@@ -7,6 +7,7 @@ import {
 import { NotificationDeliveryEvent, prisma, type Prisma } from '../../database';
 import type { TurnNudgeNotificationPayload } from '../bot-notifications.service';
 import { getDiscordIdentity } from '../support/discord-user.helpers';
+import { findSaveSeatMismatch } from '../support/save-seat-mismatch';
 import { calculateNextReminderAt } from '../support/turn-timing';
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -157,6 +158,10 @@ export class TurnRemindersService implements OnModuleInit, OnModuleDestroy {
         ),
         targetHours: turnRecord.game.turnTargetHours,
       };
+      const saveSeatMismatch = await findSaveSeatMismatch(
+        transaction,
+        turnRecord.game.id,
+      );
       const payload: TurnNudgeNotificationPayload = {
         game: {
           id: turnRecord.game.id,
@@ -186,6 +191,7 @@ export class TurnRemindersService implements OnModuleInit, OnModuleDestroy {
                 },
               },
             },
+        ...(saveSeatMismatch ? { saveSeatMismatch } : {}),
       };
 
       await transaction.notificationDelivery.create({

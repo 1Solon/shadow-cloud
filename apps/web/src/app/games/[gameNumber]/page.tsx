@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AdministratorActionsCard } from "@/components/administrator-actions-card";
 import { getServerAuthSession } from "@/auth";
@@ -24,6 +25,7 @@ type GamePageProps = {
     message?: string;
     transferOutcome?: string | string[];
     transferRecovery?: string | string[];
+    configure?: string | string[];
   }>;
 };
 
@@ -56,6 +58,9 @@ export default async function GameDetailPage({
     (session.user.id === game.organizerId ||
       (session.user.isShadowOverride && shadowOverrideEnabled)),
   );
+  const opensSeatOrder = canEditSeatOrder && query.configure === "seat-order";
+  const saveSeatMismatch =
+    isActivePlayer || canEditSeatOrder ? game.saveSeatMismatch : null;
   const canDeleteGame = Boolean(
     session?.user?.isShadowOverride && shadowOverrideEnabled,
   );
@@ -100,6 +105,27 @@ export default async function GameDetailPage({
           deleted on <LocalTimestamp timestamp={game.inactivityDeletionDueAt} />
           . Upload a save, skip a turn, or change the roster to keep it, and
           download any saves you want to keep.
+        </p>
+      ) : null}
+      {saveSeatMismatch ? (
+        <p
+          role="alert"
+          data-testid="save-seat-mismatch"
+          className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 font-mono text-sm text-destructive"
+        >
+          {`The latest save is waiting on seat ${saveSeatMismatch.expectedSeatNumber}, but seat ${saveSeatMismatch.activeSeatNumber} is the active seat.`}
+          {canEditSeatOrder ? (
+            <>
+              {" "}
+              <Link
+                className="underline underline-offset-2 hover:text-terminal-200"
+                href={`/games/${game.gameNumber}?configure=seat-order`}
+              >
+                Correct the active seat in Seat Order
+              </Link>
+              .
+            </>
+          ) : null}
         </p>
       ) : null}
       {transferNotice ? (
@@ -159,6 +185,8 @@ export default async function GameDetailPage({
       />
 
       <CampaignWorkspaceTabs
+        key={opensSeatOrder ? "seat-order" : "default"}
+        initialTabId={opensSeatOrder ? "campaign" : undefined}
         saves={
           <WorldStateHistoryCard
             saveBaseline={game.saveBaseline}
@@ -180,6 +208,9 @@ export default async function GameDetailPage({
         campaign={
           <CampaignDetailsWorkspace
             identityReadId={identityReadId}
+            initialConfigurationSection={
+              opensSeatOrder ? "seat-order" : undefined
+            }
             activePlayerEntryId={game.activePlayerEntryId}
             armyCount={game.armyCount}
             canEdit={canEditSeatOrder}

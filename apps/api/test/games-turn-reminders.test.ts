@@ -78,6 +78,7 @@ function createTransaction(candidate = createCandidate()) {
     notificationDelivery: {
       create: vi.fn(async () => ({ id: 'delivery-1' })),
     },
+    fileVersion: { findFirst: vi.fn(async () => null) },
   };
 }
 

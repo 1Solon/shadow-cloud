@@ -19,6 +19,7 @@ import { buildCanonicalThreadName } from '../support/game-configuration.helpers'
 import { buildGameDetailFileVersionPayload } from '../support/game-detail-file-version-payload';
 import { dormantCampaignDeletionDueAt } from '../support/campaign-inactivity';
 import { buildGameIdentifierWhere } from '../support/game-lookup.helpers';
+import { findSaveSeatMismatch } from '../support/save-seat-mismatch';
 import type {
   GameDetailResponse,
   TurnRecordResponse,
@@ -199,81 +200,92 @@ export class GamesQueryService {
   }
 
   async getGameDetail(gameId: string): Promise<GameDetailResponse> {
-    const { game, openTurns, recentCompletedTurns, inactivityDeletionDueAt } =
-      await prisma.$transaction(async (transaction) => {
-        const game = await transaction.game.findFirst({
-          where: {
-            ...buildGameIdentifierWhere(gameId),
-          },
-          include: {
-            organizer: true,
-            victoryRecord: { select: { id: true } },
-            players: {
-              include: {
-                user: true,
-              },
-              orderBy: {
-                turnOrder: 'asc',
-              },
+    const {
+      game,
+      openTurns,
+      recentCompletedTurns,
+      inactivityDeletionDueAt,
+      saveSeatMismatch,
+    } = await prisma.$transaction(async (transaction) => {
+      const game = await transaction.game.findFirst({
+        where: {
+          ...buildGameIdentifierWhere(gameId),
+        },
+        include: {
+          organizer: true,
+          victoryRecord: { select: { id: true } },
+          players: {
+            include: {
+              user: true,
             },
-            turnState: {
-              include: {
-                activePlayerEntry: {
-                  include: {
-                    user: true,
-                  },
+            orderBy: {
+              turnOrder: 'asc',
+            },
+          },
+          turnState: {
+            include: {
+              activePlayerEntry: {
+                include: {
+                  user: true,
                 },
               },
             },
-            fileVersions: {
-              include: {
-                uploadedBy: true,
-                replacedBy: true,
-              },
-              orderBy: {
-                versionNumber: 'desc',
-              },
-              take: resolveSaveRetentionLimit(),
+          },
+          fileVersions: {
+            include: {
+              uploadedBy: true,
+              replacedBy: true,
             },
-            auditEvents: {
-              where: {
-                eventType: {
-                  in: [
-                    AuditEventType.PLAYER_RESIGNED,
-                    AuditEventType.TURN_REASSIGNED,
-                  ],
-                },
+            orderBy: {
+              versionNumber: 'desc',
+            },
+            take: resolveSaveRetentionLimit(),
+          },
+          auditEvents: {
+            where: {
+              eventType: {
+                in: [
+                  AuditEventType.PLAYER_RESIGNED,
+                  AuditEventType.TURN_REASSIGNED,
+                ],
               },
-              orderBy: {
-                createdAt: 'desc',
-              },
+            },
+            orderBy: {
+              createdAt: 'desc',
             },
           },
-        });
-
-        if (!game) {
-          throw new NotFoundException(`Game ${gameId} was not found.`);
-        }
-
-        const [openTurns, recentCompletedTurns, inactivityDeletionDueAt] =
-          await Promise.all([
-            transaction.turnRecord.findMany({
-              where: { gameId: game.id, endedAt: null },
-            }),
-            transaction.turnRecord.findMany({
-              where: { gameId: game.id, endedAt: { not: null } },
-              orderBy: { endedAt: 'desc' },
-              take: 25,
-            }),
-            dormantCampaignDeletionDueAt(transaction, game),
-          ]);
-        return {
-          game,
-          openTurns,
-          recentCompletedTurns,
-          inactivityDeletionDueAt,
-        };
+        },
       });
+
+      if (!game) {
+        throw new NotFoundException(`Game ${gameId} was not found.`);
+      }
+
+      const [
+        openTurns,
+        recentCompletedTurns,
+        inactivityDeletionDueAt,
+        saveSeatMismatch,
+      ] = await Promise.all([
+        transaction.turnRecord.findMany({
+          where: { gameId: game.id, endedAt: null },
+        }),
+        transaction.turnRecord.findMany({
+          where: { gameId: game.id, endedAt: { not: null } },
+          orderBy: { endedAt: 'desc' },
+          take: 25,
+        }),
+        dormantCampaignDeletionDueAt(transaction, game),
+        findSaveSeatMismatch(transaction, game.id),
+      ]);
+      return {
+        game,
+        openTurns,
+        recentCompletedTurns,
+        inactivityDeletionDueAt,
+        saveSeatMismatch,
+      };
+    });
     const openTurn = openTurns[0] ? mapTurnRecord(openTurns[0]) : null;
     const latestSave = game.fileVersions[0];
     const rejectableSaveId =
@@ -380,6 +392,7 @@ export class GamesQueryService {
       turnRemindersEnabled: game.turnRemindersEnabled,
       currentTurnStartedAt: openTurn?.startedAt ?? null,
       rejectableSaveId,
+      saveSeatMismatch,
       inactivityDeletionDueAt: inactivityDeletionDueAt?.toISOString() ?? null,
       openTurn,
       recentCompletedTurns: recentCompletedTurns.map(mapTurnRecord),

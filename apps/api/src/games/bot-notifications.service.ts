@@ -10,6 +10,7 @@ import {
   prisma,
 } from '../database';
 import type { Prisma } from '../database';
+import type { SaveSeatMismatch } from './support/save-seat-mismatch';
 
 export type UploadNotificationPayload = {
   game: {
@@ -157,6 +158,7 @@ export type TurnNudgeNotificationPayload = {
           overlord: { id: string; displayName: string; discordId: string };
         };
       });
+  saveSeatMismatch?: SaveSeatMismatch;
 };
 
 export type CampaignDeletedNotificationPayload = {

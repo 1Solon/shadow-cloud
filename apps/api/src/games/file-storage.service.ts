@@ -28,6 +28,14 @@ function buildSaveFileName(input: {
   return `${input.gameNumber}-T${input.turn}-S${input.seat}-${sanitizedPlayerName}${extension}`;
 }
 
+export function renameSaveFilePlayer(fileName: string, playerName: string) {
+  const extension = extname(fileName);
+  const prefix = /^\d+-T\d+-S\d+-/.exec(fileName)?.[0];
+  if (!prefix || fileName.length <= prefix.length + extension.length)
+    return null;
+  return `${prefix}${sanitizeSegment(playerName)}${extension}`;
+}
+
 @Injectable()
 export class FileStorageService {
   private readonly rootDirectory = resolve(

@@ -28,6 +28,7 @@ export type CampaignEditorStateProps = {
 };
 
 type CampaignConfigurationShellProps = {
+  initialSection?: CampaignConfigurationSection;
   onExit: () => void;
   renderSection: (
     section: CampaignConfigurationSection,
@@ -47,11 +48,12 @@ const sections: Array<{
 ];
 
 export function CampaignConfigurationShell({
+  initialSection = "identity",
   onExit,
   renderSection,
 }: CampaignConfigurationShellProps) {
   const [activeSection, setActiveSection] =
-    useState<CampaignConfigurationSection>("identity");
+    useState<CampaignConfigurationSection>(initialSection);
   const [isDirty, setIsDirty] = useState(false);
   const configurationHeadingId = useId();
   const editorHeadingRef = useRef<HTMLHeadingElement>(null);

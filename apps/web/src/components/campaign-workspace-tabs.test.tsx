@@ -35,6 +35,23 @@ function renderWorkspace({ administration = false, regimes = false } = {}) {
 describe("CampaignWorkspaceTabs", () => {
   afterEach(cleanup);
 
+  it("can open on the Campaign tab", () => {
+    render(
+      <CampaignWorkspaceTabs
+        initialTabId="campaign"
+        saves={<p>Saves content</p>}
+        timing={<p>Timing content</p>}
+        campaign={<StatefulCampaign />}
+      />,
+    );
+
+    expect(screen.getByRole("tab", { name: "Campaign" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByLabelText("Notes draft")).toBeVisible();
+  });
+
   it("renders Saves and Timing in the workspace row with Saves initially selected", async () => {
     const user = userEvent.setup();
     renderWorkspace();

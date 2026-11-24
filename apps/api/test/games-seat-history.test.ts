@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 const prismaMock = vi.hoisted(() => ({
   $transaction: vi.fn(async (callback) => callback(prismaMock)),
+  fileVersion: { findFirst: vi.fn(async () => null) },
   game: {
     findFirst: vi.fn(),
   },

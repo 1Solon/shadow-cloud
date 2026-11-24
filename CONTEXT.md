@@ -32,6 +32,13 @@ _Avoid_: Empty active seat, stalled turn, orphaned turn
 **Save**:
 A Shadow Empire game file uploaded to a campaign at the end of a turn.
 
+**Expected seat**:
+The seat the latest save is waiting on. An upload sets it to the seat that receives the save, skipping that seat moves it on to the next seat, and rejecting a save returns it to the seat that gets the turn back. Filling a seat, a resignation, a Seat Order edit and skipping any other seat leave it where it is.
+
+**Save seat mismatch**:
+The active seat isn't the expected seat, so whoever holds the turn can't play the latest save. Shadow Cloud warns about it until the active seat is moved back or a new save is uploaded.
+_Avoid_: Wrong seat, desync
+
 **Save retention limit**:
 The number of most recent saves a campaign keeps; older saves are permanently deleted. One limit applies to every campaign.
 _Avoid_: Save cap, history limit, max saves
@@ -82,7 +89,7 @@ A nation inside a Shadow Empire game, controlled by a human or the game AI. A re
 The password protecting access to a human-controlled regime inside Shadow Empire, distinct from authentication to Shadow Cloud.
 
 **In-game password reset**:
-An Overlord-authorized replacement of a human-controlled regime's in-game password without requiring the old password or the affected player's approval.
+An Overlord-authorized replacement of a human-controlled regime's in-game password without requiring the old password or the affected player's approval. The Overlord does it from the campaign's Regimes tab.
 
 **Password reset approval**:
 The Overlord's single-use permission for the active player to set a new in-game password for the regime the latest save is waiting on. It ends once used, when the latest save changes, or when withdrawn.

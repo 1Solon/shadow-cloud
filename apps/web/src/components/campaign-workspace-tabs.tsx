@@ -7,6 +7,7 @@ type WorkspaceTabId =
   "saves" | "timing" | "campaign" | "regimes" | "administration";
 
 export type CampaignWorkspaceTabsProps = {
+  initialTabId?: WorkspaceTabId;
   saves: ReactNode;
   timing: ReactNode;
   campaign: ReactNode;
@@ -15,14 +16,18 @@ export type CampaignWorkspaceTabsProps = {
 };
 
 export function CampaignWorkspaceTabs({
+  initialTabId = "saves",
   saves,
   timing,
   campaign,
   regimes,
   administration,
 }: CampaignWorkspaceTabsProps) {
-  const [selectedTabId, setSelectedTabId] = useState<WorkspaceTabId>("saves");
-  const [mountedRegimes, setMountedRegimes] = useState(false);
+  const [selectedTabId, setSelectedTabId] =
+    useState<WorkspaceTabId>(initialTabId);
+  const [mountedRegimes, setMountedRegimes] = useState(
+    initialTabId === "regimes",
+  );
   const tabs: Array<{
     id: WorkspaceTabId;
     label: string;

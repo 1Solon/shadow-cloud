@@ -206,6 +206,9 @@ model TurnState {
   activePlayerEntry   GamePlayer? @relation("ActivePlayerEntry", fields: [activePlayerEntryId], references: [id])
 }
 
+/// Records close in turn order, so ordering by endedAt (open record last) gives the sequence of turns.
+/// startedAt is not a fixed link to the previous record's endedAt: resuming after a pause or a rejection moves the reopened record's startedAt forward by the time it was held.
+/// A turn started by an upload begins at the save's uploadedAt unless such a resume has since moved it.
 model TurnRecord {
   id                     String                 @id @default(cuid())
   gameId                 String
