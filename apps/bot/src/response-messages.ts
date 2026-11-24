@@ -166,12 +166,13 @@ export function buildResignationAnnouncement(
     ? " They remain the Overlord until campaign control is transferred in the webui."
     : "";
   const turnNote = turnVacant
-    ? ". Its turn is vacant until the Overlord fills the seat."
+    ? ". Its turn is vacant until the Overlord or a Shadow Lord fills the seat."
     : " and will be skipped during turn rotation.";
+  const fillNote = ` The Overlord or a Shadow Lord can fill the seat with \`/replace ${turnOrder} <player>\`. The new player may need the regime's in-game password reset, which the Overlord can do from the campaign's Regimes tab.`;
 
   return buildDiscordNotification({
     headline: `${mention} resigned from ${gameName}`,
-    message: `**Seat ${turnOrder}** is now empty${turnNote}${organizerNote}`,
+    message: `**Seat ${turnOrder}** is now empty${turnNote}${fillNote}${organizerNote}`,
     mentionedUserIds: [userId],
   });
 }

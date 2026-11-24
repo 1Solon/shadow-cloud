@@ -103,10 +103,32 @@ describe("response message builders", () => {
     );
 
     expect(renderedMessage).toContain(
-      "**Seat 2** is now empty. Its turn is vacant until the Overlord fills the seat.",
+      "**Seat 2** is now empty. Its turn is vacant until the Overlord or a Shadow Lord fills the seat.",
     );
     expect(renderedMessage).not.toContain("skipped during turn rotation");
   });
+
+  it.each([
+    ["the active player", true],
+    ["a waiting player", false],
+  ])(
+    "tells players who can fill the seat when %s resigns",
+    (_player, turnVacant) => {
+      const renderedMessage = rendered(
+        buildResignationAnnouncement("user-1", "Debug World", 3, {
+          wasOrganizer: false,
+          turnVacant,
+        }),
+      );
+
+      expect(renderedMessage).toContain(
+        "The Overlord or a Shadow Lord can fill the seat with `/replace 3 <player>`.",
+      );
+      expect(renderedMessage).toContain(
+        "The new player may need the regime's in-game password reset, which the Overlord can do from the campaign's Regimes tab.",
+      );
+    },
+  );
 
   it("emphasizes the resigned seat and directs transfers to the webui", () => {
     const renderedMessage = rendered(
