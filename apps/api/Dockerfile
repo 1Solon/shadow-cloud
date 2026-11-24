@@ -3,7 +3,10 @@ FROM node:24.22.3-bookworm-slim@sha256:dc26ae92c9fb15cf6b1d63e20f0944b2efe0f115b
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 
-RUN corepack enable
+# renovate: datasource=npm depName=corepack
+ARG COREPACK_VERSION=0.36.0
+RUN npm install --global corepack@$COREPACK_VERSION \
+  && corepack enable
 
 FROM base AS deps
 
