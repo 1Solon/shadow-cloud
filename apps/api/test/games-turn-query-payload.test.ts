@@ -6,6 +6,8 @@ const prismaMock = vi.hoisted(() => ({
   game: { findMany: vi.fn(), findFirst: vi.fn() },
   turnRecord: { findMany: vi.fn() },
   auditEvent: { findFirst: vi.fn() },
+  passwordReset: { findMany: vi.fn(async () => []) },
+  passwordResetApproval: { findFirst: vi.fn(async () => null) },
 }));
 
 vi.mock('../src/database', () => ({

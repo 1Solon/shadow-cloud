@@ -17,6 +17,8 @@ for (const action of ["reset", "undo"] as const) {
         idempotencyKey: null,
         replacedAt: null,
         replacedByDisplayName: null,
+        replacementReason: null,
+        replacementApproval: null,
       },
     ];
     let inspections = 0;
@@ -127,6 +129,8 @@ test("reset and undo feedback survives revision-changing campaign refreshes", as
     idempotencyKey: null,
     replacedAt: null as string | null,
     replacedByDisplayName: null as string | null,
+    replacementReason: null as string | null,
+    replacementApproval: null,
   };
   campaign.upstream.game.fileVersions = [file];
   let inspectionRequests = 0;
@@ -272,6 +276,8 @@ test("Overlord regime inspection renders on desktop and mobile without changing 
       idempotencyKey: null,
       replacedAt: null,
       replacedByDisplayName: null,
+      replacementReason: null,
+      replacementApproval: null,
     },
   ];
   // Thin visual check only. Signed proxy and real-storage operation are tested
@@ -346,7 +352,9 @@ test("Overlord regime inspection renders on desktop and mobile without changing 
     await expect(
       inspection.getByText("North Reach", { exact: true }),
     ).toBeVisible();
-    await expect(inspection.getByText("Current regime")).toBeVisible();
+    await expect(
+      inspection.getByText("The save is waiting on this regime"),
+    ).toBeVisible();
     await expect(
       inspection.getByText("This regime has no existing password."),
     ).toBeVisible();

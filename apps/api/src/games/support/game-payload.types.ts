@@ -1,4 +1,5 @@
 import type { SaveSeatMismatch } from './save-seat-mismatch';
+import type { PasswordResetApprovalPayload } from './password-reset-approval';
 import type {
   ArmyCountPreset,
   GameDlcMode,
@@ -71,11 +72,17 @@ export type GameDetailResponse = TurnTimingPolicyResponse & {
     idempotencyKey: string | null;
     replacedAt: string | null;
     replacedByDisplayName: string | null;
+    replacementReason: string | null;
+    replacementApproval: {
+      approverDisplayName: string;
+      approverRole: 'overlord' | 'shadowLord';
+    } | null;
   }>;
   rejectableSaveId: string | null;
   saveSeatMismatch: SaveSeatMismatch | null;
   /** When the campaign is dormant, the moment its inactivity deletion is due. */
   inactivityDeletionDueAt: string | null;
+  passwordResetApproval: PasswordResetApprovalPayload | null;
   openTurn: TurnRecordResponse | null;
   recentCompletedTurns: TurnRecordResponse[];
 };

@@ -13,11 +13,34 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { fieldValue } from "@/lib/terminal-styles";
+import { cn } from "@/lib/utils";
 import { SavePasswordReset } from "./save-password-reset";
 import { SavePasswordUndo } from "./save-password-undo";
+import {
+  ApprovedPasswordCard,
+  GrantPasswordApproval,
+  SavePasswordApprovalPanel,
+} from "./save-password-approval";
+import type { PasswordResetApproval } from "@/lib/shadow-cloud-api";
 
-export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
-  const { canManagePasswords, hasSave } = props;
+type SaveRegimeInspectionProps = PasswordWorkflowIdentity & {
+  approval?: PasswordResetApproval | null;
+  canSetApprovedPassword?: boolean;
+  currentUserId?: string | null;
+  activePlayer?: { userId: string; displayName: string } | null;
+  saveBaseline?: string;
+};
+
+export function SaveRegimeInspection(props: SaveRegimeInspectionProps) {
+  const {
+    canManagePasswords,
+    hasSave,
+    requiresReason = false,
+    approval = null,
+    canSetApprovedPassword = false,
+    currentUserId = null,
+    activePlayer = null,
+  } = props;
   const workflow = useSavePasswordWorkflow(props);
   const {
     success,
@@ -27,7 +50,24 @@ export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
     inspecting,
   } = workflow;
   const pending = workflow.pending !== null;
-  if (!canManagePasswords) return null;
+  const regimes = [...(inspection?.regimes ?? [])].sort(
+    (first, second) => Number(second.current) - Number(first.current),
+  );
+  const highlighted =
+    selected ??
+    regimes.find((regime) => regime.current && regime.eligible)?.id ??
+    null;
+  const openApproval = approval?.state === "OPEN" ? approval : null;
+  const approvablePlayer =
+    activePlayer && activePlayer.userId !== currentUserId ? activePlayer : null;
+  if (!canManagePasswords)
+    return approval && canSetApprovedPassword ? (
+      <ApprovedPasswordCard
+        approval={approval}
+        gameNumber={props.gameNumber}
+        saveBaseline={props.saveBaseline}
+      />
+    ) : null;
   return (
     <Card
       className="min-w-0 overflow-hidden font-mono text-sm text-terminal-300"
@@ -70,14 +110,28 @@ export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
             {error}
           </p>
         ) : null}
+        {openApproval ? (
+          <SavePasswordApprovalPanel
+            approval={openApproval}
+            gameNumber={props.gameNumber}
+          />
+        ) : null}
         {hasSave && inspection ? (
           <div aria-live="polite" className="space-y-3">
-            {inspection.regimes.length === 0 ? (
+            {regimes.length === 0 ? (
               <p>No human-controlled regimes were found.</p>
             ) : (
               <ul className="divide-y divide-terminal-400/20">
-                {inspection.regimes.map((regime) => (
-                  <li key={regime.id} className="space-y-2 py-3">
+                {regimes.map((regime) => (
+                  <li
+                    key={regime.id}
+                    aria-current={highlighted === regime.id ? true : undefined}
+                    className={cn(
+                      "space-y-2 border-l-2 border-l-transparent py-3 pl-3",
+                      highlighted === regime.id &&
+                        "border-l-terminal-400 bg-terminal-400/10",
+                    )}
+                  >
                     <div className="flex flex-wrap items-center gap-3">
                       <span
                         className={`min-w-0 max-w-full break-words ${fieldValue}`}
@@ -86,7 +140,7 @@ export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
                       </span>
                       {regime.current ? (
                         <span className="text-xs text-terminal-300/70">
-                          Current regime
+                          The save is waiting on this regime
                         </span>
                       ) : null}
                     </div>
@@ -95,21 +149,33 @@ export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
                         ? "Eligible for password reset"
                         : regime.reason}
                     </p>
-                    {regime.eligible ? (
-                      <Button
-                        className="max-w-full"
-                        type="button"
-                        variant="outline"
-                        disabled={pending || selected !== null}
-                        onClick={() => workflow.selectRegime(regime.id)}
-                      >
-                        Edit Password
-                      </Button>
+                    {regime.eligible && openApproval?.regimeId !== regime.id ? (
+                      <div className="flex flex-wrap gap-3">
+                        <Button
+                          className="max-w-full"
+                          type="button"
+                          variant="outline"
+                          disabled={pending || selected !== null}
+                          onClick={() => workflow.selectRegime(regime.id)}
+                        >
+                          Edit Password
+                        </Button>
+                        {regime.current && !openApproval && approvablePlayer ? (
+                          <GrantPasswordApproval
+                            inspection={inspection}
+                            playerDisplayName={approvablePlayer.displayName}
+                            gameNumber={props.gameNumber}
+                            requiresReason={requiresReason}
+                            disabled={pending || selected !== null}
+                          />
+                        ) : null}
+                      </div>
                     ) : null}
                     {selected === regime.id ? (
                       <SavePasswordReset
                         regime={regime}
                         pending={pending}
+                        requiresReason={requiresReason}
                         onCancel={workflow.cancelReset}
                         onReset={workflow.resetPassword}
                       />
@@ -127,6 +193,7 @@ export function SaveRegimeInspection(props: PasswordWorkflowIdentity) {
           <SavePasswordUndo
             undo={workflow.recovery}
             pending={pending}
+            requiresReason={requiresReason}
             onUndo={workflow.undoPasswordReset}
             onCancel={workflow.cancelUndo}
           />

@@ -63,6 +63,8 @@ function createFileVersion(
     idempotencyKey: null,
     replacedAt: null,
     replacedByDisplayName: null,
+    replacementReason: null,
+    replacementApproval: null,
     ...overrides,
   };
 }
@@ -303,5 +305,43 @@ describe("WorldStateHistoryCard", () => {
       screen.getByText("No campaign saves have been uploaded yet."),
     ).toHaveAttribute("role", "status");
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("shows a password reset's reason beside who corrected the save", () => {
+    renderHistory([
+      createFileVersion({
+        replacedAt: "2026-07-10T20:00:00.000Z",
+        replacedByDisplayName: "Shadow Lord",
+        replacementReason: "Overlord approved in Discord",
+        replacementApproval: null,
+      }),
+    ]);
+
+    const cell = screen
+      .getAllByRole("cell")
+      .find((element) => element.dataset.label === "Corrected");
+    expect(cell).toHaveTextContent("Shadow Lord");
+    expect(cell).toHaveTextContent("Overlord approved in Discord");
+  });
+
+  it("shows who set and who approved a player-set password, with a Shadow Lord's reason", () => {
+    renderHistory([
+      createFileVersion({
+        replacedAt: "2026-07-10T20:00:00.000Z",
+        replacedByDisplayName: "Alice",
+        replacementReason: "Overlord away this week",
+        replacementApproval: {
+          approverDisplayName: "Bob",
+          approverRole: "shadowLord",
+        },
+      }),
+    ]);
+
+    const cell = screen
+      .getAllByRole("cell")
+      .find((element) => element.dataset.label === "Corrected");
+    expect(cell).toHaveTextContent("Alice");
+    expect(cell).toHaveTextContent("approved by Bob (Shadow Lord)");
+    expect(cell).toHaveTextContent("Overlord away this week");
   });
 });

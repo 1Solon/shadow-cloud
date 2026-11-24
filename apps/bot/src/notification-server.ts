@@ -15,6 +15,8 @@ import {
   type GameInitializedNotificationPayload,
   type SaveRejectedNotificationPayload,
   type SaveReplacedNotificationPayload,
+  type PasswordResetApprovedNotificationPayload,
+  buildPasswordResetApprovedNotificationMessage,
   type ThreadRenameNotificationPayload,
   type TurnNudgeNotificationPayload,
   type UploadNotificationPayload,
@@ -134,6 +136,8 @@ export function startNotificationServer(
     const isCampaignDeletedRequest = request.url === "/notify/campaign-deleted";
     const isInactivityWarningRequest =
       request.url === "/notify/inactivity-warning";
+    const isPasswordResetApprovedRequest =
+      request.url === "/notify/password-reset-approved";
 
     if (request.method === "GET" && request.url === "/health") {
       response.writeHead(200).end("ok");
@@ -150,7 +154,8 @@ export function startNotificationServer(
         !isTurnNudgeRequest &&
         !isActivePlayerChangedRequest &&
         !isCampaignDeletedRequest &&
-        !isInactivityWarningRequest)
+        !isInactivityWarningRequest &&
+        !isPasswordResetApprovedRequest)
     ) {
       response.writeHead(404).end("Not found");
       return;
@@ -179,7 +184,8 @@ export function startNotificationServer(
         | ThreadRenameNotificationPayload
         | TurnNudgeNotificationPayload
         | CampaignDeletedNotificationPayload
-        | InactivityWarningNotificationPayload;
+        | InactivityWarningNotificationPayload
+        | PasswordResetApprovedNotificationPayload;
 
       if (!payload.game.discordThreadId) {
         response.writeHead(202).end("No thread configured");
@@ -240,6 +246,11 @@ export function startNotificationServer(
       } else if (isInactivityWarningRequest) {
         notificationMessage = buildInactivityWarningNotificationMessage(
           payload as InactivityWarningNotificationPayload,
+          webBaseUrl,
+        );
+      } else if (isPasswordResetApprovedRequest) {
+        notificationMessage = buildPasswordResetApprovedNotificationMessage(
+          payload as PasswordResetApprovedNotificationPayload,
           webBaseUrl,
         );
       } else if (isTurnNudgeRequest) {

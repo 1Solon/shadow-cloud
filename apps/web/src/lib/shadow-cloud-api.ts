@@ -47,6 +47,31 @@ export type GameDetailFileVersion = {
   idempotencyKey: string | null;
   replacedAt: string | null;
   replacedByDisplayName: string | null;
+  replacementReason: string | null;
+  replacementApproval: {
+    approverDisplayName: string;
+    approverRole: ApproverRole;
+  } | null;
+};
+
+export type ApproverRole = "overlord" | "shadowLord";
+
+export const approverRoleLabel: Record<ApproverRole, string> = {
+  overlord: "Overlord",
+  shadowLord: "Shadow Lord",
+};
+
+export type PasswordResetApproval = {
+  id: string;
+  state: "OPEN" | "USED";
+  regimeId: string;
+  regimeName: string;
+  playerId: string;
+  playerDisplayName: string;
+  approverDisplayName: string;
+  approverRole: ApproverRole;
+  reason: string | null;
+  grantedAt: string;
 };
 
 export type TurnCompletionReason =
@@ -130,6 +155,7 @@ export type GameDetail = {
     activeSeatNumber: number;
   } | null;
   inactivityDeletionDueAt: string | null;
+  passwordResetApproval: PasswordResetApproval | null;
   openTurn: GameTurnRecord | null;
   recentCompletedTurns: GameTurnRecord[];
 };

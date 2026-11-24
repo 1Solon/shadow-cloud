@@ -20,6 +20,8 @@ test("Override reveals Regimes for a privileged non-Overlord and gates signed in
       idempotencyKey: null,
       replacedAt: null,
       replacedByDisplayName: null,
+      replacementReason: null,
+      replacementApproval: null,
     },
   ];
   const initialGame = structuredClone(upstream.game);

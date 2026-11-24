@@ -17,6 +17,8 @@ test("a corrected save uses a revisioned URL and cannot be browser-cached", asyn
       idempotencyKey: null,
       replacedAt: "2026-09-11T13:00:38.000Z",
       replacedByDisplayName: "Browser Overlord",
+      replacementReason: null,
+      replacementApproval: null,
     },
   ];
 

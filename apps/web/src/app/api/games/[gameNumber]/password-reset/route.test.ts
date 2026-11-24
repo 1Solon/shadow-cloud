@@ -285,3 +285,41 @@ it("denies unauthenticated undo and sanitizes undo failures", async () => {
   expect(response.status).toBe(503);
   expect(await response.text()).not.toContain("private");
 });
+it("forwards a Shadow Lord's reason with reset and undo", async () => {
+  vi.mocked(getServerAuthSession).mockResolvedValue({
+    user: { id: "actor" },
+    expires: "2099-01-01",
+  });
+  vi.mocked(createApiAccessToken).mockResolvedValue("token");
+  const fetch = vi
+    .spyOn(globalThis, "fetch")
+    .mockResolvedValueOnce(Response.json(receipt))
+    .mockResolvedValueOnce(Response.json(receipt));
+  const context = { params: Promise.resolve({ gameNumber: "1" }) };
+  await POST(
+    new Request("http://localhost/api/games/1/password-reset", {
+      method: "POST",
+      body: JSON.stringify({ ...body, reason: "Approved in Discord" }),
+    }),
+    context,
+  );
+  await UNDO(
+    new Request("http://localhost/api/games/1/password-reset/undo", {
+      method: "POST",
+      body: JSON.stringify({
+        resetId: "reset",
+        outputId: "output",
+        outputRevision: 1,
+        expectedSaveBaseline: "baseline",
+        confirmed: true,
+        reason: "Wrong regime",
+      }),
+    }),
+    context,
+  );
+  const sent = fetch.mock.calls.map(([, init]) =>
+    JSON.parse(String(init?.body)),
+  );
+  expect(sent[0]).toMatchObject({ reason: "Approved in Discord" });
+  expect(sent[1]).toMatchObject({ reason: "Wrong regime" });
+});

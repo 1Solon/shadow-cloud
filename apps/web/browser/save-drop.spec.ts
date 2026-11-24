@@ -35,6 +35,8 @@ test("save drops beside the uploader are staged or safely rejected", async ({
       idempotencyKey: null,
       replacedAt: null,
       replacedByDisplayName: null,
+      replacementReason: null,
+      replacementApproval: null,
     },
   ];
 

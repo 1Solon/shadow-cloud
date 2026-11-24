@@ -16,11 +16,13 @@ import {
   type PasswordRecovery,
   type SaveInspection,
 } from "@/lib/save-inspection";
+import { isPasswordReason } from "./save-password-reason";
 
 export type PasswordWorkflowIdentity = {
   campaignId: string;
   gameNumber: number;
   canManagePasswords: boolean;
+  requiresReason?: boolean;
   hasSave: boolean;
   saveRevision?: string;
 };
@@ -51,12 +53,20 @@ const empty: State = {
 const unknownOutcome =
   "Outcome unknown. The request could not be confirmed. No operation will be replayed. Checking the latest save and recovery separately; review the fresh state and explicitly confirm before trying another action. Recovery availability is not proof that this attempt succeeded.";
 
+function reasonBody(identity: PasswordWorkflowIdentity, reason?: string) {
+  if (!identity.requiresReason) return {};
+  return isPasswordReason(reason ?? "")
+    ? { reason: (reason ?? "").trim() }
+    : null;
+}
+
 export function useSavePasswordWorkflow(identity: PasswordWorkflowIdentity) {
   const router = useRouter();
   const identityKey = JSON.stringify([
     identity.campaignId,
     identity.gameNumber,
     identity.canManagePasswords,
+    identity.requiresReason,
     identity.hasSave,
     identity.saveRevision,
   ]);
@@ -206,7 +216,8 @@ export function useSavePasswordWorkflow(identity: PasswordWorkflowIdentity) {
     });
   }
 
-  async function resetPassword(password: string) {
+  async function resetPassword(password: string, reason?: string) {
+    const reasonFields = reasonBody(identity, reason);
     const inspection = state.inspection;
     const regime = inspection?.regimes.find(
       (candidate) => candidate.id === state.selected && candidate.eligible,
@@ -219,7 +230,8 @@ export function useSavePasswordWorkflow(identity: PasswordWorkflowIdentity) {
       !identity.hasSave ||
       !inspection ||
       !regime ||
-      !/^[\x20-\x7e]{1,128}$/.test(password)
+      !/^[\x20-\x7e]{1,128}$/.test(password) ||
+      !reasonFields
     )
       return;
     const controller = new AbortController();
@@ -240,6 +252,7 @@ export function useSavePasswordWorkflow(identity: PasswordWorkflowIdentity) {
           regimeId: regime.id,
           password,
           confirmed: true,
+          ...reasonFields,
         }),
       });
       if (!active(controller)) return;
@@ -280,7 +293,8 @@ export function useSavePasswordWorkflow(identity: PasswordWorkflowIdentity) {
     }
   }
 
-  async function undoPasswordReset() {
+  async function undoPasswordReset(reason?: string) {
+    const reasonFields = reasonBody(identity, reason);
     const recovery = state.recovery;
     if (
       mutation.current ||
@@ -289,7 +303,8 @@ export function useSavePasswordWorkflow(identity: PasswordWorkflowIdentity) {
       !identity.canManagePasswords ||
       !identity.hasSave ||
       state.selected ||
-      !recovery
+      !recovery ||
+      !reasonFields
     )
       return;
     const controller = new AbortController();
@@ -309,6 +324,7 @@ export function useSavePasswordWorkflow(identity: PasswordWorkflowIdentity) {
           outputRevision: recovery.outputRevision,
           expectedSaveBaseline: recovery.expectedSaveBaseline,
           confirmed: true,
+          ...reasonFields,
         }),
       });
       if (!active(controller)) return;

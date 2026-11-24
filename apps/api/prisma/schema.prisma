@@ -47,6 +47,7 @@ enum NotificationDeliveryEvent {
   TURN_NUDGE
   CAMPAIGN_DELETED
   INACTIVITY_WARNING
+  PASSWORD_RESET_APPROVED
 }
 
 enum NotificationDeliveryStatus {
@@ -335,10 +336,35 @@ model PasswordReset {
   actorId           String
   regimeId          String
   regimeName        String
+  reason            String?
+  undoReason        String?
+  undoRevision      Int?
+  approvalId        String?
   state             String   @default("ACTIVE")
   createdAt         DateTime @default(now())
   closedAt          DateTime?
   cleanedAt         DateTime?
+
+  @@index([gameId, state])
+}
+
+model PasswordResetApproval {
+  id              String    @id @default(cuid())
+  gameId          String
+  fileVersionId   String
+  contentRevision Int
+  saveRevision    Int
+  sourceId        String
+  regimeId        String
+  regimeName      String
+  gamePlayerId    String
+  playerId        String
+  approverId      String
+  approverRole    String
+  reason          String?
+  state           String    @default("OPEN")
+  createdAt       DateTime  @default(now())
+  endedAt         DateTime?
 
   @@index([gameId, state])
 }

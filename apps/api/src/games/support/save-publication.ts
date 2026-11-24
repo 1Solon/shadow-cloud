@@ -12,7 +12,10 @@ import { createHash } from 'node:crypto';
 import { AuthService } from '../../auth/auth.service';
 import { AuditEventType, prisma } from '../../database';
 import type { Prisma } from '../../database';
-import { BotNotificationsService } from '../bot-notifications.service';
+import {
+  BotNotificationsService,
+  type PasswordResetActorRole,
+} from '../bot-notifications.service';
 import { FileStorageService } from '../file-storage.service';
 import { assertCampaignInPlay } from './campaign-conclusion';
 import { getDiscordIdentity } from './discord-user.helpers';
@@ -24,11 +27,18 @@ import type {
 import { assertReplacementSaveFile } from './save-file-validation';
 import { assertSaveBaseline, saveBaseline } from './save-baseline';
 import {
+  type ApproverRole,
+  approvalBinding,
+  isApprovalBound,
+  lapseUnboundApprovals,
+} from './password-reset-approval';
+import {
   closeSaveRecovery,
   cleanupSaveRecovery,
   saveStagingLease,
 } from './save-recovery';
 import {
+  type SaveInspection,
   inspectSave,
   replacePassword,
   MAX_ARCHIVE_BYTES,
@@ -42,6 +52,25 @@ export type ResetPasswordInput = {
   regimeId: string;
   password: string;
   confirmed: boolean;
+  reason?: string;
+};
+
+export type GrantPasswordResetApprovalInput = {
+  fileVersionId: string;
+  sourceId: string;
+  expectedSaveBaseline: string;
+  reason?: string;
+};
+
+export type WithdrawPasswordResetApprovalInput = {
+  approvalId: string;
+};
+
+export type SetApprovedPasswordInput = {
+  approvalId: string;
+  expectedSaveBaseline: string;
+  password: string;
+  confirmed: boolean;
 };
 
 export type UndoPasswordResetInput = {
@@ -50,30 +79,85 @@ export type UndoPasswordResetInput = {
   outputRevision: number;
   expectedSaveBaseline: string;
   confirmed: boolean;
+  reason?: string;
 };
 
-const activePlayerSelect = {
+export const MAX_PASSWORD_RESET_REASON_LENGTH = 500;
+
+function isOverlord(overlordId: string, userId: string) {
+  return overlordId === userId;
+}
+
+function reasonUnlessOverlord(
+  overlordId: string,
+  userId: string,
+  reason: unknown,
+) {
+  if (isOverlord(overlordId, userId)) return null;
+  const trimmed = typeof reason === 'string' ? reason.trim() : '';
+  if (!trimmed || trimmed.length > MAX_PASSWORD_RESET_REASON_LENGTH)
+    throw new BadRequestException(
+      `Give a reason of 1 to ${MAX_PASSWORD_RESET_REASON_LENGTH} characters, such as how the Overlord approved this.`,
+    );
+  return trimmed;
+}
+
+function actorRole(overlordId: string, userId: string) {
+  return isOverlord(overlordId, userId)
+    ? ('overlord' as const)
+    : ('shadowLord' as const);
+}
+
+function isSetByActivePlayer(
+  reset: { approvalId: string | null; actorId: string } | null,
+  activePlayerId: string | null | undefined,
+  userId: string,
+) {
+  return (
+    reset?.approvalId != null &&
+    reset.actorId === userId &&
+    activePlayerId === userId
+  );
+}
+
+function passwordResetConflict() {
+  return new ConflictException(
+    'The campaign or latest save changed. Inspect it again before resetting.',
+  );
+}
+
+function sha256(bytes: Buffer) {
+  return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+}
+
+const notifiedUserSelect = {
   select: {
-    activePlayer: {
-      select: {
-        id: true,
-        displayName: true,
-        identities: { select: { provider: true, providerId: true } },
-      },
-    },
+    id: true,
+    displayName: true,
+    identities: { select: { provider: true, providerId: true } },
   },
 } as const;
+
+const activePlayerSelect = {
+  select: { activePlayerEntryId: true, activePlayer: notifiedUserSelect },
+} as const;
+
+function notifiedUser(user: {
+  id: string;
+  displayName: string;
+  identities: Array<{ provider: string; providerId: string }>;
+}) {
+  return {
+    id: user.id,
+    displayName: user.displayName,
+    discordId: getDiscordIdentity(user),
+  };
+}
 
 function activePlayerOf(
   turnState: Prisma.TurnStateGetPayload<typeof activePlayerSelect> | null,
 ) {
-  return turnState?.activePlayer
-    ? {
-        id: turnState.activePlayer.id,
-        displayName: turnState.activePlayer.displayName,
-        discordId: getDiscordIdentity(turnState.activePlayer),
-      }
-    : null;
+  return turnState?.activePlayer ? notifiedUser(turnState.activePlayer) : null;
 }
 
 export class SavePublication {
@@ -180,6 +264,7 @@ export class SavePublication {
       include: {
         fileVersions: { orderBy: { versionNumber: 'desc' }, take: 1 },
         turnState: activePlayerSelect,
+        organizer: notifiedUserSelect,
         turnRecords: {
           where: { endedAt: null },
           orderBy: { startedAt: 'desc' },
@@ -188,16 +273,6 @@ export class SavePublication {
       },
     });
     if (!game) throw new NotFoundException('Campaign not found.');
-    if (
-      !(await this.canManagePasswords(
-        game.organizerId,
-        userId,
-        shadowOverrideEnabled,
-      ))
-    )
-      throw new ForbiddenException(
-        'Only the current Overlord or an enabled Shadow Override can manage password recovery.',
-      );
     const file = game.fileVersions[0];
     const reset = file
       ? await prisma.passwordReset.findFirst({
@@ -211,7 +286,23 @@ export class SavePublication {
           },
         })
       : null;
-    return { game, file, reset };
+    const setByActor = isSetByActivePlayer(
+      reset,
+      game.turnState?.activePlayer?.id,
+      userId,
+    );
+    if (
+      !setByActor &&
+      !(await this.canManagePasswords(
+        game.organizerId,
+        userId,
+        shadowOverrideEnabled,
+      ))
+    )
+      throw new ForbiddenException(
+        'Only the current Overlord, an enabled Shadow Override, or the player who set the password can manage password recovery.',
+      );
+    return { game, file, reset, setByActor };
   }
 
   async getPasswordResetRecovery(
@@ -262,7 +353,7 @@ export class SavePublication {
     input: UndoPasswordResetInput,
     shadowOverrideEnabled = false,
   ) {
-    const { game, file, reset } = await this.recoverySnapshot(
+    const { game, file, reset, setByActor } = await this.recoverySnapshot(
       gameId,
       userId,
       shadowOverrideEnabled,
@@ -275,6 +366,9 @@ export class SavePublication {
       throw new BadRequestException(
         'Confirm that undo restores the previous password.',
       );
+    const reason = setByActor
+      ? null
+      : reasonUnlessOverlord(game.organizerId, userId!, input.reason);
     assertSaveBaseline(game, input.expectedSaveBaseline ?? '');
     if (
       !reset ||
@@ -313,6 +407,15 @@ export class SavePublication {
         });
         if (!fenced.count) throw conflict();
         if (
+          setByActor &&
+          (await tx.turnState.findUnique({ where: { gameId: game.id } }))
+            ?.activePlayerId !== userId
+        )
+          throw new ForbiddenException(
+            'Password recovery permission was lost.',
+          );
+        if (
+          !setByActor &&
           !(await this.canManagePasswords(
             game.organizerId,
             userId!,
@@ -352,6 +455,13 @@ export class SavePublication {
             'The staged save failed verification.',
           );
         await closeSaveRecovery(tx, game.id);
+        await tx.passwordReset.update({
+          where: { id: reset.id },
+          data: {
+            undoReason: reason,
+            undoRevision: file.contentRevision + 1,
+          },
+        });
         await tx.saveCleanup.upsert({
           where: { storagePath: file.storagePath },
           create: { storagePath: file.storagePath },
@@ -393,20 +503,20 @@ export class SavePublication {
             discordThreadId: game.discordThreadId,
           },
           activePlayer: activePlayerOf(game.turnState),
+          overlord: notifiedUser(game.organizer),
           replacement: {
             contentRevision: file.contentRevision + 1,
             versionId: file.id,
             versionNumber: file.versionNumber,
             originalName: file.originalName,
             replacedAt: replacedAt.toISOString(),
-            replacedBy: {
-              id: actor.id,
-              displayName: actor.displayName,
-              discordId: getDiscordIdentity(actor),
-            },
+            replacedBy: notifiedUser(actor),
             passwordRecovery: {
               operation: 'undo',
               regimeName: reset.regimeName,
+              actorRole: setByActor
+                ? 'player'
+                : actorRole(game.organizerId, userId!),
             },
           },
         });
@@ -430,19 +540,7 @@ export class SavePublication {
   ) {
     if (!userId)
       throw new UnauthorizedException('Sign in to reset a password.');
-    const game = await prisma.game.findFirst({
-      where: buildGameIdentifierWhere(gameId),
-      include: {
-        fileVersions: { orderBy: { versionNumber: 'desc' }, take: 1 },
-        turnState: activePlayerSelect,
-        turnRecords: {
-          where: { endedAt: null },
-          orderBy: { startedAt: 'desc' },
-          take: 1,
-        },
-      },
-    });
-    if (!game) throw new NotFoundException('Campaign not found.');
+    const game = await this.passwordResetSnapshot(gameId);
     if (
       !(await this.canManagePasswords(
         game.organizerId,
@@ -457,30 +555,196 @@ export class SavePublication {
       throw new BadRequestException(
         'Confirm the selected regime and restart warning.',
       );
+    const reason = reasonUnlessOverlord(game.organizerId, userId, input.reason);
     assertSaveBaseline(game, input.expectedSaveBaseline ?? '');
     const file = game.fileVersions[0];
-    const conflict = () =>
+    if (!file || file.id !== input.fileVersionId) throw passwordResetConflict();
+    return this.publishPasswordReset({
+      game,
+      file,
+      userId,
+      sourceId: input.sourceId,
+      password: input.password,
+      selectRegime: (regime) => regime.id === input.regimeId,
+      reason,
+      actorRole: actorRole(game.organizerId, userId),
+      recheck: async () => {
+        if (
+          !(await this.canManagePasswords(
+            game.organizerId,
+            userId,
+            shadowOverrideEnabled,
+          ))
+        )
+          throw new ForbiddenException('Password reset permission was lost.');
+      },
+    });
+  }
+
+  async setApprovedPassword(
+    gameId: string,
+    userId: string | undefined,
+    input: SetApprovedPasswordInput,
+  ) {
+    if (!userId) throw new UnauthorizedException('Sign in to set a password.');
+    const game = await this.passwordResetSnapshot(gameId);
+    if (typeof input?.approvalId !== 'string')
+      throw new BadRequestException('Choose the approval to use.');
+    const approval = await prisma.passwordResetApproval.findFirst({
+      where: { id: input.approvalId, gameId: game.id },
+    });
+    if (!approval) throw new NotFoundException('Approval not found.');
+    if (
+      approval.playerId !== userId ||
+      game.turnState?.activePlayer?.id !== userId ||
+      game.turnState.activePlayerEntryId !== approval.gamePlayerId
+    )
+      throw new ForbiddenException(
+        'Only the active player named in the approval can set this password.',
+      );
+    if (input.confirmed !== true)
+      throw new BadRequestException('Confirm the regime and restart warning.');
+    assertSaveBaseline(game, input.expectedSaveBaseline ?? '');
+    const file = game.fileVersions[0];
+    const ended = () =>
       new ConflictException(
-        'The campaign or latest save changed. Inspect it again before resetting.',
+        'This approval has ended. Ask the Overlord for a new one.',
       );
-    if (!file || file.id !== input.fileVersionId) throw conflict();
-    const key = process.env.SHADOW_CLOUD_SAVE_ARCHIVE_KEY;
-    if (!key || Buffer.byteLength(key) > 1024)
-      throw new ServiceUnavailableException(
-        'Save inspection is not configured on this server.',
+    if (approval.state !== 'OPEN') throw ended();
+    if (!file || !isApprovalBound(approval, approvalBinding(game, file))) {
+      await prisma.$transaction((tx) =>
+        lapseUnboundApprovals(
+          tx,
+          game.id,
+          file ? approvalBinding(game, file) : null,
+        ),
       );
+      throw ended();
+    }
+    return this.publishPasswordReset({
+      game,
+      file,
+      userId,
+      sourceId: approval.sourceId,
+      password: input.password,
+      selectRegime: (regime) =>
+        regime.id === approval.regimeId && regime.current,
+      reason: null,
+      actorRole: 'player',
+      approval: {
+        id: approval.id,
+        approverRole: approval.approverRole as ApproverRole,
+      },
+      recheck: async (tx) => {
+        const used = await tx.passwordResetApproval.updateMany({
+          where: { id: approval.id, state: 'OPEN' },
+          data: { state: 'USED', endedAt: new Date() },
+        });
+        const turnState = await tx.turnState.findUnique({
+          where: { gameId: game.id },
+        });
+        if (
+          !used.count ||
+          turnState?.activePlayerId !== userId ||
+          turnState.activePlayerEntryId !== approval.gamePlayerId
+        )
+          throw ended();
+      },
+    });
+  }
+
+  async withdrawPasswordResetApproval(
+    gameId: string,
+    userId: string | undefined,
+    input: WithdrawPasswordResetApprovalInput,
+    shadowOverrideEnabled = false,
+  ) {
+    if (!userId)
+      throw new UnauthorizedException('Sign in to withdraw an approval.');
+    const game = await prisma.game.findFirst({
+      where: buildGameIdentifierWhere(gameId),
+      select: { id: true, organizerId: true },
+    });
+    if (!game) throw new NotFoundException('Campaign not found.');
+    if (
+      !(await this.canManagePasswords(
+        game.organizerId,
+        userId,
+        shadowOverrideEnabled,
+      ))
+    )
+      throw new ForbiddenException(
+        'Only the current Overlord or an enabled Shadow Override can withdraw an approval.',
+      );
+    if (typeof input?.approvalId !== 'string')
+      throw new BadRequestException('Choose the approval to withdraw.');
+    const withdrawn = await prisma.passwordResetApproval.updateMany({
+      where: { id: input.approvalId, gameId: game.id, state: 'OPEN' },
+      data: { state: 'WITHDRAWN', endedAt: new Date() },
+    });
+    if (!withdrawn.count)
+      throw new ConflictException('This approval has already ended.');
+    return { approvalId: input.approvalId };
+  }
+
+  private async passwordResetSnapshot(gameId: string) {
+    const game = await prisma.game.findFirst({
+      where: buildGameIdentifierWhere(gameId),
+      include: {
+        fileVersions: { orderBy: { versionNumber: 'desc' }, take: 1 },
+        turnState: activePlayerSelect,
+        organizer: notifiedUserSelect,
+        turnRecords: {
+          where: { endedAt: null },
+          orderBy: { startedAt: 'desc' },
+          take: 1,
+        },
+      },
+    });
+    if (!game) throw new NotFoundException('Campaign not found.');
+    return game;
+  }
+
+  private async publishPasswordReset({
+    game,
+    file,
+    userId,
+    sourceId,
+    password,
+    selectRegime,
+    reason,
+    actorRole,
+    approval,
+    recheck,
+  }: {
+    game: Awaited<ReturnType<SavePublication['passwordResetSnapshot']>>;
+    file: Awaited<
+      ReturnType<SavePublication['passwordResetSnapshot']>
+    >['fileVersions'][number];
+    userId: string;
+    sourceId: string;
+    password: string;
+    selectRegime: (regime: SaveInspection['regimes'][number]) => boolean;
+    reason: string | null;
+    actorRole: PasswordResetActorRole;
+    approval?: { id: string; approverRole: ApproverRole };
+    recheck: (tx: Prisma.TransactionClient) => Promise<void>;
+  }) {
+    const key = this.archiveKey();
     const source = await this.readSave(file.storagePath);
-    const hash = (bytes: Buffer) =>
-      `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
-    if (hash(source) !== input.sourceId) throw conflict();
+    if (sha256(source) !== sourceId) throw passwordResetConflict();
     let output: Buffer;
     let regime;
     try {
-      regime = inspectSave(source, Buffer.from(key)).regimes.find(
-        (r) => r.id === input.regimeId && r.eligible,
+      regime = inspectSave(source, key).regimes.find(
+        (candidate) => candidate.eligible && selectRegime(candidate),
       );
       if (!regime) throw new SaveFormatError('unsupported');
-      output = replacePassword(source, Buffer.from(key), input);
+      output = replacePassword(source, key, {
+        sourceId,
+        regimeId: regime.id,
+        password,
+      });
     } catch (error) {
       throw new UnprocessableEntityException(
         error instanceof SaveFormatError
@@ -488,7 +752,7 @@ export class SavePublication {
           : 'Save processing failed.',
       );
     }
-    const outputId = hash(output);
+    const outputId = sha256(output);
     const actor = await prisma.user.findUniqueOrThrow({
       where: { id: userId },
       include: { identities: true },
@@ -509,15 +773,8 @@ export class SavePublication {
           },
           data: { saveRevision: { increment: 1 } },
         });
-        if (!fenced.count) throw conflict();
-        if (
-          !(await this.canManagePasswords(
-            game.organizerId,
-            userId,
-            shadowOverrideEnabled,
-          ))
-        )
-          throw new ForbiddenException('Password reset permission was lost.');
+        if (!fenced.count) throw passwordResetConflict();
+        await recheck(tx);
         const current = await tx.fileVersion.findFirst({
           where: { gameId: game.id },
           orderBy: { versionNumber: 'desc' },
@@ -528,20 +785,21 @@ export class SavePublication {
           current.storagePath !== file.storagePath ||
           current.contentRevision !== file.contentRevision
         )
-          throw conflict();
-        if (hash(await this.readSave(current.storagePath)) !== input.sourceId)
-          throw conflict();
-        if (hash(await this.readSave(staged.storagePath)) !== outputId)
+          throw passwordResetConflict();
+        if (sha256(await this.readSave(current.storagePath)) !== sourceId)
+          throw passwordResetConflict();
+        if (sha256(await this.readSave(staged.storagePath)) !== outputId)
           throw new ServiceUnavailableException(
             'The staged save failed verification.',
           );
         await closeSaveRecovery(tx, game.id);
+        await lapseUnboundApprovals(tx, game.id, null);
         const reset = await tx.passwordReset.create({
           data: {
             gameId: game.id,
             fileVersionId: file.id,
             sourcePath: file.storagePath,
-            sourceId: input.sourceId,
+            sourceId,
             outputId,
             outputRevision: file.contentRevision + 1,
             saveRevision: game.saveRevision + 1,
@@ -549,6 +807,8 @@ export class SavePublication {
             actorId: userId,
             regimeId: regime.id,
             regimeName: regime.name,
+            reason,
+            approvalId: approval?.id ?? null,
           },
         });
         await tx.fileVersion.update({
@@ -571,10 +831,11 @@ export class SavePublication {
               operation: 'password-reset',
               resetId: reset.id,
               fileVersionId: file.id,
-              sourceId: input.sourceId,
+              sourceId,
               outputId,
               regimeId: regime.id,
               regimeName: regime.name,
+              ...(approval ? { approvalId: approval.id } : {}),
             }),
           },
         });
@@ -587,18 +848,24 @@ export class SavePublication {
             discordThreadId: game.discordThreadId,
           },
           activePlayer: activePlayerOf(game.turnState),
+          overlord: notifiedUser(game.organizer),
           replacement: {
             contentRevision: file.contentRevision + 1,
             versionId: file.id,
             versionNumber: file.versionNumber,
             originalName: file.originalName,
             replacedAt: replacedAt.toISOString(),
-            replacedBy: {
-              id: actor.id,
-              displayName: actor.displayName,
-              discordId: getDiscordIdentity(actor),
+            replacedBy: notifiedUser(actor),
+            passwordRecovery: {
+              operation: 'reset',
+              regimeName: regime.name,
+              actorRole,
+              ...(approval
+                ? {
+                    approverRole: approval.approverRole,
+                  }
+                : {}),
             },
-            passwordRecovery: { operation: 'reset', regimeName: regime.name },
           },
         });
         return {
@@ -611,6 +878,151 @@ export class SavePublication {
       },
       'Password reset could not be published. Refresh and try again.',
     );
+  }
+
+  private archiveKey() {
+    const key = process.env.SHADOW_CLOUD_SAVE_ARCHIVE_KEY;
+    if (!key || Buffer.byteLength(key) > 1024)
+      throw new ServiceUnavailableException(
+        'Save inspection is not configured on this server.',
+      );
+    return Buffer.from(key);
+  }
+
+  async grantPasswordResetApproval(
+    gameId: string,
+    userId: string | undefined,
+    input: GrantPasswordResetApprovalInput,
+    shadowOverrideEnabled = false,
+  ) {
+    if (!userId)
+      throw new UnauthorizedException('Sign in to approve a password reset.');
+    const game = await this.passwordResetSnapshot(gameId);
+    if (
+      !(await this.canManagePasswords(
+        game.organizerId,
+        userId,
+        shadowOverrideEnabled,
+      ))
+    )
+      throw new ForbiddenException(
+        'Only the current Overlord or an enabled Shadow Override can approve a password reset.',
+      );
+    if (!input)
+      throw new BadRequestException(
+        'Inspect the latest save before approving.',
+      );
+    const reason = reasonUnlessOverlord(game.organizerId, userId, input.reason);
+    assertSaveBaseline(game, input.expectedSaveBaseline ?? '');
+    const file = game.fileVersions[0];
+    const conflict = () =>
+      new ConflictException(
+        'The campaign or latest save changed. Inspect it again before approving.',
+      );
+    if (!file || file.id !== input.fileVersionId) throw conflict();
+    const activePlayer = game.turnState?.activePlayer;
+    const activeSeatId = game.turnState?.activePlayerEntryId;
+    if (!activePlayer || !activeSeatId)
+      throw new ConflictException(
+        'The turn is vacant, so there is no active player to approve. Fill the seat first.',
+      );
+    const source = await this.readSave(file.storagePath);
+    const sourceId = sha256(source);
+    if (sourceId !== input.sourceId) throw conflict();
+    let regime;
+    try {
+      regime = inspectSave(source, this.archiveKey()).regimes.find(
+        (candidate) => candidate.current,
+      );
+    } catch (error) {
+      if (error instanceof ServiceUnavailableException) throw error;
+      throw new UnprocessableEntityException(
+        error instanceof SaveFormatError
+          ? error.message
+          : 'Save inspection failed.',
+      );
+    }
+    if (!regime)
+      throw new UnprocessableEntityException(
+        'The latest save is not waiting on a human-controlled regime.',
+      );
+    if (!regime.eligible)
+      throw new UnprocessableEntityException(
+        regime.reason ?? `${regime.name} is not eligible for password reset.`,
+      );
+    const binding = approvalBinding(game, file);
+    return prisma.$transaction(async (tx) => {
+      await lapseUnboundApprovals(tx, game.id, binding);
+      const current = await tx.game.findUnique({
+        where: { id: game.id },
+        include: {
+          fileVersions: { orderBy: { versionNumber: 'desc' }, take: 1 },
+          turnState: { select: { activePlayerId: true } },
+        },
+      });
+      if (
+        !current?.fileVersions[0] ||
+        current.organizerId !== game.organizerId ||
+        current.turnState?.activePlayerId !== activePlayer.id ||
+        !isApprovalBound(
+          binding,
+          approvalBinding(current, current.fileVersions[0]),
+        )
+      )
+        throw conflict();
+      if (
+        !(await this.canManagePasswords(
+          game.organizerId,
+          userId,
+          shadowOverrideEnabled,
+        ))
+      )
+        throw new ForbiddenException('Password reset permission was lost.');
+      if (
+        await tx.passwordResetApproval.findFirst({
+          where: { gameId: game.id, state: 'OPEN' },
+        })
+      )
+        throw new ConflictException(
+          'A password reset approval is already open. Withdraw it before approving another.',
+        );
+      const approverRole = actorRole(game.organizerId, userId);
+      const approver = await tx.user.findUniqueOrThrow({
+        where: { id: userId },
+        include: { identities: true },
+      });
+      const approval = await tx.passwordResetApproval.create({
+        data: {
+          gameId: game.id,
+          ...binding,
+          sourceId,
+          regimeId: regime.id,
+          regimeName: regime.name,
+          gamePlayerId: activeSeatId,
+          playerId: activePlayer.id,
+          approverId: userId,
+          approverRole,
+          reason,
+        },
+      });
+      await this.botNotifications.enqueuePasswordResetApproved(tx, {
+        game: {
+          id: game.id,
+          gameNumber: game.gameNumber,
+          slug: game.slug,
+          name: game.name,
+          discordThreadId: game.discordThreadId,
+        },
+        player: notifiedUser(activePlayer),
+        approval: {
+          regimeName: regime.name,
+          grantedAt: approval.createdAt.toISOString(),
+          approver: notifiedUser(approver),
+          approverRole,
+        },
+      });
+      return { approvalId: approval.id, regimeName: regime.name };
+    });
   }
 
   constructor(
@@ -941,11 +1353,7 @@ export class SavePublication {
             versionNumber: fileVersion.versionNumber,
             originalName: fileVersion.originalName,
             replacedAt: replacedAt.toISOString(),
-            replacedBy: {
-              id: actor.id,
-              displayName: actor.displayName,
-              discordId: getDiscordIdentity(actor),
-            },
+            replacedBy: notifiedUser(actor),
           },
         });
         return {

@@ -347,6 +347,43 @@ describe("startNotificationServer", () => {
     expect(response.statusCode).toBe(204);
   });
 
+  it("posts password reset approvals to the campaign thread", async () => {
+    const pin = vi.fn(async () => undefined);
+    const thread = {
+      id: "thread-1",
+      isThread: () => true,
+      joinable: false,
+      send: vi.fn(async () => ({ pin })),
+    };
+    startNotificationServer(buildClient(thread) as never, {
+      notificationPort: 3011,
+      notificationSecret: "secret",
+      webBaseUrl: "https://shadow.example",
+    });
+
+    const response = buildResponse();
+    await httpMock.getHandler()?.(
+      buildRequest("/notify/password-reset-approved", {
+        game: saveReplacedPayload.game,
+        player: { id: "user-2", displayName: "Other", discordId: "discord-2" },
+        approval: {
+          regimeName: "North Reach",
+          grantedAt: "2026-07-10T14:30:00.000Z",
+          approver: saveReplacedPayload.replacement.replacedBy,
+          approverRole: "overlord",
+        },
+      }),
+      response,
+    );
+
+    expect(thread.send).toHaveBeenCalledOnce();
+    expect(JSON.stringify(thread.send.mock.calls[0])).toContain(
+      "you can set a new in-game password",
+    );
+    expect(pin).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(204);
+  });
+
   it("posts the campaign-deleted notice and leaves the thread open", async () => {
     const thread = {
       id: "thread-1",

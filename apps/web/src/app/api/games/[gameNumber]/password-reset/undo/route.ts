@@ -45,6 +45,7 @@ export async function POST(
           outputRevision: body.outputRevision,
           expectedSaveBaseline: body.expectedSaveBaseline,
           confirmed: true,
+          ...(typeof body.reason === "string" ? { reason: body.reason } : {}),
         }),
       },
     );

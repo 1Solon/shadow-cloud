@@ -38,8 +38,11 @@ import { GamesService, type UploadedSaveFile } from './games.service';
 import { SaveFileUploadExceptionFilter } from './support/save-file-upload-exception.filter';
 import { getMaxSaveFileSizeBytes } from './support/save-file-validation';
 import type {
+  GrantPasswordResetApprovalInput,
   ResetPasswordInput,
+  SetApprovedPasswordInput,
   UndoPasswordResetInput,
+  WithdrawPasswordResetApprovalInput,
 } from './services/games-file.service';
 
 @Controller('games')
@@ -173,6 +176,53 @@ export class GamesController {
       request.user?.sub,
       input,
       request.user?.shadowOverrideEnabled === true,
+    );
+  }
+
+  @Post(':gameId/password-reset-approval')
+  @UseGuards(AppAuthGuard)
+  @Header('Cache-Control', 'no-store')
+  grantPasswordResetApproval(
+    @Param('gameId') gameId: string,
+    @Req() request: AuthenticatedRequest,
+    @Body() input: GrantPasswordResetApprovalInput,
+  ) {
+    return this.gamesService.grantPasswordResetApproval(
+      gameId,
+      request.user?.sub,
+      input,
+      request.user?.shadowOverrideEnabled === true,
+    );
+  }
+
+  @Post(':gameId/password-reset-approval/withdraw')
+  @UseGuards(AppAuthGuard)
+  @Header('Cache-Control', 'no-store')
+  withdrawPasswordResetApproval(
+    @Param('gameId') gameId: string,
+    @Req() request: AuthenticatedRequest,
+    @Body() input: WithdrawPasswordResetApprovalInput,
+  ) {
+    return this.gamesService.withdrawPasswordResetApproval(
+      gameId,
+      request.user?.sub,
+      input,
+      request.user?.shadowOverrideEnabled === true,
+    );
+  }
+
+  @Post(':gameId/password-reset-approval/use')
+  @UseGuards(AppAuthGuard)
+  @Header('Cache-Control', 'no-store')
+  setApprovedPassword(
+    @Param('gameId') gameId: string,
+    @Req() request: AuthenticatedRequest,
+    @Body() input: SetApprovedPasswordInput,
+  ) {
+    return this.gamesService.setApprovedPassword(
+      gameId,
+      request.user?.sub,
+      input,
     );
   }
 

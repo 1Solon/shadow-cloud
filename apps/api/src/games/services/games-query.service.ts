@@ -16,6 +16,10 @@ import { FileStorageService } from '../file-storage.service';
 import { saveBaseline } from '../support/save-baseline';
 import { resolveSaveRetentionLimit } from '../support/save-retention';
 import { buildCanonicalThreadName } from '../support/game-configuration.helpers';
+import {
+  currentPasswordResetApproval,
+  withApprovalSummaries,
+} from '../support/password-reset-approval';
 import { buildGameDetailFileVersionPayload } from '../support/game-detail-file-version-payload';
 import { dormantCampaignDeletionDueAt } from '../support/campaign-inactivity';
 import { buildGameIdentifierWhere } from '../support/game-lookup.helpers';
@@ -206,6 +210,8 @@ export class GamesQueryService {
       recentCompletedTurns,
       inactivityDeletionDueAt,
       saveSeatMismatch,
+      passwordResets,
+      passwordResetApproval,
     } = await prisma.$transaction(async (transaction) => {
       const game = await transaction.game.findFirst({
         where: {
@@ -266,6 +272,8 @@ export class GamesQueryService {
         recentCompletedTurns,
         inactivityDeletionDueAt,
         saveSeatMismatch,
+        passwordResets,
+        passwordResetApproval,
       ] = await Promise.all([
         transaction.turnRecord.findMany({
           where: { gameId: game.id, endedAt: null },
@@ -277,6 +285,23 @@ export class GamesQueryService {
         }),
         dormantCampaignDeletionDueAt(transaction, game),
         findSaveSeatMismatch(transaction, game.id),
+        transaction.passwordReset.findMany({
+          where: {
+            gameId: game.id,
+            fileVersionId: {
+              in: game.fileVersions.map((fileVersion) => fileVersion.id),
+            },
+          },
+          select: {
+            fileVersionId: true,
+            outputRevision: true,
+            reason: true,
+            undoRevision: true,
+            undoReason: true,
+            approvalId: true,
+          },
+        }),
+        currentPasswordResetApproval(transaction, game, game.fileVersions[0]),
       ]);
       return {
         game,
@@ -284,6 +309,11 @@ export class GamesQueryService {
         recentCompletedTurns,
         inactivityDeletionDueAt,
         saveSeatMismatch,
+        passwordResets: await withApprovalSummaries(
+          transaction,
+          passwordResets,
+        ),
+        passwordResetApproval,
       };
     });
     const openTurn = openTurns[0] ? mapTurnRecord(openTurns[0]) : null;
@@ -385,7 +415,9 @@ export class GamesQueryService {
           player.role === GameRole.ORGANIZER ||
           player.userId === game.organizerId,
       })),
-      fileVersions: game.fileVersions.map(buildGameDetailFileVersionPayload),
+      fileVersions: game.fileVersions.map((fileVersion) =>
+        buildGameDetailFileVersionPayload(fileVersion, passwordResets),
+      ),
       turnTargetHours: game.turnTargetHours,
       turnReminderGraceHours: game.turnReminderGraceHours,
       turnReminderRepeatHours: game.turnReminderRepeatHours,
@@ -394,6 +426,7 @@ export class GamesQueryService {
       rejectableSaveId,
       saveSeatMismatch,
       inactivityDeletionDueAt: inactivityDeletionDueAt?.toISOString() ?? null,
+      passwordResetApproval,
       openTurn,
       recentCompletedTurns: recentCompletedTurns.map(mapTurnRecord),
     };
